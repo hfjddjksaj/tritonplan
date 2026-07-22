@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "TritonPlan",
+  "version": "0.1.0",
+  "description": "Passively visualize UCSD Triton Student System (TSS) courses you browse on a calendar planner. Read-only: no extra server traffic.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://tss.ucsd.edu/*",
+    "https://hfjddjksaj.github.io/tritonplan/*",
+    "http://localhost:5173/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "TritonPlan",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://tss.ucsd.edu/*"],
+      "js": ["content/interceptor.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://tss.ucsd.edu/*"],
+      "js": ["content/tss-relay.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://tss.ucsd.edu/*"],
+      "js": ["content/tss-inject.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://hfjddjksaj.github.io/tritonplan/*", "http://localhost:5173/*"],
+      "js": ["content/planner-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

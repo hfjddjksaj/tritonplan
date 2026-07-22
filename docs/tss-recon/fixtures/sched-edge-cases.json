@@ -1,0 +1,31 @@
+{
+  "_comment": "Edge-case Sched strings captured 2026-07-21 from online-modality courses (e.g. ETHN-001R, ModuleID 5147, Fall 2026). Complements cse-sections-normalized.json (which is all In-Person). These prove the meeting-line grammar's `@ <Location>` is OPTIONAL, that modality can be 'Live Online', and that 'Schedule Not Defined' is the TBA/async marker. LocationText for online = 'MC Online' (vs 'UC San Diego' in person).",
+
+  "liveOnline_noRoom": [
+    "W 09:00 AM - 09:50 AM Live Online",
+    "W 10:00 AM - 10:50 AM Live Online",
+    "F 01:00 PM - 01:50 PM Live Online",
+    "F 03:00 PM - 03:50 PM Live Online"
+  ],
+
+  "tba_async": "Schedule Not Defined",
+
+  "sampleRows": [
+    {
+      "_note": "Async online lecture: no time, no room, no final. Must go to an 'unscheduled/TBA' list, not the calendar grid.",
+      "EventAbbr": "001-000-LE", "TeachingMethod": "LE", "TeachingMethod_Text": "Lecture",
+      "InstructorName": "Shaista Patel", "LocationText": "MC Online",
+      "BeginDate": "2026-09-24", "EndDate": "2026-12-04",
+      "Sched": "Schedule Not Defined"
+    },
+    {
+      "_note": "Live-online discussion: has day/time but NO '@ Location' segment; modality 'Live Online' ends the line.",
+      "EventAbbr": "001-001-DI", "TeachingMethod": "DI", "TeachingMethod_Text": "Discussion",
+      "InstructorName": "Shaista Patel", "LocationText": "MC Online",
+      "BeginDate": "2026-09-25", "EndDate": "2026-12-04",
+      "Sched": "W 09:00 AM - 09:50 AM Live Online"
+    }
+  ],
+
+  "modalityFilterOptions": ["In Person", "Live Online", "Online", "Other"]
+}

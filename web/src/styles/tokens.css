@@ -1,0 +1,50 @@
+/*
+ * Triton Planner — design tokens.
+ * A calm, cool "planning surface" (not white, not cream) so the colored course
+ * blocks carry the eye. Triton navy + gold appear only as ink and primary accent.
+ */
+:root {
+  /* Neutrals / chrome */
+  --ink: #0b1f3a; /* deep Triton navy — primary text */
+  --ink-2: #24304a;
+  --canvas: #eef2f7; /* app background — cool paper */
+  --surface: #ffffff; /* cards + calendar body */
+  --surface-2: #f6f8fb; /* recessed panels, hour gutter */
+  --line: #e1e7f0; /* hairline dividers + grid lines */
+  --line-strong: #cdd6e4;
+
+  /* Text scale */
+  --text: #0b1f3a;
+  --text-muted: #5a6b83;
+  --text-faint: #8493a8;
+
+  /* Brand accent — used sparingly (trident, primary buttons, now-line) */
+  --gold: #e8a200;
+  --gold-ink: #7a5300;
+  --gold-soft: #fff4d6;
+
+  /* Semantic */
+  --conflict: #e5484d;
+  --conflict-soft: #fdecec;
+  --conflict-ink: #a01820;
+  --ok: #1f9d63;
+
+  /* Radius / elevation */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(11, 31, 58, 0.06), 0 1px 3px rgba(11, 31, 58, 0.05);
+  --shadow-md: 0 4px 14px rgba(11, 31, 58, 0.08);
+  --shadow-lg: 0 12px 34px rgba(11, 31, 58, 0.14);
+
+  /* Type */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'SF Mono', 'Roboto Mono',
+    Consolas, 'Liberation Mono', monospace;
+
+  /* Layout metrics */
+  --topbar-h: 60px;
+  --rail-w: 336px;
+  --hour-gutter-w: 56px;
+}

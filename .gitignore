@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output (built in CI / locally; zipped for the store)
+dist/
+web/dist/
+extension/dist/
+
+# Logs & caches
+*.log
+npm-debug.log*
+.vite/
+coverage/
+.eslintcache
+
+# Env & secrets (never commit)
+.env
+.env.*
+*.pem
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
