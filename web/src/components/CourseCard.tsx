@@ -1,6 +1,5 @@
 import type { PlanEntry } from '@triton/shared';
 import { colorsForHue, hueFromEntryColor } from '../lib/colors';
-import { openInTss } from '../lib/tss';
 import { OptionPicker } from './OptionPicker';
 import { Trash, External } from './icons';
 
@@ -10,9 +9,12 @@ interface Props {
   conflicted: boolean;
   onSelect: (optionId: string) => void;
   onRemove: () => void;
+  onOpenTss: () => void;
+  /** Open the selected section's booking page; absent when no link can be built. */
+  onBook?: () => void;
 }
 
-export function CourseCard({ entry, index, conflicted, onSelect, onRemove }: Props) {
+export function CourseCard({ entry, index, conflicted, onSelect, onRemove, onOpenTss, onBook }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
@@ -38,11 +40,21 @@ export function CourseCard({ entry, index, conflicted, onSelect, onRemove }: Pro
             <button
               type="button"
               className="course-card__tss"
-              onClick={() => openInTss(course)}
+              onClick={onOpenTss}
               title={`Open ${course.courseCode} in TSS`}
             >
               open in TSS <External size={11} strokeWidth={2.2} />
             </button>
+            {onBook && (
+              <button
+                type="button"
+                className="course-card__tss"
+                onClick={onBook}
+                title={`Go to booking for the selected ${course.courseCode} section`}
+              >
+                book section <External size={11} strokeWidth={2.2} />
+              </button>
+            )}
           </div>
         </div>
         <button

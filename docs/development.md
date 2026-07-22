@@ -75,6 +75,12 @@ issues, replays, retries, prefetches, or automates anything.
    captured pool (`courses`) and queued adds (`plan-add`) into the planner page via
    `window.postMessage`, targeted at the page's own origin. The page-side contract and
    validation live in `web/src/lib/bridge.ts` (same-window + same-origin checked).
+   The bridge is two-way: the page can post `open-tss` / `open-booking` requests
+   (source `triton-planner-page`). `open-tss` focuses the tab already showing that
+   exact module (ModuleID match), else opens a new tab — other TSS tabs are never
+   repurposed. `open-booking` reuses the one `#ZUSModule-display` booking tab
+   (reloading it when already on the same section), else opens one. Without the
+   extension the page falls back to a plain `window.open`.
 5. **Plan** (`web/`): `usePlan` merges incoming courses, computes conflicts
    (`shared/src/conflicts.ts`), renders the calendar/finals views, and persists to
    `localStorage`. Sharing lz-string-compresses the whole plan into the URL hash;

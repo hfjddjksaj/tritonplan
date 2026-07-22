@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { CourseOffering } from '@triton/shared';
-import type { UnscheduledItem } from '../lib/plan';
+import { findOption, type UnscheduledItem } from '../lib/plan';
+import { tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
 import { PRODUCT_NAME } from '../lib/brand';
 import { CourseCard } from './CourseCard';
@@ -46,16 +47,24 @@ export function CoursePanel({ ctl, unscheduled }: Props) {
 
       <div className="rail__scroll">
         {hasEntries ? (
-          ctl.plan.entries.map((entry, i) => (
-            <CourseCard
-              key={entry.course.id}
-              entry={entry}
-              index={i}
-              conflicted={ctl.conflictedCourseIds.has(entry.course.id)}
-              onSelect={(optionId) => ctl.selectOption(entry.course.id, optionId)}
-              onRemove={() => ctl.removeCourse(entry.course.id)}
-            />
-          ))
+          ctl.plan.entries.map((entry, i) => {
+            const option = findOption(entry.course, entry.selectedOptionId);
+            const bookable = option && tssBookingLink(entry.course, option) !== null;
+            return (
+              <CourseCard
+                key={entry.course.id}
+                entry={entry}
+                index={i}
+                conflicted={ctl.conflictedCourseIds.has(entry.course.id)}
+                onSelect={(optionId) => ctl.selectOption(entry.course.id, optionId)}
+                onRemove={() => ctl.removeCourse(entry.course.id)}
+                onOpenTss={() => ctl.openCourseInTss(entry.course)}
+                onBook={
+                  bookable ? () => ctl.openBookingInTss(entry.course, option) : undefined
+                }
+              />
+            );
+          })
         ) : (
           <div className="rail__empty">
             <Cap size={30} className="empty__mark" strokeWidth={1.4} />

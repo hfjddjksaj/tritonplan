@@ -82,6 +82,49 @@ export function mergeCourses(
   return merged;
 }
 
+/* ---- page → extension requests -------------------------------------------- */
+
+/** Envelope source for requests this page posts TO the extension's content script. */
+export const PAGE_BRIDGE_SOURCE = 'triton-planner-page';
+
+/** Ask the extension to open/focus a course in TSS (reusing an open TSS tab). */
+export interface OpenTssMessage {
+  source: typeof PAGE_BRIDGE_SOURCE;
+  type: 'open-tss';
+  version: 1;
+  payload: { url: string; moduleId: string };
+}
+
+/** Post an open-tss request for the extension's content script (same window/origin). */
+export function postOpenTss(url: string, moduleId: string): void {
+  const msg: OpenTssMessage = {
+    source: PAGE_BRIDGE_SOURCE,
+    type: 'open-tss',
+    version: 1,
+    payload: { url, moduleId },
+  };
+  window.postMessage(msg, window.location.origin);
+}
+
+/** Ask the extension to open a section's booking page, reusing the one booking tab. */
+export interface OpenBookingMessage {
+  source: typeof PAGE_BRIDGE_SOURCE;
+  type: 'open-booking';
+  version: 1;
+  payload: { url: string };
+}
+
+/** Post an open-booking request for the extension's content script. */
+export function postOpenBooking(url: string): void {
+  const msg: OpenBookingMessage = {
+    source: PAGE_BRIDGE_SOURCE,
+    type: 'open-booking',
+    version: 1,
+    payload: { url },
+  };
+  window.postMessage(msg, window.location.origin);
+}
+
 export interface BridgeHandlers {
   /** A `courses` message: merge these offerings into the browsed pool. */
   onCourses: (courses: CourseOffering[]) => void;

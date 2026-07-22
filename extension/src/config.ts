@@ -42,6 +42,12 @@ export const ODATA_CAPTURE_CHANNEL = 'triton-planner:odata-capture';
 export const BRIDGE_SOURCE = 'triton-planner-extension';
 export const BRIDGE_VERSION = 1 as const;
 
+/** Envelope source for requests the planner PAGE posts to us (see web bridge `postOpenTss`). */
+export const PAGE_BRIDGE_SOURCE = 'triton-planner-page';
+
+/** The only origin the open-tss handler will ever navigate to. */
+export const TSS_URL_PREFIX = 'https://tss.ucsd.edu/';
+
 /** Internal chrome.runtime message types (extension-internal only). */
 export const MSG = {
   /** relay → SW: one captured OData body to ingest + persist. */
@@ -54,6 +60,10 @@ export const MSG = {
   OPEN_PLANNER: 'tp:open-planner',
   /** planner-bridge → SW: atomically read+clear queued plan-adds. */
   DRAIN_PLAN_ADDS: 'tp:drain-plan-adds',
+  /** planner-bridge → SW: focus/reuse an open TSS tab for a course (else open one). */
+  OPEN_TSS: 'tp:open-tss',
+  /** planner-bridge → SW: open a booking page, reusing the one booking tab. */
+  OPEN_BOOKING: 'tp:open-booking',
   /** SW → planner-bridge (via tabs.sendMessage): re-push courses + queued plan-adds. */
   FLUSH: 'tp:flush',
 } as const;

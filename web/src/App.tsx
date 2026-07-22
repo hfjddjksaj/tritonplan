@@ -8,7 +8,6 @@ import { ConflictBanner } from './components/ConflictBanner';
 import { Calendar, Cap, Check } from './components/icons';
 import { downloadPlanJson, parsePlanJson, planToHash, shareUrl } from './lib/share';
 import { countConflictPairs } from './lib/plan';
-import { openInTss } from './lib/tss';
 import { PRODUCT_NAME } from './lib/brand';
 
 type Tab = 'calendar' | 'finals';
@@ -61,9 +60,9 @@ export default function App() {
   const handleOpenCourse = useCallback(
     (courseId: string) => {
       const course = ctl.courseById.get(courseId);
-      if (course) openInTss(course);
+      if (course) ctl.openCourseInTss(course);
     },
-    [ctl.courseById],
+    [ctl.courseById, ctl.openCourseInTss],
   );
 
   const handleReset = useCallback(() => {

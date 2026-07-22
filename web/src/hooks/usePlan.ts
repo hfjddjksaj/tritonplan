@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type CourseOffering,
   type PlanState,
+  type SectionOption,
   courseIdsInConflicts,
   findWeeklyConflicts,
   findFinalConflicts,
@@ -12,6 +13,7 @@ import { pickHue } from '../lib/colors';
 import { installBridgeListener, mergeCourses } from '../lib/bridge';
 import { loadPlan, savePlan, loadPool, savePool, purgeSeededSamples } from '../lib/storage';
 import { planFromHash } from '../lib/share';
+import { openBooking, openInTss } from '../lib/tss';
 import {
   DEFAULT_TERM,
   buildSelectedCourses,
@@ -141,13 +143,33 @@ export function usePlan() {
     setPool((prev) => prev.filter((c) => added.has(c.id)));
   }, [plan]);
 
+  // True once the extension's bridge has delivered anything this session — used to
+  // route "open in TSS" through the extension (which can reuse an open TSS tab).
+  const bridgeSeen = useRef(false);
+
   // Data bridge: `courses` merges into the pool; `plan-add` adds to the plan.
   useEffect(() => {
     return installBridgeListener({
-      onCourses: (incoming) => setPool((prev) => mergeCourses(prev, incoming)),
-      onPlanAdd: (course, optionId) => addCourseWithOption(course, optionId),
+      onCourses: (incoming) => {
+        bridgeSeen.current = true;
+        setPool((prev) => mergeCourses(prev, incoming));
+      },
+      onPlanAdd: (course, optionId) => {
+        bridgeSeen.current = true;
+        addCourseWithOption(course, optionId);
+      },
     });
   }, [addCourseWithOption]);
+
+  /** Jump back to TSS — through the extension when present, else a plain new tab. */
+  const openCourseInTss = useCallback((course: CourseOffering) => {
+    openInTss(course, bridgeSeen.current);
+  }, []);
+
+  /** Open a section's booking page (the extension reuses the one booking tab). */
+  const openBookingInTss = useCallback((course: CourseOffering, option: SectionOption) => {
+    openBooking(course, option, bridgeSeen.current);
+  }, []);
 
   // ---- derived view data (memoized) --------------------------------------
   const selectedCourses = useMemo(() => buildSelectedCourses(plan), [plan]);
@@ -194,6 +216,8 @@ export function usePlan() {
     resetPlan,
     removeFromPool,
     clearBrowsed,
+    openCourseInTss,
+    openBookingInTss,
     // derived
     selectedCourses,
     weeklyConflicts,

@@ -8,10 +8,12 @@
  */
 
 import { CaptureStore } from '../lib/capture-to-courses.js';
+import { extractModuleRef } from '../lib/tss-dom.js';
 import {
   MSG,
   PLANNER_URL,
   PLANNER_MATCH,
+  TSS_URL_PREFIX,
   type PlanAddIntent,
 } from '../config.js';
 import type { CourseOffering } from '@triton/shared';
@@ -78,6 +80,79 @@ async function openOrFocusPlanner(): Promise<chrome.tabs.Tab | undefined> {
   }
 }
 
+/** Hash-route prefix of TSS booking/module-display tabs (its own "Go To Booking" opens these). */
+const BOOKING_HASH = '#ZUSModule-display';
+
+async function queryTssTabs(): Promise<chrome.tabs.Tab[]> {
+  try {
+    return await chrome.tabs.query({ url: `${TSS_URL_PREFIX}*` });
+  } catch {
+    return [];
+  }
+}
+
+async function focusTab(tab: chrome.tabs.Tab, url?: string): Promise<void> {
+  if (tab.id == null) return;
+  await chrome.tabs.update(tab.id, url === undefined ? { active: true } : { active: true, url });
+  if (tab.windowId != null) {
+    await chrome.windows.update(tab.windowId, { focused: true });
+  }
+}
+
+/**
+ * Jump back to TSS for a course: focus the tab already showing that EXACT module
+ * (matched by ModuleID in the URL); otherwise open a fresh tab. Tabs on other
+ * courses, search views, or bookings are deliberately never repurposed.
+ * User-driven navigation only — never fetches or automates.
+ */
+async function openOrFocusTss(url: string, moduleId: string): Promise<void> {
+  const tabs = await queryTssTabs();
+  const onModule = moduleId
+    ? tabs.find((t) => t.url != null && extractModuleRef(t.url)?.moduleId === moduleId)
+    : undefined;
+  if (onModule && onModule.id != null) {
+    try {
+      await focusTab(onModule);
+      return;
+    } catch {
+      /* tab vanished between query and update — fall through to create */
+    }
+  }
+  try {
+    await chrome.tabs.create({ url });
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Open a booking page. Like TSS's own "Go To Booking", booking lives in its own tab —
+ * but repeat bookings reuse that one tab (navigating it, or reloading when it's
+ * already on the same section, so seat counts refresh) instead of piling up tabs.
+ */
+async function openOrReuseBookingTab(url: string): Promise<void> {
+  const tabs = await queryTssTabs();
+  const booking = tabs.find((t) => t.id != null && (t.url ?? '').includes(BOOKING_HASH));
+  if (booking && booking.id != null) {
+    try {
+      if (booking.url === url) {
+        await focusTab(booking);
+        await chrome.tabs.reload(booking.id);
+      } else {
+        await focusTab(booking, url);
+      }
+      return;
+    } catch {
+      /* fall through to create */
+    }
+  }
+  try {
+    await chrome.tabs.create({ url });
+  } catch {
+    /* ignore */
+  }
+}
+
 /* ---- Message router ------------------------------------------------------- */
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== 'object') return false;
@@ -135,6 +210,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: false });
           }
         } catch {
+          sendResponse({ ok: false });
+        }
+      })();
+      return true;
+    }
+
+    case MSG.OPEN_TSS:
+    case MSG.OPEN_BOOKING: {
+      const url = typeof msg.url === 'string' ? msg.url : '';
+      const moduleId = typeof msg.moduleId === 'string' ? msg.moduleId : '';
+      (async () => {
+        if (url.startsWith(TSS_URL_PREFIX)) {
+          if (msg.type === MSG.OPEN_BOOKING) await openOrReuseBookingTab(url);
+          else await openOrFocusTss(url, moduleId);
+          sendResponse({ ok: true });
+        } else {
           sendResponse({ ok: false });
         }
       })();

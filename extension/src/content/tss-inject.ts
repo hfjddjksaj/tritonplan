@@ -122,6 +122,12 @@ function flash(btn: HTMLButtonElement, text: string, ok: boolean): void {
 
 /** Resolve the current card → {course, option} and send a plan-add intent. */
 async function onAddClick(header: Element, btn: HTMLButtonElement): Promise<void> {
+  // The extension was reloaded/updated while this page stayed open: this orphaned
+  // script can't reach the new worker. Only a page refresh re-injects a live one.
+  if (!chrome.runtime?.id) {
+    flash(btn, 'Reload page', false);
+    return;
+  }
   const ref = extractModuleRef(location.hash || location.href);
   if (!ref) {
     flash(btn, 'No course open', false);
@@ -161,7 +167,8 @@ async function finish(
     });
     flash(btn, '✓ Added', true);
   } catch {
-    flash(btn, 'Error', false);
+    // Practically always an orphaned content script (extension reloaded underneath us).
+    flash(btn, 'Reload page', false);
   }
 }
 

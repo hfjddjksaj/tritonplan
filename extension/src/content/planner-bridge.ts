@@ -9,7 +9,14 @@
  * ⛔ NO-BAN RED LINE: touches ONLY our own extension + our own page. No TSS traffic.
  */
 
-import { BRIDGE_SOURCE, BRIDGE_VERSION, MSG, type PlanAddIntent } from '../config.js';
+import {
+  BRIDGE_SOURCE,
+  BRIDGE_VERSION,
+  MSG,
+  PAGE_BRIDGE_SOURCE,
+  TSS_URL_PREFIX,
+  type PlanAddIntent,
+} from '../config.js';
 import type { CourseOffering } from '@triton/shared';
 
 /**
@@ -69,6 +76,30 @@ async function syncAll(): Promise<void> {
 // The SW pings us when a new plan-add arrives while this tab is already open.
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === MSG.FLUSH) void syncAll();
+});
+
+// Page → extension: "open this course/booking in TSS". The SW focuses/reuses an
+// existing TSS tab instead of the page spawning a new one per click.
+// This is user-driven navigation only — nothing is fetched or automated.
+window.addEventListener('message', (event: MessageEvent) => {
+  if (event.source !== window || event.origin !== window.location.origin) return;
+  const d = event.data as
+    | { source?: unknown; type?: unknown; version?: unknown; payload?: { url?: unknown; moduleId?: unknown } }
+    | null;
+  if (!d || d.source !== PAGE_BRIDGE_SOURCE || d.version !== 1) return;
+  if (d.type !== 'open-tss' && d.type !== 'open-booking') return;
+  const url = d.payload?.url;
+  if (typeof url !== 'string' || !url.startsWith(TSS_URL_PREFIX)) return;
+  const moduleId = typeof d.payload?.moduleId === 'string' ? d.payload.moduleId : '';
+  const type = d.type === 'open-tss' ? MSG.OPEN_TSS : MSG.OPEN_BOOKING;
+  try {
+    void chrome.runtime.sendMessage({ type, url, moduleId }).catch(() => {
+      // SW unreachable — degrade to a plain new tab (may be popup-blocked; best effort).
+      window.open(url, '_blank', 'noopener');
+    });
+  } catch {
+    window.open(url, '_blank', 'noopener');
+  }
 });
 
 // On load: feed the pool + deliver anything queued (e.g. the click that opened this tab).

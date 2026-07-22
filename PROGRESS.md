@@ -58,12 +58,18 @@ TSS 页面 → `interceptor.ts`(MAIN world 钩 fetch/XHR) → `postMessage` → 
 3. **课程块太矮、信息不全**：`pxPerMinute` 0.92→**1.3**（50 分钟课 ≈65px）；代码与类型合并到同一行；块内行距 1.35；教师显示阈值 74→60px。标准 50 分钟课现在完整显示代码+类型/时间/地点/教师四行。
 4. **Finals 周历**：Finals 页在原列表下方新增 "Finals week at a glance" 日历卡。列为**最早→最晚考试日的连续真实日期**（空档日保留、**周六/周日正常渲染**并带周末底色）；复用 `CourseBlock` 与 cal-* 样式；布局为纯函数 `finalsDateRange`/`layoutFinalsWeek`（`lib/layout.ts`，同日重叠标红并排、>14 天跨度兜底），新增 3 个单测（web 共 42 个测试通过）。
 
+## 2026-07-22 交互功能（第三轮）
+
+1. **跳回 TSS 复用标签页**：planner 点课程不再无脑开新标签。桥升级为双向——页面发 `open-tss`（source `triton-planner-page`）→ SW **只做精确匹配**：URL 含该 ModuleID 的标签直接聚焦（不刷新），否则一律新建；其他课程/搜索/booking 的 TSS 标签绝不挪用（按用户实测反馈从"复用任意 TSS 标签"收紧而来）。未装扩展回退 `window.open`（planner 用"bridge 是否推送过数据"判断扩展在场）。SW 只接受 `https://tss.ucsd.edu/` 开头的 URL，纯用户触发导航，不破 NO-BAN 红线。注意：重装/重载扩展后必须刷新已打开的 TSS 页（孤儿 content script 连不上新 worker，"+" 按钮会提示 "Reload page"）。
+2. **从 planner 直接跳 booking**：逆向了 TSS "Go To Booking" 的 URL 文法（2026-07-22 由用户提供 CHEM-100A×2 + MATH-20D 三条实测 URL）：`fiori#ZUSModule-display?TileType=MYMOD&/Detail/EventPackage/SM/{ModuleID}/00000000/0/0/0/{nil-GUID}/{EventPackage 编号}/{年}/{学期}/?`，其中包编号 = enrollCode（`SE00152185`）去前缀去前导零。CourseCard 新增 "book section" 徽章（作用于当前选中 section，拼不出链接时隐藏）；扩展端 `open-booking` → 专用 booking 标签页复用（同 URL 二次点击聚焦并强制刷新以更新座位数），booking 标签与课程浏览标签互不抢占。web `tssBookingLink` 有精确复现实测 URL 的单测（共 85 个测试通过）。
+   - ⚠ 待验证：URL 中 `{ModuleID}` 位（CHEM-100A=2060）是否确为 ModuleID —— 需在 TSS 里打开 CHEM 100A 核对地址栏 `ModuleID='2060'`。
+
 ## 已知问题 / 待办
 
 - `normalize.ts` `PERIOD_SEASON` 仍只映射 Fall（'2'）——其他学期的 SAP AcademicPeriod 代码尚无实测数据，等捕获到 Winter/Spring/Summer 再补（防御性 fallback 会显示 "Period N YYYY"）。
 - "移除已浏览课程"对扩展已捕获的课程只在下次推送前生效；如需持久遗忘，要给扩展加"从 CaptureStore 删除该课程"的消息（popup 或 planner 侧入口）。
 - 本机（新电脑）尚未安装 Node —— 本轮验证用的是临时目录里的便携版 Node v22；正式开发建议装 Node ≥20。
-- 扩展 v0.1.0 **已上架** Chrome Web Store（链接见 docs/deployment.md）；本轮修复要发新版时需先把 manifest `version` 升到 0.1.1（商店拒绝同版本重传），再重新构建打包 —— 打包动作等用户确认后执行。
+- **v0.1.1 已打包**（2026-07-22 深夜，用户实测通过后确认）：manifest/package.json 版本号升至 0.1.1，生产构建已验证（无任何 localhost 痕迹、planner 指向 https://hfjddjksaj.github.io/tritonplan/、open-booking 链路完整），产物 `tritonplan-extension-v0.1.1.zip`（旧 v0.1.0 zip 已删）。**待用户执行**：① Chrome Web Store 上传 zip 发新版；② 把新的 `web/dist` 重新部署到 GitHub Pages —— 不部署的话线上 planner 没有 book 按钮、也不会发 open-tss 消息（新扩展对旧网站完全兼容，只是新交互不生效）。
 
 ## 常用命令
 
