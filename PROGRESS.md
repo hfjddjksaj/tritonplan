@@ -69,7 +69,8 @@ TSS 页面 → `interceptor.ts`(MAIN world 钩 fetch/XHR) → `postMessage` → 
 - `normalize.ts` `PERIOD_SEASON` 仍只映射 Fall（'2'）——其他学期的 SAP AcademicPeriod 代码尚无实测数据，等捕获到 Winter/Spring/Summer 再补（防御性 fallback 会显示 "Period N YYYY"）。
 - "移除已浏览课程"对扩展已捕获的课程只在下次推送前生效；如需持久遗忘，要给扩展加"从 CaptureStore 删除该课程"的消息（popup 或 planner 侧入口）。
 - 本机（新电脑）尚未安装 Node —— 本轮验证用的是临时目录里的便携版 Node v22；正式开发建议装 Node ≥20。
-- **v0.1.1 已打包**（2026-07-22 深夜，用户实测通过后确认）：manifest/package.json 版本号升至 0.1.1，生产构建已验证（无任何 localhost 痕迹、planner 指向 https://hfjddjksaj.github.io/tritonplan/、open-booking 链路完整），产物 `tritonplan-extension-v0.1.1.zip`（旧 v0.1.0 zip 已删）。**待用户执行**：① Chrome Web Store 上传 zip 发新版；② 把新的 `web/dist` 重新部署到 GitHub Pages —— 不部署的话线上 planner 没有 book 按钮、也不会发 open-tss 消息（新扩展对旧网站完全兼容，只是新交互不生效）。
+- **v0.1.1 已发布**（2026-07-23）：扩展 zip 已由用户上传 Chrome Web Store（审核中）；网站已通过 GitHub Actions 部署到 https://hfjddjksaj.github.io/tritonplan/ 并逐项验证（book 按钮、open-tss 桥、finals 周历均在线上 bundle 中，示例课程已剔除）。git 远端与本地已统一：老电脑的 2 个 commit 以 `-s ours` 合并保留历史（文件树以本机为准），`.github/workflows/deploy-pages.yml` 采自远端，此后 push main 即自动部署。
+- 已知过渡期缺口：商店 0.1.1 审核通过前，仍装着 0.1.0 的用户在新网站上点 "open in TSS"/"book section" 会静默无响应（旧扩展不监听 `open-tss`/`open-booking` 消息）；用户基数极小，接受等待审核。
 
 ## 常用命令
 
