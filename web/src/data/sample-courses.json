@@ -1,0 +1,1361 @@
+[
+  {
+    "id": "CSE-008A|2026|2",
+    "moduleId": "8461",
+    "subject": "CSE",
+    "number": "008A",
+    "courseCode": "CSE-008A",
+    "title": "Introduction to Programming and Computational Problem Solving - 1",
+    "term": {
+      "year": "2026",
+      "period": "2",
+      "label": "Fall 2026"
+    },
+    "units": 4,
+    "options": [
+      {
+        "id": "SE00154302",
+        "code": "P-001-001",
+        "enrollCode": "SE00154302",
+        "limit": 15,
+        "seatsAvailable": 15,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000958",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "11:00",
+                "end": "12:20",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-09",
+            "rawSched": "Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"
+          },
+          {
+            "id": "E 00004069",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Fri"
+                ],
+                "start": "08:00",
+                "end": "08:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-25",
+            "endDate": "2026-12-04",
+            "rawSched": "F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"
+          },
+          {
+            "id": "E 00002703",
+            "type": "LA",
+            "typeText": "Laboratory",
+            "sectionCode": "001-001-LA",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "09:00",
+                "end": "09:50",
+                "modality": "In Person",
+                "building": "Computer Science and Engineering Buildin",
+                "room": "B260",
+                "location": "Computer Science and Engineering Buildin Room B260"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 09:00 AM - 09:50 AM In Person @ Computer Science and Engineering Buildin Room B260"
+          }
+        ],
+        "final": {
+          "date": "2026-12-09",
+          "start": "11:30",
+          "end": "14:29",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154303",
+        "code": "P-001-002",
+        "enrollCode": "SE00154303",
+        "limit": 15,
+        "seatsAvailable": 15,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000958",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "11:00",
+                "end": "12:20",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-09",
+            "rawSched": "Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"
+          },
+          {
+            "id": "E 00004069",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Fri"
+                ],
+                "start": "08:00",
+                "end": "08:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-25",
+            "endDate": "2026-12-04",
+            "rawSched": "F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"
+          },
+          {
+            "id": "E 00002704",
+            "type": "LA",
+            "typeText": "Laboratory",
+            "sectionCode": "001-002-LA",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "10:00",
+                "end": "10:50",
+                "modality": "In Person",
+                "building": "Computer Science and Engineering Buildin",
+                "room": "B260",
+                "location": "Computer Science and Engineering Buildin Room B260"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 10:00 AM - 10:50 AM In Person @ Computer Science and Engineering Buildin Room B260"
+          }
+        ],
+        "final": {
+          "date": "2026-12-09",
+          "start": "11:30",
+          "end": "14:29",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154304",
+        "code": "P-001-003",
+        "enrollCode": "SE00154304",
+        "limit": 15,
+        "seatsAvailable": 15,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000958",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "11:00",
+                "end": "12:20",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-09",
+            "rawSched": "Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"
+          },
+          {
+            "id": "E 00004069",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Fri"
+                ],
+                "start": "08:00",
+                "end": "08:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-25",
+            "endDate": "2026-12-04",
+            "rawSched": "F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"
+          },
+          {
+            "id": "E 00002705",
+            "type": "LA",
+            "typeText": "Laboratory",
+            "sectionCode": "001-003-LA",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "11:00",
+                "end": "11:50",
+                "modality": "In Person",
+                "building": "Computer Science and Engineering Buildin",
+                "room": "B260",
+                "location": "Computer Science and Engineering Buildin Room B260"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 11:00 AM - 11:50 AM In Person @ Computer Science and Engineering Buildin Room B260"
+          }
+        ],
+        "final": {
+          "date": "2026-12-09",
+          "start": "11:30",
+          "end": "14:29",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154305",
+        "code": "P-001-004",
+        "enrollCode": "SE00154305",
+        "limit": 15,
+        "seatsAvailable": 15,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000958",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "11:00",
+                "end": "12:20",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-09",
+            "rawSched": "Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"
+          },
+          {
+            "id": "E 00004069",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Fri"
+                ],
+                "start": "08:00",
+                "end": "08:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-25",
+            "endDate": "2026-12-04",
+            "rawSched": "F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"
+          },
+          {
+            "id": "E 00002706",
+            "type": "LA",
+            "typeText": "Laboratory",
+            "sectionCode": "001-004-LA",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "12:00",
+                "end": "12:50",
+                "modality": "In Person",
+                "building": "Computer Science and Engineering Buildin",
+                "room": "B260",
+                "location": "Computer Science and Engineering Buildin Room B260"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 12:00 PM - 12:50 PM In Person @ Computer Science and Engineering Buildin Room B260"
+          }
+        ],
+        "final": {
+          "date": "2026-12-09",
+          "start": "11:30",
+          "end": "14:29",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154306",
+        "code": "P-001-005",
+        "enrollCode": "SE00154306",
+        "limit": 15,
+        "seatsAvailable": 15,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000958",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "11:00",
+                "end": "12:20",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-09",
+            "rawSched": "Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"
+          },
+          {
+            "id": "E 00004069",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Fri"
+                ],
+                "start": "08:00",
+                "end": "08:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-25",
+            "endDate": "2026-12-04",
+            "rawSched": "F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"
+          },
+          {
+            "id": "E 00002707",
+            "type": "LA",
+            "typeText": "Laboratory",
+            "sectionCode": "001-005-LA",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "13:00",
+                "end": "13:50",
+                "modality": "In Person",
+                "building": "Computer Science and Engineering Buildin",
+                "room": "B260",
+                "location": "Computer Science and Engineering Buildin Room B260"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 01:00 PM - 01:50 PM In Person @ Computer Science and Engineering Buildin Room B260"
+          }
+        ],
+        "final": {
+          "date": "2026-12-09",
+          "start": "11:30",
+          "end": "14:29",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154307",
+        "code": "P-001-006",
+        "enrollCode": "SE00154307",
+        "limit": 15,
+        "seatsAvailable": 15,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000958",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "11:00",
+                "end": "12:20",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-09",
+            "rawSched": "Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"
+          },
+          {
+            "id": "E 00004069",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Fri"
+                ],
+                "start": "08:00",
+                "end": "08:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-25",
+            "endDate": "2026-12-04",
+            "rawSched": "F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"
+          },
+          {
+            "id": "E 00002708",
+            "type": "LA",
+            "typeText": "Laboratory",
+            "sectionCode": "001-006-LA",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "14:00",
+                "end": "14:50",
+                "modality": "In Person",
+                "building": "Computer Science and Engineering Buildin",
+                "room": "B260",
+                "location": "Computer Science and Engineering Buildin Room B260"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 02:00 PM - 02:50 PM In Person @ Computer Science and Engineering Buildin Room B260"
+          }
+        ],
+        "final": {
+          "date": "2026-12-09",
+          "start": "11:30",
+          "end": "14:29",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154308",
+        "code": "P-001-007",
+        "enrollCode": "SE00154308",
+        "limit": 15,
+        "seatsAvailable": 15,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000958",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "11:00",
+                "end": "12:20",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-09",
+            "rawSched": "Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"
+          },
+          {
+            "id": "E 00004069",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Fri"
+                ],
+                "start": "08:00",
+                "end": "08:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-25",
+            "endDate": "2026-12-04",
+            "rawSched": "F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"
+          },
+          {
+            "id": "E 00002709",
+            "type": "LA",
+            "typeText": "Laboratory",
+            "sectionCode": "001-007-LA",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "15:00",
+                "end": "15:50",
+                "modality": "In Person",
+                "building": "Computer Science and Engineering Buildin",
+                "room": "B260",
+                "location": "Computer Science and Engineering Buildin Room B260"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 03:00 PM - 03:50 PM In Person @ Computer Science and Engineering Buildin Room B260"
+          }
+        ],
+        "final": {
+          "date": "2026-12-09",
+          "start": "11:30",
+          "end": "14:29",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154309",
+        "code": "P-001-008",
+        "enrollCode": "SE00154309",
+        "limit": 15,
+        "seatsAvailable": 15,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000958",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "11:00",
+                "end": "12:20",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-09",
+            "rawSched": "Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"
+          },
+          {
+            "id": "E 00004069",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Fri"
+                ],
+                "start": "08:00",
+                "end": "08:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-25",
+            "endDate": "2026-12-04",
+            "rawSched": "F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"
+          },
+          {
+            "id": "E 00002710",
+            "type": "LA",
+            "typeText": "Laboratory",
+            "sectionCode": "001-008-LA",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "16:00",
+                "end": "16:50",
+                "modality": "In Person",
+                "building": "Computer Science and Engineering Buildin",
+                "room": "B260",
+                "location": "Computer Science and Engineering Buildin Room B260"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 04:00 PM - 04:50 PM In Person @ Computer Science and Engineering Buildin Room B260"
+          }
+        ],
+        "final": {
+          "date": "2026-12-09",
+          "start": "11:30",
+          "end": "14:29",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154310",
+        "code": "P-001-009",
+        "enrollCode": "SE00154310",
+        "limit": 15,
+        "seatsAvailable": 15,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000958",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "11:00",
+                "end": "12:20",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-09",
+            "rawSched": "Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"
+          },
+          {
+            "id": "E 00004069",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Fri"
+                ],
+                "start": "08:00",
+                "end": "08:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-25",
+            "endDate": "2026-12-04",
+            "rawSched": "F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"
+          },
+          {
+            "id": "E 00002711",
+            "type": "LA",
+            "typeText": "Laboratory",
+            "sectionCode": "001-009-LA",
+            "instructors": [
+              "Leo Porter"
+            ],
+            "instructorEmails": [
+              "leporter@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "17:00",
+                "end": "17:50",
+                "modality": "In Person",
+                "building": "Computer Science and Engineering Buildin",
+                "room": "B260",
+                "location": "Computer Science and Engineering Buildin Room B260"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 05:00 PM - 05:50 PM In Person @ Computer Science and Engineering Buildin Room B260"
+          }
+        ],
+        "final": {
+          "date": "2026-12-09",
+          "start": "11:30",
+          "end": "14:29",
+          "modality": "In Person"
+        }
+      }
+    ]
+  },
+  {
+    "id": "CSE-030|2026|2",
+    "moduleId": "8632",
+    "subject": "CSE",
+    "number": "030",
+    "courseCode": "CSE-030",
+    "title": "Computer Organization",
+    "term": {
+      "year": "2026",
+      "period": "2",
+      "label": "Fall 2026"
+    },
+    "units": 4,
+    "options": [
+      {
+        "id": "SE00154368",
+        "code": "P-001-001",
+        "enrollCode": "SE00154368",
+        "limit": 146,
+        "seatsAvailable": 146,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000965",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Dean Tullsen"
+            ],
+            "instructorEmails": [
+              "dtullsen@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "14:00",
+                "end": "15:20",
+                "modality": "In Person",
+                "building": "Center Hall",
+                "room": "105",
+                "location": "Center Hall Room 105"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-10",
+            "rawSched": "Tu, Th 02:00 PM - 03:20 PM In Person @ Center Hall Room 105\nFinal Examination 12/10/2026 03:00 PM - 05:59 PM In Person"
+          },
+          {
+            "id": "E 00003994",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Dean Tullsen"
+            ],
+            "instructorEmails": [
+              "dtullsen@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "19:00",
+                "end": "19:50",
+                "modality": "In Person",
+                "building": "Center Hall",
+                "room": "214",
+                "location": "Center Hall Room 214"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 07:00 PM - 07:50 PM In Person @ Center Hall Room 214"
+          }
+        ],
+        "final": {
+          "date": "2026-12-10",
+          "start": "15:00",
+          "end": "17:59",
+          "modality": "In Person"
+        }
+      }
+    ]
+  },
+  {
+    "id": "CSE-011|2026|2",
+    "moduleId": "8509",
+    "subject": "CSE",
+    "number": "011",
+    "courseCode": "CSE-011",
+    "title": "Introduction to Programming and Computational Problem Solving - Accelerated Pace",
+    "term": {
+      "year": "2026",
+      "period": "2",
+      "label": "Fall 2026"
+    },
+    "units": 4,
+    "options": [
+      {
+        "id": "SE00154333",
+        "code": "P-001-001",
+        "enrollCode": "SE00154333",
+        "limit": 35,
+        "seatsAvailable": 35,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000959",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Joe Politz"
+            ],
+            "instructorEmails": [
+              "jpolitz@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "09:30",
+                "end": "10:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-10",
+            "rawSched": "Tu, Th 09:30 AM - 10:50 AM In Person @ Galbraith Hall Room 242\nFinal Examination 12/10/2026 08:00 AM - 10:59 AM In Person"
+          },
+          {
+            "id": "E 00003991",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-001-DI",
+            "instructors": [
+              "Joe Politz"
+            ],
+            "instructorEmails": [
+              "jpolitz@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "13:00",
+                "end": "13:50",
+                "modality": "In Person",
+                "building": "Center Hall",
+                "room": "214",
+                "location": "Center Hall Room 214"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 01:00 PM - 01:50 PM In Person @ Center Hall Room 214"
+          }
+        ],
+        "final": {
+          "date": "2026-12-10",
+          "start": "08:00",
+          "end": "10:59",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154334",
+        "code": "P-001-002",
+        "enrollCode": "SE00154334",
+        "limit": 35,
+        "seatsAvailable": 35,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000959",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Joe Politz"
+            ],
+            "instructorEmails": [
+              "jpolitz@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "09:30",
+                "end": "10:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-10",
+            "rawSched": "Tu, Th 09:30 AM - 10:50 AM In Person @ Galbraith Hall Room 242\nFinal Examination 12/10/2026 08:00 AM - 10:59 AM In Person"
+          },
+          {
+            "id": "E 00003992",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-002-DI",
+            "instructors": [
+              "Joe Politz"
+            ],
+            "instructorEmails": [
+              "jpolitz@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "14:00",
+                "end": "14:50",
+                "modality": "In Person",
+                "building": "Center Hall",
+                "room": "214",
+                "location": "Center Hall Room 214"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 02:00 PM - 02:50 PM In Person @ Center Hall Room 214"
+          }
+        ],
+        "final": {
+          "date": "2026-12-10",
+          "start": "08:00",
+          "end": "10:59",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154335",
+        "code": "P-001-003",
+        "enrollCode": "SE00154335",
+        "limit": 35,
+        "seatsAvailable": 35,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000959",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "001-000-LE",
+            "instructors": [
+              "Joe Politz"
+            ],
+            "instructorEmails": [
+              "jpolitz@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Tue",
+                  "Thu"
+                ],
+                "start": "09:30",
+                "end": "10:50",
+                "modality": "In Person",
+                "building": "Galbraith Hall",
+                "room": "242",
+                "location": "Galbraith Hall Room 242"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-10",
+            "rawSched": "Tu, Th 09:30 AM - 10:50 AM In Person @ Galbraith Hall Room 242\nFinal Examination 12/10/2026 08:00 AM - 10:59 AM In Person"
+          },
+          {
+            "id": "E 00003993",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "001-003-DI",
+            "instructors": [
+              "Joe Politz"
+            ],
+            "instructorEmails": [
+              "jpolitz@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Wed"
+                ],
+                "start": "16:00",
+                "end": "16:50",
+                "modality": "In Person",
+                "building": "Center Hall",
+                "room": "109",
+                "location": "Center Hall Room 109"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-30",
+            "endDate": "2026-12-02",
+            "rawSched": "W 04:00 PM - 04:50 PM In Person @ Center Hall Room 109"
+          }
+        ],
+        "final": {
+          "date": "2026-12-10",
+          "start": "08:00",
+          "end": "10:59",
+          "modality": "In Person"
+        }
+      },
+      {
+        "id": "SE00154336",
+        "code": "P-002-001",
+        "enrollCode": "SE00154336",
+        "limit": 90,
+        "seatsAvailable": 90,
+        "waitlist": 0,
+        "components": [
+          {
+            "id": "E 00000960",
+            "type": "LE",
+            "typeText": "Lecture",
+            "sectionCode": "002-000-LE",
+            "instructors": [
+              "Benjamin Ochoa"
+            ],
+            "instructorEmails": [
+              "bochoa@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Mon",
+                  "Wed"
+                ],
+                "start": "18:30",
+                "end": "19:50",
+                "modality": "In Person",
+                "building": "Center Hall",
+                "room": "115",
+                "location": "Center Hall Room 115"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-28",
+            "endDate": "2026-12-07",
+            "rawSched": "M, W 06:30 PM - 07:50 PM In Person @ Center Hall Room 115\nFinal Examination 12/07/2026 07:00 PM - 09:59 PM In Person"
+          },
+          {
+            "id": "E 00003983",
+            "type": "DI",
+            "typeText": "Discussion",
+            "sectionCode": "002-001-DI",
+            "instructors": [
+              "Benjamin Ochoa"
+            ],
+            "instructorEmails": [
+              "bochoa@ucsd.edu"
+            ],
+            "meetings": [
+              {
+                "days": [
+                  "Thu"
+                ],
+                "start": "17:00",
+                "end": "17:50",
+                "modality": "In Person",
+                "building": "Warren Lecture Hall",
+                "room": "2005",
+                "location": "Warren Lecture Hall Room 2005"
+              }
+            ],
+            "unscheduled": false,
+            "beginDate": "2026-09-24",
+            "endDate": "2026-12-03",
+            "rawSched": "Th 05:00 PM - 05:50 PM In Person @ Warren Lecture Hall Room 2005"
+          }
+        ],
+        "final": {
+          "date": "2026-12-07",
+          "start": "19:00",
+          "end": "21:59",
+          "modality": "In Person"
+        }
+      }
+    ]
+  }
+]

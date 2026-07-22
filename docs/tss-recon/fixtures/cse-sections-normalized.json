@@ -1,0 +1,57 @@
+{
+  "_comment": "Real TSS (SAP SLcM) data captured 2026-07-21 from tss.ucsd.edu via passive fetch/XHR interception on the Schedule of Classes app. Term = Fall 2026 (AcYear 2026, AcPeriod 2). This is the NORMALIZED form (events deduped by EventID; packages reference events by EventID). The raw OData `_sections` response is DENORMALIZED: one row per (event x package) pair, with all event fields inlined. See tss-api-notes.md.",
+  "CSE-008A": {
+    "moduleId": "8461", "acYear": "2026", "acPeriod": "2",
+    "events": [
+      {"EventID":"E 00000958","EventKey":"001","EventAbbr":"001-000-LE","TeachingMethod":"LE","TeachingMethod_Text":"Lecture","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"135","LocationText":"UC San Diego","BeginDate":"2026-09-24","EndDate":"2026-12-09","Sched":"Tu, Th 11:00 AM - 12:20 PM In Person @ Galbraith Hall Room 242\nFinal Examination 12/09/2026 11:30 AM - 02:29 PM In Person"},
+      {"EventID":"E 00002703","EventKey":"001","EventAbbr":"001-001-LA","TeachingMethod":"LA","TeachingMethod_Text":"Laboratory","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"15","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 09:00 AM - 09:50 AM In Person @ Computer Science and Engineering Buildin Room B260"},
+      {"EventID":"E 00002704","EventKey":"001","EventAbbr":"001-002-LA","TeachingMethod":"LA","TeachingMethod_Text":"Laboratory","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"15","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 10:00 AM - 10:50 AM In Person @ Computer Science and Engineering Buildin Room B260"},
+      {"EventID":"E 00002705","EventKey":"001","EventAbbr":"001-003-LA","TeachingMethod":"LA","TeachingMethod_Text":"Laboratory","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"15","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 11:00 AM - 11:50 AM In Person @ Computer Science and Engineering Buildin Room B260"},
+      {"EventID":"E 00002706","EventKey":"001","EventAbbr":"001-004-LA","TeachingMethod":"LA","TeachingMethod_Text":"Laboratory","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"15","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 12:00 PM - 12:50 PM In Person @ Computer Science and Engineering Buildin Room B260"},
+      {"EventID":"E 00002707","EventKey":"001","EventAbbr":"001-005-LA","TeachingMethod":"LA","TeachingMethod_Text":"Laboratory","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"15","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 01:00 PM - 01:50 PM In Person @ Computer Science and Engineering Buildin Room B260"},
+      {"EventID":"E 00002708","EventKey":"001","EventAbbr":"001-006-LA","TeachingMethod":"LA","TeachingMethod_Text":"Laboratory","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"15","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 02:00 PM - 02:50 PM In Person @ Computer Science and Engineering Buildin Room B260"},
+      {"EventID":"E 00002709","EventKey":"001","EventAbbr":"001-007-LA","TeachingMethod":"LA","TeachingMethod_Text":"Laboratory","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"15","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 03:00 PM - 03:50 PM In Person @ Computer Science and Engineering Buildin Room B260"},
+      {"EventID":"E 00002710","EventKey":"001","EventAbbr":"001-008-LA","TeachingMethod":"LA","TeachingMethod_Text":"Laboratory","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"15","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 04:00 PM - 04:50 PM In Person @ Computer Science and Engineering Buildin Room B260"},
+      {"EventID":"E 00002711","EventKey":"001","EventAbbr":"001-009-LA","TeachingMethod":"LA","TeachingMethod_Text":"Laboratory","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"15","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 05:00 PM - 05:50 PM In Person @ Computer Science and Engineering Buildin Room B260"},
+      {"EventID":"E 00004069","EventKey":"001","EventAbbr":"001-001-DI","TeachingMethod":"DI","TeachingMethod_Text":"Discussion","InstructorName":"Leo Porter","InstructorEmail":"mailto: LEPORTER@UCSD.EDU","Status":"Scheduled","Limit":"135","LocationText":"UC San Diego","BeginDate":"2026-09-25","EndDate":"2026-12-04","Sched":"F 08:00 AM - 08:50 AM In Person @ Galbraith Hall Room 242"}
+    ],
+    "packages": [
+      {"pkg":"SE00154302","text":"CSE-008A (P-001-001)","displayId":"SE00154302","limit":"15","seatsAvailable":"15","waitl":0,"statusText":"","events":["E 00000958","E 00002703","E 00004069"]},
+      {"pkg":"SE00154303","text":"CSE-008A (P-001-002)","displayId":"SE00154303","limit":"15","seatsAvailable":"15","waitl":0,"statusText":"","events":["E 00000958","E 00002704","E 00004069"]},
+      {"pkg":"SE00154304","text":"CSE-008A (P-001-003)","displayId":"SE00154304","limit":"15","seatsAvailable":"15","waitl":0,"statusText":"","events":["E 00000958","E 00002705","E 00004069"]},
+      {"pkg":"SE00154305","text":"CSE-008A (P-001-004)","displayId":"SE00154305","limit":"15","seatsAvailable":"15","waitl":0,"statusText":"","events":["E 00000958","E 00002706","E 00004069"]},
+      {"pkg":"SE00154306","text":"CSE-008A (P-001-005)","displayId":"SE00154306","limit":"15","seatsAvailable":"15","waitl":0,"statusText":"","events":["E 00000958","E 00002707","E 00004069"]},
+      {"pkg":"SE00154307","text":"CSE-008A (P-001-006)","displayId":"SE00154307","limit":"15","seatsAvailable":"15","waitl":0,"statusText":"","events":["E 00000958","E 00002708","E 00004069"]},
+      {"pkg":"SE00154308","text":"CSE-008A (P-001-007)","displayId":"SE00154308","limit":"15","seatsAvailable":"15","waitl":0,"statusText":"","events":["E 00000958","E 00002709","E 00004069"]},
+      {"pkg":"SE00154309","text":"CSE-008A (P-001-008)","displayId":"SE00154309","limit":"15","seatsAvailable":"15","waitl":0,"statusText":"","events":["E 00000958","E 00002710","E 00004069"]},
+      {"pkg":"SE00154310","text":"CSE-008A (P-001-009)","displayId":"SE00154310","limit":"15","seatsAvailable":"15","waitl":0,"statusText":"","events":["E 00000958","E 00002711","E 00004069"]}
+    ]
+  },
+  "CSE-030": {
+    "moduleId": "8632", "acYear": "2026", "acPeriod": "2",
+    "events": [
+      {"EventID":"E 00000965","EventKey":"001","EventAbbr":"001-000-LE","TeachingMethod":"LE","TeachingMethod_Text":"Lecture","InstructorName":"Dean Tullsen","InstructorEmail":"mailto: DTULLSEN@UCSD.EDU","Status":"Scheduled","Limit":"146","LocationText":"UC San Diego","BeginDate":"2026-09-24","EndDate":"2026-12-10","Sched":"Tu, Th 02:00 PM - 03:20 PM In Person @ Center Hall Room 105\nFinal Examination 12/10/2026 03:00 PM - 05:59 PM In Person"},
+      {"EventID":"E 00003994","EventKey":"001","EventAbbr":"001-001-DI","TeachingMethod":"DI","TeachingMethod_Text":"Discussion","InstructorName":"Dean Tullsen","InstructorEmail":"mailto: DTULLSEN@UCSD.EDU","Status":"Scheduled","Limit":"146","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 07:00 PM - 07:50 PM In Person @ Center Hall Room 214"}
+    ],
+    "packages": [
+      {"pkg":"SE00154368","text":"CSE-030 (P-001-001)","displayId":"SE00154368","limit":"146","seatsAvailable":"146","waitl":0,"statusText":"","events":["E 00000965","E 00003994"]}
+    ]
+  },
+  "CSE-011": {
+    "moduleId": "8509", "acYear": "2026", "acPeriod": "2",
+    "events": [
+      {"EventID":"E 00000959","EventKey":"001","EventAbbr":"001-000-LE","TeachingMethod":"LE","TeachingMethod_Text":"Lecture","InstructorName":"Joe Politz","InstructorEmail":"mailto: JPOLITZ@UCSD.EDU","Status":"Scheduled","Limit":"105","LocationText":"UC San Diego","BeginDate":"2026-09-24","EndDate":"2026-12-10","Sched":"Tu, Th 09:30 AM - 10:50 AM In Person @ Galbraith Hall Room 242\nFinal Examination 12/10/2026 08:00 AM - 10:59 AM In Person"},
+      {"EventID":"E 00000960","EventKey":"002","EventAbbr":"002-000-LE","TeachingMethod":"LE","TeachingMethod_Text":"Lecture","InstructorName":"Benjamin Ochoa","InstructorEmail":"mailto: BOCHOA@UCSD.EDU","Status":"Scheduled","Limit":"90","LocationText":"UC San Diego","BeginDate":"2026-09-28","EndDate":"2026-12-07","Sched":"M, W 06:30 PM - 07:50 PM In Person @ Center Hall Room 115\nFinal Examination 12/07/2026 07:00 PM - 09:59 PM In Person"},
+      {"EventID":"E 00003983","EventKey":"002","EventAbbr":"002-001-DI","TeachingMethod":"DI","TeachingMethod_Text":"Discussion","InstructorName":"Benjamin Ochoa","InstructorEmail":"mailto: BOCHOA@UCSD.EDU","Status":"Scheduled","Limit":"90","LocationText":"UC San Diego","BeginDate":"2026-09-24","EndDate":"2026-12-03","Sched":"Th 05:00 PM - 05:50 PM In Person @ Warren Lecture Hall Room 2005"},
+      {"EventID":"E 00003991","EventKey":"001","EventAbbr":"001-001-DI","TeachingMethod":"DI","TeachingMethod_Text":"Discussion","InstructorName":"Joe Politz","InstructorEmail":"mailto: JPOLITZ@UCSD.EDU","Status":"Scheduled","Limit":"35","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 01:00 PM - 01:50 PM In Person @ Center Hall Room 214"},
+      {"EventID":"E 00003992","EventKey":"001","EventAbbr":"001-002-DI","TeachingMethod":"DI","TeachingMethod_Text":"Discussion","InstructorName":"Joe Politz","InstructorEmail":"mailto: JPOLITZ@UCSD.EDU","Status":"Scheduled","Limit":"35","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 02:00 PM - 02:50 PM In Person @ Center Hall Room 214"},
+      {"EventID":"E 00003993","EventKey":"001","EventAbbr":"001-003-DI","TeachingMethod":"DI","TeachingMethod_Text":"Discussion","InstructorName":"Joe Politz","InstructorEmail":"mailto: JPOLITZ@UCSD.EDU","Status":"Scheduled","Limit":"35","LocationText":"UC San Diego","BeginDate":"2026-09-30","EndDate":"2026-12-02","Sched":"W 04:00 PM - 04:50 PM In Person @ Center Hall Room 109"}
+    ],
+    "packages": [
+      {"pkg":"SE00154333","text":"CSE-011 (P-001-001)","displayId":"SE00154333","limit":"35","seatsAvailable":"35","waitl":0,"statusText":"","events":["E 00000959","E 00003991"]},
+      {"pkg":"SE00154334","text":"CSE-011 (P-001-002)","displayId":"SE00154334","limit":"35","seatsAvailable":"35","waitl":0,"statusText":"","events":["E 00000959","E 00003992"]},
+      {"pkg":"SE00154335","text":"CSE-011 (P-001-003)","displayId":"SE00154335","limit":"35","seatsAvailable":"35","waitl":0,"statusText":"","events":["E 00000959","E 00003993"]},
+      {"pkg":"SE00154336","text":"CSE-011 (P-002-001)","displayId":"SE00154336","limit":"90","seatsAvailable":"90","waitl":0,"statusText":"","events":["E 00000960","E 00003983"]}
+    ]
+  }
+}

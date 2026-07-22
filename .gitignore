@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# packaged release artifacts (built from extension/dist on demand)
+*.zip
+
+# local working files (reference screenshots etc.)
+ref/
+
+# OS / editor noise
+.DS_Store
+*.log

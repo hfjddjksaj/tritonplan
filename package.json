@@ -1,0 +1,17 @@
+{
+  "name": "triton-planner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Recreate UCSD WebReg's course-planning visualization for the new SAP-based Triton Student System (TSS): a passive-scraping browser extension + a standalone calendar planner website.",
+  "workspaces": [
+    "shared",
+    "web",
+    "extension"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "license": "MIT"
+}
