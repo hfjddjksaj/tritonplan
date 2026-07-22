@@ -107,6 +107,11 @@ export const Check = (p: P) => (
     <path d="m5 12 5 5 9-11" />
   </svg>
 );
+export const ChevronDown = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
 export const External = (p: P) => (
   <svg {...base(p)}>
     <path d="M14 4h6v6" />

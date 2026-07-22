@@ -184,20 +184,13 @@ export function optionSummary(option: SectionOption): string {
   return parts.join(' · ');
 }
 
+/** Full location text — the calendar block's CSS ellipsizes only when space runs out. */
 function locationText(
   building?: string,
   room?: string,
   location?: string,
 ): string | undefined {
-  if (building && room) return `${shorten(building)} ${room}`;
+  if (building && room) return `${building} ${room}`;
   if (location) return location;
-  return building ? shorten(building) : undefined;
-}
-
-/** Buildings can be long/truncated in source; keep the first few words for a block. */
-function shorten(building: string): string {
-  const words = building.trim().split(/\s+/);
-  if (words.length <= 2) return building;
-  // e.g. "Computer Science and Engineering Buildin" -> "Computer Science…"
-  return words.slice(0, 2).join(' ') + '…';
+  return building;
 }

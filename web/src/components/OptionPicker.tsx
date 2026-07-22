@@ -1,20 +1,40 @@
 import { Fragment } from 'react';
 import type { CourseOffering } from '@triton/shared';
 import { optionSummaryParts } from '../lib/plan';
+import { ChevronDown } from './icons';
 
 interface Props {
   course: CourseOffering;
   selectedOptionId: string | null;
   onSelect: (optionId: string) => void;
+  /** Collapsed: only the toggle row shows (with the selected section's code). */
+  collapsed: boolean;
+  onToggle: () => void;
 }
 
-export function OptionPicker({ course, selectedOptionId, onSelect }: Props) {
+export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, onToggle }: Props) {
   if (course.options.length === 0) return null;
+  const selected = course.options.find((o) => o.id === selectedOptionId);
   return (
     <div className="picker">
-      <div className="eyebrow picker__label">
-        Section {course.options.length > 1 ? `· ${course.options.length} options` : ''}
-      </div>
+      <button
+        type="button"
+        className="picker__toggle"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        title={collapsed ? 'Show all sections' : 'Hide sections'}
+      >
+        <span className="eyebrow picker__label">
+          Section {course.options.length > 1 ? `· ${course.options.length} options` : ''}
+        </span>
+        {collapsed && selected && <span className="picker__selected mono">{selected.code}</span>}
+        <ChevronDown
+          size={14}
+          strokeWidth={2.2}
+          className={`picker__chev${collapsed ? '' : ' picker__chev--open'}`}
+        />
+      </button>
+      {collapsed ? null : (
       <div className="picker__list" role="radiogroup" aria-label={`${course.courseCode} section`}>
         {course.options.map((opt) => {
           const active = opt.id === selectedOptionId;
@@ -58,6 +78,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect }: Props) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

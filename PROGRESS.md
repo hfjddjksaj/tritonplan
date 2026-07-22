@@ -64,6 +64,11 @@ TSS 页面 → `interceptor.ts`(MAIN world 钩 fetch/XHR) → `postMessage` → 
 2. **从 planner 直接跳 booking**：逆向了 TSS "Go To Booking" 的 URL 文法（2026-07-22 由用户提供 CHEM-100A×2 + MATH-20D 三条实测 URL）：`fiori#ZUSModule-display?TileType=MYMOD&/Detail/EventPackage/SM/{ModuleID}/00000000/0/0/0/{nil-GUID}/{EventPackage 编号}/{年}/{学期}/?`，其中包编号 = enrollCode（`SE00152185`）去前缀去前导零。CourseCard 新增 "book section" 徽章（作用于当前选中 section，拼不出链接时隐藏）；扩展端 `open-booking` → 专用 booking 标签页复用（同 URL 二次点击聚焦并强制刷新以更新座位数），booking 标签与课程浏览标签互不抢占。web `tssBookingLink` 有精确复现实测 URL 的单测（共 85 个测试通过）。
    - ⚠ 待验证：URL 中 `{ModuleID}` 位（CHEM-100A=2060）是否确为 ModuleID —— 需在 TSS 里打开 CHEM 100A 核对地址栏 `ModuleID='2060'`。
 
+## 2026-07-23 前端修复（第四轮，纯 web 端，无需扩展发版）
+
+1. **Section 列表收纳**：课程卡的 section 列表默认收起（此前 9 个 option 全展开把侧栏撑得过长）。"SECTION · N OPTIONS" 行变为折叠开关（`OptionPicker` 新增 `collapsed`/`onToggle`，状态在 `CourseCard` 内，默认收起），收起时右侧显示当前选中的 section 代码，点击展开/收回，箭头随状态旋转。
+2. **日历块地点完整渲染**：删掉 `plan.ts` 的 `shorten()` 预截断（楼名超两词就被剪成 "Pepper Canyon…"，其实框里放得下）。现在渲染完整"楼名+房间号"，只在真正放不下时由 CSS ellipsis 兜底；源数据本身被 TSS 截断的楼名（"…Buildin"）无法恢复。
+
 ## 已知问题 / 待办
 
 - `normalize.ts` `PERIOD_SEASON` 仍只映射 Fall（'2'）——其他学期的 SAP AcademicPeriod 代码尚无实测数据，等捕获到 Winter/Spring/Summer 再补（防御性 fallback 会显示 "Period N YYYY"）。

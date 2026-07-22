@@ -546,10 +546,42 @@ p {
   border-top: 1px dashed var(--line);
   padding: 10px 12px 12px 15px;
 }
+.picker__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  background: transparent;
+  border: none;
+  text-align: left;
+}
+.picker__toggle:hover .picker__label {
+  color: var(--ink);
+}
 .picker__label {
-  margin-bottom: 7px;
+  margin-bottom: 0;
+}
+.picker__selected {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-text, var(--ink));
+}
+.picker__chev {
+  flex: none;
+  margin-left: auto; /* right-aligned; sits after the code when one is shown */
+  color: var(--text-faint);
+  transition: transform 0.15s ease;
+}
+.picker__selected + .picker__chev {
+  margin-left: 0;
+}
+.picker__chev--open {
+  transform: rotate(180deg);
 }
 .picker__list {
+  margin-top: 9px;
   display: flex;
   flex-direction: column;
   gap: 6px;

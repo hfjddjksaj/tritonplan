@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { PlanEntry } from '@triton/shared';
 import { colorsForHue, hueFromEntryColor } from '../lib/colors';
 import { OptionPicker } from './OptionPicker';
@@ -18,6 +19,8 @@ export function CourseCard({ entry, index, conflicted, onSelect, onRemove, onOpe
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
+  // Section list starts tucked away — long option lists otherwise dominate the rail.
+  const [sectionsOpen, setSectionsOpen] = useState(false);
 
   return (
     <section
@@ -71,6 +74,8 @@ export function CourseCard({ entry, index, conflicted, onSelect, onRemove, onOpe
         course={course}
         selectedOptionId={entry.selectedOptionId}
         onSelect={onSelect}
+        collapsed={!sectionsOpen}
+        onToggle={() => setSectionsOpen((v) => !v)}
       />
     </section>
   );
