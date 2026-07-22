@@ -60,19 +60,52 @@ function pngChunk(type, data) {
   return Buffer.concat([len, typeBuf, data, crcBuf]);
 }
 function iconPng(size) {
-  const bg = [0x1a, 0x4b, 0x8c, 0xff]; // brand blue
-  const fg = [0xff, 0xff, 0xff, 0xff]; // white "+"
-  const margin = Math.round(size * 0.24);
-  const half = Math.max(1, Math.round(size * 0.09));
-  const c = size / 2;
-  const raw = Buffer.alloc((size * 4 + 1) * size);
+  const PURPLE = [0x4a, 0x2a, 0x7c, 0xff]; // deep purple hexagon
+  const GOLD = [0xff, 0xc7, 0x2c, 0xff]; // gold trident
+  const CLEAR = [0, 0, 0, 0];
+  const S = size;
+  const cx = S / 2;
+  const cy = S / 2;
+  const f = (v) => v * S;
+  // deep-purple pointy-top hexagon (point-in-polygon)
+  const R = S * 0.49;
+  const verts = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (Math.PI / 3) * i - Math.PI / 2;
+    verts.push([cx + R * Math.cos(a), cy + R * Math.sin(a)]);
+  }
+  const inHex = (x, y) => {
+    let inside = false;
+    for (let i = 0, j = 5; i < 6; j = i++) {
+      const [xi, yi] = verts[i];
+      const [xj, yj] = verts[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  // gold trident: 3 pointed prongs + crossbar + shaft + base foot
+  const spike = (x, y, sx, tipY, baseY, half) => {
+    if (y < tipY || y > baseY) return false;
+    return Math.abs(x - sx) <= (half * (y - tipY)) / (baseY - tipY);
+  };
+  const rect = (x, y, x0, x1, y0, y1) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  const off = f(0.185);
+  const sh = f(0.04);
+  const inTrident = (x, y) =>
+    spike(x, y, cx, f(0.14), f(0.44), f(0.055)) ||
+    spike(x, y, cx - off, f(0.22), f(0.44), f(0.052)) ||
+    spike(x, y, cx + off, f(0.22), f(0.44), f(0.052)) ||
+    rect(x, y, cx - f(0.235), cx + f(0.235), f(0.42), f(0.485)) ||
+    rect(x, y, cx - sh, cx + sh, f(0.485), f(0.8)) ||
+    rect(x, y, cx - f(0.1), cx + f(0.1), f(0.8), f(0.855));
+  const raw = Buffer.alloc((S * 4 + 1) * S);
   let p = 0;
-  for (let y = 0; y < size; y++) {
+  for (let y = 0; y < S; y++) {
     raw[p++] = 0; // filter: none
-    for (let x = 0; x < size; x++) {
-      const vBar = Math.abs(x - c) <= half && y >= margin && y < size - margin;
-      const hBar = Math.abs(y - c) <= half && x >= margin && x < size - margin;
-      const col = vBar || hBar ? fg : bg;
+    for (let x = 0; x < S; x++) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const col = !inHex(px, py) ? CLEAR : inTrident(px, py) ? GOLD : PURPLE;
       raw[p++] = col[0];
       raw[p++] = col[1];
       raw[p++] = col[2];
