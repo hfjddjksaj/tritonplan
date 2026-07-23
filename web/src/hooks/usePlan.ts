@@ -48,6 +48,17 @@ export function usePlan() {
   const [plan, setPlan] = useState<PlanState>(initialPlan);
   const firstRun = useRef(true);
 
+  // A share link's #p=… is consumed ONCE: persist the imported plan immediately and
+  // strip the hash. Leaving it in the address bar would pin every future reload to
+  // that stale snapshot, silently discarding anything added since (real user bug).
+  useEffect(() => {
+    const fromHash = planFromHash(window.location.hash);
+    if (fromHash) {
+      savePlan(fromHash);
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, []);
+
   // Persist the plan on change (skip first render so we don't clobber before load).
   useEffect(() => {
     if (firstRun.current) {

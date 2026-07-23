@@ -31,13 +31,14 @@ export default function App() {
 
   const handleShare = useCallback(async () => {
     const url = shareUrl(ctl.plan);
-    // keep the address bar in sync so a copy/paste or bookmark also works
-    window.history.replaceState(null, '', `#${planToHash(ctl.plan)}`);
     try {
       await navigator.clipboard.writeText(url);
       flash('Share link copied to clipboard');
     } catch {
-      flash('Share link is in the address bar');
+      // Clipboard unavailable — expose the link via the address bar instead. The
+      // hash is consumed-and-cleared on next load, so it can't pin a stale plan.
+      window.history.replaceState(null, '', `#${planToHash(ctl.plan)}`);
+      flash('Share link is in the address bar — copy it from there');
     }
   }, [ctl.plan, flash]);
 
