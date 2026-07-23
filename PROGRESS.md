@@ -87,9 +87,10 @@ TSS 页面 → `interceptor.ts`(MAIN world 钩 fetch/XHR) → `postMessage` → 
 - **小红书首发包**：`docs/marketing/`——封面+三步卡（playwright 渲染 HTML 生成）+ 完整文案。策略：小红书先发（慢热型），**Reddit 等 0.1.1 上架**（0.1.0 新用户点 open in TSS/book section 静默无响应，首发帖不能带这个雷）。
 - 本机 playwright 插件 MCP 修复：`~/.claude/plugins/cache/.../playwright/unknown/.mcp.json` 改绝对路径 npx + env.PATH（Homebrew PATH 问题，插件更新会覆盖需重改）。
 
-## 当前发布状态（2026-07-23 会话结束时）
+## 当前发布状态（2026-07-23 晚更新）
 
-- **扩展 v0.1.1**：zip 已上传 Chrome Web Store，**审核中**。审核通过前的过渡期缺口：仍装 0.1.0 的用户在新网站点 "open in TSS"/"book section" 静默无响应（旧扩展不监听新消息）；用户基数极小，接受等待。
+- **扩展 v0.1.1 已上架** Chrome Web Store（商店页确认 Version 0.1.1 / Updated July 23, 2026），0.1.0 过渡期缺口随之关闭。
+- **宣发进度**：小红书首发笔记已发布（零 URL 策略）；Reddit r/UCSD 发布包就绪（`docs/marketing/reddit-post.md`，含正文成稿/时机/FAQ 口径/modmail 模板），待用户择时发帖。
 - **网站**：GitHub Actions 自动部署，push main 即上线。本次会话最后一版含全部第四/五轮 UI 改进 + 教学楼弹窗 + 分享哈希数据丢失修复，均已线上验证。
 - **git**：本地与远端 `hfjddjksaj/tritonplan` 已统一（老电脑历史以 `-s ours` 合并保留）。
 
