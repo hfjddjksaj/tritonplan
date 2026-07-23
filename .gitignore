@@ -31,3 +31,6 @@ docs/marketing-plan.md
 docs/screenshots/store/
 docs/screenshots/README.md
 docs/tools/
+
+# local Claude Code project config (marketing agent etc.) — not for GitHub
+.claude/
