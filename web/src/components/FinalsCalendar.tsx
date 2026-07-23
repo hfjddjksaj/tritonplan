@@ -15,13 +15,14 @@ import { CourseBlock } from './CourseBlock';
 interface Props {
   finals: FinalItem[];
   onOpenCourse: (courseId: string) => void;
+  onFocusCourse?: (courseId: string) => void;
 }
 
 /**
  * Week-style calendar of finals: one column per date from the earliest to the
  * latest exam (weekends included — finals do land on Sat/Sun).
  */
-export function FinalsCalendar({ finals, onOpenCourse }: Props) {
+export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse }: Props) {
   const cfg = FINALS_GRID;
   const { dates, byDate } = useMemo(() => {
     const items: FinalInstance[] = finals.map((f) => ({
@@ -103,7 +104,12 @@ export function FinalsCalendar({ finals, onOpenCourse }: Props) {
             {dates.map((date) => (
               <div key={date} className="cal-col" style={{ position: 'relative' }}>
                 {byDate[date]?.map((block) => (
-                  <CourseBlock key={block.key} block={block} onOpen={onOpenCourse} />
+                  <CourseBlock
+                    key={block.key}
+                    block={block}
+                    onOpen={onOpenCourse}
+                    onFocusCourse={onFocusCourse}
+                  />
                 ))}
               </div>
             ))}

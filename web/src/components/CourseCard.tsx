@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PlanEntry } from '@triton/shared';
 import { colorsForHue, hueFromEntryColor } from '../lib/colors';
 import { OptionPicker } from './OptionPicker';
@@ -8,6 +8,8 @@ interface Props {
   entry: PlanEntry;
   index: number;
   conflicted: boolean;
+  /** Bumped when this course's calendar block is clicked — expand sections and scroll here. */
+  focusNonce?: number | undefined;
   onSelect: (optionId: string) => void;
   onRemove: () => void;
   onOpenTss: () => void;
@@ -15,16 +17,34 @@ interface Props {
   onBook?: () => void;
 }
 
-export function CourseCard({ entry, index, conflicted, onSelect, onRemove, onOpenTss, onBook }: Props) {
+export function CourseCard({ entry, index, conflicted, focusNonce, onSelect, onRemove, onOpenTss, onBook }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
   // Section list starts tucked away — long option lists otherwise dominate the rail.
   const [sectionsOpen, setSectionsOpen] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const rootRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (focusNonce === undefined) return;
+    setSectionsOpen(true);
+    setFlash(true);
+    // Scroll after the expanded sections have been laid out.
+    const raf = requestAnimationFrame(() => {
+      rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    const t = setTimeout(() => setFlash(false), 1300);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, [focusNonce]);
 
   return (
     <section
-      className={`course-card${conflicted ? ' course-card--conflict' : ''}`}
+      ref={rootRef}
+      className={`course-card${conflicted ? ' course-card--conflict' : ''}${flash ? ' course-card--flash' : ''}`}
       style={{
         ['--c-spine' as string]: c.spine,
         ['--c-border' as string]: c.border,

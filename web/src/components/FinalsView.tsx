@@ -9,9 +9,10 @@ interface Props {
   finals: FinalItem[];
   conflicts: FinalConflict[];
   onOpenCourse: (courseId: string) => void;
+  onFocusCourse?: (courseId: string) => void;
 }
 
-export function FinalsView({ finals, conflicts, onOpenCourse }: Props) {
+export function FinalsView({ finals, conflicts, onOpenCourse, onFocusCourse }: Props) {
   const conflicted = new Set<string>();
   for (const c of conflicts) {
     conflicted.add(c.aCourseId);
@@ -76,7 +77,7 @@ export function FinalsView({ finals, conflicts, onOpenCourse }: Props) {
       </div>
 
       <div className="eyebrow fincal__title">Finals week at a glance</div>
-      <FinalsCalendar finals={finals} onOpenCourse={onOpenCourse} />
+      <FinalsCalendar finals={finals} onOpenCourse={onOpenCourse} onFocusCourse={onFocusCourse} />
     </div>
   );
 }

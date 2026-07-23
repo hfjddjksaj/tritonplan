@@ -39,9 +39,10 @@ interface Props {
   instances: MeetingInstance[];
   onOpenCourse: (courseId: string) => void;
   onOpenLocation: (block: PositionedBlock) => void;
+  onFocusCourse: (courseId: string) => void;
 }
 
-export function CalendarGrid({ instances, onOpenCourse, onOpenLocation }: Props) {
+export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusCourse }: Props) {
   const cfg = DEFAULT_GRID;
   const { byDay, usedDays } = useMemo(() => layoutWeek(instances, cfg), [instances, cfg]);
   const days = useMemo(() => visibleDays(usedDays), [usedDays]);
@@ -148,6 +149,7 @@ export function CalendarGrid({ instances, onOpenCourse, onOpenLocation }: Props)
                       block={block}
                       onOpen={onOpenCourse}
                       onOpenLocation={onOpenLocation}
+                      onFocusCourse={onFocusCourse}
                     />
                   ))}
                   {d === today && nowInWindow && (

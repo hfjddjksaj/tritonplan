@@ -11,16 +11,20 @@ interface Props {
   onOpen: (courseId: string) => void;
   /** Show where this block's building is; when absent the location stays plain text. */
   onOpenLocation?: (block: PositionedBlock) => void;
+  /** Reveal this course's card (sections expanded) in the rail; fires on any click
+      that isn't the code or the location text. */
+  onFocusCourse?: (courseId: string) => void;
 }
 
-export function CourseBlock({ block, onOpen, onOpenLocation }: Props) {
+export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse }: Props) {
   const c = colorsForHue(block.hue);
   const widthPct = 100 / block.laneCount;
   const compact = block.height < 42;
 
   return (
     <article
-      className={`block${block.conflict ? ' block--conflict' : ''}${compact ? ' block--sm' : ''}`}
+      className={`block${block.conflict ? ' block--conflict' : ''}${compact ? ' block--sm' : ''}${onFocusCourse ? ' block--focusable' : ''}`}
+      onClick={onFocusCourse ? () => onFocusCourse(block.courseId) : undefined}
       style={{
         top: block.top,
         height: Math.max(block.height, 18),
@@ -45,7 +49,10 @@ export function CourseBlock({ block, onOpen, onOpenLocation }: Props) {
         <button
           type="button"
           className="block__code"
-          onClick={() => onOpen(block.courseId)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(block.courseId);
+          }}
           title={`Open ${block.courseCode} in TSS`}
         >
           {block.courseCode}
@@ -61,7 +68,10 @@ export function CourseBlock({ block, onOpen, onOpenLocation }: Props) {
           <button
             type="button"
             className="block__loc block__loc--link"
-            onClick={() => onOpenLocation(block)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenLocation(block);
+            }}
             title={`Where is ${block.building}?`}
           >
             {block.location}

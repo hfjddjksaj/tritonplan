@@ -18,6 +18,9 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('calendar');
   const [toast, setToast] = useState<string | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
+  // Clicking a calendar block reveals that course's card in the rail. The nonce
+  // makes a second click on the same course re-trigger the scroll/expand.
+  const [focusReq, setFocusReq] = useState<{ courseId: string; nonce: number } | null>(null);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -68,6 +71,10 @@ export default function App() {
     [ctl.courseById, ctl.openCourseInTss],
   );
 
+  const handleFocusCourse = useCallback((courseId: string) => {
+    setFocusReq((prev) => ({ courseId, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+
   const handleReset = useCallback(() => {
     if (ctl.plan.entries.length === 0) return;
     if (window.confirm('Remove every course from the plan? Browsed courses stay.')) {
@@ -89,7 +96,7 @@ export default function App() {
         onReset={handleReset}
       />
       <div className="app__body">
-        <CoursePanel ctl={ctl} unscheduled={ctl.unscheduled} />
+        <CoursePanel ctl={ctl} unscheduled={ctl.unscheduled} focus={focusReq} />
 
         <main className="main">
           <div className="toolbar">
@@ -141,12 +148,14 @@ export default function App() {
               onOpenLocation={(block) => {
                 if (block.building) setMapLoc({ building: block.building, room: block.room });
               }}
+              onFocusCourse={handleFocusCourse}
             />
           ) : (
             <FinalsView
               finals={ctl.finals}
               conflicts={ctl.finalConflicts}
               onOpenCourse={handleOpenCourse}
+              onFocusCourse={handleFocusCourse}
             />
           )}
         </main>
