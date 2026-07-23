@@ -26,7 +26,11 @@ export interface MeetingInstance {
   typeText: string;
   hue: number;
   instructor?: string;
+  /** Combined display text, e.g. "Galbraith Hall 242". */
   location?: string;
+  /** Raw building name (possibly TSS-truncated) — drives the building popover. */
+  building?: string;
+  room?: string;
   start: string; // "HH:MM"
   end: string; // "HH:MM"
   day: Weekday;

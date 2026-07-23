@@ -5,6 +5,7 @@ import { CoursePanel } from './components/CoursePanel';
 import { CalendarGrid } from './components/CalendarGrid';
 import { FinalsView } from './components/FinalsView';
 import { ConflictBanner } from './components/ConflictBanner';
+import { BuildingPopover } from './components/BuildingPopover';
 import { Calendar, Cap, Check } from './components/icons';
 import { downloadPlanJson, parsePlanJson, planToHash, shareUrl } from './lib/share';
 import { countConflictPairs } from './lib/plan';
@@ -16,6 +17,7 @@ export default function App() {
   const ctl = usePlan();
   const [tab, setTab] = useState<Tab>('calendar');
   const [toast, setToast] = useState<string | null>(null);
+  const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -132,7 +134,13 @@ export default function App() {
           )}
 
           {tab === 'calendar' ? (
-            <CalendarGrid instances={ctl.instances} onOpenCourse={handleOpenCourse} />
+            <CalendarGrid
+              instances={ctl.instances}
+              onOpenCourse={handleOpenCourse}
+              onOpenLocation={(block) => {
+                if (block.building) setMapLoc({ building: block.building, room: block.room });
+              }}
+            />
           ) : (
             <FinalsView
               finals={ctl.finals}
@@ -147,6 +155,14 @@ export default function App() {
         <div className="toast" role="status">
           <Check size={16} className="toast__check" /> {toast}
         </div>
+      )}
+
+      {mapLoc && (
+        <BuildingPopover
+          building={mapLoc.building}
+          room={mapLoc.room}
+          onClose={() => setMapLoc(null)}
+        />
       )}
     </div>
   );

@@ -71,6 +71,7 @@ TSS 页面 → `interceptor.ts`(MAIN world 钩 fetch/XHR) → `postMessage` → 
 3. **Section 选项时间片段加类型标签**：每段时间前显示 LEC/DIS/LAB 三字母缩写（课程主题色小字；`TYPE_TAG` 映射全部已知 TSS TeachingMethod 代码，未知类型取全称前三字母兜底）。
 4. **课程卡action徽章低调强调色**："open in TSS"/"book section" 用课程主题色着文字+边框（区别于灰色静态标签），悬停加深。
 5. **日历块点击收窄到课程代码**：整块不再可点，只有课程代码（真按钮，悬停下划线）跳 TSS；块内其余区域预留给"点教学楼弹地图"（设想已记入 docs/future-direction.md）。
+6. **"点教学楼弹位置"上线**（方案 A：弹窗+跳转链接，用户拍板）：日历块的地点行可点 → 居中弹窗显示修复后的完整楼名 + 房间号 + 两个跳转按钮（Google Maps 楼名精确搜索深链 / UCSD 官方 ArcGIS 校园图——该图无深链参数，只能开全景后手动搜）。`lib/buildings.ts` 内置 35 栋教学楼标准名清单（起步版），**用唯一前缀匹配自动修复 TSS 截断楼名**（"…Buildin"→"…Building"），匹配不上照原文搜索兜底；弹窗内标注 TSS 原始文本保持可追溯。跳转均为用户点击触发，页面零外部请求。新增 4 个单测（web 共 50 个）。
 
 ## 已知问题 / 待办
 

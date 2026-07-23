@@ -9,9 +9,11 @@ interface Props {
   block: PositionedBlock;
   /** Jump back to this course's TSS schedule view. */
   onOpen: (courseId: string) => void;
+  /** Show where this block's building is; when absent the location stays plain text. */
+  onOpenLocation?: (block: PositionedBlock) => void;
 }
 
-export function CourseBlock({ block, onOpen }: Props) {
+export function CourseBlock({ block, onOpen, onOpenLocation }: Props) {
   const c = colorsForHue(block.hue);
   const widthPct = 100 / block.laneCount;
   const compact = block.height < 42;
@@ -53,7 +55,20 @@ export function CourseBlock({ block, onOpen }: Props) {
       <div className="block__time">
         {formatDisplay(block.start)} – {formatDisplay(block.end)}
       </div>
-      {!compact && block.location && <div className="block__loc">{block.location}</div>}
+      {!compact &&
+        block.location &&
+        (block.building && onOpenLocation ? (
+          <button
+            type="button"
+            className="block__loc block__loc--link"
+            onClick={() => onOpenLocation(block)}
+            title={`Where is ${block.building}?`}
+          >
+            {block.location}
+          </button>
+        ) : (
+          <div className="block__loc">{block.location}</div>
+        ))}
       {!compact && block.height > 60 && block.instructor && (
         <div className="block__instr">{block.instructor}</div>
       )}

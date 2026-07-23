@@ -68,6 +68,8 @@ export function meetingInstances(plan: PlanState): MeetingInstance[] {
             hue,
             instructor: comp.instructors[0],
             location: locationText(m.building, m.room, m.location),
+            building: m.building,
+            room: m.room,
             start: m.start,
             end: m.end,
             day,

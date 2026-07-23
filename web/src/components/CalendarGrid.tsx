@@ -9,6 +9,7 @@ import {
   layoutWeek,
   visibleDays,
   type MeetingInstance,
+  type PositionedBlock,
 } from '../lib/layout';
 import { todayWeekday, weekdayLong } from '../lib/format';
 import { CourseBlock } from './CourseBlock';
@@ -37,9 +38,10 @@ const DOW_LABEL: Record<Weekday, string> = {
 interface Props {
   instances: MeetingInstance[];
   onOpenCourse: (courseId: string) => void;
+  onOpenLocation: (block: PositionedBlock) => void;
 }
 
-export function CalendarGrid({ instances, onOpenCourse }: Props) {
+export function CalendarGrid({ instances, onOpenCourse, onOpenLocation }: Props) {
   const cfg = DEFAULT_GRID;
   const { byDay, usedDays } = useMemo(() => layoutWeek(instances, cfg), [instances, cfg]);
   const days = useMemo(() => visibleDays(usedDays), [usedDays]);
@@ -141,7 +143,12 @@ export function CalendarGrid({ instances, onOpenCourse }: Props) {
               {days.map((d) => (
                 <div key={d} className="cal-col" style={{ position: 'relative' }}>
                   {byDay[d].map((block) => (
-                    <CourseBlock key={block.key} block={block} onOpen={onOpenCourse} />
+                    <CourseBlock
+                      key={block.key}
+                      block={block}
+                      onOpen={onOpenCourse}
+                      onOpenLocation={onOpenLocation}
+                    />
                   ))}
                   {d === today && nowInWindow && (
                     <div className="cal-nowline" style={{ top: nowTop }} aria-hidden />
