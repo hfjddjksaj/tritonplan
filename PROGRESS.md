@@ -79,19 +79,30 @@ TSS 页面 → `interceptor.ts`(MAIN world 钩 fetch/XHR) → `postMessage` → 
 - **修复**：分享哈希改为一次性消费——载入时导入、立即 `savePlan` 持久化、随即从地址栏清除（`usePlan` 挂载 effect）；Share 成功时不再写地址栏（只进剪贴板），仅剪贴板不可用时才写哈希兜底（下次载入同样会被消费清除，无法再钉死 plan）。已用 puppeteer 复现原场景验证：打开分享链接 → 哈希清空 → 加课 → 连刷两次均保留。
 - 注意：被旧快照覆盖掉的课程无法找回，用户需重加一次；地址栏还挂着旧哈希的标签页会再导入一次快照（然后清除），建议直接用干净网址打开。
 
+## 当前发布状态（2026-07-23 会话结束时）
+
+- **扩展 v0.1.1**：zip 已上传 Chrome Web Store，**审核中**。审核通过前的过渡期缺口：仍装 0.1.0 的用户在新网站点 "open in TSS"/"book section" 静默无响应（旧扩展不监听新消息）；用户基数极小，接受等待。
+- **网站**：GitHub Actions 自动部署，push main 即上线。本次会话最后一版含全部第四/五轮 UI 改进 + 教学楼弹窗 + 分享哈希数据丢失修复，均已线上验证。
+- **git**：本地与远端 `hfjddjksaj/tritonplan` 已统一（老电脑历史以 `-s ours` 合并保留）。
+
 ## 已知问题 / 待办
 
 - `normalize.ts` `PERIOD_SEASON` 仍只映射 Fall（'2'）——其他学期的 SAP AcademicPeriod 代码尚无实测数据，等捕获到 Winter/Spring/Summer 再补（防御性 fallback 会显示 "Period N YYYY"）。
 - "移除已浏览课程"对扩展已捕获的课程只在下次推送前生效；如需持久遗忘，要给扩展加"从 CaptureStore 删除该课程"的消息（popup 或 planner 侧入口）。
-- 本机（新电脑）尚未安装 Node —— 本轮验证用的是临时目录里的便携版 Node v22；正式开发建议装 Node ≥20。
-- **v0.1.1 已发布**（2026-07-23）：扩展 zip 已由用户上传 Chrome Web Store（审核中）；网站已通过 GitHub Actions 部署到 https://hfjddjksaj.github.io/tritonplan/ 并逐项验证（book 按钮、open-tss 桥、finals 周历均在线上 bundle 中，示例课程已剔除）。git 远端与本地已统一：老电脑的 2 个 commit 以 `-s ours` 合并保留历史（文件树以本机为准），`.github/workflows/deploy-pages.yml` 采自远端，此后 push main 即自动部署。
-- 已知过渡期缺口：商店 0.1.1 审核通过前，仍装着 0.1.0 的用户在新网站上点 "open in TSS"/"book section" 会静默无响应（旧扩展不监听 `open-tss`/`open-booking` 消息）；用户基数极小，接受等待审核。
+- `lib/buildings.ts` 的 35 栋教学楼清单是起步版：遇到弹窗里显示原始截断楼名（说明没匹配上）就把该楼加进清单。
+- README 截图仍待补（docs/screenshots/）；商店 listing 的截图同理。
+- 后续功能设想集中在 `docs/future-direction.md`：移动端访问 plan（推荐做"URL 自动同步 + 二维码 + 响应式"三件套）；教学楼弹窗升级为应用内地图（需坐标数据 + 静态底图）。
+
+## 开发环境备忘（本机）
+
+- Node/npm/gh 由 Homebrew 安装在 `/opt/homebrew/bin`，非交互 shell 需 `export PATH="/opt/homebrew/bin:$PATH"`；git 为系统自带 `/usr/bin/git`，全局身份 hfjddjksaj-mac / duzijue@gmail.com，gh 已登录 hfjddjksaj。
 
 ## 常用命令
 
 ```sh
-npm run dev -w @triton/web      # planner 开发服务器 :5173
-npm run build                    # 全 workspace 构建
-npm test                         # 全 workspace vitest
-node extension/build.mjs --watch # 扩展 watch 构建 → extension/dist
+npm run dev -w @triton/web       # planner 开发服务器 :5173
+npm run build                    # 全 workspace 构建（web 生产包 → web/dist）
+npm test                         # 全 workspace vitest（当前 89 个测试）
+npm run build:dev -w @triton/extension  # 扩展 dev 构建（对接 localhost planner）
+npm run build -w @triton/extension      # 扩展生产构建（发版用；版本号规则见 deployment.md）
 ```
