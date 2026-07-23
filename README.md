@@ -38,11 +38,13 @@ You browse courses in TSS like you always do. TritonPlan quietly turns them into
 
 ## Screenshots
 
-*Screenshots are TBD — see [`docs/screenshots/`](./docs/screenshots/).*
+![Weekly calendar with a time conflict highlighted](docs/screenshots/calendar.png)
 
-<!-- ![Weekly calendar with a conflict highlighted](docs/screenshots/calendar.png) -->
-<!-- ![Finals view](docs/screenshots/finals.png) -->
-<!-- ![The "+ TritonPlan" button injected on a TSS section](docs/screenshots/tss-button.png) -->
+![Switch a section to clear the conflict](docs/screenshots/section-switch.gif)
+
+![Finals view flagging two overlapping final exams](docs/screenshots/finals.png)
+
+![The "+ TritonPlan" button injected on a TSS section card](docs/screenshots/tss-button.png)
 
 ---
 

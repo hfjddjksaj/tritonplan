@@ -79,6 +79,14 @@ TSS 页面 → `interceptor.ts`(MAIN world 钩 fetch/XHR) → `postMessage` → 
 - **修复**：分享哈希改为一次性消费——载入时导入、立即 `savePlan` 持久化、随即从地址栏清除（`usePlan` 挂载 effect）；Share 成功时不再写地址栏（只进剪贴板），仅剪贴板不可用时才写哈希兜底（下次载入同样会被消费清除，无法再钉死 plan）。已用 puppeteer 复现原场景验证：打开分享链接 → 哈希清空 → 加课 → 连刷两次均保留。
 - 注意：被旧快照覆盖掉的课程无法找回，用户需重加一次；地址栏还挂着旧哈希的标签页会再导入一次快照（然后清除），建议直接用干净网址打开。
 
+## 2026-07-23 营销物料轮（Phase 0，纯 docs/素材，无代码改动）
+
+- **宣传计划**：`docs/marketing-plan.md`——渠道优先级 Reddit r/UCSD > Discord > 小红书/微信 > 校媒；节奏跟选课日历走（11 月 Winter 选课为全年最大窗口）；主发布前置条件 = v0.1.1 上架。
+- **截图全部补齐**（`docs/screenshots/`，演示课表经分享链接注入、playwright 隔离上下文实拍线上站）：calendar/finals/building-popover（@2x）、section-switch.gif（1680 原生四帧）、tss-button.png（真实登录态 TSS 实拍脱敏裁切）、store/ 两张 1280×800。两份 README 截图区已启用。
+- **演示课表**：5 门大一工科课（CSE 8A 为真实捕获数据），故意埋周三 11 点冲突 + 12/9 finals 撞车；生成/裁切脚本固化在 `docs/tools/`（gifenc/pngjs/jpeg-js 按需临时装，不进仓库依赖）。
+- **小红书首发包**：`docs/marketing/`——封面+三步卡（playwright 渲染 HTML 生成）+ 完整文案。策略：小红书先发（慢热型），**Reddit 等 0.1.1 上架**（0.1.0 新用户点 open in TSS/book section 静默无响应，首发帖不能带这个雷）。
+- 本机 playwright 插件 MCP 修复：`~/.claude/plugins/cache/.../playwright/unknown/.mcp.json` 改绝对路径 npx + env.PATH（Homebrew PATH 问题，插件更新会覆盖需重改）。
+
 ## 当前发布状态（2026-07-23 会话结束时）
 
 - **扩展 v0.1.1**：zip 已上传 Chrome Web Store，**审核中**。审核通过前的过渡期缺口：仍装 0.1.0 的用户在新网站点 "open in TSS"/"book section" 静默无响应（旧扩展不监听新消息）；用户基数极小，接受等待。

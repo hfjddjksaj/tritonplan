@@ -14,3 +14,6 @@ ref/
 # OS / editor noise
 .DS_Store
 *.log
+
+# playwright MCP working dir (snapshots, temp shots)
+.playwright-mcp/

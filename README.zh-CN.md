@@ -38,11 +38,13 @@ TritonPlan 由两个协同工作的部分组成：
 
 ## 截图
 
-*截图待补 —— 见 [`docs/screenshots/`](./docs/screenshots/)。*
+![高亮时间冲突的每周日历](docs/screenshots/calendar.png)
 
-<!-- ![高亮冲突的每周日历](docs/screenshots/calendar.png) -->
-<!-- ![期末视图](docs/screenshots/finals.png) -->
-<!-- ![注入在 TSS Section 上的 "+ TritonPlan" 按钮](docs/screenshots/tss-button.png) -->
+![切换 section 消解冲突](docs/screenshots/section-switch.gif)
+
+![期末视图标记两场重叠的期末考](docs/screenshots/finals.png)
+
+![注入在 TSS Section 卡片上的 "+ TritonPlan" 按钮](docs/screenshots/tss-button.png)
 
 ---
 
