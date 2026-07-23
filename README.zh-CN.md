@@ -1,6 +1,6 @@
 [English](./README.md) | **中文**
 
-# TritonPlan（崔顿排课）
+# TritonPlan
 
 **一款以日历为核心的加州大学圣地亚哥分校（UCSD）排课工具 —— 找回新版 Triton Student System（TSS）从未提供的 WebReg "plan"（排课）视图。**
 
