@@ -3,7 +3,7 @@ import type { CourseOffering } from '@triton/shared';
 import { findOption, type UnscheduledItem } from '../lib/plan';
 import { tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
-import { PRODUCT_NAME } from '../lib/brand';
+import { CHROME_STORE_URL, PRODUCT_NAME } from '../lib/brand';
 import { CourseCard } from './CourseCard';
 import { UnscheduledList } from './UnscheduledList';
 import { Search, Plus, Cap, X } from './icons';
@@ -11,6 +11,8 @@ import { Search, Plus, Cap, X } from './icons';
 interface Props {
   ctl: PlanController;
   unscheduled: UnscheduledItem[];
+  /** Calendar-block click: reveal this course's card with its sections expanded. */
+  focus?: { courseId: string; nonce: number } | null;
 }
 
 function matches(course: CourseOffering, q: string): boolean {
@@ -22,7 +24,7 @@ function matches(course: CourseOffering, q: string): boolean {
     .every((tok) => hay.includes(tok));
 }
 
-export function CoursePanel({ ctl, unscheduled }: Props) {
+export function CoursePanel({ ctl, unscheduled, focus }: Props) {
   const [filter, setFilter] = useState('');
 
   const browsed = useMemo(() => {
@@ -56,6 +58,7 @@ export function CoursePanel({ ctl, unscheduled }: Props) {
                 entry={entry}
                 index={i}
                 conflicted={ctl.conflictedCourseIds.has(entry.course.id)}
+                focusNonce={focus && focus.courseId === entry.course.id ? focus.nonce : undefined}
                 onSelect={(optionId) => ctl.selectOption(entry.course.id, optionId)}
                 onRemove={() => ctl.removeCourse(entry.course.id)}
                 onOpenTss={() => ctl.openCourseInTss(entry.course)}
@@ -101,6 +104,15 @@ export function CoursePanel({ ctl, unscheduled }: Props) {
               Courses you open in TSS show up here once the {PRODUCT_NAME} extension is installed —
               then bring the ones you want into your plan.
             </p>
+            <a
+              className="btn btn--primary browse-empty__cta"
+              href={CHROME_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Get the extension
+            </a>
+            <span className="browse-empty__hint">Free · Chrome &amp; Edge · read-only</span>
           </div>
         ) : (
           <>

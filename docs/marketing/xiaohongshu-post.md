@@ -43,10 +43,13 @@ Chrome / Edge 都能用，商店搜 TritonPlan 或走评论区链接🔗
 
 ## 发布后动作
 
-1. **第一条评论**（发布后立刻，自己顶起来）：
-   > 排课网站：hfjddjksaj.github.io/tritonplan
-   > Chrome 商店：chromewebstore.google.com 搜 "TritonPlan"
-   > 开源代码：github.com/hfjddjksaj/tritonplan
+1. **第一条评论**（发布后立刻，自己顶起来）——**安装直链放第一位**，这是产品唯一的安装入口；GitHub 只是开源背书，放最后：
+   > 📥 扩展安装（电脑 Chrome/Edge 打开）：
+   > chromewebstore.google.com/detail/tritonplan/lnchlccmjhhpbbemlfnpldooeehcmjel
+   > 📅 排课网站：hfjddjksaj.github.io/tritonplan
+   > 🔍 代码开源可查：github.com/hfjddjksaj/tritonplan
+   >
+   > 手机刷到的宝子先收藏，回电脑上装～商店直接搜 TritonPlan 也能找到（唯一结果）
 2. 24 小时内盯评论区：问安全性 → 用"零请求/开源/无账号"三点事实回；报 bug → 快修快回。
 3. 数据参考：收藏 > 点赞 说明选对了人群（收藏 = 选课时要用）。
 
