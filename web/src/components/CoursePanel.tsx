@@ -3,7 +3,7 @@ import type { CourseOffering } from '@triton/shared';
 import { findOption, type UnscheduledItem } from '../lib/plan';
 import { tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
-import { CHROME_STORE_URL, PRODUCT_NAME } from '../lib/brand';
+import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
 import { CourseCard } from './CourseCard';
 import { UnscheduledList } from './UnscheduledList';
 import { Search, Plus, Cap, X } from './icons';
@@ -167,6 +167,18 @@ export function CoursePanel({ ctl, unscheduled, focus }: Props) {
         )}
 
         <UnscheduledList items={unscheduled} />
+
+        <div className="rail__foot">
+          open source at{' '}
+          <a
+            className="rail__foot-link"
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            github.com/hfjddjksaj/tritonplan
+          </a>
+        </div>
       </div>
     </aside>
   );

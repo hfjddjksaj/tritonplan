@@ -44,3 +44,17 @@ export function todayWeekday(now = new Date()): Weekday {
   const map: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   return map[now.getDay()] ?? 'Mon';
 }
+
+/** Compact staleness label for a past ISO timestamp: "just now", "5m ago",
+ * "3h ago", "2d ago". Empty string when the timestamp doesn't parse. */
+export function relativeTime(iso: string, now = new Date()): string {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return '';
+  const sec = Math.max(0, Math.floor((now.getTime() - then) / 1000));
+  if (sec < 60) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.floor(hr / 24)}d ago`;
+}

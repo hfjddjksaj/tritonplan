@@ -12,6 +12,7 @@ import { classifyCapture } from './extract-odata.js';
 interface StoreShape {
   modules: Record<string, TssModuleRow>;               // by ModuleID
   sections: Record<string, TssSectionRow[]>;           // by ModuleID
+  capturedAt?: Record<string, string>;                 // by ModuleID; absent in old stores
 }
 
 function creditsToUnits(s: string | undefined): number | undefined {
@@ -44,6 +45,8 @@ function sectionRowKey(r: TssSectionRow): string {
 export class CaptureStore {
   private modules = new Map<string, TssModuleRow>();
   private sections = new Map<string, TssSectionRow[]>();
+  /** When each module's section rows (seat counts!) were last captured. */
+  private capturedAt = new Map<string, string>();
 
   /**
    * Ingest one captured OData response body (plain or $batch). Returns true if anything
@@ -77,6 +80,7 @@ export class CaptureStore {
         } else {
           this.sections.set(moduleId, rows); // latest capture wins (freshest seats/status)
         }
+        this.capturedAt.set(moduleId, new Date().toISOString());
         changed = true;
       }
     }
@@ -107,7 +111,9 @@ export class CaptureStore {
       const meta = this.metaFor(moduleId, rows);
       if (!meta) continue;
       try {
-        out.push(normalizeSections(rows, meta));
+        const course = normalizeSections(rows, meta);
+        const at = this.capturedAt.get(moduleId);
+        out.push(at !== undefined ? { ...course, capturedAt: at } : course);
       } catch {
         /* skip a module we can't normalize */
       }
@@ -120,6 +126,7 @@ export class CaptureStore {
     return {
       modules: Object.fromEntries(this.modules),
       sections: Object.fromEntries(this.sections),
+      capturedAt: Object.fromEntries(this.capturedAt),
     };
   }
 
@@ -128,6 +135,8 @@ export class CaptureStore {
     const shape = (data ?? {}) as Partial<StoreShape>;
     if (shape.modules) for (const [k, v] of Object.entries(shape.modules)) store.modules.set(k, v);
     if (shape.sections) for (const [k, v] of Object.entries(shape.sections)) store.sections.set(k, v);
+    if (shape.capturedAt)
+      for (const [k, v] of Object.entries(shape.capturedAt)) store.capturedAt.set(k, v);
     return store;
   }
 }

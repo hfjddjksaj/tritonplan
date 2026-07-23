@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { CaptureStore } from './capture-to-courses.js';
 import { classifyCapture } from './extract-odata.js';
 import { loadNormalizedFixture, denormalize } from '../parser/fixtures.js';
@@ -85,5 +85,45 @@ describe('capture pipeline', () => {
     store.ingestBody(odataBody(denormalize(fx['CSE-008A']!)));
     const restored = CaptureStore.deserialize(JSON.parse(JSON.stringify(store.serialize())));
     expect(restored.toCourses()[0]!.options).toHaveLength(9);
+  });
+});
+
+describe('capturedAt (seat-count freshness)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('stamps section captures and re-stamps on a fresh re-browse', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-24T10:00:00Z'));
+    const store = new CaptureStore();
+    store.ingestBody(odataBody([cse008Meta]));
+    store.ingestBody(odataBody(denormalize(fx['CSE-008A']!)));
+    expect(store.toCourses()[0]!.capturedAt).toBe('2026-07-24T10:00:00.000Z');
+
+    vi.setSystemTime(new Date('2026-07-24T12:30:00Z'));
+    store.ingestBody(odataBody(denormalize(fx['CSE-008A']!)));
+    expect(store.toCourses()[0]!.capturedAt).toBe('2026-07-24T12:30:00.000Z');
+  });
+
+  it('a module-list-only capture does not stamp (no seat data arrived)', () => {
+    const store = new CaptureStore();
+    store.ingestBody(odataBody([cse008Meta]));
+    expect(store.toCourses()).toHaveLength(0); // no sections, no course either
+  });
+
+  it('round-trips through serialize/deserialize; old stores without it stay undefined', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-24T10:00:00Z'));
+    const store = new CaptureStore();
+    store.ingestBody(odataBody([cse008Meta]));
+    store.ingestBody(odataBody(denormalize(fx['CSE-008A']!)));
+    const restored = CaptureStore.deserialize(JSON.parse(JSON.stringify(store.serialize())));
+    expect(restored.toCourses()[0]!.capturedAt).toBe('2026-07-24T10:00:00.000Z');
+
+    const legacy = store.serialize();
+    delete legacy.capturedAt;
+    const old = CaptureStore.deserialize(JSON.parse(JSON.stringify(legacy)));
+    expect(old.toCourses()[0]!.capturedAt).toBeUndefined();
   });
 });

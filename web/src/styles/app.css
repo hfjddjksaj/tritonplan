@@ -343,6 +343,24 @@ p {
   font-size: 11px;
   color: var(--text-faint);
 }
+/* quiet "open source" note tucked at the bottom of the rail */
+.rail__foot {
+  margin-top: 14px;
+  padding: 10px 4px 4px;
+  border-top: 1px dashed var(--line);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  text-align: center;
+}
+.rail__foot-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+.rail__foot-link:hover {
+  color: var(--text-muted);
+}
+
 .browse-none {
   padding: 10px 4px;
   font-size: 12px;
@@ -592,6 +610,27 @@ p {
   font-size: 11px;
   font-weight: 700;
   color: var(--c-text, var(--ink));
+}
+/* the seat numbers are snapshots — say so where people read them */
+.picker__note {
+  margin: 8px 2px 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+
+/* "seats 2h ago" staleness hint — data is only as fresh as the last TSS browse */
+.picker__fresh {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.picker__fresh + .picker__selected {
+  margin-left: 0;
+}
+.picker__fresh + .picker__chev {
+  margin-left: 0;
 }
 .picker__chev {
   flex: none;

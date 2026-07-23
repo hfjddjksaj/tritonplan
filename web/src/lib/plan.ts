@@ -28,6 +28,28 @@ export function findOption(
   return course.options.find((o) => o.id === optionId);
 }
 
+/**
+ * Refresh each plan entry's course copy from freshly-pushed capture data — entries
+ * otherwise keep the snapshot frozen at add time, so seat counts never update.
+ * The selection is kept when that option still exists in the fresh data; if TSS no
+ * longer offers it, fall back to the first option. Returns `prev` unchanged when no
+ * incoming course matches an entry.
+ */
+export function refreshPlanEntries(prev: PlanState, incoming: CourseOffering[]): PlanState {
+  if (prev.entries.length === 0 || incoming.length === 0) return prev;
+  const byId = new Map(incoming.map((c) => [c.id, c]));
+  let changed = false;
+  const entries = prev.entries.map((e) => {
+    const fresh = byId.get(e.course.id);
+    if (!fresh) return e;
+    changed = true;
+    const keep = e.selectedOptionId !== null && findOption(fresh, e.selectedOptionId) !== undefined;
+    const selectedOptionId = keep ? e.selectedOptionId : (fresh.options[0]?.id ?? null);
+    return { ...e, course: fresh, selectedOptionId };
+  });
+  return changed ? { ...prev, entries } : prev;
+}
+
 /** Total units of every added course (a course's units are fixed regardless of option). */
 export function planUnits(plan: PlanState): number {
   return plan.entries.reduce((sum, e) => sum + (e.course.units ?? 0), 0);

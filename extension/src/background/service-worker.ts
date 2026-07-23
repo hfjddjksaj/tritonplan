@@ -80,6 +80,38 @@ async function openOrFocusPlanner(): Promise<chrome.tabs.Tab | undefined> {
   }
 }
 
+/**
+ * After fresh data lands, ping any OPEN planner tabs to re-pull the pool, so seat
+ * counts refresh live while the student browses TSS. Debounced — one TSS browse
+ * emits several OData responses in a burst. This messages OUR page only; TSS is
+ * never contacted. Best effort: if the worker is evicted before the timer fires,
+ * the planner still gets the fresh pool on its next load.
+ */
+const REFRESH_PING_DELAY_MS = 400;
+let refreshPingTimer: ReturnType<typeof setTimeout> | undefined;
+function schedulePlannerRefresh(): void {
+  if (refreshPingTimer !== undefined) clearTimeout(refreshPingTimer);
+  refreshPingTimer = setTimeout(() => {
+    refreshPingTimer = undefined;
+    void (async () => {
+      let tabs: chrome.tabs.Tab[] = [];
+      try {
+        tabs = await chrome.tabs.query({ url: PLANNER_MATCH });
+      } catch {
+        return;
+      }
+      for (const t of tabs) {
+        if (t.id == null) continue;
+        try {
+          await chrome.tabs.sendMessage(t.id, { type: MSG.FLUSH });
+        } catch {
+          /* tab without a live bridge (mid-load) — it syncs itself on load */
+        }
+      }
+    })();
+  }, REFRESH_PING_DELAY_MS);
+}
+
 /** Hash-route prefix of TSS booking/module-display tabs (its own "Go To Booking" opens these). */
 const BOOKING_HASH = '#ZUSModule-display';
 
@@ -165,7 +197,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         try {
           if (body) {
             const store = await getStore();
-            if (store.ingestBody(body, url)) await persist(store);
+            if (store.ingestBody(body, url)) {
+              await persist(store);
+              schedulePlannerRefresh();
+            }
           }
           sendResponse({ ok: true });
         } catch {

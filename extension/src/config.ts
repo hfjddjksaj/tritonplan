@@ -64,7 +64,8 @@ export const MSG = {
   OPEN_TSS: 'tp:open-tss',
   /** planner-bridge → SW: open a booking page, reusing the one booking tab. */
   OPEN_BOOKING: 'tp:open-booking',
-  /** SW → planner-bridge (via tabs.sendMessage): re-push courses + queued plan-adds. */
+  /** SW → planner-bridge (via tabs.sendMessage): re-push courses + queued plan-adds.
+   *  Sent when a plan-add arrives and (debounced) after fresh captures land. */
   FLUSH: 'tp:flush',
 } as const;
 

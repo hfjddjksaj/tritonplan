@@ -1,6 +1,7 @@
-import { Fragment } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import type { CourseOffering } from '@triton/shared';
 import { optionSummaryParts } from '../lib/plan';
+import { relativeTime } from '../lib/format';
 import { ChevronDown } from './icons';
 
 interface Props {
@@ -13,8 +14,19 @@ interface Props {
 }
 
 export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, onToggle }: Props) {
+  // Re-render once a minute so the "seats Xm ago" staleness label keeps aging
+  // while the tab sits open. (Hook order: before any early return.)
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!course.capturedAt) return;
+    const t = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, [course.capturedAt]);
+
   if (course.options.length === 0) return null;
   const selected = course.options.find((o) => o.id === selectedOptionId);
+  const freshness = course.capturedAt ? relativeTime(course.capturedAt) : '';
+  const hasSeats = course.options.some((o) => o.seatsAvailable !== undefined);
   return (
     <div className="picker">
       <button
@@ -27,6 +39,14 @@ export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, on
         <span className="eyebrow picker__label">
           Section {course.options.length > 1 ? `· ${course.options.length} options` : ''}
         </span>
+        {freshness && (
+          <span
+            className="picker__fresh"
+            title={`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`}
+          >
+            seats {freshness}
+          </span>
+        )}
         {collapsed && selected && <span className="picker__selected mono">{selected.code}</span>}
         <ChevronDown
           size={14}
@@ -80,6 +100,12 @@ export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, on
             </button>
           );
         })}
+        {hasSeats && (
+          <p className="picker__note">
+            Note: seat counts don’t refresh on their own. Use “open in TSS” above and browse the
+            course again to refresh them.
+          </p>
+        )}
       </div>
       )}
     </div>

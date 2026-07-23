@@ -81,6 +81,9 @@ export interface CourseOffering {
   academicLevel?: string;     // "Lower Division" | "Graduate" | ...
   department?: string;        // "Computer Science and Engineering"
   options: SectionOption[];   // bookable packages
+  /** ISO timestamp of the capture this data (incl. seat counts) came from — i.e. when
+   *  the student last browsed this course in TSS. Absent on data from older builds. */
+  capturedAt?: string;
 }
 
 /** What the user has added to their plan and which option they picked per course. */

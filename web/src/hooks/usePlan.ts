@@ -21,6 +21,7 @@ import {
   finalsSorted,
   meetingInstances,
   planUnits,
+  refreshPlanEntries,
   unscheduledItems,
 } from '../lib/plan';
 
@@ -164,6 +165,9 @@ export function usePlan() {
       onCourses: (incoming) => {
         bridgeSeen.current = true;
         setPool((prev) => mergeCourses(prev, incoming));
+        // Plan entries hold their own course copy — refresh it too, or seat
+        // counts stay frozen at whatever they were when the course was added.
+        setPlan((prev) => refreshPlanEntries(prev, incoming));
       },
       onPlanAdd: (course, optionId) => {
         bridgeSeen.current = true;
