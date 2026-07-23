@@ -1,8 +1,7 @@
 # Developer Guide — TritonPlan
 
-Internal documentation for people working on the codebase. User-facing docs live in the
-[README](../README.md); current project status and known issues in [PROGRESS.md](../PROGRESS.md);
-publishing steps in [deployment.md](./deployment.md).
+Documentation for people working on the codebase. User-facing docs live in the
+[README](../README.md).
 
 ## Repository layout
 
@@ -14,8 +13,7 @@ plan/
 │   └── src/             Calendar UI, planner state, share/export, TSS deep links
 ├── extension/      The Chrome/Edge MV3 extension
 │   └── src/             Passive interceptor, TSS parser, background worker, popup
-└── docs/           TSS reverse-engineering notes + guides
-    └── screenshots/     (TBD)
+└── docs/           TSS reverse-engineering notes + README screenshots
 ```
 
 npm workspaces monorepo (`shared`, `web`, `extension`). Both `web` and `extension` consume
@@ -95,5 +93,6 @@ The normalized model shared by both halves is `shared/src/types.ts`
   reverse-engineering notes (endpoints, the `Sched` grammar, DOM selectors), with real
   captured fixtures in [`docs/tss-recon/fixtures/`](./tss-recon/fixtures/) that drive the
   parser tests.
-- [`docs/deployment.md`](./deployment.md) — GitHub Pages + Chrome Web Store publishing.
-- [`PROGRESS.md`](../PROGRESS.md) — status log and known issues.
+- The planner website deploys automatically: every push to `main` runs
+  [`deploy-pages.yml`](../.github/workflows/deploy-pages.yml) and publishes `web/dist`
+  to GitHub Pages.

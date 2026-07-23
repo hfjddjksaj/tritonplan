@@ -2,7 +2,7 @@ name: Deploy planner to GitHub Pages
 
 # Builds the TritonPlan planner website (web/) and publishes web/dist to GitHub Pages.
 # The extension is NOT deployed here — it is zipped from extension/dist and uploaded to the
-# Chrome Web Store manually (see docs/deployment.md).
+# Chrome Web Store manually.
 
 on:
   push:

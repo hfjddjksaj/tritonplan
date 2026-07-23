@@ -17,3 +17,17 @@ ref/
 
 # playwright MCP working dir (snapshots, temp shots)
 .playwright-mcp/
+
+# internal working docs (Claude-facing status/planning) — not for GitHub
+PROGRESS.md
+CLAUDE.md
+docs/deployment.md
+docs/future-direction.md
+docs/store-listing.md
+
+# marketing / promo material — not for GitHub
+docs/marketing/
+docs/marketing-plan.md
+docs/screenshots/store/
+docs/screenshots/README.md
+docs/tools/
