@@ -162,26 +162,42 @@ const DAY_ABBR: Record<Weekday, string> = {
   Sun: 'Su',
 };
 
+/** Three-letter display tags for TSS TeachingMethod codes. */
+const TYPE_TAG: Record<string, string> = {
+  LE: 'LEC',
+  DI: 'DIS',
+  LA: 'LAB',
+  SE: 'SEM',
+  ST: 'STU',
+  IN: 'IND',
+  FI: 'FIN',
+  OT: 'OTH',
+};
+
+/** One schedule fragment of an option, tagged with its component type. */
+export interface OptionSummaryPart {
+  /** Component type tag shown before the times, e.g. "LEC" / "DIS" / "LAB". */
+  type: string;
+  /** Compact meeting time, e.g. "MW 12:00–12:50". */
+  time: string;
+}
+
 /**
- * One compact schedule fragment per meeting, e.g. ["MW 12:00–12:50", "F 10:00–10:50"].
+ * One compact schedule fragment per meeting, e.g.
+ * [{type:'LEC', time:'TuTh 11:00–12:20'}, {type:'DIS', time:'F 08:00–08:50'}].
  * Kept as separate parts so the UI can wrap between meetings but never inside one.
  */
-export function optionSummaryParts(option: SectionOption): string[] {
-  const parts: string[] = [];
+export function optionSummaryParts(option: SectionOption): OptionSummaryPart[] {
+  const parts: OptionSummaryPart[] = [];
   for (const comp of option.components) {
     if (comp.unscheduled || comp.meetings.length === 0) continue;
+    const code = comp.type?.trim() ?? '';
+    const type = TYPE_TAG[code] ?? (comp.typeText?.slice(0, 3).toUpperCase() || code);
     for (const m of comp.meetings) {
-      parts.push(`${m.days.map((d) => DAY_ABBR[d]).join('')} ${m.start}–${m.end}`);
+      parts.push({ type, time: `${m.days.map((d) => DAY_ABBR[d]).join('')} ${m.start}–${m.end}` });
     }
   }
   return parts;
-}
-
-/** A short "MW 9:00–9:50 · F 10:00–10:50" style summary for an option. */
-export function optionSummary(option: SectionOption): string {
-  const parts = optionSummaryParts(option);
-  if (parts.length === 0) return 'TBA / no set time';
-  return parts.join(' · ');
 }
 
 /** Full location text — the calendar block's CSS ellipsizes only when space runs out. */

@@ -68,6 +68,9 @@ TSS 页面 → `interceptor.ts`(MAIN world 钩 fetch/XHR) → `postMessage` → 
 
 1. **Section 列表收纳**：课程卡的 section 列表默认收起（此前 9 个 option 全展开把侧栏撑得过长）。"SECTION · N OPTIONS" 行变为折叠开关（`OptionPicker` 新增 `collapsed`/`onToggle`，状态在 `CourseCard` 内，默认收起），收起时右侧显示当前选中的 section 代码，点击展开/收回，箭头随状态旋转。
 2. **日历块地点完整渲染**：删掉 `plan.ts` 的 `shorten()` 预截断（楼名超两词就被剪成 "Pepper Canyon…"，其实框里放得下）。现在渲染完整"楼名+房间号"，只在真正放不下时由 CSS ellipsis 兜底；源数据本身被 TSS 截断的楼名（"…Buildin"）无法恢复。
+3. **Section 选项时间片段加类型标签**：每段时间前显示 LEC/DIS/LAB 三字母缩写（课程主题色小字；`TYPE_TAG` 映射全部已知 TSS TeachingMethod 代码，未知类型取全称前三字母兜底）。
+4. **课程卡action徽章低调强调色**："open in TSS"/"book section" 用课程主题色着文字+边框（区别于灰色静态标签），悬停加深。
+5. **日历块点击收窄到课程代码**：整块不再可点，只有课程代码（真按钮，悬停下划线）跳 TSS；块内其余区域预留给"点教学楼弹地图"（设想已记入 docs/future-direction.md）。
 
 ## 已知问题 / 待办
 

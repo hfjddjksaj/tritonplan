@@ -58,9 +58,12 @@ export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, on
                   {parts.length === 0
                     ? 'TBA / no set time'
                     : parts.map((p, i) => (
-                        <Fragment key={p + i}>
+                        <Fragment key={p.type + p.time + i}>
                           {i > 0 && <span className="opt__summary-dot"> · </span>}
-                          <span className="opt__summary-part">{p}</span>
+                          <span className="opt__summary-part">
+                            {p.type && <span className="opt__summary-kind">{p.type}</span>}
+                            {p.time}
+                          </span>
                         </Fragment>
                       ))}
                 </span>

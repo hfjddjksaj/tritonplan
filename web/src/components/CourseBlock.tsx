@@ -19,15 +19,6 @@ export function CourseBlock({ block, onOpen }: Props) {
   return (
     <article
       className={`block${block.conflict ? ' block--conflict' : ''}${compact ? ' block--sm' : ''}`}
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(block.courseId)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen(block.courseId);
-        }
-      }}
       style={{
         top: block.top,
         height: Math.max(block.height, 18),
@@ -39,7 +30,7 @@ export function CourseBlock({ block, onOpen }: Props) {
         ['--b-border' as string]: c.border,
         ['--b-text' as string]: c.text,
       }}
-      title={`${block.courseCode} · ${block.typeText}\n${formatDisplay(block.start)} – ${formatDisplay(block.end)}${block.location ? `\n${block.location}` : ''}${block.instructor ? `\n${block.instructor}` : ''}${block.conflict ? '\n⚠ Time conflict' : ''}\nOpen in TSS`}
+      title={`${block.courseCode} · ${block.typeText}\n${formatDisplay(block.start)} – ${formatDisplay(block.end)}${block.location ? `\n${block.location}` : ''}${block.instructor ? `\n${block.instructor}` : ''}${block.conflict ? '\n⚠ Time conflict' : ''}`}
     >
       {block.conflict && (
         <span className="block__warn" aria-hidden>
@@ -47,7 +38,16 @@ export function CourseBlock({ block, onOpen }: Props) {
         </span>
       )}
       <div className="block__head">
-        <span className="block__code">{block.courseCode}</span>
+        {/* Only the code jumps to TSS — the rest of the block stays free for future
+            interactions (e.g. clicking the building to show it on a map). */}
+        <button
+          type="button"
+          className="block__code"
+          onClick={() => onOpen(block.courseId)}
+          title={`Open ${block.courseCode} in TSS`}
+        >
+          {block.courseCode}
+        </button>
         {!compact && <span className="block__type">{block.typeText}</span>}
       </div>
       <div className="block__time">

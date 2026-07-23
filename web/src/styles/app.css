@@ -432,15 +432,16 @@ p {
   font-size: 10.5px;
   font-weight: 600;
   white-space: nowrap;
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
+  /* quiet accent in the course's own color — reads as an action, not a static tag */
+  color: var(--c-text, var(--text-muted));
+  background: var(--surface);
+  border: 1px solid var(--c-border, var(--line));
   border-radius: 4px;
-  transition: color 0.12s ease, border-color 0.12s ease;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 .course-card__tss:hover {
-  color: var(--gold-ink);
-  border-color: var(--gold);
+  border-color: var(--c-spine, var(--gold));
+  box-shadow: 0 0 0 1px var(--c-spine, var(--gold));
 }
 
 /* ============================================================== course card */
@@ -657,6 +658,13 @@ p {
 .opt__summary-part {
   font-family: var(--font-mono);
   white-space: nowrap;
+}
+.opt__summary-kind {
+  margin-right: 5px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--c-spine, var(--text-faint));
 }
 .opt__summary-dot {
   color: var(--text-faint);
@@ -948,7 +956,6 @@ p {
   border-left: 3px solid var(--b-spine);
   padding: 4px 7px 4px 8px;
   overflow: hidden;
-  cursor: pointer;
   text-align: left;
   transition: box-shadow 0.14s ease, transform 0.08s ease, filter 0.14s ease;
   animation: block-in 0.18s ease both;
@@ -965,6 +972,12 @@ p {
   min-width: 0;
 }
 .block__code {
+  /* a real <button> — only the code is clickable (jumps to TSS) */
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -973,6 +986,10 @@ p {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+}
+.block__code:hover {
+  text-decoration: underline;
 }
 .block__type {
   flex: none;
