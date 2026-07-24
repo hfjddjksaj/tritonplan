@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
 import { canonicalBuilding, googleMapsLink, UCSD_CAMPUS_MAP_URL } from '../lib/buildings';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { External, X } from './icons';
 
 interface Props {
@@ -17,13 +17,7 @@ export function BuildingPopover({ building, room, onClose }: Props) {
   const canonical = canonicalBuilding(building);
   const name = canonical ?? building;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   return (
     <div className="mappop__backdrop" onClick={onClose}>

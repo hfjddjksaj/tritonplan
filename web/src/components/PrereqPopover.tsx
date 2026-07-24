@@ -1,6 +1,7 @@
-import { Fragment, useEffect } from 'react';
+import { Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import type { CourseOffering } from '@triton/shared';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { X } from './icons';
 
 interface Props {
@@ -19,13 +20,7 @@ interface Props {
 export function PrereqPopover({ course, accent, onClose }: Props) {
   const groups = course.prereqs ?? [];
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   return createPortal(
     <div className="mappop__backdrop" onClick={onClose}>

@@ -20,7 +20,10 @@ import {
   loadReceived,
   saveReceived,
   clearReceived,
+  loadViewing,
+  saveViewing,
   type ReceivedPlan,
+  type Viewing,
 } from '../lib/storage';
 import { planFromHash } from '../lib/share';
 import { openBooking, openInTss } from '../lib/tss';
@@ -53,25 +56,17 @@ function initialPool(): CourseOffering[] {
   return mergeCourses(SAMPLE, purgeSeededSamples(loadPool() ?? []));
 }
 
-// Which plan the app is showing. Session-scoped: the tab where a link was opened
-// keeps showing it across reloads; other tabs stay on the user's own plan.
-const VIEWING_KEY = 'triton-planner:viewing:v1';
-type Viewing = 'mine' | 'received';
-
-function loadViewing(): Viewing {
-  try {
-    return sessionStorage.getItem(VIEWING_KEY) === 'received' ? 'received' : 'mine';
-  } catch {
-    return 'mine';
-  }
-}
-
-function persistViewing(v: Viewing): void {
-  try {
-    sessionStorage.setItem(VIEWING_KEY, v);
-  } catch {
-    /* ignore */
-  }
+/** Append a fresh plan entry, coloring it with the next hue in the palette. */
+function appendEntry(
+  prev: PlanState,
+  course: CourseOffering,
+  selectedOptionId: string | null,
+): PlanState {
+  const hue = pickHue(prev.entries.length);
+  return {
+    ...prev,
+    entries: [...prev.entries, { course, selectedOptionId, color: String(hue) }],
+  };
 }
 
 export function usePlan() {
@@ -87,7 +82,7 @@ export function usePlan() {
 
   const switchViewing = useCallback((v: Viewing) => {
     setViewing(v);
-    persistViewing(v);
+    saveViewing(v);
   }, []);
 
   // A share link's #p=… is consumed ONCE into the received slot, then stripped from
@@ -105,14 +100,13 @@ export function usePlan() {
       };
       saveReceived(rec);
       setReceived(rec);
-      setViewing('received');
-      persistViewing('received');
+      switchViewing('received');
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     };
     consume();
     window.addEventListener('hashchange', consume);
     return () => window.removeEventListener('hashchange', consume);
-  }, []);
+  }, [switchViewing]);
 
   // Persist the plan on change (skip first render so we don't clobber before load).
   useEffect(() => {
@@ -132,14 +126,7 @@ export function usePlan() {
   const addCourse = useCallback((course: CourseOffering) => {
     setPlan((prev) => {
       if (prev.entries.some((e) => e.course.id === course.id)) return prev;
-      const hue = pickHue(prev.entries.length);
-      return {
-        ...prev,
-        entries: [
-          ...prev.entries,
-          { course, selectedOptionId: course.options[0]?.id ?? null, color: String(hue) },
-        ],
-      };
+      return appendEntry(prev, course, course.options[0]?.id ?? null);
     });
   }, []);
 
@@ -160,11 +147,7 @@ export function usePlan() {
           ),
         };
       }
-      const hue = pickHue(prev.entries.length);
-      return {
-        ...prev,
-        entries: [...prev.entries, { course, selectedOptionId: optionId, color: String(hue) }],
-      };
+      return appendEntry(prev, course, optionId);
     });
   }, []);
 

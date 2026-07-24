@@ -111,6 +111,13 @@ export interface FinalItem {
   final: FinalExam;
 }
 
+/** Lexicographic string compare returning -1 / 0 / 1. */
+function cmpStr(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 /** Finals of chosen options, sorted by date then start time. */
 export function finalsSorted(plan: PlanState): FinalItem[] {
   const out: FinalItem[] = [];
@@ -125,10 +132,7 @@ export function finalsSorted(plan: PlanState): FinalItem[] {
       final: option.final,
     });
   }
-  out.sort((a, b) => {
-    if (a.final.date !== b.final.date) return a.final.date < b.final.date ? -1 : 1;
-    return a.final.start < b.final.start ? -1 : a.final.start > b.final.start ? 1 : 0;
-  });
+  out.sort((a, b) => cmpStr(a.final.date, b.final.date) || cmpStr(a.final.start, b.final.start));
   return out;
 }
 

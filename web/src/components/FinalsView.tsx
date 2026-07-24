@@ -1,4 +1,4 @@
-import { formatDisplay, type FinalConflict } from '@triton/shared';
+import { courseIdsInConflicts, formatDisplay, type FinalConflict } from '@triton/shared';
 import { colorsForHue } from '../lib/colors';
 import { dateParts } from '../lib/format';
 import type { FinalItem } from '../lib/plan';
@@ -13,11 +13,7 @@ interface Props {
 }
 
 export function FinalsView({ finals, conflicts, onOpenCourse, onFocusCourse }: Props) {
-  const conflicted = new Set<string>();
-  for (const c of conflicts) {
-    conflicted.add(c.aCourseId);
-    conflicted.add(c.bCourseId);
-  }
+  const conflicted = courseIdsInConflicts(conflicts);
 
   if (finals.length === 0) {
     return (

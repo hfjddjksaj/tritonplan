@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatDisplay, type Weekday } from '@triton/shared';
+import { formatDisplay } from '@triton/shared';
 import {
   DEFAULT_GRID,
   gridHeightPx,
   gridStartMinutes,
   gridTotalMinutes,
   hourMarks,
+  hourMarkTop,
   layoutWeek,
   visibleDays,
   type MeetingInstance,
@@ -24,16 +25,6 @@ function useNow(): Date {
   }, []);
   return now;
 }
-
-const DOW_LABEL: Record<Weekday, string> = {
-  Mon: 'Mon',
-  Tue: 'Tue',
-  Wed: 'Wed',
-  Thu: 'Thu',
-  Fri: 'Fri',
-  Sat: 'Sat',
-  Sun: 'Sun',
-};
 
 interface Props {
   instances: MeetingInstance[];
@@ -83,7 +74,7 @@ export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusC
               className={`cal-head__day${d === today ? ' cal-head__day--today' : ''}`}
             >
               <span className="cal-head__dow">
-                {DOW_LABEL[d]}
+                {d}
                 {d === today && <span className="cal-head__today-dot" aria-hidden />}
               </span>
               <span className="sr-only">{weekdayLong(d)}</span>
@@ -100,7 +91,7 @@ export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusC
               <div
                 key={h}
                 className="cal-gutter__hour"
-                style={{ top: (h - cfg.startHour) * 60 * cfg.pxPerMinute }}
+                style={{ top: hourMarkTop(h, cfg) }}
               >
                 {formatDisplay(`${String(h).padStart(2, '0')}:00`)}
               </div>
@@ -127,14 +118,14 @@ export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusC
                 <div
                   key={h}
                   className="cal-hline"
-                  style={{ top: (h - cfg.startHour) * 60 * cfg.pxPerMinute }}
+                  style={{ top: hourMarkTop(h, cfg) }}
                 />
               ))}
               {marks.slice(0, -1).map((h) => (
                 <div
                   key={`half-${h}`}
                   className="cal-hline cal-hline--half"
-                  style={{ top: (h - cfg.startHour) * 60 * cfg.pxPerMinute + 30 * cfg.pxPerMinute }}
+                  style={{ top: hourMarkTop(h, cfg) + 30 * cfg.pxPerMinute }}
                 />
               ))}
             </div>

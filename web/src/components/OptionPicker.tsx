@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import type { CourseOffering } from '@triton/shared';
-import { optionSummaryParts } from '../lib/plan';
+import { findOption, optionSummaryParts } from '../lib/plan';
 import { ChevronDown } from './icons';
 
 interface Props {
@@ -16,7 +16,7 @@ interface Props {
 
 export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = false, collapsed, onToggle }: Props) {
   if (course.options.length === 0) return null;
-  const selected = course.options.find((o) => o.id === selectedOptionId);
+  const selected = findOption(course, selectedOptionId);
   const hasSeats = course.options.some((o) => o.seatsAvailable !== undefined);
   const showSub = course.options.length > 1 || (collapsed && selected);
   return (

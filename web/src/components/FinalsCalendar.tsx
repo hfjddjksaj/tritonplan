@@ -4,6 +4,7 @@ import {
   FINALS_GRID,
   gridHeightPx,
   hourMarks,
+  hourMarkTop,
   isoWeekday,
   layoutFinalsWeek,
   type FinalInstance,
@@ -70,7 +71,7 @@ export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse }: Props) {
             <div
               key={h}
               className="cal-gutter__hour"
-              style={{ top: (h - cfg.startHour) * 60 * cfg.pxPerMinute }}
+              style={{ top: hourMarkTop(h, cfg) }}
             >
               {formatDisplay(`${String(h).padStart(2, '0')}:00`)}
             </div>
@@ -95,7 +96,7 @@ export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse }: Props) {
               <div
                 key={h}
                 className="cal-hline"
-                style={{ top: (h - cfg.startHour) * 60 * cfg.pxPerMinute }}
+                style={{ top: hourMarkTop(h, cfg) }}
               />
             ))}
           </div>

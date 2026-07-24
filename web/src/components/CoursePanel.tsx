@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import type { CourseOffering } from '@triton/shared';
 import { findOption } from '../lib/plan';
 import { tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
@@ -13,24 +12,18 @@ interface Props {
   focus?: { courseId: string; nonce: number } | null;
 }
 
-function matches(course: CourseOffering, q: string): boolean {
-  const hay = `${course.courseCode} ${course.subject} ${course.number} ${course.title}`.toLowerCase();
-  return q
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .every((tok) => hay.includes(tok));
-}
-
 export function CoursePanel({ ctl, focus }: Props) {
   const [filter, setFilter] = useState('');
   const readOnly = ctl.readOnly;
   const entries = ctl.viewPlan.entries;
 
   const browsed = useMemo(() => {
-    const q = filter.trim();
-    if (!q) return ctl.browsedNotAdded;
-    return ctl.browsedNotAdded.filter((c) => matches(c, q));
+    const tokens = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return ctl.browsedNotAdded;
+    return ctl.browsedNotAdded.filter((c) => {
+      const hay = `${c.courseCode} ${c.subject} ${c.number} ${c.title}`.toLowerCase();
+      return tokens.every((tok) => hay.includes(tok));
+    });
   }, [filter, ctl.browsedNotAdded]);
 
   const hasEntries = entries.length > 0;

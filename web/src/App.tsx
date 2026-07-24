@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePlan } from './hooks/usePlan';
 import { Topbar } from './components/Topbar';
 import { CoursePanel } from './components/CoursePanel';
@@ -10,6 +10,7 @@ import { BuildingPopover } from './components/BuildingPopover';
 import { Calendar, Cap, Check } from './components/icons';
 import { downloadPlanJson, parsePlanJson, planFromLinkText, planToHash, shareUrl } from './lib/share';
 import { countConflictPairs } from './lib/plan';
+import { pluralize } from './lib/format';
 import { PRODUCT_NAME } from './lib/brand';
 
 type Tab = 'calendar' | 'finals';
@@ -85,7 +86,7 @@ export default function App() {
     if (
       n > 0 &&
       !window.confirm(
-        `Make this your plan? Your current plan (${n} course${n === 1 ? '' : 's'}) will be replaced.`,
+        `Make this your plan? Your current plan (${n} ${pluralize(n, 'course')}) will be replaced.`,
       )
     ) {
       return;
@@ -120,7 +121,16 @@ export default function App() {
     }
   }, [ctl, flash]);
 
-  const conflictCount = countConflictPairs(ctl.weeklyConflicts, ctl.finalConflicts);
+  const conflictCount = useMemo(
+    () => countConflictPairs(ctl.weeklyConflicts, ctl.finalConflicts),
+    [ctl.weeklyConflicts, ctl.finalConflicts],
+  );
+
+  function hintText(): string {
+    if (conflictCount > 0) return `${conflictCount} ${pluralize(conflictCount, 'conflict')}`;
+    if (ctl.selectedCourses.length > 0) return 'No conflicts — looks clear';
+    return 'Bring in a course to begin';
+  }
 
   return (
     <div className="app">
@@ -173,13 +183,7 @@ export default function App() {
               </button>
             </div>
             <div className="toolbar__spacer" />
-            <span className="toolbar__hint">
-              {conflictCount > 0
-                ? `${conflictCount} conflict${conflictCount === 1 ? '' : 's'}`
-                : ctl.selectedCourses.length > 0
-                  ? 'No conflicts — looks clear'
-                  : 'Bring in a course to begin'}
-            </span>
+            <span className="toolbar__hint">{hintText()}</span>
           </div>
 
           {tab === 'calendar' && (

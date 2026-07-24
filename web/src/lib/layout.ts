@@ -82,6 +82,11 @@ export function hourMarks(cfg: GridConfig): number[] {
   return out;
 }
 
+/** Y-pixel of the top of hour `h`'s line/label on the grid. */
+export function hourMarkTop(h: number, cfg: GridConfig): number {
+  return (h - cfg.startHour) * 60 * cfg.pxPerMinute;
+}
+
 /**
  * Assign lane (column) + laneCount to a day's meetings so that overlapping
  * meetings sit side by side. Classic interval-partitioning within each maximal
@@ -128,8 +133,11 @@ export function assignLanes<T extends { start: string; end: string }>(
   return result;
 }
 
-/** True if two meeting instances from different courses overlap in time (same day assumed). */
-function instancesConflict(a: MeetingInstance, b: MeetingInstance): boolean {
+/** True if two placed items from different courses overlap in time (same day/date assumed). */
+function overlapsDifferentCourse(
+  a: { courseId: string; start: string; end: string },
+  b: { courseId: string; start: string; end: string },
+): boolean {
   if (a.courseId === b.courseId) return false;
   return rangesOverlap(
     toMinutes(a.start),
@@ -164,7 +172,7 @@ export function layoutWeek(
     const laned = assignLanes(dayInstances);
     byDay[day] = laned.map((m) => {
       const { top, height } = blockGeometry(m.start, m.end, cfg);
-      const conflict = dayInstances.some((other) => instancesConflict(m, other));
+      const conflict = dayInstances.some((other) => overlapsDifferentCourse(m, other));
       return {
         ...(m as MeetingInstance),
         key: `${m.courseId}:${m.typeText}:${day}:${m.start}`,
@@ -263,11 +271,7 @@ export function layoutFinalsWeek(
     const laned = assignLanes(dayItems);
     byDate[date] = laned.map((m) => {
       const { top, height } = blockGeometry(m.start, m.end, cfg);
-      const conflict = dayItems.some(
-        (o) =>
-          o.courseId !== m.courseId &&
-          rangesOverlap(toMinutes(m.start), toMinutes(m.end), toMinutes(o.start), toMinutes(o.end)),
-      );
+      const conflict = dayItems.some((o) => overlapsDifferentCourse(m, o));
       return {
         courseId: m.courseId,
         courseCode: m.courseCode,

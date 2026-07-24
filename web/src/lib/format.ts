@@ -19,7 +19,8 @@ const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
-const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** JS `Date.getDay()` index (0 = Sun … 6 = Sat) → our Weekday code. */
+const WEEKDAY_BY_DOW: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export interface DateParts {
   dow: string; // "Wed"
@@ -32,7 +33,7 @@ export function dateParts(iso: string): DateParts {
   const [y, m, d] = iso.split('-').map(Number);
   const dt = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
   return {
-    dow: DOW_SHORT[dt.getDay()] ?? '',
+    dow: WEEKDAY_BY_DOW[dt.getDay()] ?? '',
     day: String(d ?? 0).padStart(2, '0'),
     month: MONTHS[(m ?? 1) - 1] ?? '',
   };
@@ -41,8 +42,12 @@ export function dateParts(iso: string): DateParts {
 /** Today's weekday code in the browser's local time (weekends included — the grid
  * simply has no such column to highlight unless weekend meetings exist). */
 export function todayWeekday(now = new Date()): Weekday {
-  const map: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return map[now.getDay()] ?? 'Mon';
+  return WEEKDAY_BY_DOW[now.getDay()] ?? 'Mon';
+}
+
+/** English pluralize a noun by count: pluralize(1, 'course') → 'course', pluralize(2, 'course') → 'courses'. */
+export function pluralize(n: number, singular: string, plural = `${singular}s`): string {
+  return n === 1 ? singular : plural;
 }
 
 /** Compact staleness label for a past ISO timestamp: "just now", "5m ago",

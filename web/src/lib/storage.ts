@@ -4,6 +4,37 @@ import type { CourseOffering, PlanState } from '@triton/shared';
 const KEY = 'triton-planner:plan:v1';
 const POOL_KEY = 'triton-planner:pool:v1';
 
+/* ---- best-effort localStorage helpers (never throw to the UI) ---- */
+
+/** Read + JSON-parse a key, returning null unless it passes `guard`. */
+function readJson<T>(key: string, guard: (v: unknown) => v is T): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return guard(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** JSON-serialize + write a key; silently ignores storage full/disabled. */
+function writeJson(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage full / disabled — ignore */
+  }
+}
+
+function removeKey(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Minimal shape check so a corrupt/foreign value can't crash the app. */
 export function isPlanState(value: unknown): value is PlanState {
   if (!value || typeof value !== 'object') return false;
@@ -12,30 +43,15 @@ export function isPlanState(value: unknown): value is PlanState {
 }
 
 export function savePlan(plan: PlanState): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(plan));
-  } catch {
-    /* storage full / disabled — ignore */
-  }
+  writeJson(KEY, plan);
 }
 
 export function loadPlan(): PlanState | null {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isPlanState(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  return readJson(KEY, isPlanState);
 }
 
 export function clearPlan(): void {
-  try {
-    localStorage.removeItem(KEY);
-  } catch {
-    /* ignore */
-  }
+  removeKey(KEY);
 }
 
 /** Loose check that a value is an array of course-shaped objects. */
@@ -54,22 +70,11 @@ export function isCoursePool(value: unknown): value is CourseOffering[] {
 
 /** Persist the browsed course pool so the "Browsed — not yet added" list survives reloads. */
 export function savePool(pool: CourseOffering[]): void {
-  try {
-    localStorage.setItem(POOL_KEY, JSON.stringify(pool));
-  } catch {
-    /* ignore */
-  }
+  writeJson(POOL_KEY, pool);
 }
 
 export function loadPool(): CourseOffering[] | null {
-  try {
-    const raw = localStorage.getItem(POOL_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isCoursePool(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  return readJson(POOL_KEY, isCoursePool);
 }
 
 /* ---- received plans (opened from a share link or an imported JSON file) ----
@@ -96,27 +101,35 @@ function isReceivedPlan(value: unknown): value is ReceivedPlan {
 }
 
 export function saveReceived(received: ReceivedPlan): void {
-  try {
-    localStorage.setItem(RECEIVED_KEY, JSON.stringify(received));
-  } catch {
-    /* ignore */
-  }
+  writeJson(RECEIVED_KEY, received);
 }
 
 export function loadReceived(): ReceivedPlan | null {
-  try {
-    const raw = localStorage.getItem(RECEIVED_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isReceivedPlan(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  return readJson(RECEIVED_KEY, isReceivedPlan);
 }
 
 export function clearReceived(): void {
+  removeKey(RECEIVED_KEY);
+}
+
+/* ---- which plan a tab is viewing (session-scoped, so a tab that opened a
+   share link keeps showing it across reloads while other tabs stay on the
+   user's own plan). Lives here with the other persistence keys. ---- */
+
+const VIEWING_KEY = 'triton-planner:viewing:v1';
+export type Viewing = 'mine' | 'received';
+
+export function loadViewing(): Viewing {
   try {
-    localStorage.removeItem(RECEIVED_KEY);
+    return sessionStorage.getItem(VIEWING_KEY) === 'received' ? 'received' : 'mine';
+  } catch {
+    return 'mine';
+  }
+}
+
+export function saveViewing(v: Viewing): void {
+  try {
+    sessionStorage.setItem(VIEWING_KEY, v);
   } catch {
     /* ignore */
   }

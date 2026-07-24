@@ -1,5 +1,6 @@
 import type { WeeklyConflict, FinalConflict } from '@triton/shared';
 import { conflictPairKey } from '../lib/plan';
+import { pluralize } from '../lib/format';
 import { Warning } from './icons';
 
 interface Props {
@@ -32,7 +33,7 @@ export function ConflictBanner({ weekly, finals, codeById }: Props) {
       </span>
       <div>
         <div className="banner__title">
-          {total} scheduling {total === 1 ? 'conflict' : 'conflicts'} — resolve before you enroll
+          {total} scheduling {pluralize(total, 'conflict')} — resolve before you enroll
         </div>
         <ul className="banner__list">
           {[...weeklyByPair.values()].map((c) => (
