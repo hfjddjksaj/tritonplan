@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import type { CourseOffering } from '@triton/shared';
 import { findOption, optionSummaryParts } from '../lib/plan';
+import { pluralize } from '../lib/format';
 import { ChevronDown } from './icons';
 
 interface Props {
@@ -18,7 +19,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
   if (course.options.length === 0) return null;
   const selected = findOption(course, selectedOptionId);
   const hasSeats = course.options.some((o) => o.seatsAvailable !== undefined);
-  const showSub = course.options.length > 1 || (collapsed && selected);
+  const optionCount = course.options.length;
   return (
     <div className="picker">
       <button
@@ -34,14 +35,12 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
           strokeWidth={2.2}
           className={`picker__chev${collapsed ? '' : ' picker__chev--open'}`}
         />
-        {showSub && (
-          <span className="picker__sub">
-            {course.options.length > 1 && (
-              <span className="eyebrow picker__count">{course.options.length} options</span>
-            )}
-            {collapsed && selected && <span className="picker__selected mono">{selected.code}</span>}
+        <span className="picker__sub">
+          <span className="eyebrow picker__count">
+            {optionCount} {pluralize(optionCount, 'option')}
           </span>
-        )}
+          {collapsed && selected && <span className="picker__selected mono">{selected.code}</span>}
+        </span>
       </button>
       {collapsed ? null : (
       <div className="picker__list" role="radiogroup" aria-label={`${course.courseCode} section`}>
