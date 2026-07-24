@@ -3,6 +3,7 @@ import type { PlanEntry } from '@triton/shared';
 import { colorsForHue, hueFromEntryColor } from '../lib/colors';
 import { relativeTime } from '../lib/format';
 import { OptionPicker } from './OptionPicker';
+import { PrereqPopover } from './PrereqPopover';
 import { Trash, External } from './icons';
 
 interface Props {
@@ -27,6 +28,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
   // Section list starts tucked away — long option lists otherwise dominate the rail.
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [prereqsOpen, setPrereqsOpen] = useState(false);
   const rootRef = useRef<HTMLElement | null>(null);
 
   // Re-render once a minute so the "seats Xm ago" staleness label keeps aging
@@ -91,6 +93,16 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                 book section <External size={11} strokeWidth={2.2} />
               </button>
             )}
+            {(course.prereqs?.length ?? 0) > 0 && (
+              <button
+                type="button"
+                className="course-card__tss"
+                onClick={() => setPrereqsOpen(true)}
+                title={`Enrollment requirements for ${course.courseCode}`}
+              >
+                prerequisites
+              </button>
+            )}
           </div>
         </div>
         <div className="course-card__side">
@@ -123,6 +135,13 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
         collapsed={!sectionsOpen}
         onToggle={() => setSectionsOpen((v) => !v)}
       />
+      {prereqsOpen && (
+        <PrereqPopover
+          course={course}
+          accent={{ text: c.text, spine: c.spine }}
+          onClose={() => setPrereqsOpen(false)}
+        />
+      )}
     </section>
   );
 }

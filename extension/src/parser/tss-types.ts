@@ -4,6 +4,15 @@
  */
 
 /** One row of the `_sections` navigation response: a (Event × EventPackage) pair (DENORMALIZED). */
+/** One row of YUCSD_I_PREREQ_TREE — a flat tree of enrollment requirements.
+ *  Roots (`parent_id: ""`) are AND-ed groups; children are OR alternatives.
+ *  The owning module is NOT in the rows — it's in the collection's @odata.context. */
+export interface TssPrereqRow {
+  id: string;
+  parent_id: string;
+  text: string;
+}
+
 export interface TssSectionRow {
   AcYear: string;
   AcPeriod: string;

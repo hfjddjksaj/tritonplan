@@ -11,11 +11,12 @@ import type {
   Component,
   CourseOffering,
   FinalExam,
+  PrereqGroup,
   SectionOption,
   TeachingMethod,
   Term,
 } from '@triton/shared';
-import type { TssSectionRow } from './tss-types.js';
+import type { TssPrereqRow, TssSectionRow } from './tss-types.js';
 import { parseSched } from './parse-sched.js';
 
 export interface CourseMeta {
@@ -154,6 +155,38 @@ export function normalizeSections(rows: TssSectionRow[], meta: CourseMeta): Cour
     department: meta.department,
     options,
   };
+}
+
+/**
+ * Flatten a YUCSD_I_PREREQ_TREE row set into display groups: each root
+ * (`parent_id: ""`) is one AND-ed group whose descendants (any depth, document
+ * order) are its OR options. Defensive: an orphan row (parent not in the set)
+ * becomes its own childless group rather than vanishing.
+ */
+export function prereqTreeToGroups(rows: TssPrereqRow[]): PrereqGroup[] {
+  const ids = new Set(rows.map((r) => r.id));
+  const children = new Map<string, TssPrereqRow[]>();
+  const roots: TssPrereqRow[] = [];
+  for (const row of rows) {
+    if (row.parent_id && ids.has(row.parent_id)) {
+      const arr = children.get(row.parent_id);
+      if (arr) arr.push(row);
+      else children.set(row.parent_id, [row]);
+    } else {
+      roots.push(row);
+    }
+  }
+  return roots.map((root) => {
+    const options: string[] = [];
+    const walk = (id: string) => {
+      for (const child of children.get(id) ?? []) {
+        options.push(child.text);
+        walk(child.id);
+      }
+    };
+    walk(root.id);
+    return { label: root.text, options };
+  });
 }
 
 export function splitCourseCode(code: string): [string, string] {

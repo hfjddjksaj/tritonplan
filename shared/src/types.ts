@@ -68,6 +68,19 @@ export interface SectionOption {
   final?: FinalExam;          // derived from the lecture component(s)
 }
 
+/**
+ * One enrollment-requirement group from TSS's YUCSD_I_PREREQ_TREE. Groups are
+ * AND-ed together; the options within a group are OR alternatives. All text is
+ * display-ready as TSS words it (e.g. "CHEM-007L - General Chemistry Laboratory
+ * with a 'D' or higher").
+ */
+export interface PrereqGroup {
+  /** Group heading, e.g. "1 of the following:". */
+  label: string;
+  /** OR alternatives under this group (may be empty for a childless node). */
+  options: string[];
+}
+
 /** A course offering for a term = a TSS module (YUCSD_CON_MODULE). */
 export interface CourseOffering {
   id: string;                 // stable id, e.g. `${courseCode}|${term.year}|${term.period}`
@@ -84,6 +97,9 @@ export interface CourseOffering {
   /** ISO timestamp of the capture this data (incl. seat counts) came from — i.e. when
    *  the student last browsed this course in TSS. Absent on data from older builds. */
   capturedAt?: string;
+  /** Enrollment requirements captured from TSS. `[]` = confirmed none;
+   *  `undefined` = not captured (older builds / course not browsed since). */
+  prereqs?: PrereqGroup[];
 }
 
 /** What the user has added to their plan and which option they picked per course. */

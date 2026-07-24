@@ -1,8 +1,56 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSections } from './normalize.js';
-import { loadNormalizedFixture, denormalize } from './fixtures.js';
+import { normalizeSections, prereqTreeToGroups } from './normalize.js';
+import { loadNormalizedFixture, denormalize, prereqTreeRows } from './fixtures.js';
 
 const fx = loadNormalizedFixture();
+
+describe('prereqTreeToGroups — captured CHEM-043A tree', () => {
+  it('roots become AND-ed groups; children become OR options in order', () => {
+    expect(prereqTreeToGroups(prereqTreeRows())).toEqual([
+      {
+        label: '1 of the following:',
+        options: [
+          "CHEM-007L - General Chemistry Laboratory with a 'D' or higher",
+          "CHEM-007LM - General Chemistry Lab - Majors with a 'D' or higher",
+        ],
+      },
+      {
+        label: '1 of the following:',
+        options: [
+          "CHEM-041A - Organic I: Struct & React with a 'D' or higher",
+          "CHEM-040A - Organic Chem for Life Sci I with a 'D' or higher",
+          "CHEM-040AH - Honors Organic Chemistry I with a 'D' or higher",
+        ],
+      },
+    ]);
+  });
+
+  it('empty tree → no groups; orphan and childless rows degrade gracefully', () => {
+    expect(prereqTreeToGroups([])).toEqual([]);
+    // A childless root is its own requirement; an orphan (unknown parent) too.
+    expect(
+      prereqTreeToGroups([
+        { id: 'R1', parent_id: '', text: 'CHEM-006B with a C- or higher' },
+        { id: 'X9', parent_id: 'GONE', text: 'Orphaned requirement' },
+      ]),
+    ).toEqual([
+      { label: 'CHEM-006B with a C- or higher', options: [] },
+      { label: 'Orphaned requirement', options: [] },
+    ]);
+  });
+
+  it('nested descendants flatten into the root group', () => {
+    expect(
+      prereqTreeToGroups([
+        { id: 'R', parent_id: '', text: 'All of the following:' },
+        { id: 'R.1', parent_id: 'R', text: 'MATH-020A' },
+        { id: 'R.1.1', parent_id: 'R.1', text: 'MATH-010A with a C or higher' },
+      ]),
+    ).toEqual([
+      { label: 'All of the following:', options: ['MATH-020A', 'MATH-010A with a C or higher'] },
+    ]);
+  });
+});
 
 describe('normalizeSections — real captured CSE data', () => {
   it('CSE-008A: 9 packages, each = lecture + one lab + discussion, with final', () => {

@@ -5,7 +5,7 @@
  * Grounded in real captured payloads — see docs/tss-recon/tss-api-notes.md.
  */
 
-import type { TssModuleRow, TssSectionRow } from '../parser/tss-types.js';
+import type { TssModuleRow, TssPrereqRow, TssSectionRow } from '../parser/tss-types.js';
 
 interface ODataCollection {
   '@odata.context'?: string;
@@ -71,20 +71,44 @@ function looksLikeSectionRow(v: unknown): v is TssSectionRow {
 function looksLikeModuleRow(v: unknown): v is TssModuleRow {
   return !!v && typeof v === 'object' && 'CourseAbbr' in v && 'ModuleID' in v && 'CourseTitle' in v;
 }
+function looksLikePrereqRow(v: unknown): v is TssPrereqRow {
+  return !!v && typeof v === 'object' && 'id' in v && 'parent_id' in v && 'text' in v;
+}
+
+/** The requirements tree can be EMPTY (course without prereqs), so it's recognized
+ *  by its @odata.context — which is also the only place the owning moduleid lives:
+ *  `…$metadata#YUCSD_I_PREREQ_TREE(moduleid='2117',keydate=2026-09-21)/Set`. */
+const PREREQ_CONTEXT_RE = /YUCSD_I_PREREQ_TREE\(moduleid='(\w+)'/i;
+
+export interface PrereqTreeCapture {
+  moduleId: string;
+  rows: TssPrereqRow[];
+}
 
 export interface ClassifiedCapture {
   moduleRows: TssModuleRow[];
   sectionRows: TssSectionRow[];
+  prereqTrees: PrereqTreeCapture[];
 }
 
-/** Classify all collections found in a body into module rows vs section rows. */
+/** Classify all collections found in a body into module / section / prereq-tree rows. */
 export function classifyCapture(body: string): ClassifiedCapture {
   const moduleRows: TssModuleRow[] = [];
   const sectionRows: TssSectionRow[] = [];
+  const prereqTrees: PrereqTreeCapture[] = [];
   for (const coll of extractODataCollections(body)) {
+    const ctx = coll['@odata.context'];
+    const prereqMatch = typeof ctx === 'string' ? ctx.match(PREREQ_CONTEXT_RE) : null;
+    if (prereqMatch) {
+      prereqTrees.push({
+        moduleId: prereqMatch[1]!,
+        rows: (coll.value ?? []).filter(looksLikePrereqRow),
+      });
+      continue;
+    }
     const first = coll.value?.[0];
     if (looksLikeSectionRow(first)) sectionRows.push(...(coll.value as TssSectionRow[]));
     else if (looksLikeModuleRow(first)) moduleRows.push(...(coll.value as TssModuleRow[]));
   }
-  return { moduleRows, sectionRows };
+  return { moduleRows, sectionRows, prereqTrees };
 }

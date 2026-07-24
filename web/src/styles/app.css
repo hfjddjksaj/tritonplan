@@ -1322,6 +1322,66 @@ button.menu__item:hover {
   color: var(--text-faint);
 }
 
+/* ================================= enrollment requirements popover (in-card) */
+/* Rides on the mappop modal shell; groups are AND-ed, options within are OR. */
+.prereqpop {
+  width: min(430px, calc(100vw - 40px));
+}
+.prereqpop__course {
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--c-text, var(--ink));
+}
+.prereqpop__groups {
+  margin-top: 12px;
+}
+.prereqpop__group {
+  padding: 9px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.prereqpop__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.prereqpop__opts {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.prereqpop__opts li {
+  position: relative;
+  padding: 3px 0 3px 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.prereqpop__opts li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.9em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--c-spine, var(--line-strong));
+}
+.prereqpop__and {
+  margin: 6px 0;
+  padding-left: 11px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
 /* gold current-time indicator, drawn on today's column only */
 .cal-nowline {
   position: absolute;

@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import type { TssSectionRow } from './tss-types.js';
+import type { TssPrereqRow, TssSectionRow } from './tss-types.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIX_DIR = resolve(here, '../../../docs/tss-recon/fixtures');
@@ -33,6 +33,12 @@ export function loadNormalizedFixture(): Record<string, NormCourse> {
   const raw = JSON.parse(readFileSync(resolve(FIX_DIR, 'cse-sections-normalized.json'), 'utf8'));
   delete raw._comment;
   return raw;
+}
+
+/** The captured YUCSD_I_PREREQ_TREE rows for CHEM-043A (see the fixture's __comment). */
+export function prereqTreeRows(): TssPrereqRow[] {
+  const raw = JSON.parse(readFileSync(resolve(FIX_DIR, 'prereq-tree-chem43a.json'), 'utf8'));
+  return raw.value as TssPrereqRow[];
 }
 
 /** Rebuild the denormalized `_sections` rows for one fixture course. */

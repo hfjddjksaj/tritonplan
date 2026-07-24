@@ -5,14 +5,15 @@
  */
 
 import type { CourseOffering } from '@triton/shared';
-import type { TssModuleRow, TssSectionRow } from '../parser/tss-types.js';
-import { normalizeSections, type CourseMeta } from '../parser/normalize.js';
+import type { TssModuleRow, TssPrereqRow, TssSectionRow } from '../parser/tss-types.js';
+import { normalizeSections, prereqTreeToGroups, type CourseMeta } from '../parser/normalize.js';
 import { classifyCapture } from './extract-odata.js';
 
 interface StoreShape {
   modules: Record<string, TssModuleRow>;               // by ModuleID
   sections: Record<string, TssSectionRow[]>;           // by ModuleID
   capturedAt?: Record<string, string>;                 // by ModuleID; absent in old stores
+  prereqs?: Record<string, TssPrereqRow[]>;            // by ModuleID; absent in old stores
 }
 
 function creditsToUnits(s: string | undefined): number | undefined {
@@ -47,6 +48,8 @@ export class CaptureStore {
   private sections = new Map<string, TssSectionRow[]>();
   /** When each module's section rows (seat counts!) were last captured. */
   private capturedAt = new Map<string, string>();
+  /** Raw YUCSD_I_PREREQ_TREE rows by ModuleID ([] = confirmed no requirements). */
+  private prereqs = new Map<string, TssPrereqRow[]>();
 
   /**
    * Ingest one captured OData response body (plain or $batch). Returns true if anything
@@ -55,10 +58,14 @@ export class CaptureStore {
    * browse replaces them (freshest seats/status win).
    */
   ingestBody(body: string, url?: string): boolean {
-    const { moduleRows, sectionRows } = classifyCapture(body);
+    const { moduleRows, sectionRows, prereqTrees } = classifyCapture(body);
     let changed = false;
     for (const m of moduleRows) {
       this.modules.set(m.ModuleID, m);
+      changed = true;
+    }
+    for (const tree of prereqTrees) {
+      this.prereqs.set(tree.moduleId, tree.rows); // latest browse wins, empty set included
       changed = true;
     }
     if (sectionRows.length) {
@@ -111,9 +118,14 @@ export class CaptureStore {
       const meta = this.metaFor(moduleId, rows);
       if (!meta) continue;
       try {
-        const course = normalizeSections(rows, meta);
+        let course = normalizeSections(rows, meta);
         const at = this.capturedAt.get(moduleId);
-        out.push(at !== undefined ? { ...course, capturedAt: at } : course);
+        if (at !== undefined) course = { ...course, capturedAt: at };
+        const prereqRows = this.prereqs.get(moduleId);
+        if (prereqRows !== undefined) {
+          course = { ...course, prereqs: prereqTreeToGroups(prereqRows) };
+        }
+        out.push(course);
       } catch {
         /* skip a module we can't normalize */
       }
@@ -127,6 +139,7 @@ export class CaptureStore {
       modules: Object.fromEntries(this.modules),
       sections: Object.fromEntries(this.sections),
       capturedAt: Object.fromEntries(this.capturedAt),
+      prereqs: Object.fromEntries(this.prereqs),
     };
   }
 
@@ -137,6 +150,8 @@ export class CaptureStore {
     if (shape.sections) for (const [k, v] of Object.entries(shape.sections)) store.sections.set(k, v);
     if (shape.capturedAt)
       for (const [k, v] of Object.entries(shape.capturedAt)) store.capturedAt.set(k, v);
+    if (shape.prereqs)
+      for (const [k, v] of Object.entries(shape.prereqs)) store.prereqs.set(k, v);
     return store;
   }
 }
