@@ -103,36 +103,6 @@ export function meetingInstances(plan: PlanState): MeetingInstance[] {
   return out;
 }
 
-export interface UnscheduledItem {
-  courseId: string;
-  courseCode: string;
-  typeText: string;
-  sectionCode: string;
-  hue: number;
-}
-
-/** Components of chosen options that have no placeable meeting (TBA/async). */
-export function unscheduledItems(plan: PlanState): UnscheduledItem[] {
-  const out: UnscheduledItem[] = [];
-  for (const entry of plan.entries) {
-    const option = findOption(entry.course, entry.selectedOptionId);
-    if (!option) continue;
-    const hue = entryHue(plan, entry);
-    for (const comp of option.components) {
-      if (comp.unscheduled || comp.meetings.length === 0) {
-        out.push({
-          courseId: entry.course.id,
-          courseCode: entry.course.courseCode,
-          typeText: comp.typeText,
-          sectionCode: comp.sectionCode,
-          hue,
-        });
-      }
-    }
-  }
-  return out;
-}
-
 export interface FinalItem {
   courseId: string;
   courseCode: string;

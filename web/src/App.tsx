@@ -96,7 +96,7 @@ export default function App() {
         onReset={handleReset}
       />
       <div className="app__body">
-        <CoursePanel ctl={ctl} unscheduled={ctl.unscheduled} focus={focusReq} />
+        <CoursePanel ctl={ctl} focus={focusReq} />
 
         <main className="main">
           <div className="toolbar">

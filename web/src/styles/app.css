@@ -751,39 +751,34 @@ p {
   font-size: 10px;
 }
 
-/* ============================================================ unscheduled list */
-.unsched {
-  margin-top: 4px;
+/* ============================================= not-scheduled components (in-card) */
+/* A chosen option's "Schedule Not Defined" components live inside the course card —
+   grayed and inert — instead of duplicating the course in a separate list. */
+.course-card__nosched {
+  padding: 0 12px 9px 15px;
 }
-.unsched__item {
+.nosched-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  font-size: 12px;
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--surface-2),
-    var(--surface-2) 7px,
-    #eef1f6 7px,
-    #eef1f6 14px
-  );
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--r-sm);
-  margin-bottom: 6px;
-}
-.unsched__code {
-  font-weight: 700;
-  color: var(--ink);
-}
-.unsched__type {
-  color: var(--text-muted);
-}
-.unsched__tba {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  padding: 5px 8px;
+  font-size: 11.5px;
   color: var(--text-faint);
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  cursor: default;
+  user-select: none;
+}
+.nosched-row + .nosched-row {
+  margin-top: 4px;
+}
+.nosched-row__code {
+  font-size: 10.5px;
+}
+.nosched-row__label {
+  margin-left: auto;
+  font-style: italic;
 }
 
 /* =================================================================== main pane */

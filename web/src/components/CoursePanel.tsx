@@ -1,16 +1,14 @@
 import { useMemo, useState } from 'react';
 import type { CourseOffering } from '@triton/shared';
-import { findOption, type UnscheduledItem } from '../lib/plan';
+import { findOption } from '../lib/plan';
 import { tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
 import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
 import { CourseCard } from './CourseCard';
-import { UnscheduledList } from './UnscheduledList';
 import { Search, Plus, Cap, X } from './icons';
 
 interface Props {
   ctl: PlanController;
-  unscheduled: UnscheduledItem[];
   /** Calendar-block click: reveal this course's card with its sections expanded. */
   focus?: { courseId: string; nonce: number } | null;
 }
@@ -24,7 +22,7 @@ function matches(course: CourseOffering, q: string): boolean {
     .every((tok) => hay.includes(tok));
 }
 
-export function CoursePanel({ ctl, unscheduled, focus }: Props) {
+export function CoursePanel({ ctl, focus }: Props) {
   const [filter, setFilter] = useState('');
 
   const browsed = useMemo(() => {
@@ -165,8 +163,6 @@ export function CoursePanel({ ctl, unscheduled, focus }: Props) {
             )}
           </>
         )}
-
-        <UnscheduledList items={unscheduled} />
 
         <div className="rail__foot">
           open source at{' '}

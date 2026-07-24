@@ -22,7 +22,6 @@ import {
   meetingInstances,
   planUnits,
   refreshPlanEntries,
-  unscheduledItems,
 } from '../lib/plan';
 
 // Demo seed for LOCAL DEV ONLY: stands in for courses the student has "browsed" in
@@ -196,7 +195,6 @@ export function usePlan() {
   );
 
   const instances = useMemo(() => meetingInstances(plan), [plan]);
-  const unscheduled = useMemo(() => unscheduledItems(plan), [plan]);
   const finals = useMemo(() => finalsSorted(plan), [plan]);
   const units = useMemo(() => planUnits(plan), [plan]);
 
@@ -239,7 +237,6 @@ export function usePlan() {
     finalConflicts,
     conflictedCourseIds,
     instances,
-    unscheduled,
     finals,
     units,
     codeById,

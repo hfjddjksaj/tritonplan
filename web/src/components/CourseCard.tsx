@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlanEntry } from '@triton/shared';
 import { colorsForHue, hueFromEntryColor } from '../lib/colors';
+import { findOption } from '../lib/plan';
 import { OptionPicker } from './OptionPicker';
 import { Trash, External } from './icons';
 
@@ -23,6 +24,12 @@ export function CourseCard({ entry, index, conflicted, focusNonce, onSelect, onR
   const { course } = entry;
   // Section list starts tucked away — long option lists otherwise dominate the rail.
   const [sectionsOpen, setSectionsOpen] = useState(false);
+  // Components of the chosen option that TSS lists without a meeting time
+  // ("Schedule Not Defined") — shown inside this card, grayed, not clickable,
+  // instead of duplicating the course in a separate "unscheduled" list.
+  const selectedOption = findOption(course, entry.selectedOptionId);
+  const notScheduled =
+    selectedOption?.components.filter((c) => c.unscheduled || c.meetings.length === 0) ?? [];
   const [flash, setFlash] = useState(false);
   const rootRef = useRef<HTMLElement | null>(null);
 
@@ -90,6 +97,21 @@ export function CourseCard({ entry, index, conflicted, focusNonce, onSelect, onR
           <Trash size={15} />
         </button>
       </div>
+      {notScheduled.length > 0 && (
+        <div className="course-card__nosched">
+          {notScheduled.map((c) => (
+            <div
+              key={c.sectionCode}
+              className="nosched-row"
+              title="TSS lists this component as “Schedule Not Defined” — it has no meeting time and can’t be placed on the calendar."
+            >
+              <span className="nosched-row__type">{c.typeText}</span>
+              <span className="nosched-row__code mono">{c.sectionCode}</span>
+              <span className="nosched-row__label">not scheduled</span>
+            </div>
+          ))}
+        </div>
+      )}
       <OptionPicker
         course={course}
         selectedOptionId={entry.selectedOptionId}
