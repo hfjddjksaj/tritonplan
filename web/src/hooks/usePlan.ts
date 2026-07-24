@@ -11,7 +11,17 @@ import {
 import sampleCourses from '../data/sample-courses.json';
 import { pickHue } from '../lib/colors';
 import { installBridgeListener, mergeCourses } from '../lib/bridge';
-import { loadPlan, savePlan, loadPool, savePool, purgeSeededSamples } from '../lib/storage';
+import {
+  loadPlan,
+  savePlan,
+  loadPool,
+  savePool,
+  purgeSeededSamples,
+  loadReceived,
+  saveReceived,
+  clearReceived,
+  type ReceivedPlan,
+} from '../lib/storage';
 import { planFromHash } from '../lib/share';
 import { openBooking, openInTss } from '../lib/tss';
 import {
@@ -43,20 +53,65 @@ function initialPool(): CourseOffering[] {
   return mergeCourses(SAMPLE, purgeSeededSamples(loadPool() ?? []));
 }
 
+// Which plan the app is showing. Session-scoped: the tab where a link was opened
+// keeps showing it across reloads; other tabs stay on the user's own plan.
+const VIEWING_KEY = 'triton-planner:viewing:v1';
+type Viewing = 'mine' | 'received';
+
+function loadViewing(): Viewing {
+  try {
+    return sessionStorage.getItem(VIEWING_KEY) === 'received' ? 'received' : 'mine';
+  } catch {
+    return 'mine';
+  }
+}
+
+function persistViewing(v: Viewing): void {
+  try {
+    sessionStorage.setItem(VIEWING_KEY, v);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function usePlan() {
   const [pool, setPool] = useState<CourseOffering[]>(initialPool);
   const [plan, setPlan] = useState<PlanState>(initialPlan);
+  // A plan someone else sent (share link or imported JSON). Lives in its own slot,
+  // shown read-only — it can never overwrite the user's own plan.
+  const [received, setReceived] = useState<ReceivedPlan | null>(loadReceived);
+  const [viewing, setViewing] = useState<Viewing>(() =>
+    loadReceived() ? loadViewing() : 'mine',
+  );
   const firstRun = useRef(true);
 
-  // A share link's #p=… is consumed ONCE: persist the imported plan immediately and
-  // strip the hash. Leaving it in the address bar would pin every future reload to
-  // that stale snapshot, silently discarding anything added since (real user bug).
+  const switchViewing = useCallback((v: Viewing) => {
+    setViewing(v);
+    persistViewing(v);
+  }, []);
+
+  // A share link's #p=… is consumed ONCE into the received slot, then stripped from
+  // the address bar (leaving it would pin every reload to that snapshot). The user's
+  // own plan is untouched — the shared plan opens read-only alongside it. Also runs
+  // on hashchange: pasting a link into an already-open planner tab doesn't reload.
   useEffect(() => {
-    const fromHash = planFromHash(window.location.hash);
-    if (fromHash) {
-      savePlan(fromHash);
+    const consume = () => {
+      const fromHash = planFromHash(window.location.hash);
+      if (!fromHash) return;
+      const rec: ReceivedPlan = {
+        plan: fromHash,
+        source: 'link',
+        receivedAt: new Date().toISOString(),
+      };
+      saveReceived(rec);
+      setReceived(rec);
+      setViewing('received');
+      persistViewing('received');
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
+    };
+    consume();
+    window.addEventListener('hashchange', consume);
+    return () => window.removeEventListener('hashchange', consume);
   }, []);
 
   // Persist the plan on change (skip first render so we don't clobber before load).
@@ -139,6 +194,32 @@ export function usePlan() {
     setPlan((prev) => emptyPlan(prev.term));
   }, []);
 
+  /** Bring in a plan someone sent (imported JSON / pasted link) — read-only view. */
+  const importReceived = useCallback(
+    (incoming: PlanState, source: ReceivedPlan['source']) => {
+      const rec: ReceivedPlan = { plan: incoming, source, receivedAt: new Date().toISOString() };
+      saveReceived(rec);
+      setReceived(rec);
+      switchViewing('received');
+    },
+    [switchViewing],
+  );
+
+  /** Make the received plan MY plan (explicit, destructive — caller confirms). */
+  const saveReceivedAsMine = useCallback(() => {
+    if (received) replacePlan(received.plan);
+    clearReceived();
+    setReceived(null);
+    switchViewing('mine');
+  }, [received, replacePlan, switchViewing]);
+
+  /** Drop the received plan and go back to my own. */
+  const discardReceived = useCallback(() => {
+    clearReceived();
+    setReceived(null);
+    switchViewing('mine');
+  }, [switchViewing]);
+
   /**
    * Drop a browsed course from the pool. Plan entries keep their own course copy, so
    * this only affects the "Browsed — not yet added" list. A course the extension has
@@ -171,9 +252,11 @@ export function usePlan() {
       onPlanAdd: (course, optionId) => {
         bridgeSeen.current = true;
         addCourseWithOption(course, optionId);
+        // Adds always land in MY plan — surface it, even if a received plan was up.
+        switchViewing('mine');
       },
     });
-  }, [addCourseWithOption]);
+  }, [addCourseWithOption, switchViewing]);
 
   /** Jump back to TSS — through the extension when present, else a plain new tab. */
   const openCourseInTss = useCallback((course: CourseOffering) => {
@@ -186,7 +269,12 @@ export function usePlan() {
   }, []);
 
   // ---- derived view data (memoized) --------------------------------------
-  const selectedCourses = useMemo(() => buildSelectedCourses(plan), [plan]);
+  // Everything the screen shows derives from the plan being VIEWED — the user's
+  // own, or a received one (read-only).
+  const viewPlan = viewing === 'received' && received ? received.plan : plan;
+  const readOnly = viewing === 'received' && received !== null;
+
+  const selectedCourses = useMemo(() => buildSelectedCourses(viewPlan), [viewPlan]);
   const weeklyConflicts = useMemo(() => findWeeklyConflicts(selectedCourses), [selectedCourses]);
   const finalConflicts = useMemo(() => findFinalConflicts(selectedCourses), [selectedCourses]);
   const conflictedCourseIds = useMemo(
@@ -194,23 +282,23 @@ export function usePlan() {
     [weeklyConflicts, finalConflicts],
   );
 
-  const instances = useMemo(() => meetingInstances(plan), [plan]);
-  const finals = useMemo(() => finalsSorted(plan), [plan]);
-  const units = useMemo(() => planUnits(plan), [plan]);
+  const instances = useMemo(() => meetingInstances(viewPlan), [viewPlan]);
+  const finals = useMemo(() => finalsSorted(viewPlan), [viewPlan]);
+  const units = useMemo(() => planUnits(viewPlan), [viewPlan]);
 
   const codeById = useMemo(() => {
     const m = new Map<string, string>();
-    for (const e of plan.entries) m.set(e.course.id, e.course.courseCode);
+    for (const e of viewPlan.entries) m.set(e.course.id, e.course.courseCode);
     return m;
-  }, [plan]);
+  }, [viewPlan]);
 
-  /** Resolve a course by id (pool + plan) — used for TSS jump-back from a block. */
+  /** Resolve a course by id (pool + viewed plan) — used for TSS jump-back from a block. */
   const courseById = useMemo(() => {
     const m = new Map<string, CourseOffering>();
     for (const c of pool) m.set(c.id, c);
-    for (const e of plan.entries) m.set(e.course.id, e.course);
+    for (const e of viewPlan.entries) m.set(e.course.id, e.course);
     return m;
-  }, [pool, plan]);
+  }, [pool, viewPlan]);
 
   /** Pool courses not yet in the plan — the "Browsed — not yet added" list. */
   const browsedNotAdded = useMemo(() => {
@@ -231,6 +319,15 @@ export function usePlan() {
     clearBrowsed,
     openCourseInTss,
     openBookingInTss,
+    // received plans (share links / imported JSON) — read-only companion slot
+    received,
+    viewing,
+    viewPlan,
+    readOnly,
+    switchViewing,
+    importReceived,
+    saveReceivedAsMine,
+    discardReceived,
     // derived
     selectedCourses,
     weeklyConflicts,

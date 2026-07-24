@@ -24,6 +24,8 @@ function matches(course: CourseOffering, q: string): boolean {
 
 export function CoursePanel({ ctl, focus }: Props) {
   const [filter, setFilter] = useState('');
+  const readOnly = ctl.readOnly;
+  const entries = ctl.viewPlan.entries;
 
   const browsed = useMemo(() => {
     const q = filter.trim();
@@ -31,23 +33,27 @@ export function CoursePanel({ ctl, focus }: Props) {
     return ctl.browsedNotAdded.filter((c) => matches(c, q));
   }, [filter, ctl.browsedNotAdded]);
 
-  const hasEntries = ctl.plan.entries.length > 0;
+  const hasEntries = entries.length > 0;
 
   return (
     <aside className="rail">
       <div className="rail__head">
         <div className="rail__title-row">
-          <span className="rail__title">Browsed &amp; Added Courses</span>
-          <span className="rail__count mono">{ctl.plan.entries.length} added</span>
+          <span className="rail__title">
+            {readOnly ? 'Courses in this plan' : 'Browsed & Added Courses'}
+          </span>
+          <span className="rail__count mono">{entries.length} added</span>
         </div>
         <p className="rail__lede">
-          Sections you pick in TSS land here. Switch a section below to clear a conflict.
+          {readOnly
+            ? 'A plan someone sent you — read-only. Save it as yours to edit it.'
+            : 'Sections you pick in TSS land here. Switch a section below to clear a conflict.'}
         </p>
       </div>
 
       <div className="rail__scroll">
         {hasEntries ? (
-          ctl.plan.entries.map((entry, i) => {
+          entries.map((entry, i) => {
             const option = findOption(entry.course, entry.selectedOptionId);
             const bookable = option && tssBookingLink(entry.course, option) !== null;
             return (
@@ -56,8 +62,9 @@ export function CoursePanel({ ctl, focus }: Props) {
                 entry={entry}
                 index={i}
                 conflicted={ctl.conflictedCourseIds.has(entry.course.id)}
+                readOnly={readOnly}
                 focusNonce={focus && focus.courseId === entry.course.id ? focus.nonce : undefined}
-                onSelect={(optionId) => ctl.selectOption(entry.course.id, optionId)}
+                onSelect={readOnly ? () => {} : (optionId) => ctl.selectOption(entry.course.id, optionId)}
                 onRemove={() => ctl.removeCourse(entry.course.id)}
                 onOpenTss={() => ctl.openCourseInTss(entry.course)}
                 onBook={
@@ -76,7 +83,9 @@ export function CoursePanel({ ctl, focus }: Props) {
           </div>
         )}
 
-        {/* Browsed — not yet added */}
+        {/* Browsed — not yet added (yours; hidden while viewing a received plan) */}
+        {!readOnly && (
+        <>
         <div className="rail__section">
           <span className="eyebrow">Browsed — not yet added</span>
           {ctl.browsedNotAdded.length > 0 && (
@@ -162,6 +171,8 @@ export function CoursePanel({ ctl, focus }: Props) {
               </ul>
             )}
           </>
+        )}
+        </>
         )}
 
         <div className="rail__foot">

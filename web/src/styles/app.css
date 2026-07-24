@@ -60,14 +60,15 @@ p {
 
 /* ================================================================ app shell */
 .app {
-  display: grid;
-  grid-template-rows: var(--topbar-h) 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100dvh;
   overflow: hidden;
 }
 .app__body {
   display: grid;
   grid-template-columns: var(--rail-w) 1fr;
+  flex: 1;
   min-height: 0;
 }
 
@@ -76,6 +77,8 @@ p {
   display: flex;
   align-items: center;
   gap: 18px;
+  height: var(--topbar-h);
+  flex: none;
   padding: 0 18px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
@@ -758,6 +761,135 @@ p {
 .opt__seats-label {
   color: var(--text-faint);
   font-size: 10px;
+}
+
+/* ======================================================== topbar dropdown menus */
+.menu-wrap {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 272px;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md, 10px);
+  box-shadow: 0 10px 28px rgba(11, 31, 58, 0.16);
+  z-index: 40;
+}
+.menu__item {
+  display: block;
+  width: 100%;
+  padding: 9px 10px 10px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+}
+button.menu__item:hover {
+  background: var(--surface-2);
+}
+.menu__item--static {
+  cursor: default;
+}
+.menu__item + .menu__item {
+  margin-top: 2px;
+}
+.menu__item-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.menu__item-desc {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.menu__linkrow {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+.menu__input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+}
+.menu__input:focus {
+  outline: none;
+  border-color: var(--line-strong);
+}
+
+/* =============================== received plan (share link / imported JSON) banner */
+/* Constant reminder that what's on screen (or parked nearby) is someone else's
+   plan: read-only, stored apart, never clobbering the user's own. */
+.received {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 6px 18px;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.received--active {
+  background: var(--gold-soft);
+  border-bottom-color: var(--gold);
+}
+.received__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  color: var(--gold-ink);
+  white-space: nowrap;
+}
+.received__text {
+  color: var(--text-muted);
+}
+.received--active .received__text {
+  color: var(--gold-ink);
+}
+.received__spacer {
+  flex: 1;
+}
+.received__discard {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-faint);
+}
+.received__discard:hover {
+  background: var(--conflict-soft);
+  color: var(--conflict);
+}
+
+/* Read-only option rows: selection is shown but not switchable. */
+.opt--readonly {
+  cursor: default;
+}
+.opt--readonly:hover {
+  border-color: var(--line);
 }
 
 /* =================================================================== main pane */

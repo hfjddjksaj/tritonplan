@@ -5,9 +5,10 @@ import { CoursePanel } from './components/CoursePanel';
 import { CalendarGrid } from './components/CalendarGrid';
 import { FinalsView } from './components/FinalsView';
 import { ConflictBanner } from './components/ConflictBanner';
+import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
 import { Calendar, Cap, Check } from './components/icons';
-import { downloadPlanJson, parsePlanJson, planToHash, shareUrl } from './lib/share';
+import { downloadPlanJson, parsePlanJson, planFromLinkText, planToHash, shareUrl } from './lib/share';
 import { countConflictPairs } from './lib/plan';
 import { PRODUCT_NAME } from './lib/brand';
 
@@ -32,36 +33,72 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const handleShare = useCallback(async () => {
-    const url = shareUrl(ctl.plan);
+  // Share/export act on whatever plan is on screen — yours, or a received one
+  // you're passing along.
+  const handleCopyLink = useCallback(async () => {
+    const url = shareUrl(ctl.viewPlan);
     try {
       await navigator.clipboard.writeText(url);
       flash('Share link copied to clipboard');
     } catch {
       // Clipboard unavailable — expose the link via the address bar instead. The
       // hash is consumed-and-cleared on next load, so it can't pin a stale plan.
-      window.history.replaceState(null, '', `#${planToHash(ctl.plan)}`);
+      window.history.replaceState(null, '', `#${planToHash(ctl.viewPlan)}`);
       flash('Share link is in the address bar — copy it from there');
     }
-  }, [ctl.plan, flash]);
+  }, [ctl.viewPlan, flash]);
 
-  const handleExport = useCallback(() => {
-    downloadPlanJson(ctl.plan);
+  const handleExportJson = useCallback(() => {
+    downloadPlanJson(ctl.viewPlan);
     flash('Plan exported as JSON');
-  }, [ctl.plan, flash]);
+  }, [ctl.viewPlan, flash]);
 
-  const handleImport = useCallback(
+  const handleImportText = useCallback(
     (text: string) => {
       const plan = parsePlanJson(text);
       if (!plan) {
         flash(`That file isn’t a valid ${PRODUCT_NAME} plan`);
         return;
       }
-      ctl.replacePlan(plan);
-      flash('Plan imported');
+      ctl.importReceived(plan, 'json');
+      flash('Imported plan opened — read-only, your own plan is untouched');
     },
     [ctl, flash],
   );
+
+  const handleImportLink = useCallback(
+    (text: string): boolean => {
+      const plan = planFromLinkText(text);
+      if (!plan) {
+        flash('That doesn’t look like a valid share link');
+        return false;
+      }
+      ctl.importReceived(plan, 'link');
+      flash('Shared plan opened — read-only, your own plan is untouched');
+      return true;
+    },
+    [ctl, flash],
+  );
+
+  const handleSaveAsMine = useCallback(() => {
+    const n = ctl.plan.entries.length;
+    if (
+      n > 0 &&
+      !window.confirm(
+        `Make this your plan? Your current plan (${n} course${n === 1 ? '' : 's'}) will be replaced.`,
+      )
+    ) {
+      return;
+    }
+    ctl.saveReceivedAsMine();
+    flash('Saved as your plan — you can edit it now');
+  }, [ctl, flash]);
+
+  const handleDiscardReceived = useCallback(() => {
+    if (window.confirm('Discard this plan? Your own plan is not affected.')) {
+      ctl.discardReceived();
+    }
+  }, [ctl]);
 
   const handleOpenCourse = useCallback(
     (courseId: string) => {
@@ -88,13 +125,25 @@ export default function App() {
   return (
     <div className="app">
       <Topbar
-        termLabel={ctl.plan.term.label}
+        termLabel={ctl.viewPlan.term.label}
         units={ctl.units}
-        onShare={handleShare}
-        onExport={handleExport}
-        onImportText={handleImport}
+        readOnly={ctl.readOnly}
+        onCopyLink={handleCopyLink}
+        onExportJson={handleExportJson}
+        onImportText={handleImportText}
+        onImportLink={handleImportLink}
         onReset={handleReset}
       />
+      {ctl.received && (
+        <ReceivedBanner
+          received={ctl.received}
+          viewing={ctl.viewing}
+          onView={() => ctl.switchViewing('received')}
+          onBackToMine={() => ctl.switchViewing('mine')}
+          onSaveAsMine={handleSaveAsMine}
+          onDiscard={handleDiscardReceived}
+        />
+      )}
       <div className="app__body">
         <CoursePanel ctl={ctl} focus={focusReq} />
 

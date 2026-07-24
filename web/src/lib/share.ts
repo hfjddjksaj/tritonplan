@@ -209,6 +209,19 @@ export function planFromHash(hash: string): PlanState | null {
   return decodePlan(token);
 }
 
+/**
+ * Parse a pasted share link into a plan. Accepts the full URL, just the hash
+ * fragment ("#p=…" / "p=…"), or the bare token.
+ */
+export function planFromLinkText(text: string): PlanState | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const hashIdx = trimmed.indexOf('#');
+  if (hashIdx !== -1) return planFromHash(trimmed.slice(hashIdx));
+  if (trimmed.includes('=')) return planFromHash(trimmed);
+  return decodePlan(trimmed);
+}
+
 /** A full absolute URL that restores this plan when opened. */
 export function shareUrl(plan: PlanState, base = window.location.href): string {
   const url = new URL(base);

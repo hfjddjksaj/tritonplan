@@ -72,6 +72,56 @@ export function loadPool(): CourseOffering[] | null {
   }
 }
 
+/* ---- received plans (opened from a share link or an imported JSON file) ----
+   Kept in their own slot so someone else's plan can NEVER overwrite yours: the
+   app shows it read-only and only writes it to the main slot on an explicit
+   "Save as my plan". */
+
+const RECEIVED_KEY = 'triton-planner:received:v1';
+
+export interface ReceivedPlan {
+  plan: PlanState;
+  source: 'link' | 'json';
+  receivedAt: string; // ISO timestamp
+}
+
+function isReceivedPlan(value: unknown): value is ReceivedPlan {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    (v.source === 'link' || v.source === 'json') &&
+    typeof v.receivedAt === 'string' &&
+    isPlanState(v.plan)
+  );
+}
+
+export function saveReceived(received: ReceivedPlan): void {
+  try {
+    localStorage.setItem(RECEIVED_KEY, JSON.stringify(received));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadReceived(): ReceivedPlan | null {
+  try {
+    const raw = localStorage.getItem(RECEIVED_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isReceivedPlan(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearReceived(): void {
+  try {
+    localStorage.removeItem(RECEIVED_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Course ids the demo sample data seeded — early builds shipped these to production. */
 const SEEDED_SAMPLE_IDS = new Set(['CSE-008A|2026|2', 'CSE-030|2026|2', 'CSE-011|2026|2']);
 const SAMPLE_PURGE_KEY = 'triton-planner:sample-purged:v1';

@@ -1,5 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { savePlan, loadPlan, clearPlan, isPlanState, savePool, loadPool, isCoursePool } from './storage';
+import {
+  savePlan,
+  loadPlan,
+  clearPlan,
+  isPlanState,
+  savePool,
+  loadPool,
+  isCoursePool,
+  saveReceived,
+  loadReceived,
+  clearReceived,
+} from './storage';
 import { makePlan, makeCourse } from './fixtures';
 
 beforeEach(() => {
@@ -31,6 +42,39 @@ describe('storage', () => {
     savePlan(makePlan());
     clearPlan();
     expect(loadPlan()).toBeNull();
+  });
+});
+
+describe('received-plan slot (plans from a link or an imported file)', () => {
+  it('round-trips a received plan without touching my plan', () => {
+    const mine = makePlan();
+    savePlan(mine);
+    const received = { plan: makePlan(), source: 'link' as const, receivedAt: '2026-07-24T10:00:00.000Z' };
+    saveReceived(received);
+    expect(loadReceived()).toEqual(received);
+    expect(loadPlan()).toEqual(mine);
+  });
+
+  it('returns null when nothing is stored, on corrupt JSON, and on wrong shapes', () => {
+    expect(loadReceived()).toBeNull();
+    localStorage.setItem('triton-planner:received:v1', '{ broken');
+    expect(loadReceived()).toBeNull();
+    localStorage.setItem(
+      'triton-planner:received:v1',
+      JSON.stringify({ plan: makePlan(), source: 'email', receivedAt: 'x' }),
+    );
+    expect(loadReceived()).toBeNull();
+    localStorage.setItem(
+      'triton-planner:received:v1',
+      JSON.stringify({ plan: { version: 2 }, source: 'json', receivedAt: 'x' }),
+    );
+    expect(loadReceived()).toBeNull();
+  });
+
+  it('clears the received plan', () => {
+    saveReceived({ plan: makePlan(), source: 'json', receivedAt: '2026-07-24T10:00:00.000Z' });
+    clearReceived();
+    expect(loadReceived()).toBeNull();
   });
 });
 

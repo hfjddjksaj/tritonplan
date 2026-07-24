@@ -7,12 +7,14 @@ interface Props {
   course: CourseOffering;
   selectedOptionId: string | null;
   onSelect: (optionId: string) => void;
+  /** Received (shared/imported) plan: options are visible but not switchable. */
+  readOnly?: boolean;
   /** Collapsed: only the toggle row shows (with the selected section's code). */
   collapsed: boolean;
   onToggle: () => void;
 }
 
-export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, onToggle }: Props) {
+export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = false, collapsed, onToggle }: Props) {
   if (course.options.length === 0) return null;
   const selected = course.options.find((o) => o.id === selectedOptionId);
   const hasSeats = course.options.some((o) => o.seatsAvailable !== undefined);
@@ -54,8 +56,10 @@ export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, on
               type="button"
               role="radio"
               aria-checked={active}
-              className={`opt${active ? ' opt--active' : ''}`}
-              onClick={() => onSelect(opt.id)}
+              aria-disabled={readOnly}
+              className={`opt${active ? ' opt--active' : ''}${readOnly ? ' opt--readonly' : ''}`}
+              onClick={readOnly ? undefined : () => onSelect(opt.id)}
+              title={readOnly ? 'Read-only — save this plan as yours to switch sections' : undefined}
             >
               <span className="opt__radio" aria-hidden />
               <span className="opt__main">
@@ -87,7 +91,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, on
             </button>
           );
         })}
-        {hasSeats && (
+        {hasSeats && !readOnly && (
           <p className="picker__note">
             Note: seat counts don’t refresh on their own. Use “open in TSS” above and browse the
             course again to refresh them.

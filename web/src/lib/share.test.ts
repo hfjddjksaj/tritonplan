@@ -6,6 +6,7 @@ import {
   decodePlan,
   planToHash,
   planFromHash,
+  planFromLinkText,
   shareUrl,
   parsePlanJson,
 } from './share';
@@ -165,6 +166,27 @@ describe('hash helpers', () => {
     const url = shareUrl(plan, 'https://plan.example/app/');
     expect(url.startsWith('https://plan.example/app/#p=')).toBe(true);
     expect(planFromHash(new URL(url).hash)!.entries[0]!.course.courseCode).toBe('CSE-008A');
+  });
+});
+
+describe('planFromLinkText — pasted share links', () => {
+  it('accepts a full URL, a hash fragment, and a bare token', () => {
+    const plan = richPlan();
+    const url = shareUrl(plan, 'https://plan.example/app/');
+    const token = encodePlan(plan);
+    for (const text of [url, `#p=${token}`, `p=${token}`, token, `  ${url}  `]) {
+      const parsed = planFromLinkText(text);
+      expect(parsed, `failed for: ${text.slice(0, 30)}`).not.toBeNull();
+      expect(parsed!.entries[0]!.course.courseCode).toBe('CSE-008A');
+    }
+  });
+
+  it('rejects garbage and empty input', () => {
+    expect(planFromLinkText('')).toBeNull();
+    expect(planFromLinkText('   ')).toBeNull();
+    expect(planFromLinkText('hello world')).toBeNull();
+    expect(planFromLinkText('https://plan.example/app/')).toBeNull();
+    expect(planFromLinkText('https://plan.example/app/#other=1')).toBeNull();
   });
 });
 

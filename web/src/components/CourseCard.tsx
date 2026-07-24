@@ -9,6 +9,8 @@ interface Props {
   entry: PlanEntry;
   index: number;
   conflicted: boolean;
+  /** Received (shared/imported) plan: no removing, no section switching. */
+  readOnly?: boolean;
   /** Bumped when this course's calendar block is clicked — expand sections and scroll here. */
   focusNonce?: number | undefined;
   onSelect: (optionId: string) => void;
@@ -18,7 +20,7 @@ interface Props {
   onBook?: () => void;
 }
 
-export function CourseCard({ entry, index, conflicted, focusNonce, onSelect, onRemove, onOpenTss, onBook }: Props) {
+export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
@@ -92,15 +94,17 @@ export function CourseCard({ entry, index, conflicted, focusNonce, onSelect, onR
           </div>
         </div>
         <div className="course-card__side">
-          <button
-            type="button"
-            className="course-card__remove"
-            onClick={onRemove}
-            aria-label={`Remove ${course.courseCode}`}
-            title={`Remove ${course.courseCode}`}
-          >
-            <Trash size={15} />
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className="course-card__remove"
+              onClick={onRemove}
+              aria-label={`Remove ${course.courseCode}`}
+              title={`Remove ${course.courseCode}`}
+            >
+              <Trash size={15} />
+            </button>
+          )}
           {freshness && (
             <span
               className="course-card__fresh"
@@ -115,6 +119,7 @@ export function CourseCard({ entry, index, conflicted, focusNonce, onSelect, onR
         course={course}
         selectedOptionId={entry.selectedOptionId}
         onSelect={onSelect}
+        readOnly={readOnly}
         collapsed={!sectionsOpen}
         onToggle={() => setSectionsOpen((v) => !v)}
       />

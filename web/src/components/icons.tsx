@@ -107,6 +107,18 @@ export const Check = (p: P) => (
     <path d="m5 12 5 5 9-11" />
   </svg>
 );
+export const Link = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+    <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+  </svg>
+);
+export const Eye = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z" />
+    <circle cx="12" cy="12" r="2.6" />
+  </svg>
+);
 export const ChevronDown = (p: P) => (
   <svg {...base(p)}>
     <path d="m6 9 6 6 6-6" />
