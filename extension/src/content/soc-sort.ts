@@ -123,6 +123,54 @@ const POP_ID = 'tp-soc-sort-pop';
 const NAVY = '#0b1f3a';
 const GOLD = '#f5b800';
 
+/* ---- live column-resize preview ------------------------------------------- */
+/* TSS's resize handle only commits the width on mouseup, so while dragging the
+ * (now invisible) handle nothing appears to move. We preview the drag by
+ * writing the width straight onto the header cell as the pointer moves — the
+ * REAL column border follows the mouse, no guide overlay. On release TSS's own
+ * commit takes over; whatever it decides wins. Client-side styling only. */
+
+let colResize: { th: HTMLElement; startX: number; startW: number } | null = null;
+
+/** The header cell whose right edge sits under the resize handle. */
+function resizeTargetFor(handle: Element): HTMLElement | null {
+  // The handle is a direct child of <table> (sibling of thead/tbody), so climb
+  // to the table with closest() — parentElement.querySelector('table') would
+  // search *inside* the table and find nothing.
+  const table = handle.closest('table');
+  if (!table) return null;
+  const cells = [...table.querySelectorAll<HTMLElement>('th')].filter((th) => th.offsetWidth > 0);
+  const hx = handle.getBoundingClientRect().left;
+  let best: HTMLElement | null = null;
+  let bestDist = 24;
+  for (const th of cells) {
+    const d = Math.abs(th.getBoundingClientRect().right - hx);
+    if (d < bestDist) {
+      bestDist = d;
+      best = th;
+    }
+  }
+  return best;
+}
+
+function onResizeDown(e: MouseEvent): void {
+  const handle = (e.target as Element | null)?.closest?.('.sapMPluginsColumnResizerHandle');
+  if (!handle) return;
+  const th = resizeTargetFor(handle);
+  if (!th) return;
+  colResize = { th, startX: e.clientX, startW: th.getBoundingClientRect().width };
+}
+
+function onResizeMove(e: MouseEvent): void {
+  if (!colResize) return;
+  const width = Math.max(48, colResize.startW + (e.clientX - colResize.startX));
+  colResize.th.style.width = `${width}px`;
+}
+
+function onResizeUp(): void {
+  colResize = null;
+}
+
 /** Tiny trident logo mark (matches the extension icon) as an inline SVG. */
 const LOGO_SVG =
   `<svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true">` +
@@ -137,16 +185,13 @@ function injectStyleOnce(): void {
   style.textContent = [
     /* Cosmetic patch for a TSS display quirk (confirmed present WITHOUT this
      * extension): the table's column-resize handle can get stuck as a thick
-     * full-height navy bar. Repaint it Excel-style — an almost invisible grab
-     * strip with a hairline that darkens on hover/drag. Resizing still works;
-     * only the paint changes. */
-    '.sapMPluginsColumnResizerHandle{background:linear-gradient(to right,',
-    'transparent calc(50% - 0.5px),#c9d1de calc(50% - 0.5px),',
-    '#c9d1de calc(50% + 0.5px),transparent calc(50% + 0.5px)) !important;',
+     * bar spilling down the whole list. It is now ALWAYS invisible — no bar,
+     * no guide line — with its hit area confined to the header row; the
+     * col-resize cursor is the only hint. Drag feedback comes from the live
+     * column-resize preview below (the real column border follows the mouse). */
+    '.sapMPluginsColumnResizerHandle{top:0 !important;bottom:auto !important;',
+    'height:3rem !important;background:none !important;border:0 !important;',
     'cursor:col-resize !important}',
-    '.sapMPluginsColumnResizerHandle:hover,.sapMPluginsColumnResizerHandle:active{',
-    'background:linear-gradient(to right,transparent calc(50% - 1px),#7e8ba0 calc(50% - 1px),',
-    '#7e8ba0 calc(50% + 1px),transparent calc(50% + 1px)) !important}',
     // the strip: a right-aligned row of our own, added above the table
     `#${BAR_ID}{position:relative;display:flex;justify-content:flex-end;`,
     'margin:2px 8px 0 0;padding:0}',
@@ -377,6 +422,12 @@ function start(): void {
   }
   // The column-resizer repaint should apply even before (or without) the strip.
   injectStyleOnce();
+
+  document.addEventListener('mousedown', onResizeDown, true);
+  document.addEventListener('mousemove', onResizeMove, true);
+  document.addEventListener('mouseup', onResizeUp, true);
+  window.addEventListener('blur', onResizeUp);
+
   injectChip();
 }
 
