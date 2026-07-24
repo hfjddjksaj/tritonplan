@@ -44,6 +44,11 @@
       "run_at": "document_idle"
     },
     {
+      "matches": ["https://tss.ucsd.edu/*"],
+      "js": ["content/soc-sort.js"],
+      "run_at": "document_idle"
+    },
+    {
       "matches": ["https://hfjddjksaj.github.io/tritonplan/*"],
       "js": ["content/planner-bridge.js"],
       "run_at": "document_idle"
