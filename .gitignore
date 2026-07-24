@@ -34,3 +34,14 @@ docs/tools/
 
 # local Claude Code project config (marketing agent etc.) — not for GitHub
 .claude/
+
+# secrets — never commit (auto-git safety block)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.*
