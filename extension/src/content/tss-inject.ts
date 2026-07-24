@@ -134,16 +134,15 @@ async function onAddClick(header: Element, btn: HTMLButtonElement): Promise<void
     return;
   }
   if (!cachedCourses.length) await refreshCourses();
-  const course = findCourseByModuleId(cachedCourses, ref.moduleId);
+  let course = findCourseByModuleId(cachedCourses, ref.moduleId);
   if (!course) {
-    // Maybe not captured yet; try one refresh then bail gracefully.
+    // Maybe not captured yet; try one more refresh then bail gracefully.
     await refreshCourses();
-    const retry = findCourseByModuleId(cachedCourses, ref.moduleId);
-    if (!retry) {
-      flash(btn, 'Browse first', false);
-      return;
-    }
-    return finish(retry, header, btn);
+    course = findCourseByModuleId(cachedCourses, ref.moduleId);
+  }
+  if (!course) {
+    flash(btn, 'Browse first', false);
+    return;
   }
   return finish(course, header, btn);
 }

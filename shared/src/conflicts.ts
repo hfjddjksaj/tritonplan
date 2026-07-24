@@ -40,21 +40,26 @@ export interface SelectedCourse {
   final?: FinalExam;
 }
 
+/** Every unordered pair (i < j) of the given items. */
+function* pairs<T>(items: T[]): Generator<[T, T]> {
+  for (let i = 0; i < items.length; i++) {
+    for (let j = i + 1; j < items.length; j++) {
+      yield [items[i]!, items[j]!];
+    }
+  }
+}
+
 /** All pairwise weekly-meeting conflicts among the selected courses. */
 export function findWeeklyConflicts(selected: SelectedCourse[]): WeeklyConflict[] {
   const out: WeeklyConflict[] = [];
-  for (let i = 0; i < selected.length; i++) {
-    for (let j = i + 1; j < selected.length; j++) {
-      const sa = selected[i]!;
-      const sb = selected[j]!;
-      const ma = optionMeetings(sa.option);
-      const mb = optionMeetings(sb.option);
-      for (const a of ma) {
-        for (const b of mb) {
-          if (meetingsConflict(a, b)) {
-            const day = a.days.find((d) => b.days.includes(d))!;
-            out.push({ aCourseId: sa.courseId, bCourseId: sb.courseId, day });
-          }
+  for (const [sa, sb] of pairs(selected)) {
+    const ma = optionMeetings(sa.option);
+    const mb = optionMeetings(sb.option);
+    for (const a of ma) {
+      for (const b of mb) {
+        if (meetingsConflict(a, b)) {
+          const day = a.days.find((d) => b.days.includes(d))!;
+          out.push({ aCourseId: sa.courseId, bCourseId: sb.courseId, day });
         }
       }
     }
@@ -65,15 +70,11 @@ export function findWeeklyConflicts(selected: SelectedCourse[]): WeeklyConflict[
 /** All pairwise final-exam conflicts among the selected courses. */
 export function findFinalConflicts(selected: SelectedCourse[]): FinalConflict[] {
   const out: FinalConflict[] = [];
-  for (let i = 0; i < selected.length; i++) {
-    for (let j = i + 1; j < selected.length; j++) {
-      const sa = selected[i]!;
-      const sb = selected[j]!;
-      const fa = sa.final;
-      const fb = sb.final;
-      if (fa && fb && finalsConflict(fa, fb)) {
-        out.push({ aCourseId: sa.courseId, bCourseId: sb.courseId, date: fa.date });
-      }
+  for (const [sa, sb] of pairs(selected)) {
+    const fa = sa.final;
+    const fb = sb.final;
+    if (fa && fb && finalsConflict(fa, fb)) {
+      out.push({ aCourseId: sa.courseId, bCourseId: sb.courseId, date: fa.date });
     }
   }
   return out;

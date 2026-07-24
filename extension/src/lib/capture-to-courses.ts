@@ -43,6 +43,12 @@ function sectionRowKey(r: TssSectionRow): string {
   return `${r.EventPkgOtjid}|${r.EventID}`;
 }
 
+/** Load a serialized record back into its Map (no-op for absent sections of old stores). */
+function fillMap<V>(map: Map<string, V>, record: Record<string, V> | undefined): void {
+  if (!record) return;
+  for (const [k, v] of Object.entries(record)) map.set(k, v);
+}
+
 export class CaptureStore {
   private modules = new Map<string, TssModuleRow>();
   private sections = new Map<string, TssSectionRow[]>();

@@ -261,6 +261,12 @@ function syncChip(chip: HTMLElement): void {
     : 'TritonPlan feature: sort the course list by course number. Click for details.';
 }
 
+/** Re-sync the on/off chip to `enabled`, if it's currently in the DOM. */
+function refreshChip(): void {
+  const chip = document.getElementById(CHIP_ID);
+  if (chip) syncChip(chip);
+}
+
 function setEnabled(next: boolean): void {
   enabled = next;
   try {
@@ -270,8 +276,7 @@ function setEnabled(next: boolean): void {
   }
   if (enabled) sortLists();
   else restoreLists();
-  const chip = document.getElementById(CHIP_ID);
-  if (chip) syncChip(chip);
+  refreshChip();
 }
 
 function closePopover(): void {
@@ -407,15 +412,13 @@ function start(): void {
   try {
     void chrome.storage?.local?.get(STORAGE_KEY).then((data) => {
       enabled = data?.[STORAGE_KEY] === true;
-      const chip = document.getElementById(CHIP_ID) as HTMLButtonElement | null;
-      if (chip) syncChip(chip);
+      refreshChip();
       if (enabled) sortLists();
     });
     chrome.storage?.onChanged?.addListener((changes, area) => {
       if (area !== 'local' || !(STORAGE_KEY in changes)) return;
       enabled = changes[STORAGE_KEY]?.newValue === true;
-      const chip = document.getElementById(CHIP_ID) as HTMLButtonElement | null;
-      if (chip) syncChip(chip);
+      refreshChip();
       if (enabled) sortLists();
       else restoreLists();
     });

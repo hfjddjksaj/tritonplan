@@ -1,8 +1,14 @@
 /** Time helpers shared by the TSS parser and the planner's conflict logic. */
 
+/** Split "13:05" into [hours, minutes]; missing parts default to 0. */
+function parseHhmm(hhmm: string): [number, number] {
+  const [h = 0, m = 0] = hhmm.split(':').map(Number);
+  return [h, m];
+}
+
 /** "13:05" -> 785 (minutes since midnight). */
 export function toMinutes(hhmm: string): number {
-  const [h = 0, m = 0] = hhmm.split(':').map(Number);
+  const [h, m] = parseHhmm(hhmm);
   return h * 60 + m;
 }
 
@@ -35,7 +41,7 @@ export function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd
 
 /** Format "13:05" as "1:05 PM" for display. */
 export function formatDisplay(hhmm: string): string {
-  const [h = 0, m = 0] = hhmm.split(':').map(Number);
+  const [h, m] = parseHhmm(hhmm);
   const ampm = h < 12 ? 'AM' : 'PM';
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;

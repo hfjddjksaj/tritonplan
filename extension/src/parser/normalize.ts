@@ -56,13 +56,14 @@ function cleanEmail(raw?: string): string | undefined {
 
 function rowToComponent(row: TssSectionRow): Component {
   const parsed = parseSched(row.Sched);
+  const email = cleanEmail(row.InstructorEmail);
   return {
     id: row.EventID,
     type: row.TeachingMethod as TeachingMethod,
     typeText: row.TeachingMethod_Text,
     sectionCode: row.EventAbbr,
     instructors: row.InstructorName ? [row.InstructorName] : [],
-    instructorEmails: cleanEmail(row.InstructorEmail) ? [cleanEmail(row.InstructorEmail)!] : undefined,
+    instructorEmails: email ? [email] : undefined,
     meetings: parsed.meetings,
     unscheduled: parsed.unscheduled,
     beginDate: row.BeginDate,
@@ -75,13 +76,11 @@ function rowToComponent(row: TssSectionRow): Component {
 function packageFinal(components: Component[], rows: TssSectionRow[]): FinalExam | undefined {
   // Re-parse lecture rows for finals (component drops the final; keep parse here).
   for (const c of components) {
-    if (c.type === 'LE') {
-      const row = rows.find((r) => r.EventID === c.id);
-      if (row) {
-        const f = parseSched(row.Sched).final;
-        if (f) return f;
-      }
-    }
+    if (c.type !== 'LE') continue;
+    const row = rows.find((r) => r.EventID === c.id);
+    if (!row) continue;
+    const f = parseSched(row.Sched).final;
+    if (f) return f;
   }
   // Fallback: any component with a final.
   for (const row of rows) {
