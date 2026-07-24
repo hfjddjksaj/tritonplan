@@ -44,13 +44,31 @@ interface Unit {
   key: CourseKey | null;
 }
 
+/**
+ * Course key for a row, extracted CELL BY CELL. Whole-row textContent doesn't
+ * work in the wide layout: the columns' texts run together with no separator
+ * ("CHEM-004Chemical Thinking4.00…"), which kills the code regex's trailing
+ * word boundary. Each cell's own text is clean ("CHEM-004"), and the Course
+ * cell comes first, so the first matching cell is the course code.
+ */
+function keyForRow(row: Element): CourseKey | null {
+  const cells = (row as HTMLTableRowElement).cells;
+  if (cells) {
+    for (const cell of cells) {
+      const key = courseKeyFromText(cell.textContent ?? '');
+      if (key) return key;
+    }
+  }
+  return courseKeyFromText(row.textContent ?? '');
+}
+
 /** Group tbody children into course units (main row + its popin rows) + tail. */
 function collectUnits(tbody: Element): { units: Unit[]; tail: Element[] } {
   const units: Unit[] = [];
   const tail: Element[] = [];
   for (const el of [...tbody.children]) {
     if (el.matches(MAIN_ROW) && !el.matches(POPIN_ROW)) {
-      units.push({ rows: [el], key: courseKeyFromText(el.textContent ?? '') });
+      units.push({ rows: [el], key: keyForRow(el) });
     } else if (el.matches(POPIN_ROW) && units.length > 0) {
       units[units.length - 1]!.rows.push(el);
     } else {
