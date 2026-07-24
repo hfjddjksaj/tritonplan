@@ -1,0 +1,12 @@
+{
+  "__comment": "YUCSD_I_PREREQ_TREE for CHEM-043A (ModuleID 2117), transcribed from a live passive capture on 2026-07-24. The embedded JSON arrived inside a $batch response fired by the course-detail page itself. @odata.context fragment: YUCSD_I_PREREQ_TREE(moduleid='2117',keydate=2026-09-21)/Set. Roots (parent_id '') are AND-ed groups; children are OR alternatives. A course with no requirements returns value: [] (verified on ETHN-001R / 5147).",
+  "value": [
+    { "id": "RM10015958", "parent_id": "", "text": "1 of the following:" },
+    { "id": "RM1001595800100002037", "parent_id": "RM10015958", "text": "CHEM-007L - General Chemistry Laboratory with a 'D' or higher" },
+    { "id": "RM1001595800200002038", "parent_id": "RM10015958", "text": "CHEM-007LM - General Chemistry Lab - Majors with a 'D' or higher" },
+    { "id": "RM10015959", "parent_id": "", "text": "1 of the following:" },
+    { "id": "RM1001595900100002048", "parent_id": "RM10015959", "text": "CHEM-041A - Organic I: Struct & React with a 'D' or higher" },
+    { "id": "RM1001595900200002105", "parent_id": "RM10015959", "text": "CHEM-040A - Organic Chem for Life Sci I with a 'D' or higher" },
+    { "id": "RM1001595900300002106", "parent_id": "RM10015959", "text": "CHEM-040AH - Honors Organic Chemistry I with a 'D' or higher" }
+  ]
+}

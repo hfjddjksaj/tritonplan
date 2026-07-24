@@ -119,6 +119,28 @@ W 04:00 PM - 04:50 PM In Person @ Center Hall Room 109
 ```
 (`\n` shown literally above = a real newline inside the field.)
 
+## Entity: `YUCSD_I_PREREQ_TREE` — enrollment requirements ⭐ (VERIFIED LIVE 2026-07-24)
+
+The course-detail page has three anchor sections: **Notes | Enrollment Requirements | Class
+Sections** (the "Enrollment Requirements" anchor is absent when a course has none). The
+requirement data arrives **automatically while the course detail loads** — inside a `$batch`
+response (multipart, embedded JSON) fired by the page itself, alongside `YUCSD_I_SM_TITLE`
+and before `/_sections`. No extra user action needed → our passive interceptor already
+receives it; only the classifier discards it today.
+
+- Embedded JSON `@odata.context` fragment: `YUCSD_I_PREREQ_TREE(moduleid='<ModuleID>',keydate=<YYYY-MM-DD>)/Set`
+  — **the moduleid lives in the context string, NOT in the rows**, so the classifier must
+  parse the context to attribute rows to a course. `keydate` looked like the term start (2026-09-21).
+- Row shape: `{ id, parent_id, text }` — a **flat tree**:
+  - roots (`parent_id: ""`, id like `RM10015958`) = requirement groups, text `"1 of the following:"`
+  - children (id = parent id + suffix) = alternatives, display-ready text like
+    `"CHEM-007L - General Chemistry Laboratory with a 'D' or higher"`
+  - multiple roots = AND of groups; children within a group = OR alternatives.
+- CHEM-043A (ModuleID **2117**): 7 rows — 2 groups (CHEM-7L/7LM; CHEM-41A/40A/40AH), each "with a 'D' or higher".
+- ETHN-001R (ModuleID **5147**): the SAME request still fires and returns `rows: 0` (and the UI
+  drops the anchor). Absence of requirements = empty set, not a missing call.
+- Fixture: `fixtures/prereq-tree-chem43a.json` (transcribed from the live capture same day).
+
 ## Day-abbreviation → Weekday map
 `M`→Mon, `Tu`→Tue, `W`→Wed, `Th`→Thu, `F`→Fri, `Sa`→Sat, `Su`→Sun.
 
