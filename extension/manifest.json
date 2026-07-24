@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TritonPlan",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Passively visualize UCSD Triton Student System (TSS) courses you browse on a calendar planner. Read-only: no extra server traffic.",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
