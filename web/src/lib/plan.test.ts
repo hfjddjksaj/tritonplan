@@ -18,11 +18,52 @@ function recaptured(course: CourseOffering, seats: number, optionId?: string): C
 }
 
 describe('optionSummaryParts', () => {
-  it('skips day-less phantom meetings (pre-0.2.1 captures parsed exam lines as meetings)', () => {
+  // CHEM-043A shape: a real lecture meeting, a phantom exam-time meeting from
+  // pre-0.2.1 captures, and an undefined "Other" component.
+  const chemOption: SectionOption = {
+    id: 'pkg',
+    code: 'P-001-001',
+    enrollCode: 'pkg',
+    components: [
+      {
+        id: 'lec',
+        type: 'LE',
+        typeText: 'Lecture',
+        sectionCode: '001-000',
+        instructors: [],
+        meetings: [
+          { days: ['Fri'], start: '09:00', end: '09:50', modality: 'In Person' },
+          // Old extension builds turned "Midterm Examination 10/31/2026 …" into this:
+          { days: [], start: '10:00', end: '11:50', modality: 'In Person' },
+        ],
+        unscheduled: false,
+        rawSched: 'F 09:00 AM - 09:50 AM In Person @ York Hall Room 2622',
+      },
+      {
+        id: 'other',
+        type: 'OT',
+        typeText: 'Other',
+        sectionCode: '003-001',
+        instructors: [],
+        meetings: [],
+        unscheduled: true,
+        rawSched: 'Schedule Not Defined',
+      },
+    ],
+  };
+
+  it('skips day-less phantom meetings but keeps undefined components as "undefined"', () => {
+    expect(optionSummaryParts(chemOption)).toEqual([
+      { type: 'LEC', time: 'F 09:00–09:50' },
+      { type: 'OTH', time: 'undefined' },
+    ]);
+  });
+
+  it('shows undefined components in place (ETHN-001R: async lecture, scheduled discussion)', () => {
     const option: SectionOption = {
-      id: 'pkg',
+      id: 'pkg2',
       code: 'P-001-001',
-      enrollCode: 'pkg',
+      enrollCode: 'pkg2',
       components: [
         {
           id: 'lec',
@@ -30,27 +71,30 @@ describe('optionSummaryParts', () => {
           typeText: 'Lecture',
           sectionCode: '001-000',
           instructors: [],
-          meetings: [
-            { days: ['Fri'], start: '09:00', end: '09:50', modality: 'In Person' },
-            // Old extension builds turned "Midterm Examination 10/31/2026 …" into this:
-            { days: [], start: '10:00', end: '11:50', modality: 'In Person' },
-          ],
-          unscheduled: false,
-          rawSched: 'F 09:00 AM - 09:50 AM In Person @ York Hall Room 2622',
-        },
-        {
-          id: 'other',
-          type: 'OT',
-          typeText: 'Other',
-          sectionCode: '003-001',
-          instructors: [],
           meetings: [],
           unscheduled: true,
           rawSched: 'Schedule Not Defined',
         },
+        {
+          id: 'dis',
+          type: 'DI',
+          typeText: 'Discussion',
+          sectionCode: '001-001',
+          instructors: [],
+          meetings: [{ days: ['Wed'], start: '09:00', end: '09:50', modality: 'Live Online' }],
+          unscheduled: false,
+          rawSched: 'W 09:00 AM - 09:50 AM Live Online',
+        },
       ],
     };
-    expect(optionSummaryParts(option)).toEqual([{ type: 'LEC', time: 'F 09:00–09:50' }]);
+    expect(optionSummaryParts(option)).toEqual([
+      { type: 'LEC', time: 'undefined' },
+      { type: 'DIS', time: 'W 09:00–09:50' },
+    ]);
+  });
+
+  it('path 2 (standby): hideOther drops TeachingMethod "Other" components entirely', () => {
+    expect(optionSummaryParts(chemOption, true)).toEqual([{ type: 'LEC', time: 'F 09:00–09:50' }]);
   });
 });
 

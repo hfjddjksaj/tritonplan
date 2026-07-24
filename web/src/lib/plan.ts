@@ -177,16 +177,40 @@ export interface OptionSummaryPart {
 }
 
 /**
+ * Path-2 standby switch (see PROGRESS.md 2026-07-24): TSS fills schedules in
+ * gradually (ETHN-001R's async lecture later gained times), so undefined
+ * components are shown as-is — type tag + "undefined" — and refresh with the
+ * data. If "Other" components (CHEM-043A's "Other / Schedule Not Defined" rows)
+ * turn out to be noise TSS never schedules, flip this to true to hide them
+ * from section summaries entirely.
+ */
+const HIDE_OTHER_COMPONENTS = false;
+
+function isOtherComponent(comp: SectionOption['components'][number]): boolean {
+  return comp.type?.trim() === 'OT' || comp.typeText?.trim() === 'Other';
+}
+
+/**
  * One compact schedule fragment per meeting, e.g.
  * [{type:'LEC', time:'TuTh 11:00–12:20'}, {type:'DIS', time:'F 08:00–08:50'}].
+ * Components TSS lists without a schedule yet contribute {type, time:'undefined'}.
  * Kept as separate parts so the UI can wrap between meetings but never inside one.
  */
-export function optionSummaryParts(option: SectionOption): OptionSummaryPart[] {
+export function optionSummaryParts(
+  option: SectionOption,
+  hideOther: boolean = HIDE_OTHER_COMPONENTS,
+): OptionSummaryPart[] {
   const parts: OptionSummaryPart[] = [];
   for (const comp of option.components) {
-    if (comp.unscheduled || comp.meetings.length === 0) continue;
+    if (hideOther && isOtherComponent(comp)) continue;
     const code = comp.type?.trim() ?? '';
     const type = TYPE_TAG[code] ?? (comp.typeText?.slice(0, 3).toUpperCase() || code);
+    // "Schedule Not Defined" in TSS — say so honestly; TSS fills these in over time
+    // and the next capture refresh will replace this with real times.
+    if (comp.unscheduled || comp.meetings.length === 0) {
+      parts.push({ type, time: 'undefined' });
+      continue;
+    }
     for (const m of comp.meetings) {
       // Day-less meetings are phantom rows (pre-0.2.1 extensions parsed dated exam
       // lines like "Midterm Examination 10/31/2026 …" into these) — not placeable, not shown.
