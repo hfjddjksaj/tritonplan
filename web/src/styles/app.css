@@ -767,6 +767,138 @@ p {
 .menu-wrap {
   position: relative;
 }
+.menu--left {
+  left: 0;
+  right: auto;
+}
+
+/* ------------------------------------------------- named-plans switcher */
+.planswitch {
+  position: relative;
+  margin-left: -4px;
+}
+.planswitch__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 210px;
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.planswitch__btn:hover {
+  background: var(--surface-2);
+}
+.planswitch__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.planswitch__chev {
+  flex: none;
+  color: var(--text-faint);
+}
+.planmenu {
+  width: 252px;
+}
+.planmenu__row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-sm);
+}
+.planmenu__row:hover {
+  background: var(--surface-2);
+}
+.planmenu__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 4px 8px 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  color: var(--ink);
+}
+.planmenu__check {
+  flex: none;
+  width: 14px;
+  display: inline-flex;
+  color: var(--gold-ink);
+}
+.planmenu__row--active .planmenu__main {
+  font-weight: 700;
+}
+.planmenu__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.planmenu__count {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.planmenu__acts {
+  flex: none;
+  display: inline-flex;
+  gap: 1px;
+  padding-right: 5px;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.planmenu__row:hover .planmenu__acts,
+.planmenu__acts:focus-within {
+  opacity: 1;
+}
+.planmenu__act {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-faint);
+}
+.planmenu__act:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--ink);
+}
+.planmenu__act--danger:hover:not(:disabled) {
+  background: var(--conflict-soft);
+  color: var(--conflict);
+}
+.planmenu__act:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.planmenu__new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 3px;
+  padding: 8px;
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.planmenu__new:hover {
+  background: var(--surface-2);
+}
 .menu {
   position: absolute;
   top: calc(100% + 6px);

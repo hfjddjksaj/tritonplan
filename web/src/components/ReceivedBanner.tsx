@@ -6,6 +6,9 @@ interface Props {
   viewing: 'mine' | 'received';
   onView: () => void;
   onBackToMine: () => void;
+  /** Keep it as a NEW named plan (e.g. "朋友的plan") — the safe default. */
+  onSaveAsNew: () => void;
+  /** Overwrite the currently active plan with it (confirmed by the caller). */
   onSaveAsMine: () => void;
   onDiscard: () => void;
 }
@@ -20,6 +23,7 @@ export function ReceivedBanner({
   viewing,
   onView,
   onBackToMine,
+  onSaveAsNew,
   onSaveAsMine,
   onDiscard,
 }: Props) {
@@ -36,10 +40,13 @@ export function ReceivedBanner({
         </span>
         <span className="received__spacer" />
         <button type="button" className="btn btn--sm" onClick={onBackToMine}>
-          Back to my plan
+          Back to my plans
         </button>
-        <button type="button" className="btn btn--sm btn--primary" onClick={onSaveAsMine}>
-          <Check size={13} /> Save as my plan
+        <button type="button" className="btn btn--sm" onClick={onSaveAsMine}>
+          Replace current plan
+        </button>
+        <button type="button" className="btn btn--sm btn--primary" onClick={onSaveAsNew}>
+          <Check size={13} /> Save as a new plan
         </button>
         <button
           type="button"

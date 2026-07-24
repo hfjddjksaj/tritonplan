@@ -13,7 +13,8 @@ import { pickHue } from '../lib/colors';
 import { installBridgeListener, mergeCourses } from '../lib/bridge';
 import {
   loadPlan,
-  savePlan,
+  loadPlans,
+  savePlans,
   loadPool,
   savePool,
   purgeSeededSamples,
@@ -25,10 +26,22 @@ import {
   type ReceivedPlan,
   type Viewing,
 } from '../lib/storage';
+import {
+  migratePlans,
+  activePlan,
+  updateActivePlan,
+  mapAllPlans,
+  createPlan,
+  addPlan,
+  renamePlan as renamePlanIn,
+  duplicatePlan as duplicatePlanIn,
+  deletePlan as deletePlanIn,
+  switchActive,
+  type PlansState,
+} from '../lib/plans';
 import { planFromHash } from '../lib/share';
 import { openBooking, openInTss } from '../lib/tss';
 import {
-  DEFAULT_TERM,
   buildSelectedCourses,
   emptyPlan,
   finalsSorted,
@@ -42,13 +55,9 @@ import {
 // the extension re-pushes the real pool on each load via a `courses` bridge message.
 const SAMPLE = import.meta.env.DEV ? (sampleCourses as unknown as CourseOffering[]) : [];
 
-/** Prefer a shared-URL plan, then a saved plan, then an empty one. */
-function initialPlan(): PlanState {
-  const fromHash = planFromHash(window.location.hash);
-  if (fromHash) return fromHash;
-  const saved = loadPlan();
-  if (saved) return saved;
-  return emptyPlan(SAMPLE[0]?.term ?? DEFAULT_TERM);
+/** Named-plans list: stored list wins, else the legacy single plan is migrated in. */
+function initialPlans(): PlansState {
+  return migratePlans(loadPlans(), loadPlan(), new Date().toISOString());
 }
 
 /** Seed the browsed pool from anything persisted from a prior session (+ dev samples). */
@@ -71,14 +80,22 @@ function appendEntry(
 
 export function usePlan() {
   const [pool, setPool] = useState<CourseOffering[]>(initialPool);
-  const [plan, setPlan] = useState<PlanState>(initialPlan);
+  const [plansState, setPlansState] = useState<PlansState>(initialPlans);
   // A plan someone else sent (share link or imported JSON). Lives in its own slot,
-  // shown read-only — it can never overwrite the user's own plan.
+  // shown read-only — it can never overwrite any of the user's plans.
   const [received, setReceived] = useState<ReceivedPlan | null>(loadReceived);
   const [viewing, setViewing] = useState<Viewing>(() =>
     loadReceived() ? loadViewing() : 'mine',
   );
   const firstRun = useRef(true);
+
+  // The plan every existing action/selector works on = the ACTIVE named plan.
+  const active = activePlan(plansState);
+  const plan = active.plan;
+  /** Route a PlanState update into the active member of the plans list. */
+  const setPlan = useCallback((update: (prev: PlanState) => PlanState) => {
+    setPlansState((s) => updateActivePlan(s, update, new Date().toISOString()));
+  }, []);
 
   const switchViewing = useCallback((v: Viewing) => {
     setViewing(v);
@@ -108,14 +125,14 @@ export function usePlan() {
     return () => window.removeEventListener('hashchange', consume);
   }, [switchViewing]);
 
-  // Persist the plan on change (skip first render so we don't clobber before load).
+  // Persist the plans list on change (skip first render so we don't clobber before load).
   useEffect(() => {
     if (firstRun.current) {
       firstRun.current = false;
       return;
     }
-    savePlan(plan);
-  }, [plan]);
+    savePlans(plansState);
+  }, [plansState]);
 
   // Persist the browsed pool so the "Browsed — not yet added" list survives reloads.
   useEffect(() => {
@@ -167,14 +184,47 @@ export function usePlan() {
     }));
   }, []);
 
-  const replacePlan = useCallback((next: PlanState) => {
-    // Any courses referenced by the imported plan should also exist in the pool.
-    setPool((prev) => mergeCourses(prev, next.entries.map((e) => e.course)));
-    setPlan(next);
-  }, []);
+  const replacePlan = useCallback(
+    (next: PlanState) => {
+      // Any courses referenced by the imported plan should also exist in the pool.
+      setPool((prev) => mergeCourses(prev, next.entries.map((e) => e.course)));
+      setPlan(() => next);
+    },
+    [setPlan],
+  );
 
   const resetPlan = useCallback(() => {
     setPlan((prev) => emptyPlan(prev.term));
+  }, [setPlan]);
+
+  // ---- named-plans management -------------------------------------------
+  const switchPlan = useCallback(
+    (id: string) => {
+      setPlansState((s) => switchActive(s, id));
+      switchViewing('mine');
+    },
+    [switchViewing],
+  );
+
+  const createNewPlan = useCallback(() => {
+    setPlansState((s) => createPlan(s, new Date().toISOString()));
+    switchViewing('mine');
+  }, [switchViewing]);
+
+  const renamePlan = useCallback((id: string, name: string) => {
+    setPlansState((s) => renamePlanIn(s, id, name));
+  }, []);
+
+  const duplicatePlan = useCallback(
+    (id: string) => {
+      setPlansState((s) => duplicatePlanIn(s, id, new Date().toISOString()));
+      switchViewing('mine');
+    },
+    [switchViewing],
+  );
+
+  const deletePlan = useCallback((id: string) => {
+    setPlansState((s) => deletePlanIn(s, id));
   }, []);
 
   /** Bring in a plan someone sent (imported JSON / pasted link) — read-only view. */
@@ -188,13 +238,27 @@ export function usePlan() {
     [switchViewing],
   );
 
-  /** Make the received plan MY plan (explicit, destructive — caller confirms). */
+  /** Replace the ACTIVE plan with the received one (destructive — caller confirms). */
   const saveReceivedAsMine = useCallback(() => {
     if (received) replacePlan(received.plan);
     clearReceived();
     setReceived(null);
     switchViewing('mine');
   }, [received, replacePlan, switchViewing]);
+
+  /** Keep the received plan as a NEW named plan ("朋友的plan") and switch to it. */
+  const saveReceivedAsNewPlan = useCallback(
+    (name: string) => {
+      if (!received) return;
+      const incoming = received.plan;
+      setPool((prev) => mergeCourses(prev, incoming.entries.map((e) => e.course)));
+      setPlansState((s) => addPlan(s, incoming, name, new Date().toISOString()));
+      clearReceived();
+      setReceived(null);
+      switchViewing('mine');
+    },
+    [received, switchViewing],
+  );
 
   /** Drop the received plan and go back to my own. */
   const discardReceived = useCallback(() => {
@@ -228,9 +292,11 @@ export function usePlan() {
       onCourses: (incoming) => {
         bridgeSeen.current = true;
         setPool((prev) => mergeCourses(prev, incoming));
-        // Plan entries hold their own course copy — refresh it too, or seat
+        // EVERY plan holds its own course copies — refresh them all, or seat
         // counts stay frozen at whatever they were when the course was added.
-        setPlan((prev) => refreshPlanEntries(prev, incoming));
+        setPlansState((s) =>
+          mapAllPlans(s, (p) => refreshPlanEntries(p, incoming), new Date().toISOString()),
+        );
       },
       onPlanAdd: (course, optionId) => {
         bridgeSeen.current = true;
@@ -302,6 +368,15 @@ export function usePlan() {
     clearBrowsed,
     openCourseInTss,
     openBookingInTss,
+    // named plans
+    plans: plansState.plans,
+    activePlanId: plansState.activeId,
+    activePlanName: active.name,
+    switchPlan,
+    createNewPlan,
+    renamePlan,
+    duplicatePlan,
+    deletePlan,
     // received plans (share links / imported JSON) — read-only companion slot
     received,
     viewing,
@@ -310,6 +385,7 @@ export function usePlan() {
     switchViewing,
     importReceived,
     saveReceivedAsMine,
+    saveReceivedAsNewPlan,
     discardReceived,
     // derived
     selectedCourses,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePlan } from './hooks/usePlan';
 import { Topbar } from './components/Topbar';
+import { PlanSwitcher } from './components/PlanSwitcher';
 import { CoursePanel } from './components/CoursePanel';
 import { CalendarGrid } from './components/CalendarGrid';
 import { FinalsView } from './components/FinalsView';
@@ -86,13 +87,23 @@ export default function App() {
     if (
       n > 0 &&
       !window.confirm(
-        `Make this your plan? Your current plan (${n} ${pluralize(n, 'course')}) will be replaced.`,
+        `Replace “${ctl.activePlanName}” (${n} ${pluralize(n, 'course')}) with this plan?`,
       )
     ) {
       return;
     }
     ctl.saveReceivedAsMine();
-    flash('Saved as your plan — you can edit it now');
+    flash(`Replaced “${ctl.activePlanName}” — you can edit it now`);
+  }, [ctl, flash]);
+
+  const handleSaveAsNewPlan = useCallback(() => {
+    if (!ctl.received) return;
+    const d = new Date(ctl.received.receivedAt);
+    const fallback = `${ctl.received.source === 'link' ? 'Shared' : 'Imported'} plan ${d.getMonth() + 1}/${d.getDate()}`;
+    const name = window.prompt('Name this plan', fallback);
+    if (name === null) return;
+    ctl.saveReceivedAsNewPlan(name.trim() || fallback);
+    flash('Saved as a new plan — you can edit it now');
   }, [ctl, flash]);
 
   const handleDiscardReceived = useCallback(() => {
@@ -138,6 +149,17 @@ export default function App() {
         termLabel={ctl.viewPlan.term.label}
         units={ctl.units}
         readOnly={ctl.readOnly}
+        planSwitcher={
+          <PlanSwitcher
+            plans={ctl.plans.map((p) => ({ id: p.id, name: p.name, count: p.plan.entries.length }))}
+            activeId={ctl.activePlanId}
+            onSwitch={ctl.switchPlan}
+            onCreate={ctl.createNewPlan}
+            onRename={ctl.renamePlan}
+            onDuplicate={ctl.duplicatePlan}
+            onDelete={ctl.deletePlan}
+          />
+        }
         onCopyLink={handleCopyLink}
         onExportJson={handleExportJson}
         onImportText={handleImportText}
@@ -150,6 +172,7 @@ export default function App() {
           viewing={ctl.viewing}
           onView={() => ctl.switchViewing('received')}
           onBackToMine={() => ctl.switchViewing('mine')}
+          onSaveAsNew={handleSaveAsNewPlan}
           onSaveAsMine={handleSaveAsMine}
           onDiscard={handleDiscardReceived}
         />

@@ -107,6 +107,17 @@ export const Check = (p: P) => (
     <path d="m5 12 5 5 9-11" />
   </svg>
 );
+export const Pencil = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M17 3.5a2.1 2.1 0 0 1 3 3L7.5 19 3 20.5 4.5 16Z" />
+  </svg>
+);
+export const Copy = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="9" y="9" width="12" height="12" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
 export const Link = (p: P) => (
   <svg {...base(p)}>
     <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />

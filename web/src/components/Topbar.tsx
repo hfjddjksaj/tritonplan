@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { PRODUCT_NAME } from '../lib/brand';
+import { useClickAway } from '../hooks/useClickAway';
 import { Trident, Share, Download, Upload, Trash, Link, ChevronDown } from './icons';
 
 interface Props {
@@ -7,6 +8,8 @@ interface Props {
   units: number;
   /** Viewing someone else's plan — editing actions (Clear) hide. */
   readOnly: boolean;
+  /** The named-plans dropdown, rendered next to the brand. */
+  planSwitcher?: ReactNode;
   onCopyLink: () => void;
   onExportJson: () => void;
   onImportText: (text: string) => void;
@@ -14,22 +17,11 @@ interface Props {
   onReset: () => void;
 }
 
-/** Close an open dropdown when clicking anywhere outside it. */
-function useClickAway(open: boolean, ref: React.RefObject<HTMLElement | null>, close: () => void) {
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close();
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open, ref, close]);
-}
-
 export function Topbar({
   termLabel,
   units,
   readOnly,
+  planSwitcher,
   onCopyLink,
   onExportJson,
   onImportText,
@@ -67,6 +59,8 @@ export function Topbar({
         <span>{PRODUCT_NAME}</span>
         <span className="brand__sub">· UCSD</span>
       </div>
+
+      {planSwitcher}
 
       <div className="topbar__term">
         <span className="eyebrow">Term</span>

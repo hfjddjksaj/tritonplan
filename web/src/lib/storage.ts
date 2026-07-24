@@ -77,6 +77,44 @@ export function loadPool(): CourseOffering[] | null {
   return readJson(POOL_KEY, isCoursePool);
 }
 
+/* ---- named plans list ------------------------------------------------------
+   Multiple plans the user can switch between. The legacy single-plan slot
+   (`plan:v1`) is migrated into this on first load and then left untouched
+   (a stale rollback backstop — never written again). */
+
+const PLANS_KEY = 'triton-planner:plans:v1';
+
+function isNamedPlan(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === 'string' &&
+    typeof v.name === 'string' &&
+    typeof v.createdAt === 'string' &&
+    typeof v.updatedAt === 'string' &&
+    isPlanState(v.plan)
+  );
+}
+
+function isPlansState(value: unknown): value is import('./plans').PlansState {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.activeId === 'string' &&
+    Array.isArray(v.plans) &&
+    v.plans.length > 0 &&
+    v.plans.every(isNamedPlan)
+  );
+}
+
+export function savePlans(state: import('./plans').PlansState): void {
+  writeJson(PLANS_KEY, state);
+}
+
+export function loadPlans(): import('./plans').PlansState | null {
+  return readJson(PLANS_KEY, isPlansState);
+}
+
 /* ---- received plans (opened from a share link or an imported JSON file) ----
    Kept in their own slot so someone else's plan can NEVER overwrite yours: the
    app shows it read-only and only writes it to the main slot on an explicit
