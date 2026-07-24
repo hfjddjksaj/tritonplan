@@ -64,26 +64,27 @@ export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusC
 
   return (
     <div className="cal-wrap">
-      {/* sticky-ish header row */}
-      <div className="cal-head">
-        <div className="cal-head__corner" />
-        <div className="cal-head__days" style={{ gridTemplateColumns: colTemplate }}>
-          {days.map((d) => (
-            <div
-              key={d}
-              className={`cal-head__day${d === today ? ' cal-head__day--today' : ''}`}
-            >
-              <span className="cal-head__dow">
-                {d}
-                {d === today && <span className="cal-head__today-dot" aria-hidden />}
-              </span>
-              <span className="sr-only">{weekdayLong(d)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
       <div className="cal-scroll">
+        {/* Sticky header INSIDE the scroll container: it then shares the scrollbar
+            gutter with the body, so header and body columns always align (classic
+            scrollbars shrink the scroll content; a header outside wouldn't shrink). */}
+        <div className="cal-head">
+          <div className="cal-head__corner" />
+          <div className="cal-head__days" style={{ gridTemplateColumns: colTemplate }}>
+            {days.map((d) => (
+              <div
+                key={d}
+                className={`cal-head__day${d === today ? ' cal-head__day--today' : ''}`}
+              >
+                <span className="cal-head__dow">
+                  {d}
+                  {d === today && <span className="cal-head__today-dot" aria-hidden />}
+                </span>
+                <span className="sr-only">{weekdayLong(d)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
         <div className="cal-grid" style={{ height }}>
           {/* hour gutter */}
           <div className="cal-gutter" style={{ height }}>

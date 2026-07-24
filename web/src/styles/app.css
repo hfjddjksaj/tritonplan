@@ -1005,7 +1005,7 @@ button.menu__item:hover {
   box-shadow: var(--shadow-md);
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 1fr;
   min-height: 0;
 }
 .cal-head {
@@ -1013,6 +1013,15 @@ button.menu__item:hover {
   grid-template-columns: var(--hour-gutter-w) 1fr;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
+}
+/* Weekly view only: the header lives INSIDE .cal-scroll (sticky) so it shares
+   the scrollbar gutter with the body — with classic scrollbars a header outside
+   the scroller keeps full width while the body shrinks, skewing every column
+   boundary. (The finals calendar has no inner scroller; its header stays put.) */
+.cal-scroll .cal-head {
+  position: sticky;
+  top: 0;
+  z-index: 10; /* above course blocks (hover 5 / conflict 6 / focus ring 8) */
 }
 .cal-head__corner {
   border-right: 1px solid var(--line);
