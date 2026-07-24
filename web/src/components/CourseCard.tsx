@@ -83,17 +83,18 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             >
               open in TSS <External size={11} strokeWidth={2.2} />
             </button>
-            {onBook && (
-              <button
-                type="button"
-                className="course-card__tss"
-                onClick={onBook}
-                title={`Go to booking for the selected ${course.courseCode} section`}
-              >
-                book section <External size={11} strokeWidth={2.2} />
-              </button>
-            )}
-            {(course.prereqs?.length ?? 0) > 0 && (
+            {/* Kept as one non-wrapping pair: prerequisites sits right of book section. */}
+            <span className="course-card__pair">
+              {onBook && (
+                <button
+                  type="button"
+                  className="course-card__tss"
+                  onClick={onBook}
+                  title={`Go to booking for the selected ${course.courseCode} section`}
+                >
+                  book section <External size={11} strokeWidth={2.2} />
+                </button>
+              )}
               <button
                 type="button"
                 className="course-card__tss"
@@ -102,7 +103,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               >
                 prerequisites
               </button>
-            )}
+            </span>
           </div>
         </div>
         <div className="course-card__side">
@@ -139,6 +140,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
         <PrereqPopover
           course={course}
           accent={{ text: c.text, spine: c.spine }}
+          onOpenTss={onOpenTss}
           onClose={() => setPrereqsOpen(false)}
         />
       )}

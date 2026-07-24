@@ -571,6 +571,12 @@ p {
   color: var(--conflict-ink);
   border-color: transparent;
 }
+/* "book section" + "prerequisites" wrap as one unit — always on the same line */
+.course-card__pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px 8px;
+}
 .course-card__side {
   flex: none;
   display: flex;
@@ -1512,6 +1518,12 @@ button.menu__item:hover {
   height: 5px;
   border-radius: 50%;
   background: var(--c-spine, var(--line-strong));
+}
+.prereqpop__none {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
 }
 .prereqpop__and {
   margin: 6px 0;
