@@ -68,6 +68,32 @@ describe('parseSched — real captured TSS strings', () => {
     expect(r.final?.date).toBe('2026-12-11');
   });
 
+  it('midterm-exam line is NOT a weekly meeting (CHEM-043A, seen 2026-07-24)', () => {
+    const r = parseSched(
+      'F 09:00 AM - 09:50 AM In Person @ York Hall Room 2622\n' +
+        'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person\n' +
+        'Final Examination 12/05/2026 11:30 AM - 02:29 PM In Person',
+    );
+    expect(r.unscheduled).toBe(false);
+    expect(r.meetings).toHaveLength(1);
+    expect(r.meetings[0]).toMatchObject({
+      days: ['Fri'],
+      start: '09:00',
+      end: '09:50',
+      building: 'York Hall',
+      room: '2622',
+    });
+    expect(r.final).toEqual({ date: '2026-12-05', start: '11:30', end: '14:29', modality: 'In Person' });
+    expect(r.unparsedLines).toEqual(['Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person']);
+  });
+
+  it('any dated one-off line (non-day prefix before the time) is rejected, kept for diagnostics', () => {
+    const r = parseSched('Makeup Examination 11/15/2026 10:00 AM - 11:50 AM In Person');
+    expect(r.meetings).toHaveLength(0);
+    expect(r.final).toBeUndefined();
+    expect(r.unparsedLines).toEqual(['Makeup Examination 11/15/2026 10:00 AM - 11:50 AM In Person']);
+  });
+
   it('empty / nullish is unscheduled, not a crash', () => {
     expect(parseSched('').unscheduled).toBe(true);
     expect(parseSched(undefined).unscheduled).toBe(true);

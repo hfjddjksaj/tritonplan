@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlanEntry } from '@triton/shared';
 import { colorsForHue, hueFromEntryColor } from '../lib/colors';
-import { findOption } from '../lib/plan';
+import { relativeTime } from '../lib/format';
 import { OptionPicker } from './OptionPicker';
 import { Trash, External } from './icons';
 
@@ -24,14 +24,18 @@ export function CourseCard({ entry, index, conflicted, focusNonce, onSelect, onR
   const { course } = entry;
   // Section list starts tucked away — long option lists otherwise dominate the rail.
   const [sectionsOpen, setSectionsOpen] = useState(false);
-  // Components of the chosen option that TSS lists without a meeting time
-  // ("Schedule Not Defined") — shown inside this card, grayed, not clickable,
-  // instead of duplicating the course in a separate "unscheduled" list.
-  const selectedOption = findOption(course, entry.selectedOptionId);
-  const notScheduled =
-    selectedOption?.components.filter((c) => c.unscheduled || c.meetings.length === 0) ?? [];
   const [flash, setFlash] = useState(false);
   const rootRef = useRef<HTMLElement | null>(null);
+
+  // Re-render once a minute so the "seats Xm ago" staleness label keeps aging
+  // while the tab sits open.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!course.capturedAt) return;
+    const t = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, [course.capturedAt]);
+  const freshness = course.capturedAt ? relativeTime(course.capturedAt) : '';
 
   useEffect(() => {
     if (focusNonce === undefined) return;
@@ -87,31 +91,26 @@ export function CourseCard({ entry, index, conflicted, focusNonce, onSelect, onR
             )}
           </div>
         </div>
-        <button
-          type="button"
-          className="course-card__remove"
-          onClick={onRemove}
-          aria-label={`Remove ${course.courseCode}`}
-          title={`Remove ${course.courseCode}`}
-        >
-          <Trash size={15} />
-        </button>
-      </div>
-      {notScheduled.length > 0 && (
-        <div className="course-card__nosched">
-          {notScheduled.map((c) => (
-            <div
-              key={c.sectionCode}
-              className="nosched-row"
-              title="TSS lists this component as “Schedule Not Defined” — it has no meeting time and can’t be placed on the calendar."
+        <div className="course-card__side">
+          <button
+            type="button"
+            className="course-card__remove"
+            onClick={onRemove}
+            aria-label={`Remove ${course.courseCode}`}
+            title={`Remove ${course.courseCode}`}
+          >
+            <Trash size={15} />
+          </button>
+          {freshness && (
+            <span
+              className="course-card__fresh"
+              title={`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`}
             >
-              <span className="nosched-row__type">{c.typeText}</span>
-              <span className="nosched-row__code mono">{c.sectionCode}</span>
-              <span className="nosched-row__label">not scheduled</span>
-            </div>
-          ))}
+              seats {freshness}
+            </span>
+          )}
         </div>
-      )}
+      </div>
       <OptionPicker
         course={course}
         selectedOptionId={entry.selectedOptionId}

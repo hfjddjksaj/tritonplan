@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { CourseOffering } from '@triton/shared';
-import { refreshPlanEntries } from './plan';
+import type { CourseOffering, SectionOption } from '@triton/shared';
+import { optionSummaryParts, refreshPlanEntries } from './plan';
 import { makeCourse, makePlan } from './fixtures';
 
 /** A re-captured copy of `course` with new seat counts (and optionally new option ids). */
@@ -16,6 +16,43 @@ function recaptured(course: CourseOffering, seats: number, optionId?: string): C
     })),
   };
 }
+
+describe('optionSummaryParts', () => {
+  it('skips day-less phantom meetings (pre-0.2.1 captures parsed exam lines as meetings)', () => {
+    const option: SectionOption = {
+      id: 'pkg',
+      code: 'P-001-001',
+      enrollCode: 'pkg',
+      components: [
+        {
+          id: 'lec',
+          type: 'LE',
+          typeText: 'Lecture',
+          sectionCode: '001-000',
+          instructors: [],
+          meetings: [
+            { days: ['Fri'], start: '09:00', end: '09:50', modality: 'In Person' },
+            // Old extension builds turned "Midterm Examination 10/31/2026 …" into this:
+            { days: [], start: '10:00', end: '11:50', modality: 'In Person' },
+          ],
+          unscheduled: false,
+          rawSched: 'F 09:00 AM - 09:50 AM In Person @ York Hall Room 2622',
+        },
+        {
+          id: 'other',
+          type: 'OT',
+          typeText: 'Other',
+          sectionCode: '003-001',
+          instructors: [],
+          meetings: [],
+          unscheduled: true,
+          rawSched: 'Schedule Not Defined',
+        },
+      ],
+    };
+    expect(optionSummaryParts(option)).toEqual([{ type: 'LEC', time: 'F 09:00–09:50' }]);
+  });
+});
 
 describe('refreshPlanEntries', () => {
   it('replaces an entry’s frozen course with the fresh copy, keeping the selection', () => {

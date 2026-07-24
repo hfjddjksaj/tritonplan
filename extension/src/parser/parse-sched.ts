@@ -3,12 +3,16 @@
  *
  * Grammar (see docs/tss-recon/tss-api-notes.md), either:
  *   "Schedule Not Defined"                                  → TBA/async, no placeable time
- * or one-or-more `\n`-separated lines, each either:
+ * or one-or-more `\n`-separated lines, each one of:
  *   meeting: `<Days> <Start> - <End> <Modality>[ @ <Location>]`
  *   final:   `Final Examination <MM/DD/YYYY> <Start> - <End> <Modality>`
+ *   other dated one-offs: `Midterm Examination <MM/DD/YYYY> <Start> - <End> <Modality>`
+ *     (seen on CHEM-043A, 2026-07-24) — NOT a weekly meeting; dropped into unparsedLines.
  *
  * Robustness: modality is multi-word ("Live Online"), and `@ <Location>` is optional
  * (absent for online). We anchor on the time range regex rather than splitting by spaces.
+ * A line only counts as a meeting if everything before the time range is day tokens —
+ * otherwise dated exam lines would come back as phantom meetings with `days: []`.
  */
 
 import type { Meeting, FinalExam, Weekday } from '@triton/shared';
@@ -40,13 +44,16 @@ export interface ParsedSched {
   unparsedLines: string[]; // any lines we couldn't interpret (kept for diagnostics)
 }
 
-function parseDays(daysPart: string): Weekday[] {
-  return daysPart
+/** Day tokens → weekdays; null when any token is not a day code (not a meeting line). */
+function parseDays(daysPart: string): Weekday[] | null {
+  const tokens = daysPart
     .split(',')
     .map((t) => t.trim())
-    .filter(Boolean)
+    .filter(Boolean);
+  const days = tokens
     .map((tok) => DAY_MAP[tok])
     .filter((d): d is Weekday => Boolean(d));
+  return days.length === tokens.length ? days : null;
 }
 
 /** Split a raw location like "Galbraith Hall Room 242" into building + room. */
@@ -82,6 +89,7 @@ function parseMeetingLine(line: string): Meeting | null {
   const daysPart = head.slice(0, tm.index).trim();
   const modality = head.slice((tm.index ?? 0) + tm[0].length).trim();
   const days = parseDays(daysPart);
+  if (days === null) return null; // e.g. "Midterm Examination 10/31/2026 …" — dated one-off, not weekly
 
   const loc = location ? splitLocation(location) : {};
   return {

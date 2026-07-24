@@ -188,6 +188,9 @@ export function optionSummaryParts(option: SectionOption): OptionSummaryPart[] {
     const code = comp.type?.trim() ?? '';
     const type = TYPE_TAG[code] ?? (comp.typeText?.slice(0, 3).toUpperCase() || code);
     for (const m of comp.meetings) {
+      // Day-less meetings are phantom rows (pre-0.2.1 extensions parsed dated exam
+      // lines like "Midterm Examination 10/31/2026 …" into these) — not placeable, not shown.
+      if (m.days.length === 0) continue;
       parts.push({ type, time: `${m.days.map((d) => DAY_ABBR[d]).join('')} ${m.start}–${m.end}` });
     }
   }

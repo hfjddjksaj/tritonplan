@@ -1,7 +1,6 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment } from 'react';
 import type { CourseOffering } from '@triton/shared';
 import { optionSummaryParts } from '../lib/plan';
-import { relativeTime } from '../lib/format';
 import { ChevronDown } from './icons';
 
 interface Props {
@@ -14,19 +13,10 @@ interface Props {
 }
 
 export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, onToggle }: Props) {
-  // Re-render once a minute so the "seats Xm ago" staleness label keeps aging
-  // while the tab sits open. (Hook order: before any early return.)
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (!course.capturedAt) return;
-    const t = setInterval(() => setTick((n) => n + 1), 60_000);
-    return () => clearInterval(t);
-  }, [course.capturedAt]);
-
   if (course.options.length === 0) return null;
   const selected = course.options.find((o) => o.id === selectedOptionId);
-  const freshness = course.capturedAt ? relativeTime(course.capturedAt) : '';
   const hasSeats = course.options.some((o) => o.seatsAvailable !== undefined);
+  const showSub = course.options.length > 1 || (collapsed && selected);
   return (
     <div className="picker">
       <button
@@ -36,23 +26,20 @@ export function OptionPicker({ course, selectedOptionId, onSelect, collapsed, on
         aria-expanded={!collapsed}
         title={collapsed ? 'Show all sections' : 'Hide sections'}
       >
-        <span className="eyebrow picker__label">
-          Section {course.options.length > 1 ? `· ${course.options.length} options` : ''}
-        </span>
-        {freshness && (
-          <span
-            className="picker__fresh"
-            title={`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`}
-          >
-            seats {freshness}
-          </span>
-        )}
-        {collapsed && selected && <span className="picker__selected mono">{selected.code}</span>}
+        <span className="eyebrow picker__label">Section</span>
         <ChevronDown
           size={14}
           strokeWidth={2.2}
           className={`picker__chev${collapsed ? '' : ' picker__chev--open'}`}
         />
+        {showSub && (
+          <span className="picker__sub">
+            {course.options.length > 1 && (
+              <span className="eyebrow picker__count">{course.options.length} options</span>
+            )}
+            {collapsed && selected && <span className="picker__selected mono">{selected.code}</span>}
+          </span>
+        )}
       </button>
       {collapsed ? null : (
       <div className="picker__list" role="radiogroup" aria-label={`${course.courseCode} section`}>

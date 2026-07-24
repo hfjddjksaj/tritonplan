@@ -64,7 +64,7 @@ Per-row fields we keep (see `fixtures/cse-sections-normalized.json` for real cap
 
 ## ⭐ `Sched` string grammar (the core parsing job)
 Either the literal `"Schedule Not Defined"` (TBA/async — see below), OR one or more lines
-separated by `\n`. Two line kinds:
+separated by `\n`. Three line kinds:
 
 **1. Meeting line:** `<Days> <StartTime> - <EndTime> <Modality>[ @ <Location>]`
 - `<Days>` = comma+space separated abbreviations from `{M, Tu, W, Th, F}` (expect `Sa`, `Su` too). Examples: `Tu, Th` / `M, W` / `W` / `F` / `Th`.
@@ -79,6 +79,14 @@ separated by `\n`. Two line kinds:
 **2. Final-exam line:** `Final Examination <MM/DD/YYYY> <StartTime> - <EndTime> <Modality>`
 - Present on most in-person **Lecture (`LE`)** rows, but **OPTIONAL even on lectures** (async/online lectures have none).
 - Date is US `MM/DD/YYYY` (e.g. `12/09/2026`); times are 12-hour.
+
+**3. Midterm-exam line (2026-07-24, user TSS screenshot of CHEM-043A):** `Midterm Examination <MM/DD/YYYY> <StartTime> - <EndTime> <Modality>`
+- Seen on the CHEM-043A Lecture row between the meeting line and the final-exam line:
+  `F 09:00 AM - 09:50 AM In Person @ York Hall Room 2622\nMidterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person\nFinal Examination 12/05/2026 11:30 AM - 02:29 PM In Person`
+- **NOT a weekly meeting** — parser must not surface it as one (it used to become a phantom
+  `days: []` meeting). We drop it (kept in `unparsedLines` diagnostics only). Guard generically:
+  a meeting line's `<Days>` part must consist solely of day tokens, so any other dated one-off
+  (e.g. a hypothetical `Makeup Examination …`) is rejected the same way.
 
 **TBA / async:** `Sched === "Schedule Not Defined"` → the component has no placeable time (e.g. an
 async online lecture; `LocationText` is then `"MC Online"`). Put these in an **"unscheduled/TBA" list**,
