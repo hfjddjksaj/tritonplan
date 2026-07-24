@@ -152,12 +152,10 @@ export class CaptureStore {
   static deserialize(data: unknown): CaptureStore {
     const store = new CaptureStore();
     const shape = (data ?? {}) as Partial<StoreShape>;
-    if (shape.modules) for (const [k, v] of Object.entries(shape.modules)) store.modules.set(k, v);
-    if (shape.sections) for (const [k, v] of Object.entries(shape.sections)) store.sections.set(k, v);
-    if (shape.capturedAt)
-      for (const [k, v] of Object.entries(shape.capturedAt)) store.capturedAt.set(k, v);
-    if (shape.prereqs)
-      for (const [k, v] of Object.entries(shape.prereqs)) store.prereqs.set(k, v);
+    fillMap(store.modules, shape.modules);
+    fillMap(store.sections, shape.sections);
+    fillMap(store.capturedAt, shape.capturedAt);
+    fillMap(store.prereqs, shape.prereqs);
     return store;
   }
 }

@@ -39,16 +39,19 @@ async function persist(store: CaptureStore): Promise<void> {
 }
 
 /* ---- Plan-add queue (persisted so it survives worker eviction) ------------ */
-async function enqueuePlanAdd(intent: PlanAddIntent): Promise<void> {
+async function readQueue(): Promise<PlanAddIntent[]> {
   const data = await chrome.storage.local.get(QUEUE_KEY);
-  const queue: PlanAddIntent[] = Array.isArray(data?.[QUEUE_KEY]) ? data[QUEUE_KEY] : [];
+  return Array.isArray(data?.[QUEUE_KEY]) ? data[QUEUE_KEY] : [];
+}
+
+async function enqueuePlanAdd(intent: PlanAddIntent): Promise<void> {
+  const queue = await readQueue();
   queue.push(intent);
   await chrome.storage.local.set({ [QUEUE_KEY]: queue });
 }
 
 async function drainPlanAdds(): Promise<PlanAddIntent[]> {
-  const data = await chrome.storage.local.get(QUEUE_KEY);
-  const queue: PlanAddIntent[] = Array.isArray(data?.[QUEUE_KEY]) ? data[QUEUE_KEY] : [];
+  const queue = await readQueue();
   if (queue.length) await chrome.storage.local.set({ [QUEUE_KEY]: [] });
   return queue;
 }
