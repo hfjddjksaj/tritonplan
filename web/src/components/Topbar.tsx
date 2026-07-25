@@ -12,6 +12,8 @@ interface Props {
   readOnly: boolean;
   /** The named-plans dropdown, rendered next to the brand. */
   planSwitcher?: ReactNode;
+  /** The student's own appointment-times capsule, rendered before the unit pill. */
+  apptSlot?: ReactNode;
   /** The plan on screen, for the Share menu (link + QR). */
   sharePlan: PlanState;
   onFlash: (msg: string) => void;
@@ -25,6 +27,7 @@ export function Topbar({
   units,
   readOnly,
   planSwitcher,
+  apptSlot,
   sharePlan,
   onFlash,
   onImportText,
@@ -68,6 +71,8 @@ export function Topbar({
       </div>
 
       <div className="topbar__spacer" />
+
+      {apptSlot}
 
       <div className="unit-pill" title="Total units of added courses">
         <span className="unit-pill__n mono">{units}</span>

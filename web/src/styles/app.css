@@ -2149,3 +2149,48 @@ button.menu__item:hover {
     background: var(--gold-soft);
   }
 }
+
+/* ---- enrollment appointment-times capsule + popover ---- */
+.appt-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.appt-capsule:hover { border-color: var(--ink); }
+.appt-capsule--open {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+.appt-capsule--ended { opacity: 0.55; }
+
+.apptpop { max-width: 420px; }
+.apptpop__term { font-weight: 700; font-size: 15px; margin: 2px 0 10px; }
+.apptpop__list { display: grid; gap: 8px; }
+.apptpop__win {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.apptpop__win--open { border-color: var(--gold); }
+.apptpop__win--ended { opacity: 0.55; }
+.apptpop__winhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.apptpop__label { font-weight: 700; font-size: 13px; }
+.apptpop__status { font-size: 11px; letter-spacing: 0.02em; }
+.apptpop__status--open { color: var(--gold-ink); font-weight: 700; }
+.apptpop__times { font-size: 12px; margin-top: 3px; }
+.apptpop__meta { display: flex; gap: 12px; font-size: 11px; opacity: 0.8; margin-top: 3px; }
+.apptpop__none { font-size: 13px; opacity: 0.8; }
+
+@media (max-width: 760px) {
+  .appt-capsule { padding: 4px 8px; }
+  .appt-capsule__text { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
+}

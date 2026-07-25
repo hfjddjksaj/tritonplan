@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePlan } from './hooks/usePlan';
 import { useIsMobile } from './hooks/useIsMobile';
+import { useApptTimes } from './hooks/useApptTimes';
 import { Topbar } from './components/Topbar';
 import { PlanSwitcher } from './components/PlanSwitcher';
+import { ApptCapsule } from './components/ApptCapsule';
 import { CoursePanel } from './components/CoursePanel';
 import { CalendarGrid } from './components/CalendarGrid';
 import { CalViewToggle } from './components/CalViewToggle';
@@ -23,6 +25,7 @@ import type { PositionedBlock } from './lib/layout';
 export default function App() {
   const ctl = usePlan();
   const isMobile = useIsMobile();
+  const appt = useApptTimes();
   const [tab, setTab] = useState<MobileTab>('calendar');
   const [calPulse, setCalPulse] = useState(false);
   const [calView, setCalView] = useState<CalView>(loadCalView);
@@ -174,6 +177,7 @@ export default function App() {
             onDelete={ctl.deletePlan}
           />
         }
+        apptSlot={<ApptCapsule appt={appt} />}
         sharePlan={ctl.viewPlan}
         onFlash={flash}
         onImportText={handleImportText}

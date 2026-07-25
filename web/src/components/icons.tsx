@@ -80,6 +80,12 @@ export const Trash = (p: P) => (
     <path d="M6 7l1 13h10l1-13" />
   </svg>
 );
+export const Clock = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
 export const Calendar = (p: P) => (
   <svg {...base(p)}>
     <rect x="3" y="5" width="18" height="16" rx="2" />
