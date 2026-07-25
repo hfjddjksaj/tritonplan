@@ -2187,6 +2187,7 @@ button.menu__item:hover {
 .apptpop__status { font-size: 11px; letter-spacing: 0.02em; }
 .apptpop__status--open { color: var(--gold-ink); font-weight: 700; }
 .apptpop__times { font-size: 12px; margin-top: 3px; }
+.apptpop__times--local { font-size: 11px; opacity: 0.65; margin-top: 1px; }
 .apptpop__meta { display: flex; gap: 12px; font-size: 11px; opacity: 0.8; margin-top: 3px; }
 .apptpop__none { font-size: 13px; opacity: 0.8; }
 

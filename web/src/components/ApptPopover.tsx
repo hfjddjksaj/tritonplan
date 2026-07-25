@@ -1,7 +1,14 @@
 import { createPortal } from 'react-dom';
 import type { ApptTimes } from '@triton/shared';
 import { useEscapeKey } from '../hooks/useEscapeKey';
-import { apptWindowStatus, formatApptInstant, type ApptStatus } from '../lib/appt';
+import {
+  apptWindowStatus,
+  deviceZone,
+  formatApptInstant,
+  formatApptRangeInZone,
+  localZoneIfNotPacific,
+  type ApptStatus,
+} from '../lib/appt';
 import { relativeTime } from '../lib/format';
 import { X } from './icons';
 
@@ -19,6 +26,8 @@ const STATUS_LABEL: Record<ApptStatus, string> = {
 export function ApptPopover({ appt, onClose }: Props) {
   useEscapeKey(onClose);
   const now = new Date();
+  // Secondary "your time" line — only when the device isn't on Pacific time.
+  const localZone = localZoneIfNotPacific(deviceZone());
   return createPortal(
     <div className="mappop__backdrop" onClick={onClose}>
       <div
@@ -40,6 +49,7 @@ export function ApptPopover({ appt, onClose }: Props) {
           <div className="apptpop__list">
             {appt.windows.map((w, i) => {
               const status = apptWindowStatus(w, now);
+              const local = localZone ? formatApptRangeInZone(w.beginsAt, w.endsAt, localZone) : '';
               return (
                 <div key={`${w.label}-${w.beginsAt}-${i}`} className={`apptpop__win apptpop__win--${status}`}>
                   <div className="apptpop__winhead">
@@ -51,6 +61,11 @@ export function ApptPopover({ appt, onClose }: Props) {
                   <div className="apptpop__times mono">
                     {formatApptInstant(w.beginsAt)} – {formatApptInstant(w.endsAt)} PT
                   </div>
+                  {local && (
+                    <div className="apptpop__times apptpop__times--local mono">
+                      Your time · {local}
+                    </div>
+                  )}
                   {(w.unitCap || w.waitlists) && (
                     <div className="apptpop__meta">
                       {w.unitCap && <span>Unit cap {w.unitCap}</span>}

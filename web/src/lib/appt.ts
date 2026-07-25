@@ -60,3 +60,40 @@ export function formatApptInstant(iso: string): string {
   const d = new Date(t);
   return `${PT_DATE.format(d)} ${PT_TIME.format(d)}`;
 }
+
+/** The device's IANA timezone, or null when the environment can't say. */
+export function deviceZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The zone to show a secondary "your time" line in — null when the device is
+ *  already on Pacific time (or unknown), so the line stays hidden. */
+export function localZoneIfNotPacific(zone: string | null): string | null {
+  return zone && zone !== 'America/Los_Angeles' ? zone : null;
+}
+
+/** "8/11 5:00 AM – 8/14 1:59 PM GMT+8" — a window's range on the given zone's
+ *  wall clock, labeled with its GMT offset (DST handled by Intl). Empty string
+ *  on an invalid zone or timestamps — callers skip rendering. */
+export function formatApptRangeInZone(beginsAt: string, endsAt: string, zone: string): string {
+  const b = Date.parse(beginsAt);
+  const e = Date.parse(endsAt);
+  if (!Number.isFinite(b) || !Number.isFinite(e)) return '';
+  try {
+    const date = new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'numeric', day: 'numeric' });
+    const time = new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', minute: '2-digit' });
+    const label = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'shortOffset' })
+      .formatToParts(new Date(b))
+      .find((p) => p.type === 'timeZoneName')?.value;
+    const bd = new Date(b);
+    const ed = new Date(e);
+    const range = `${date.format(bd)} ${time.format(bd)} – ${date.format(ed)} ${time.format(ed)}`;
+    return label ? `${range} ${label}` : range;
+  } catch {
+    return ''; // invalid IANA zone
+  }
+}

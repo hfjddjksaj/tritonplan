@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { ApptTimes } from '@triton/shared';
-import { apptWindowStatus, formatApptInstant, nextRelevantWindow, pickDisplayTerm } from './appt';
+import {
+  apptWindowStatus,
+  formatApptInstant,
+  formatApptRangeInZone,
+  localZoneIfNotPacific,
+  nextRelevantWindow,
+  pickDisplayTerm,
+} from './appt';
 
 const W1 = { label: 'First Pass', beginsAt: '2026-08-10T21:00:00Z', endsAt: '2026-08-14T05:59:59Z' };
 const W2 = { label: 'Second Pass', beginsAt: '2026-08-21T17:00:00Z', endsAt: '2026-08-27T05:59:59Z' };
@@ -62,5 +69,30 @@ describe('formatApptInstant', () => {
   });
   it('returns empty on garbage', () => {
     expect(formatApptInstant('nope')).toBe('');
+  });
+});
+
+describe('localZoneIfNotPacific', () => {
+  it('suppresses Pacific and unknown zones, passes others through', () => {
+    expect(localZoneIfNotPacific('America/Los_Angeles')).toBeNull();
+    expect(localZoneIfNotPacific(null)).toBeNull();
+    expect(localZoneIfNotPacific('Asia/Shanghai')).toBe('Asia/Shanghai');
+  });
+});
+
+describe('formatApptRangeInZone', () => {
+  it('renders the range in the given zone with a GMT-offset label (crosses midnight in Shanghai)', () => {
+    expect(
+      formatApptRangeInZone('2026-08-10T21:00:00Z', '2026-08-14T05:59:59Z', 'Asia/Shanghai'),
+    ).toBe('8/11 5:00 AM – 8/14 1:59 PM GMT+8');
+  });
+  it('respects DST in the target zone (New York is GMT-4 in August)', () => {
+    expect(
+      formatApptRangeInZone('2026-08-10T21:00:00Z', '2026-08-14T05:59:59Z', 'America/New_York'),
+    ).toBe('8/10 5:00 PM – 8/14 1:59 AM GMT-4');
+  });
+  it('returns empty on an invalid zone or invalid timestamps', () => {
+    expect(formatApptRangeInZone('2026-08-10T21:00:00Z', '2026-08-14T05:59:59Z', 'Not/AZone')).toBe('');
+    expect(formatApptRangeInZone('nope', '2026-08-14T05:59:59Z', 'Asia/Shanghai')).toBe('');
   });
 });
