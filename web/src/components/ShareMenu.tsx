@@ -72,10 +72,10 @@ export function ShareMenu({ plan, onFlash }: Props) {
       </button>
       {open && (
         <div className="menu menu--right" role="menu">
-          <div className="menu__seg" role="radiogroup" aria-label="Share format">
+          <div className="menu__seg" role="group" aria-label="Share format">
             <button
               type="button"
-              role="radio"
+              role="menuitemradio"
               aria-checked={format === 'full'}
               className={`menu__seg-btn${format === 'full' ? ' menu__seg-btn--on' : ''}`}
               onClick={() => setFormat('full')}
@@ -84,7 +84,7 @@ export function ShareMenu({ plan, onFlash }: Props) {
             </button>
             <button
               type="button"
-              role="radio"
+              role="menuitemradio"
               aria-checked={format === 'lite'}
               className={`menu__seg-btn${format === 'lite' ? ' menu__seg-btn--on' : ''}`}
               onClick={() => setFormat('lite')}

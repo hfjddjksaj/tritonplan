@@ -993,6 +993,10 @@ button.menu__item:hover {
   background: var(--ink);
   border-color: var(--ink);
 }
+.menu__seg-btn:hover:not(.menu__seg-btn--on) {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
 .menu__seg-desc {
   margin: 4px 8px 2px;
   font-size: 11px;
