@@ -9,7 +9,7 @@ import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
 import { Calendar, Cap, Check } from './components/icons';
-import { downloadPlanJson, parsePlanJson, planFromLinkText, planToHash, shareUrl } from './lib/share';
+import { parsePlanJson, planFromLinkText } from './lib/share';
 import { countConflictPairs } from './lib/plan';
 import { pluralize } from './lib/format';
 import { PRODUCT_NAME } from './lib/brand';
@@ -34,26 +34,6 @@ export default function App() {
     const t = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(t);
   }, [toast]);
-
-  // Share/export act on whatever plan is on screen — yours, or a received one
-  // you're passing along.
-  const handleCopyLink = useCallback(async () => {
-    const url = shareUrl(ctl.viewPlan);
-    try {
-      await navigator.clipboard.writeText(url);
-      flash('Share link copied to clipboard');
-    } catch {
-      // Clipboard unavailable — expose the link via the address bar instead. The
-      // hash is consumed-and-cleared on next load, so it can't pin a stale plan.
-      window.history.replaceState(null, '', `#${planToHash(ctl.viewPlan)}`);
-      flash('Share link is in the address bar — copy it from there');
-    }
-  }, [ctl.viewPlan, flash]);
-
-  const handleExportJson = useCallback(() => {
-    downloadPlanJson(ctl.viewPlan);
-    flash('Plan exported as JSON');
-  }, [ctl.viewPlan, flash]);
 
   const handleImportText = useCallback(
     (text: string) => {
@@ -160,8 +140,8 @@ export default function App() {
             onDelete={ctl.deletePlan}
           />
         }
-        onCopyLink={handleCopyLink}
-        onExportJson={handleExportJson}
+        sharePlan={ctl.viewPlan}
+        onFlash={flash}
         onImportText={handleImportText}
         onImportLink={handleImportLink}
         onReset={handleReset}

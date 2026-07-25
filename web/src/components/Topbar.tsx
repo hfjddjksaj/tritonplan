@@ -1,7 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react';
+import type { PlanState } from '@triton/shared';
 import { PRODUCT_NAME } from '../lib/brand';
 import { useClickAway } from '../hooks/useClickAway';
-import { Trident, Share, Download, Upload, Trash, Link, ChevronDown } from './icons';
+import { ShareMenu } from './ShareMenu';
+import { Trident, Upload, Trash, Link, ChevronDown } from './icons';
 
 interface Props {
   termLabel: string;
@@ -10,8 +12,11 @@ interface Props {
   readOnly: boolean;
   /** The named-plans dropdown, rendered next to the brand. */
   planSwitcher?: ReactNode;
-  onCopyLink: () => void;
-  onExportJson: () => void;
+  /** Mobile-only calendar view toggle (Week ⇄ Days), rendered after the switcher. */
+  calToggle?: ReactNode;
+  /** The plan on screen, for the Share menu (link + QR). */
+  sharePlan: PlanState;
+  onFlash: (msg: string) => void;
   onImportText: (text: string) => void;
   onImportLink: (text: string) => boolean;
   onReset: () => void;
@@ -22,19 +27,17 @@ export function Topbar({
   units,
   readOnly,
   planSwitcher,
-  onCopyLink,
-  onExportJson,
+  calToggle,
+  sharePlan,
+  onFlash,
   onImportText,
   onImportLink,
   onReset,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [shareOpen, setShareOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [linkText, setLinkText] = useState('');
-  const shareRef = useRef<HTMLDivElement>(null);
   const importRef = useRef<HTMLDivElement>(null);
-  useClickAway(shareOpen, shareRef, () => setShareOpen(false));
   useClickAway(importOpen, importRef, () => setImportOpen(false));
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,6 +64,7 @@ export function Topbar({
       </div>
 
       {planSwitcher}
+      {calToggle}
 
       <div className="topbar__term">
         <span className="eyebrow">Term</span>
@@ -144,55 +148,7 @@ export function Topbar({
           )}
         </div>
 
-        <div className="menu-wrap" ref={shareRef}>
-          <button
-            type="button"
-            className="btn btn--sm btn--primary"
-            aria-haspopup="menu"
-            aria-expanded={shareOpen}
-            onClick={() => setShareOpen((v) => !v)}
-          >
-            <Share size={15} /> Share <ChevronDown size={12} />
-          </button>
-          {shareOpen && (
-            <div className="menu menu--right" role="menu">
-              <button
-                type="button"
-                className="menu__item"
-                role="menuitem"
-                onClick={() => {
-                  setShareOpen(false);
-                  onCopyLink();
-                }}
-              >
-                <span className="menu__item-title">
-                  <Link size={14} /> Copy link
-                </span>
-                <span className="menu__item-desc">
-                  A quick snapshot to send — carries only the selected sections. The receiver can
-                  view it, not edit it.
-                </span>
-              </button>
-              <button
-                type="button"
-                className="menu__item"
-                role="menuitem"
-                onClick={() => {
-                  setShareOpen(false);
-                  onExportJson();
-                }}
-              >
-                <span className="menu__item-title">
-                  <Download size={14} /> Export as JSON
-                </span>
-                <span className="menu__item-desc">
-                  The complete plan, every section option included. To open it: click Import →
-                  upload the file, and the plan is right there.
-                </span>
-              </button>
-            </div>
-          )}
-        </div>
+        <ShareMenu plan={sharePlan} onFlash={onFlash} />
       </div>
     </header>
   );

@@ -971,6 +971,55 @@ button.menu__item:hover {
   border-color: var(--line-strong);
 }
 
+/* Share menu: format segment + QR panel */
+.menu__seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px 6px 0;
+}
+.menu__seg-btn {
+  height: 26px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.menu__seg-btn--on {
+  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.menu__seg-desc {
+  margin: 4px 8px 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+.menu__qr {
+  padding: 6px 8px 8px;
+}
+.menu__qr-box {
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.menu__qr-box svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.menu__qr-note {
+  margin: 6px 8px 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--gold-ink);
+}
+
 /* =============================== received plan (share link / imported JSON) banner */
 /* Constant reminder that what's on screen (or parked nearby) is someone else's
    plan: read-only, stored apart, never clobbering the user's own. */
