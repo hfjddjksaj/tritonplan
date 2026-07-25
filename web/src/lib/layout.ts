@@ -18,6 +18,9 @@ export interface GridConfig {
  * 1.3 px/min ⇒ a standard 50-min class is ~65px tall, enough for its full details. */
 export const DEFAULT_GRID: GridConfig = { startHour: 8, endHour: 22, pxPerMinute: 1.3 };
 
+/** Mobile week view: same window, compressed — a 50-min class ≈ 39px (compact blocks). */
+export const MOBILE_GRID: GridConfig = { startHour: 8, endHour: 22, pxPerMinute: 0.78 };
+
 /** A meeting flattened together with the course + component it belongs to. */
 export interface MeetingInstance {
   courseId: string;

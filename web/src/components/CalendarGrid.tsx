@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatDisplay } from '@triton/shared';
 import {
   DEFAULT_GRID,
+  MOBILE_GRID,
   gridHeightPx,
   gridStartMinutes,
   gridTotalMinutes,
@@ -31,10 +32,25 @@ interface Props {
   onOpenCourse: (courseId: string) => void;
   onOpenLocation: (block: PositionedBlock) => void;
   onFocusCourse: (courseId: string) => void;
+  /** 'desktop' (default) | mobile 'fit' (whole week in viewport) | mobile 'scroll' (wide snap-scrolling day columns). */
+  variant?: 'desktop' | 'fit' | 'scroll';
+  onBlockDetail?: (block: PositionedBlock) => void;
 }
 
-export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusCourse }: Props) {
-  const cfg = DEFAULT_GRID;
+/** "8a" / "12p" / "9p" — the 64px desktop gutter shrinks to 34px on mobile. */
+function shortHour(h: number): string {
+  return `${((h + 11) % 12) + 1}${h < 12 ? 'a' : 'p'}`;
+}
+
+export function CalendarGrid({
+  instances,
+  onOpenCourse,
+  onOpenLocation,
+  onFocusCourse,
+  variant = 'desktop',
+  onBlockDetail,
+}: Props) {
+  const cfg = variant === 'desktop' ? DEFAULT_GRID : MOBILE_GRID;
   const { byDay, usedDays } = useMemo(() => layoutWeek(instances, cfg), [instances, cfg]);
   const days = useMemo(() => visibleDays(usedDays), [usedDays]);
   const marks = useMemo(() => hourMarks(cfg), [cfg]);
@@ -44,8 +60,18 @@ export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusC
   const nowOffsetMin = now.getHours() * 60 + now.getMinutes() - gridStartMinutes(cfg);
   const nowInWindow = nowOffsetMin >= 0 && nowOffsetMin <= gridTotalMinutes(cfg);
   const nowTop = nowOffsetMin * cfg.pxPerMinute;
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const colTemplate = `repeat(${days.length}, 1fr)`;
+  const colTemplate =
+    variant === 'scroll' ? `repeat(${days.length}, var(--day-col-w))` : `repeat(${days.length}, 1fr)`;
+
+  // Day-scroll mode starts with today at the left edge.
+  useEffect(() => {
+    if (variant !== 'scroll') return;
+    const el = scrollRef.current?.querySelector('.cal-col--today');
+    el?.scrollIntoView({ inline: 'start', block: 'nearest' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant]);
 
   if (instances.length === 0) {
     return (
@@ -63,8 +89,8 @@ export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusC
   }
 
   return (
-    <div className="cal-wrap">
-      <div className="cal-scroll">
+    <div className={`cal-wrap${variant !== 'desktop' ? ` cal--${variant}` : ''}`}>
+      <div className="cal-scroll" ref={scrollRef}>
         {/* Sticky header INSIDE the scroll container: it then shares the scrollbar
             gutter with the body, so header and body columns always align (classic
             scrollbars shrink the scroll content; a header outside wouldn't shrink). */}
@@ -94,7 +120,7 @@ export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusC
                 className="cal-gutter__hour"
                 style={{ top: hourMarkTop(h, cfg) }}
               >
-                {formatDisplay(`${String(h).padStart(2, '0')}:00`)}
+                {variant === 'desktop' ? formatDisplay(`${String(h).padStart(2, '0')}:00`) : shortHour(h)}
               </div>
             ))}
           </div>
@@ -142,6 +168,7 @@ export function CalendarGrid({ instances, onOpenCourse, onOpenLocation, onFocusC
                       onOpen={onOpenCourse}
                       onOpenLocation={onOpenLocation}
                       onFocusCourse={onFocusCourse}
+                      onDetail={onBlockDetail}
                     />
                   ))}
                   {d === today && nowInWindow && (

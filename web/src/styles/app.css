@@ -1958,6 +1958,56 @@ button.menu__item:hover {
   }
 }
 
+/* calendar variants (only ever applied ≤760 via the variant prop) */
+.cal--fit,
+.cal--scroll {
+  --hour-gutter-w: 34px;
+}
+.cal--fit .cal-gutter__hour,
+.cal--scroll .cal-gutter__hour {
+  font-size: 9.5px;
+}
+.cal--fit .block__code,
+.cal--scroll .block__code {
+  font-size: 10px;
+}
+.cal--fit .block__time {
+  font-size: 9px;
+}
+.cal--scroll {
+  --day-col-w: 44vw;
+}
+.cal--scroll .cal-scroll {
+  scroll-snap-type: x mandatory;
+}
+.cal--scroll .cal-col {
+  scroll-snap-align: start;
+}
+
+/* topbar calendar toggle */
+.calseg {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.calseg__btn {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.calseg__btn--on {
+  color: #fff;
+  background: var(--ink);
+}
+
 @keyframes tab-pulse {
   0%,
   100% {

@@ -14,17 +14,26 @@ interface Props {
   /** Reveal this course's card (sections expanded) in the rail; fires on any click
       that isn't the code or the location text. */
   onFocusCourse?: (courseId: string) => void;
+  /** When set, the whole block is a single tap target opening a detail sheet —
+      the code and location render as inert spans instead of their own buttons. */
+  onDetail?: (block: PositionedBlock) => void;
 }
 
-export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse }: Props) {
+export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse, onDetail }: Props) {
   const c = colorsForHue(block.hue);
   const widthPct = 100 / block.laneCount;
   const compact = block.height < 42;
 
   return (
     <article
-      className={`block${block.conflict ? ' block--conflict' : ''}${compact ? ' block--sm' : ''}${onFocusCourse ? ' block--focusable' : ''}`}
-      onClick={onFocusCourse ? () => onFocusCourse(block.courseId) : undefined}
+      className={`block${block.conflict ? ' block--conflict' : ''}${compact ? ' block--sm' : ''}${onDetail || onFocusCourse ? ' block--focusable' : ''}`}
+      onClick={
+        onDetail
+          ? () => onDetail(block)
+          : onFocusCourse
+            ? () => onFocusCourse(block.courseId)
+            : undefined
+      }
       style={{
         top: block.top,
         height: Math.max(block.height, 18),
@@ -45,18 +54,24 @@ export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse }: Pr
       )}
       <div className="block__head">
         {/* Only the code jumps to TSS — the rest of the block stays free for future
-            interactions (e.g. clicking the building to show it on a map). */}
-        <button
-          type="button"
-          className="block__code"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen(block.courseId);
-          }}
-          title={`Open ${block.courseCode} in TSS`}
-        >
-          {block.courseCode}
-        </button>
+            interactions (e.g. clicking the building to show it on a map). When
+            onDetail owns the whole block, code/location become inert spans so
+            there's a single tap target instead of nested buttons. */}
+        {onDetail ? (
+          <span className="block__code">{block.courseCode}</span>
+        ) : (
+          <button
+            type="button"
+            className="block__code"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(block.courseId);
+            }}
+            title={`Open ${block.courseCode} in TSS`}
+          >
+            {block.courseCode}
+          </button>
+        )}
         {!compact && <span className="block__type">{block.typeText}</span>}
       </div>
       <div className="block__time">
@@ -64,7 +79,9 @@ export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse }: Pr
       </div>
       {!compact &&
         block.location &&
-        (block.building && onOpenLocation ? (
+        (onDetail ? (
+          <div className="block__loc">{block.location}</div>
+        ) : block.building && onOpenLocation ? (
           <button
             type="button"
             className="block__loc block__loc--link"

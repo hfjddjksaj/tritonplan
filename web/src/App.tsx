@@ -5,6 +5,7 @@ import { Topbar } from './components/Topbar';
 import { PlanSwitcher } from './components/PlanSwitcher';
 import { CoursePanel } from './components/CoursePanel';
 import { CalendarGrid } from './components/CalendarGrid';
+import { CalViewToggle } from './components/CalViewToggle';
 import { FinalsView } from './components/FinalsView';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
@@ -15,12 +16,18 @@ import { parsePlanJson, planFromLinkText } from './lib/share';
 import { countConflictPairs } from './lib/plan';
 import { pluralize } from './lib/format';
 import { PRODUCT_NAME } from './lib/brand';
+import { loadCalView, saveCalView, type CalView } from './lib/storage';
 
 export default function App() {
   const ctl = usePlan();
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<MobileTab>('calendar');
   const [calPulse, setCalPulse] = useState(false);
+  const [calView, setCalView] = useState<CalView>(loadCalView);
+  const handleCalView = useCallback((v: CalView) => {
+    setCalView(v);
+    saveCalView(v);
+  }, []);
   // Desktop has no Courses tab — the rail is always visible there.
   const view: MobileTab = !isMobile && tab === 'courses' ? 'calendar' : tab;
   const [toast, setToast] = useState<string | null>(null);
@@ -160,6 +167,11 @@ export default function App() {
             onDelete={ctl.deletePlan}
           />
         }
+        calToggle={
+          isMobile && view === 'calendar' ? (
+            <CalViewToggle value={calView} onChange={handleCalView} />
+          ) : undefined
+        }
         sharePlan={ctl.viewPlan}
         onFlash={flash}
         onImportText={handleImportText}
@@ -226,6 +238,7 @@ export default function App() {
                   if (block.building) setMapLoc({ building: block.building, room: block.room });
                 }}
                 onFocusCourse={handleFocusCourse}
+                variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
               />
             ) : (
               <FinalsView

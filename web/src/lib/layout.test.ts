@@ -9,6 +9,8 @@ import {
   finalsDateRange,
   isoWeekday,
   layoutFinalsWeek,
+  DEFAULT_GRID,
+  MOBILE_GRID,
   type FinalInstance,
   type MeetingInstance,
   type GridConfig,
@@ -129,6 +131,15 @@ describe('visibleDays', () => {
     expect(visibleDays(new Set(['Sun', 'Sat']))).toEqual([
       'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
     ]);
+  });
+});
+
+describe('MOBILE_GRID', () => {
+  it('spans the same 8:00–22:00 window, denser than desktop', () => {
+    expect(MOBILE_GRID.startHour).toBe(DEFAULT_GRID.startHour);
+    expect(MOBILE_GRID.endHour).toBe(DEFAULT_GRID.endHour);
+    expect(MOBILE_GRID.pxPerMinute).toBeLessThan(DEFAULT_GRID.pxPerMinute);
+    expect(gridHeightPx(MOBILE_GRID)).toBeGreaterThan(500); // whole day stays scannable
   });
 });
 
