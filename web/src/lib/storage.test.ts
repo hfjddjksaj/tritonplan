@@ -136,4 +136,9 @@ describe('calendar view preference', () => {
     saveCalView('fit');
     expect(loadCalView()).toBe('fit');
   });
+
+  it('falls back to fit on an unrecognized stored value', () => {
+    localStorage.setItem('triton-planner:cal-view:v1', 'garbage');
+    expect(loadCalView()).toBe('fit');
+  });
 });
