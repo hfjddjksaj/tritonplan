@@ -45,6 +45,14 @@ describe('pickDisplayTerm', () => {
     expect(pickDisplayTerm([fall, winter], new Date('2027-01-01T00:00:00Z'))).toBe(winter);
     expect(pickDisplayTerm([], new Date())).toBeNull();
   });
+  it('never features an empty-windows term (spec: treat as no data)', () => {
+    const empty = term({ capturedAt: '2026-07-27T12:00:00Z', windows: [] });
+    expect(pickDisplayTerm([empty], new Date('2026-07-25T00:00:00Z'))).toBeNull();
+  });
+  it('prefers an older all-ended term over a freshest-captured empty one', () => {
+    const empty = term({ capturedAt: '2026-07-27T12:00:00Z', windows: [] });
+    expect(pickDisplayTerm([fall, winter, empty], new Date('2027-01-01T00:00:00Z'))).toBe(winter);
+  });
 });
 
 describe('formatApptInstant', () => {

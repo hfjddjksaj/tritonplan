@@ -26,7 +26,9 @@ export function nextRelevantWindow(appt: ApptTimes, now: Date): ApptWindow | nul
 }
 
 /** Which captured term to show: the one whose next not-ended window begins
- *  soonest; if every term is over (or empty), the most recently captured. */
+ *  soonest; if every term is over, the most recently captured all-ended term.
+ *  A term with an empty `windows[]` never displays — spec treats it as
+ *  no-data (stored, but the capsule stays hidden), not as "ended". */
 export function pickDisplayTerm(list: ApptTimes[], now: Date): ApptTimes | null {
   let best: ApptTimes | null = null;
   let bestBegin = Infinity;
@@ -40,7 +42,8 @@ export function pickDisplayTerm(list: ApptTimes[], now: Date): ApptTimes | null 
     }
   }
   if (best) return best;
-  return [...list].sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0] ?? null;
+  const ended = list.filter((a) => a.windows.length > 0);
+  return [...ended].sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0] ?? null;
 }
 
 const PT_DATE = new Intl.DateTimeFormat('en-US', {
