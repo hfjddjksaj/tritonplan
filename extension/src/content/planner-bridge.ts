@@ -4,6 +4,7 @@
  * Bridges captured TSS data into the planner page using the exact contract the page
  * validates (see web/src/lib/bridge.ts):
  *   - `courses`   — re-push the whole captured pool on every planner load.
+ *   - `appt-times` — re-push the student's enrollment windows.
  *   - `plan-add`  — deliver any queued "+ TritonPlan" intents.
  *
  * ⛔ NO-BAN RED LINE: touches ONLY our own extension + our own page. No TSS traffic.
@@ -17,7 +18,7 @@ import {
   TSS_URL_PREFIX,
   type PlanAddIntent,
 } from '../config.js';
-import type { CourseOffering } from '@triton/shared';
+import type { ApptTimes, CourseOffering } from '@triton/shared';
 
 /**
  * postMessage targetOrigin: always this page's own origin, never '*'. The manifest
@@ -38,6 +39,26 @@ async function pushCourses(): Promise<void> {
         type: 'courses',
         version: BRIDGE_VERSION,
         payload: courses as CourseOffering[],
+      },
+      TARGET_ORIGIN,
+    );
+  } catch {
+    /* SW asleep or context gone */
+  }
+}
+
+/** Post the student's own captured appointment times. Personal data: goes only
+ *  to our page (same-window/origin postMessage), never into any plan. */
+async function pushApptTimes(): Promise<void> {
+  try {
+    const appt = await chrome.runtime.sendMessage({ type: MSG.GET_APPT_TIMES });
+    if (!Array.isArray(appt) || appt.length === 0) return; // nothing captured — never wipe
+    window.postMessage(
+      {
+        source: BRIDGE_SOURCE,
+        type: 'appt-times',
+        version: BRIDGE_VERSION,
+        payload: appt as ApptTimes[],
       },
       TARGET_ORIGIN,
     );
@@ -70,6 +91,7 @@ async function flushPlanAdds(): Promise<void> {
 
 async function syncAll(): Promise<void> {
   await pushCourses();
+  await pushApptTimes();
   await flushPlanAdds();
 }
 
