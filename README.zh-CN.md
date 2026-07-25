@@ -24,6 +24,7 @@
 - **切换 Section**——对比一门课的各套 Lecture / Discussion / Lab 组合（标注 LEC / DIS / LAB 和剩余名额），在排课表里直接换掉冲突的那套。
 - **跳回 TSS**——点日历上的课程代码回到 TSS 中的那门课，也可以直接跳到该 Section 的 booking 页面。
 - **教学楼查询**——点上课地点，弹窗显示这是哪栋楼，附 Google Maps 和 UCSD 校园地图链接。
+- **选课时间**——从 TSS "My Appointment Times" 被动捕获的 First Pass / Second Pass 等窗口常驻 planner 顶栏，随时知道自己什么时候能选课。完全私有：绝不进入分享的 plan。
 - **分享与导出**——整个方案压缩进一个可分享的链接；也支持 JSON 导出 / 导入做备份。
 - **本地优先**——方案保存在浏览器的 `localStorage` 里，不上传到任何地方。
 

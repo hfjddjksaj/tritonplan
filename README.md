@@ -24,6 +24,7 @@ The old WebReg showed your week as a calendar — times, locations, professors, 
 - **Section switching** — compare a course's lecture/discussion/lab combinations (tagged LEC / DIS / LAB, with seat counts) and switch right in the planner to clear a conflict.
 - **Jump back to TSS** — click a course code on the calendar to return to that exact course in TSS, or jump straight to the section's booking page.
 - **Building lookup** — click a class's location to see which building it is, with Google Maps and UCSD campus map links.
+- **Your appointment times** — the "My Appointment Times" windows (First Pass, Second Pass, …) captured from TSS show as a live capsule in the planner topbar, so you always know when you can enroll. Private: never part of shared plans.
 - **Share & export** — the whole plan compresses into a shareable URL; JSON export/import for backups.
 - **Local-first** — plans live in your browser's `localStorage`. Nothing is uploaded.
 
