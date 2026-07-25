@@ -2045,6 +2045,27 @@ button.menu__item:hover {
   .rail__units {
     display: inline;
   }
+
+  /* compact topbar: icon brand, narrow switcher, icon-only action buttons —
+     Share must stay tappable down to a 320px viewport (it is the phone's only
+     entry point for share links and QR codes) */
+  .brand > span {
+    display: none;
+  }
+  .planswitch__btn {
+    max-width: min(130px, 28vw);
+  }
+  .topbar__actions {
+    gap: 6px;
+  }
+  .topbar__actions .btn {
+    font-size: 0; /* icon-only: hides the text node, svg sizing is attribute-based */
+    gap: 4px;
+    padding: 0 9px;
+  }
+  .menu-wrap > .btn > svg:last-child {
+    display: none; /* the ▾ chevron on Import/Share */
+  }
 }
 
 /* calendar variants (only ever applied ≤760 via the variant prop) */

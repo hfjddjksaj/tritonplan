@@ -12,8 +12,6 @@ interface Props {
   readOnly: boolean;
   /** The named-plans dropdown, rendered next to the brand. */
   planSwitcher?: ReactNode;
-  /** Mobile-only calendar view toggle (Week ⇄ Days), rendered after the switcher. */
-  calToggle?: ReactNode;
   /** The plan on screen, for the Share menu (link + QR). */
   sharePlan: PlanState;
   onFlash: (msg: string) => void;
@@ -27,7 +25,6 @@ export function Topbar({
   units,
   readOnly,
   planSwitcher,
-  calToggle,
   sharePlan,
   onFlash,
   onImportText,
@@ -64,7 +61,6 @@ export function Topbar({
       </div>
 
       {planSwitcher}
-      {calToggle}
 
       <div className="topbar__term">
         <span className="eyebrow">Term</span>

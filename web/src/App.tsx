@@ -174,11 +174,6 @@ export default function App() {
             onDelete={ctl.deletePlan}
           />
         }
-        calToggle={
-          isMobile && view === 'calendar' ? (
-            <CalViewToggle value={calView} onChange={handleCalView} />
-          ) : undefined
-        }
         sharePlan={ctl.viewPlan}
         onFlash={flash}
         onImportText={handleImportText}
@@ -202,6 +197,9 @@ export default function App() {
         {(!isMobile || view !== 'courses') && (
           <main className="main">
             <div className="toolbar">
+              {isMobile && view === 'calendar' && (
+                <CalViewToggle value={calView} onChange={handleCalView} />
+              )}
               <div className="tabs" role="tablist" aria-label="Planner views">
                 <button
                   type="button"
