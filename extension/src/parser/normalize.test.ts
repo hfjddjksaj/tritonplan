@@ -106,3 +106,67 @@ describe('normalizeSections — real captured CSE data', () => {
     expect(course.options[0]!.final?.date).toBe('2026-12-10');
   });
 });
+
+import { apptPeriodsFixture } from './fixtures.js';
+import type { TssApptPeriodsRow } from './tss-types.js';
+import { apptPeriodsToApptTimes } from './normalize.js';
+
+describe('apptPeriodsToApptTimes', () => {
+  const fx = apptPeriodsFixture();
+
+  it('maps the fixture row: windows sorted by begin, unit caps joined, texts taken', () => {
+    const appt = apptPeriodsToApptTimes(fx.row, '2026-07-25T12:00:00Z');
+    expect(appt).not.toBeNull();
+    expect(appt!.academicYear).toBe('2026');
+    expect(appt!.academicSession).toBe('2');
+    expect(appt!.yearText).toBe('2026/2027');
+    expect(appt!.sessionText).toBe('Fall Quarter');
+    expect(appt!.capturedAt).toBe('2026-07-25T12:00:00Z');
+    // fixture order is 08-10, 09-12, 08-21, 09-28 — output must be begin-sorted
+    expect(appt!.windows.map((w) => w.beginsAt.slice(5, 10))).toEqual([
+      '08-10', '08-21', '09-12', '09-28',
+    ]);
+    expect(appt!.windows[0]).toEqual({
+      label: 'First Pass',
+      beginsAt: '2026-08-10T21:00:00Z',
+      endsAt: '2026-08-14T05:59:59Z',
+      unitCap: '11.50',
+      waitlists: 'Not Allowed',
+    });
+    expect(appt!.windows[3]!.label).toBe('Instruction Session Enrollment');
+    expect(appt!.windows[3]!.unitCap).toBe('22.00');
+  });
+
+  it('whitelists output — no PII field can survive', () => {
+    const dirty = {
+      ...fx.row,
+      studentNumber: '200355050',
+      studentObjid: '355047',
+      studyObjid: '170130',
+    } as unknown as TssApptPeriodsRow;
+    const appt = apptPeriodsToApptTimes(dirty, '2026-07-25T12:00:00Z')!;
+    const json = JSON.stringify(appt);
+    expect(json).not.toContain('studentNumber');
+    expect(json).not.toContain('200355050');
+    expect(json).not.toContain('355047');
+    expect(json).not.toContain('170130');
+    expect(Object.keys(appt).sort()).toEqual([
+      'academicSession', 'academicYear', 'capturedAt', 'sessionText', 'windows', 'yearText',
+    ]);
+  });
+
+  it('keeps an empty windows list and falls back to code-derived texts', () => {
+    const appt = apptPeriodsToApptTimes(
+      { academicYear: '2026', academicSession: '3' },
+      '2026-07-25T12:00:00Z',
+    );
+    expect(appt).not.toBeNull();
+    expect(appt!.windows).toEqual([]);
+    expect(appt!.yearText).toBe('2026');
+    expect(appt!.sessionText).toBe('Period 3');
+  });
+
+  it('rejects a structurally unusable row', () => {
+    expect(apptPeriodsToApptTimes({} as TssApptPeriodsRow, 'x')).toBeNull();
+  });
+});

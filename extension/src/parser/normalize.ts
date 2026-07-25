@@ -8,6 +8,8 @@
  */
 
 import type {
+  ApptTimes,
+  ApptWindow,
   Component,
   CourseOffering,
   FinalExam,
@@ -16,7 +18,7 @@ import type {
   TeachingMethod,
   Term,
 } from '@triton/shared';
-import type { TssPrereqRow, TssSectionRow } from './tss-types.js';
+import type { TssApptPeriodsRow, TssPrereqRow, TssSectionRow } from './tss-types.js';
 import { parseSched } from './parse-sched.js';
 
 export interface CourseMeta {
@@ -192,4 +194,44 @@ export function splitCourseCode(code: string): [string, string] {
   const m = code.match(/^([A-Za-z]+)-?(\w+)$/);
   if (!m) return [code, ''];
   return [m[1]!, m[2]!];
+}
+
+/** Map a captured ysd_appttimes `apptPeriods` row to the shared ApptTimes shape.
+ *  WHITELIST mapping: only the fields below survive — the wire row also carries
+ *  student PII (studentNumber etc.) which must never reach storage or the page.
+ *  Returns null when the row is structurally unusable. */
+export function apptPeriodsToApptTimes(
+  row: TssApptPeriodsRow,
+  capturedAt: string,
+): ApptTimes | null {
+  if (!row || typeof row.academicYear !== 'string' || typeof row.academicSession !== 'string') {
+    return null;
+  }
+  const src = Array.isArray(row.appointmentTimes) ? row.appointmentTimes : [];
+  const caps = Array.isArray(row.maxUnits) ? row.maxUnits : [];
+  const windows: ApptWindow[] = [];
+  for (const at of src) {
+    if (typeof at.beginTimestamp !== 'string' || typeof at.endTimestamp !== 'string') continue;
+    const cap = caps.find(
+      (mu) => mu.Perid === row.academicSession && mu.Timelimit === at.timelimit,
+    );
+    const w: ApptWindow = {
+      label: at.timelimit_Text || 'Enrollment window',
+      beginsAt: at.beginTimestamp,
+      endsAt: at.endTimestamp,
+    };
+    if (cap?.MaxUnits) w.unitCap = cap.MaxUnits;
+    if (at.waitlists) w.waitlists = at.waitlists;
+    windows.push(w);
+  }
+  windows.sort((a, b) => Date.parse(a.beginsAt) - Date.parse(b.beginsAt));
+  const first = src[0];
+  return {
+    academicYear: row.academicYear,
+    academicSession: row.academicSession,
+    yearText: first?.academicYear_Text || row.academicYear,
+    sessionText: first?.academicSession_Text || `Period ${row.academicSession}`,
+    windows,
+    capturedAt,
+  };
 }
