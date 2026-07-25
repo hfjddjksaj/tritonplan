@@ -81,6 +81,29 @@ export interface PrereqGroup {
   options: string[];
 }
 
+/** One enrollment window from TSS "My Appointment Times" ("First Pass",
+ *  "Second Pass", …). Window count is variable — real captures showed TWO
+ *  Second Pass rows; never assume exactly first+second. */
+export interface ApptWindow {
+  label: string;      // timelimit_Text verbatim, e.g. "First Pass"
+  beginsAt: string;   // UTC ISO instant, e.g. "2026-08-10T21:00:00Z"
+  endsAt: string;     // UTC ISO instant (inclusive end)
+  unitCap?: string;   // joined from the maxUnits table, e.g. "11.50"
+  waitlists?: string; // "Allowed" | "Not Allowed" (verbatim)
+}
+
+/** The student's appointment times for one (academic year, session). PERSONAL
+ *  data: kept only in the extension's store and the planner's own localStorage —
+ *  never inside plans, share links, QR codes or exports. */
+export interface ApptTimes {
+  academicYear: string;    // "2026"
+  academicSession: string; // "2" — same code space as Term.period
+  yearText: string;        // "2026/2027"
+  sessionText: string;     // "Fall Quarter"
+  windows: ApptWindow[];   // sorted by beginsAt ascending
+  capturedAt: string;      // ISO timestamp of the capture
+}
+
 /** A course offering for a term = a TSS module (YUCSD_CON_MODULE). */
 export interface CourseOffering {
   id: string;                 // stable id, e.g. `${courseCode}|${term.year}|${term.period}`
