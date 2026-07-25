@@ -23,6 +23,8 @@ import {
   clearReceived,
   loadViewing,
   saveViewing,
+  loadSyncedToken,
+  saveSyncedToken,
   type ReceivedPlan,
   type Viewing,
 } from '../lib/storage';
@@ -39,7 +41,7 @@ import {
   switchActive,
   type PlansState,
 } from '../lib/plans';
-import { planFromHash } from '../lib/share';
+import { decodePlan, encodePlan, tokenFromHash } from '../lib/share';
 import { openBooking, openInTss } from '../lib/tss';
 import {
   buildSelectedCourses,
@@ -108,7 +110,12 @@ export function usePlan() {
   // on hashchange: pasting a link into an already-open planner tab doesn't reload.
   useEffect(() => {
     const consume = () => {
-      const fromHash = planFromHash(window.location.hash);
+      const token = tokenFromHash(window.location.hash);
+      if (!token) return;
+      // Our own auto-synced hash (see the mirror effect below) is not an
+      // incoming share — leave it alone or every reload would "receive" it.
+      if (token === loadSyncedToken()) return;
+      const fromHash = decodePlan(token);
       if (!fromHash) return;
       const rec: ReceivedPlan = {
         plan: fromHash,
@@ -124,6 +131,23 @@ export function usePlan() {
     window.addEventListener('hashchange', consume);
     return () => window.removeEventListener('hashchange', consume);
   }, [switchViewing]);
+
+  // Mirror the ACTIVE plan into the address bar as a #p=<full token> so the
+  // browser's own "send this tab to your device" / bookmark sync always carry
+  // the latest plan. The token is also remembered per-tab (sessionStorage) so
+  // a reload recognizes its own echo instead of importing it as a received
+  // plan. Depends on `received` too: after consuming a foreign hash we restore
+  // our own hash right away.
+  useEffect(() => {
+    if (plan.entries.length === 0) {
+      saveSyncedToken('');
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      return;
+    }
+    const token = encodePlan(plan, 'full');
+    saveSyncedToken(token);
+    window.history.replaceState(null, '', `#p=${token}`);
+  }, [plan, received]);
 
   // Persist the plans list on change (skip first render so we don't clobber before load).
   useEffect(() => {
