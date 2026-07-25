@@ -45,3 +45,6 @@ docs/tools/
 *.pfx
 credentials.json
 secrets.*
+
+# superpowers brainstorm sessions
+.superpowers/
