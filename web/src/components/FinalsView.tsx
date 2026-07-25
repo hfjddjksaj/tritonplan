@@ -10,9 +10,11 @@ interface Props {
   conflicts: FinalConflict[];
   onOpenCourse: (courseId: string) => void;
   onFocusCourse?: (courseId: string) => void;
+  /** Forwarded to the finals-week calendar (mobile fit/scroll variants). */
+  variant?: 'desktop' | 'fit' | 'scroll';
 }
 
-export function FinalsView({ finals, conflicts, onOpenCourse, onFocusCourse }: Props) {
+export function FinalsView({ finals, conflicts, onOpenCourse, onFocusCourse, variant }: Props) {
   const conflicted = courseIdsInConflicts(conflicts);
 
   if (finals.length === 0) {
@@ -73,7 +75,12 @@ export function FinalsView({ finals, conflicts, onOpenCourse, onFocusCourse }: P
       </div>
 
       <div className="eyebrow fincal__title">Finals week at a glance</div>
-      <FinalsCalendar finals={finals} onOpenCourse={onOpenCourse} onFocusCourse={onFocusCourse} />
+      <FinalsCalendar
+        finals={finals}
+        onOpenCourse={onOpenCourse}
+        onFocusCourse={onFocusCourse}
+        variant={variant}
+      />
     </div>
   );
 }

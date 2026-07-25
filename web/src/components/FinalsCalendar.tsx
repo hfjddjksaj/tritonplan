@@ -9,7 +9,7 @@ import {
   layoutFinalsWeek,
   type FinalInstance,
 } from '../lib/layout';
-import { dateParts } from '../lib/format';
+import { dateParts, shortHour } from '../lib/format';
 import type { FinalItem } from '../lib/plan';
 import { CourseBlock } from './CourseBlock';
 
@@ -17,13 +17,15 @@ interface Props {
   finals: FinalItem[];
   onOpenCourse: (courseId: string) => void;
   onFocusCourse?: (courseId: string) => void;
+  /** 'desktop' (default) | mobile 'fit' (dates squeezed in) | mobile 'scroll' (wide snap-scrolling date columns). */
+  variant?: 'desktop' | 'fit' | 'scroll';
 }
 
 /**
  * Week-style calendar of finals: one column per date from the earliest to the
  * latest exam (weekends included — finals do land on Sat/Sun).
  */
-export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse }: Props) {
+export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse, variant = 'desktop' }: Props) {
   const cfg = FINALS_GRID;
   const { dates, byDate } = useMemo(() => {
     const items: FinalInstance[] = finals.map((f) => ({
@@ -42,10 +44,16 @@ export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse }: Props) {
 
   if (dates.length === 0) return null;
 
-  const colTemplate = `repeat(${dates.length}, 1fr)`;
+  const colTemplate =
+    variant === 'scroll'
+      ? `repeat(${dates.length}, var(--day-col-w))`
+      : `repeat(${dates.length}, 1fr)`;
 
   return (
-    <section className="fincal" aria-label="Finals week calendar">
+    <section
+      className={`fincal${variant !== 'desktop' ? ` cal--${variant}` : ''}`}
+      aria-label="Finals week calendar"
+    >
       <div className="cal-head">
         <div className="cal-head__corner" />
         <div className="cal-head__days" style={{ gridTemplateColumns: colTemplate }}>
@@ -73,7 +81,7 @@ export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse }: Props) {
               className="cal-gutter__hour"
               style={{ top: hourMarkTop(h, cfg) }}
             >
-              {formatDisplay(`${String(h).padStart(2, '0')}:00`)}
+              {variant === 'desktop' ? formatDisplay(`${String(h).padStart(2, '0')}:00`) : shortHour(h)}
             </div>
           ))}
         </div>

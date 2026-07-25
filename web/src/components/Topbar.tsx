@@ -105,6 +105,9 @@ export function Topbar({
           </button>
           {importOpen && (
             <div className="menu" role="menu">
+              {/* Upload JSON — shelved 2026-07-25 together with Export as JSON (see
+                  ShareMenu). Full share links now carry the whole plan; restore both
+                  entries together if JSON round-tripping ever comes back.
               <button
                 type="button"
                 className="menu__item"
@@ -122,6 +125,7 @@ export function Topbar({
                   save it as yours if you want to edit it.
                 </span>
               </button>
+              */}
               <div className="menu__item menu__item--static">
                 <span className="menu__item-title">
                   <Link size={14} /> Paste a share link

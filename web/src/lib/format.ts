@@ -45,6 +45,11 @@ export function todayWeekday(now = new Date()): Weekday {
   return WEEKDAY_BY_DOW[now.getDay()] ?? 'Mon';
 }
 
+/** "8a" / "12p" / "9p" — compact hour label for the narrow mobile calendar gutter. */
+export function shortHour(h: number): string {
+  return `${((h + 11) % 12) + 1}${h < 12 ? 'a' : 'p'}`;
+}
+
 /** English pluralize a noun by count: pluralize(1, 'course') → 'course', pluralize(2, 'course') → 'courses'. */
 export function pluralize(n: number, singular: string, plural = `${singular}s`): string {
   return n === 1 ? singular : plural;

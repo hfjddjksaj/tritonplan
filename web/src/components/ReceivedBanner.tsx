@@ -39,15 +39,17 @@ export function ReceivedBanner({
           This is not your plan — it’s read-only and kept separate from your own.
         </span>
         <span className="received__spacer" />
-        <button type="button" className="btn btn--sm" onClick={onBackToMine}>
-          Back to my plans
-        </button>
-        <button type="button" className="btn btn--sm" onClick={onSaveAsMine}>
-          Replace current plan
-        </button>
-        <button type="button" className="btn btn--sm btn--primary" onClick={onSaveAsNew}>
-          <Check size={13} /> Save as a new plan
-        </button>
+        <div className="received__actions">
+          <button type="button" className="btn btn--sm" onClick={onBackToMine}>
+            Back to my plans
+          </button>
+          <button type="button" className="btn btn--sm" onClick={onSaveAsMine}>
+            Replace current plan
+          </button>
+          <button type="button" className="btn btn--sm btn--primary" onClick={onSaveAsNew}>
+            <Check size={13} /> Save as a new plan
+          </button>
+        </div>
         <button
           type="button"
           className="received__discard"

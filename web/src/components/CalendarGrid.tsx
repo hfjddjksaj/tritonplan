@@ -13,7 +13,7 @@ import {
   type MeetingInstance,
   type PositionedBlock,
 } from '../lib/layout';
-import { todayWeekday, weekdayLong } from '../lib/format';
+import { shortHour, todayWeekday, weekdayLong } from '../lib/format';
 import { CourseBlock } from './CourseBlock';
 import { Calendar } from './icons';
 
@@ -35,11 +35,6 @@ interface Props {
   /** 'desktop' (default) | mobile 'fit' (whole week in viewport) | mobile 'scroll' (wide snap-scrolling day columns). */
   variant?: 'desktop' | 'fit' | 'scroll';
   onBlockDetail?: (block: PositionedBlock) => void;
-}
-
-/** "8a" / "12p" / "9p" — the 64px desktop gutter shrinks to 34px on mobile. */
-function shortHour(h: number): string {
-  return `${((h + 11) % 12) + 1}${h < 12 ? 'a' : 'p'}`;
 }
 
 export function CalendarGrid({

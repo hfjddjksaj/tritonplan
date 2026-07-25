@@ -3,6 +3,7 @@ import { findOption } from '../lib/plan';
 import { tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
 import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { CourseCard } from './CourseCard';
 import { Search, Plus, Cap, X } from './icons';
 
@@ -16,6 +17,7 @@ interface Props {
 
 export function CoursePanel({ ctl, focus, hidden = false }: Props) {
   const [filter, setFilter] = useState('');
+  const isMobile = useIsMobile();
   const readOnly = ctl.readOnly;
   const entries = ctl.viewPlan.entries;
 
@@ -44,7 +46,9 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
         <p className="rail__lede">
           {readOnly
             ? 'A plan someone sent you — read-only. Save it as yours to edit it.'
-            : 'Sections you pick in TSS land here. Switch a section below to clear a conflict.'}
+            : isMobile
+              ? 'Courses can only be added on a computer. Open a plan here via a share link or QR code, save it as yours, and edit its sections below.'
+              : 'Sections you pick in TSS land here. Switch a section below to clear a conflict.'}
         </p>
       </div>
 
@@ -104,19 +108,30 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
         {ctl.browsedNotAdded.length === 0 ? (
           <div className="browse-empty">
             <Search size={22} className="empty__mark" strokeWidth={1.5} />
-            <p>
-              Courses you open in TSS show up here once the {PRODUCT_NAME} extension is installed —
-              then bring the ones you want into your plan.
-            </p>
-            <a
-              className="btn btn--primary browse-empty__cta"
-              href={CHROME_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Get the extension
-            </a>
-            <span className="browse-empty__hint">Free · Chrome &amp; Edge · read-only</span>
+            {isMobile ? (
+              // No extension on phones — say so instead of a store link that can't help here.
+              <p>
+                Adding courses isn’t possible on a phone — the {PRODUCT_NAME} extension runs in a
+                desktop browser only. Build your plan on a computer, open it here via Share →
+                link or QR code, then save it as yours to edit its sections.
+              </p>
+            ) : (
+              <>
+                <p>
+                  Courses you open in TSS show up here once the {PRODUCT_NAME} extension is
+                  installed — then bring the ones you want into your plan.
+                </p>
+                <a
+                  className="btn btn--primary browse-empty__cta"
+                  href={CHROME_STORE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Get the extension
+                </a>
+                <span className="browse-empty__hint">Free · Chrome &amp; Edge · read-only</span>
+              </>
+            )}
           </div>
         ) : (
           <>

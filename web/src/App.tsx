@@ -197,7 +197,7 @@ export default function App() {
         {(!isMobile || view !== 'courses') && (
           <main className="main">
             <div className="toolbar">
-              {isMobile && view === 'calendar' && (
+              {isMobile && (view === 'calendar' || view === 'finals') && (
                 <CalViewToggle value={calView} onChange={handleCalView} />
               )}
               <div className="tabs" role="tablist" aria-label="Planner views">
@@ -252,6 +252,7 @@ export default function App() {
                 conflicts={ctl.finalConflicts}
                 onOpenCourse={handleOpenCourse}
                 onFocusCourse={handleFocusCourse}
+                variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
               />
             )}
           </main>
