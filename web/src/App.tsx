@@ -178,7 +178,7 @@ export default function App() {
         />
       )}
       <div className="app__body">
-        {(!isMobile || view === 'courses') && <CoursePanel ctl={ctl} focus={focusReq} />}
+        <CoursePanel ctl={ctl} focus={focusReq} hidden={isMobile && view !== 'courses'} />
 
         {(!isMobile || view !== 'courses') && (
           <main className="main">

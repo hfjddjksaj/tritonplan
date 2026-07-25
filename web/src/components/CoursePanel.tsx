@@ -10,9 +10,11 @@ interface Props {
   ctl: PlanController;
   /** Calendar-block click: reveal this course's card with its sections expanded. */
   focus?: { courseId: string; nonce: number } | null;
+  /** Mobile: pane hidden but kept mounted so filter/scroll state survives tab switches. */
+  hidden?: boolean;
 }
 
-export function CoursePanel({ ctl, focus }: Props) {
+export function CoursePanel({ ctl, focus, hidden = false }: Props) {
   const [filter, setFilter] = useState('');
   const readOnly = ctl.readOnly;
   const entries = ctl.viewPlan.entries;
@@ -29,7 +31,7 @@ export function CoursePanel({ ctl, focus }: Props) {
   const hasEntries = entries.length > 0;
 
   return (
-    <aside className="rail">
+    <aside className={`rail${hidden ? ' rail--hidden' : ''}`}>
       <div className="rail__head">
         <div className="rail__title-row">
           <span className="rail__title">

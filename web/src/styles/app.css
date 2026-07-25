@@ -196,6 +196,9 @@ p {
   flex-direction: column;
   min-height: 0;
 }
+.rail--hidden {
+  display: none;
+}
 .rail__head {
   padding: 16px 16px 12px;
   border-bottom: 1px solid var(--line);
