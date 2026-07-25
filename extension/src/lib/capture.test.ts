@@ -224,3 +224,38 @@ describe('appointment-times classification', () => {
     expect(res.sectionRows).toHaveLength(0);
   });
 });
+
+describe('appointment-times store', () => {
+  const fx = apptPeriodsFixture();
+
+  it('ingests an apptPeriods batch and exposes normalized, PII-free appt times', () => {
+    const store = new CaptureStore();
+    expect(store.ingestBody(apptBatchBody(fx.context, [fx.row]))).toBe(true);
+    const appts = store.getApptTimes();
+    expect(appts).toHaveLength(1);
+    expect(appts[0]!.windows).toHaveLength(4);
+    expect(JSON.stringify(store.serialize())).not.toContain('studentNumber');
+  });
+
+  it('re-capture of the same term replaces it; other terms coexist', () => {
+    const store = new CaptureStore();
+    store.ingestBody(apptBatchBody(fx.context, [fx.row]));
+    store.ingestBody(
+      apptBatchBody(fx.context, [{ ...fx.row, academicSession: '3', appointmentTimes: [] }]),
+    );
+    store.ingestBody(apptBatchBody(fx.context, [fx.row])); // same term again
+    const appts = store.getApptTimes();
+    expect(appts).toHaveLength(2);
+    expect(appts.map((a) => a.academicSession)).toEqual(['2', '3']);
+  });
+
+  it('survives serialize/deserialize and tolerates old persisted stores', () => {
+    const store = new CaptureStore();
+    store.ingestBody(apptBatchBody(fx.context, [fx.row]));
+    const revived = CaptureStore.deserialize(store.serialize());
+    expect(revived.getApptTimes()).toHaveLength(1);
+    expect(revived.getApptTimes()[0]!.windows[0]!.label).toBe('First Pass');
+    const old = CaptureStore.deserialize({ modules: {}, sections: {} });
+    expect(old.getApptTimes()).toEqual([]);
+  });
+});

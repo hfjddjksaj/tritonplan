@@ -4,9 +4,9 @@
  * the student themselves browsed — nothing is fetched here.
  */
 
-import type { CourseOffering } from '@triton/shared';
+import type { ApptTimes, CourseOffering } from '@triton/shared';
 import type { TssModuleRow, TssPrereqRow, TssSectionRow } from '../parser/tss-types.js';
-import { normalizeSections, prereqTreeToGroups, type CourseMeta } from '../parser/normalize.js';
+import { apptPeriodsToApptTimes, normalizeSections, prereqTreeToGroups, type CourseMeta } from '../parser/normalize.js';
 import { classifyCapture } from './extract-odata.js';
 
 interface StoreShape {
@@ -14,6 +14,7 @@ interface StoreShape {
   sections: Record<string, TssSectionRow[]>;           // by ModuleID
   capturedAt?: Record<string, string>;                 // by ModuleID; absent in old stores
   prereqs?: Record<string, TssPrereqRow[]>;            // by ModuleID; absent in old stores
+  apptTimes?: Record<string, ApptTimes>;               // by "<year>|<session>"; absent in old stores
 }
 
 function creditsToUnits(s: string | undefined): number | undefined {
@@ -56,6 +57,8 @@ export class CaptureStore {
   private capturedAt = new Map<string, string>();
   /** Raw YUCSD_I_PREREQ_TREE rows by ModuleID ([] = confirmed no requirements). */
   private prereqs = new Map<string, TssPrereqRow[]>();
+  /** Student's enrollment windows by term — normalized (PII already stripped). */
+  private apptTimes = new Map<string, ApptTimes>();
 
   /**
    * Ingest one captured OData response body (plain or $batch). Returns true if anything
@@ -64,7 +67,7 @@ export class CaptureStore {
    * browse replaces them (freshest seats/status win).
    */
   ingestBody(body: string, url?: string): boolean {
-    const { moduleRows, sectionRows, prereqTrees } = classifyCapture(body);
+    const { moduleRows, sectionRows, prereqTrees, apptPeriods } = classifyCapture(body);
     let changed = false;
     for (const m of moduleRows) {
       this.modules.set(m.ModuleID, m);
@@ -72,6 +75,13 @@ export class CaptureStore {
     }
     for (const tree of prereqTrees) {
       this.prereqs.set(tree.moduleId, tree.rows); // latest browse wins, empty set included
+      changed = true;
+    }
+    for (const row of apptPeriods) {
+      const appt = apptPeriodsToApptTimes(row, new Date().toISOString());
+      if (!appt) continue;
+      // latest capture of a term wins (the student re-opened the TSS tile)
+      this.apptTimes.set(`${appt.academicYear}|${appt.academicSession}`, appt);
       changed = true;
     }
     if (sectionRows.length) {
@@ -140,12 +150,22 @@ export class CaptureStore {
     return out;
   }
 
+  /** The student's captured appointment times, one per term, term-sorted. */
+  getApptTimes(): ApptTimes[] {
+    return [...this.apptTimes.values()].sort(
+      (a, b) =>
+        a.academicYear.localeCompare(b.academicYear) ||
+        a.academicSession.localeCompare(b.academicSession),
+    );
+  }
+
   serialize(): StoreShape {
     return {
       modules: Object.fromEntries(this.modules),
       sections: Object.fromEntries(this.sections),
       capturedAt: Object.fromEntries(this.capturedAt),
       prereqs: Object.fromEntries(this.prereqs),
+      apptTimes: Object.fromEntries(this.apptTimes),
     };
   }
 
@@ -156,6 +176,7 @@ export class CaptureStore {
     fillMap(store.sections, shape.sections);
     fillMap(store.capturedAt, shape.capturedAt);
     fillMap(store.prereqs, shape.prereqs);
+    fillMap(store.apptTimes, shape.apptTimes);
     return store;
   }
 }
