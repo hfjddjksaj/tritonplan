@@ -1,15 +1,29 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { BridgeMessage } from '@triton/shared';
+import type { ApptTimes, BridgeMessage } from '@triton/shared';
 import {
   isBridgeMessage,
   isCoursesMessage,
   isPlanAddMessage,
   mergeCourses,
   installBridgeListener,
+  isApptTimesMessage,
+  installApptTimesListener,
   BRIDGE_SOURCE,
   type PlanAddMessage,
 } from './bridge';
 import { makeCourse } from './fixtures';
+
+const APPT: ApptTimes = {
+  academicYear: '2026',
+  academicSession: '2',
+  yearText: '2026/2027',
+  sessionText: 'Fall Quarter',
+  capturedAt: '2026-07-25T12:00:00Z',
+  windows: [
+    { label: 'First Pass', beginsAt: '2026-08-10T21:00:00Z', endsAt: '2026-08-14T05:59:59Z', unitCap: '11.50', waitlists: 'Not Allowed' },
+    { label: 'Second Pass', beginsAt: '2026-08-21T17:00:00Z', endsAt: '2026-08-27T05:59:59Z', unitCap: '19.50', waitlists: 'Allowed' },
+  ],
+};
 
 describe('isCoursesMessage', () => {
   it('accepts a valid envelope (and the isBridgeMessage alias)', () => {
@@ -150,5 +164,62 @@ describe('installBridgeListener', () => {
     expect(onCourses).not.toHaveBeenCalled();
     expect(onPlanAdd).not.toHaveBeenCalled();
     cleanup();
+  });
+});
+
+describe('appt-times bridge', () => {
+  it('accepts a valid appt-times envelope', () => {
+    expect(
+      isApptTimesMessage({
+        source: 'triton-planner-extension',
+        type: 'appt-times',
+        version: 1,
+        payload: [APPT],
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects wrong source/type/payload', () => {
+    expect(isApptTimesMessage({ source: 'evil', type: 'appt-times', version: 1, payload: [APPT] })).toBe(false);
+    expect(isApptTimesMessage({ source: 'triton-planner-extension', type: 'appt-times', version: 1, payload: [{ nope: 1 }] })).toBe(false);
+    expect(isApptTimesMessage({ source: 'triton-planner-extension', type: 'courses', version: 1, payload: [APPT] })).toBe(false);
+  });
+
+  it('installApptTimesListener fires on valid messages only', () => {
+    /** A message event as the extension's content script produces it: same window, same origin. */
+    function trustedEvent(data: unknown): MessageEvent {
+      return new MessageEvent('message', {
+        data,
+        origin: window.location.origin,
+        source: window,
+      });
+    }
+
+    const onApptTimes = vi.fn();
+    const cleanup = installApptTimesListener(onApptTimes);
+
+    // unknown / garbage: ignored
+    window.dispatchEvent(trustedEvent('garbage'));
+    expect(onApptTimes).not.toHaveBeenCalled();
+
+    // forged source: ignored
+    const forgedMsg = { source: 'evil', type: 'appt-times', version: 1, payload: [APPT] };
+    window.dispatchEvent(trustedEvent(forgedMsg));
+    expect(onApptTimes).not.toHaveBeenCalled();
+
+    // valid appt-times message -> onApptTimes(payload)
+    const apptMsg = {
+      source: BRIDGE_SOURCE,
+      type: 'appt-times' as const,
+      version: 1 as const,
+      payload: [APPT],
+    };
+    window.dispatchEvent(trustedEvent(apptMsg));
+    expect(onApptTimes).toHaveBeenCalledTimes(1);
+    expect(onApptTimes.mock.calls[0]![0]).toEqual([APPT]);
+
+    cleanup();
+    window.dispatchEvent(trustedEvent(apptMsg));
+    expect(onApptTimes).toHaveBeenCalledTimes(1);
   });
 });

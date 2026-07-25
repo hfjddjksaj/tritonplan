@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import type { ApptTimes } from '@triton/shared';
 import {
   savePlan,
   loadPlan,
@@ -14,8 +15,22 @@ import {
   loadSyncedToken,
   saveCalView,
   loadCalView,
+  saveApptTimes,
+  loadApptTimes,
 } from './storage';
 import { makePlan, makeCourse } from './fixtures';
+
+const APPT: ApptTimes = {
+  academicYear: '2026',
+  academicSession: '2',
+  yearText: '2026/2027',
+  sessionText: 'Fall Quarter',
+  capturedAt: '2026-07-25T12:00:00Z',
+  windows: [
+    { label: 'First Pass', beginsAt: '2026-08-10T21:00:00Z', endsAt: '2026-08-14T05:59:59Z', unitCap: '11.50', waitlists: 'Not Allowed' },
+    { label: 'Second Pass', beginsAt: '2026-08-21T17:00:00Z', endsAt: '2026-08-27T05:59:59Z', unitCap: '19.50', waitlists: 'Allowed' },
+  ],
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -140,5 +155,22 @@ describe('calendar view preference', () => {
   it('falls back to fit on an unrecognized stored value', () => {
     localStorage.setItem('triton-planner:cal-view:v1', 'garbage');
     expect(loadCalView()).toBe('fit');
+  });
+});
+
+describe('appointment-times slot', () => {
+  it('round-trips through localStorage', () => {
+    saveApptTimes([APPT]);
+    expect(loadApptTimes()).toEqual([APPT]);
+  });
+
+  it('rejects corrupt or wrong-shaped values', () => {
+    localStorage.setItem('triton-planner:appt:v1', 'not json');
+    expect(loadApptTimes()).toBeNull();
+    localStorage.setItem(
+      'triton-planner:appt:v1',
+      JSON.stringify([{ ...APPT, windows: [{ label: 1 }] }]),
+    );
+    expect(loadApptTimes()).toBeNull();
   });
 });

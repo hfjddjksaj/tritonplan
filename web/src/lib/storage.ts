@@ -1,5 +1,5 @@
 /** Persist the working plan + browsed pool to localStorage. Best-effort; never throws to the UI. */
-import type { CourseOffering, PlanState } from '@triton/shared';
+import type { ApptTimes, CourseOffering, PlanState } from '@triton/shared';
 
 const KEY = 'triton-planner:plan:v1';
 const POOL_KEY = 'triton-planner:pool:v1';
@@ -233,4 +233,45 @@ export function purgeSeededSamples(pool: CourseOffering[]): CourseOffering[] {
     return pool;
   }
   return pool.filter((c) => !SEEDED_SAMPLE_IDS.has(c.id));
+}
+
+/* ---- appointment times (the student's own enrollment windows) --------------
+   Personal data, global to this browser: NOT part of any plan, never included
+   in share links, QR codes or exports. Latest extension push wins. */
+
+const APPT_KEY = 'triton-planner:appt:v1';
+
+function isApptWindow(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.label === 'string' && typeof v.beginsAt === 'string' && typeof v.endsAt === 'string'
+  );
+}
+
+export function isApptTimesList(value: unknown): value is ApptTimes[] {
+  return (
+    Array.isArray(value) &&
+    value.every((a) => {
+      if (!a || typeof a !== 'object') return false;
+      const v = a as Record<string, unknown>;
+      return (
+        typeof v.academicYear === 'string' &&
+        typeof v.academicSession === 'string' &&
+        typeof v.yearText === 'string' &&
+        typeof v.sessionText === 'string' &&
+        typeof v.capturedAt === 'string' &&
+        Array.isArray(v.windows) &&
+        v.windows.every(isApptWindow)
+      );
+    })
+  );
+}
+
+export function saveApptTimes(appt: ApptTimes[]): void {
+  writeJson(APPT_KEY, appt);
+}
+
+export function loadApptTimes(): ApptTimes[] | null {
+  return readJson(APPT_KEY, isApptTimesList);
 }

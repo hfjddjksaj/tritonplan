@@ -10,7 +10,8 @@
  * Implemented to the shared BridgeMessage contract (for `courses`) plus the `plan-add`
  * envelope below — the extension targets these exact shapes.
  */
-import type { BridgeMessage, CourseOffering } from '@triton/shared';
+import type { ApptTimes, BridgeMessage, CourseOffering } from '@triton/shared';
+import { isApptTimesList } from './storage';
 
 export const BRIDGE_SOURCE = 'triton-planner-extension';
 
@@ -52,6 +53,35 @@ export function isPlanAddMessage(data: unknown): data is PlanAddMessage {
     typeof course.id === 'string' &&
     Array.isArray(course.options)
   );
+}
+
+/** Envelope for the student's own appointment times (personal — never part of plans). */
+export interface ApptTimesMessage {
+  source: typeof BRIDGE_SOURCE;
+  type: 'appt-times';
+  version: 1;
+  payload: ApptTimes[];
+}
+
+/** Validate an `appt-times` envelope (payload shape-checked per item). */
+export function isApptTimesMessage(data: unknown): data is ApptTimesMessage {
+  if (!data || typeof data !== 'object') return false;
+  const m = data as Record<string, unknown>;
+  if (m.source !== BRIDGE_SOURCE || m.type !== 'appt-times' || m.version !== 1) return false;
+  return isApptTimesList(m.payload);
+}
+
+/** Same-window/same-origin listener for `appt-times` pushes. Separate from
+ *  installBridgeListener so the appt hook subscribes independently of usePlan. */
+export function installApptTimesListener(
+  onApptTimes: (appt: ApptTimes[]) => void,
+): () => void {
+  const handler = (event: MessageEvent) => {
+    if (event.source !== window || event.origin !== window.location.origin) return;
+    if (isApptTimesMessage(event.data)) onApptTimes(event.data.payload);
+  };
+  window.addEventListener('message', handler);
+  return () => window.removeEventListener('message', handler);
 }
 
 /**
