@@ -62,7 +62,9 @@ export function BlockSheet({ block, onOpenCourse, onOpenLocation, onFocusCourse,
             Course details
           </button>
         </div>
-        <p className="mappop__hint">The location button shows where the building is on campus.</p>
+        {block.location && block.building && (
+          <p className="mappop__hint">The location button shows where the building is on campus.</p>
+        )}
       </div>
     </div>,
     document.body,

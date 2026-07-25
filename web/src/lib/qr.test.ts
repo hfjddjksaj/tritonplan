@@ -21,7 +21,7 @@ describe('qrShareForPlan', () => {
     const plan = makePlan(3, 80); // deliberately huge
     const full = shareUrl(plan, 'full');
     const qr = qrShareForPlan(plan, 'full');
-    if (full.length <= QR_URL_BUDGET) return; // guard: plan not big enough — bump sizes above
+    expect(full.length).toBeGreaterThan(QR_URL_BUDGET); // fixture must actually exceed the budget
     expect(qr!.mode).toBe('lite');
   });
 

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { PlanState } from '@triton/shared';
 import { useClickAway } from '../hooks/useClickAway';
-import { encodePlan, shareUrl, type ShareFormat } from '../lib/share';
+import { encodePlan, shareUrl, tokenFromHash, type ShareFormat } from '../lib/share';
 import { qrShareForPlan, qrSvg } from '../lib/qr';
 import { saveSyncedToken } from '../lib/storage';
 import { ChevronDown, Link, QrCode, Share } from './icons';
@@ -52,7 +52,10 @@ export function ShareMenu({ plan, onFlash }: Props) {
     } catch {
       // Clipboard unavailable — expose the link via the address bar instead.
       // Mark it as our own write so the next load doesn't re-import it.
-      saveSyncedToken(token);
+      // Store the marker in the same form the consume effect will read back:
+      // URLSearchParams turns a literal '+' (present in lite/lz-string tokens)
+      // into a space, so normalize through the same parser.
+      saveSyncedToken(tokenFromHash(`#p=${token}`) ?? token);
       window.history.replaceState(null, '', `#p=${token}`);
       onFlash('Share link is in the address bar — copy it from there');
     }

@@ -214,4 +214,10 @@ describe('v3 full format via the share.ts API', () => {
     expect(tokenFromHash('#other=1')).toBeNull();
     expect(tokenFromHash('')).toBeNull();
   });
+
+  it('tokenFromHash decodes + as space — markers must be normalized through it', () => {
+    expect(tokenFromHash('#p=abc+def')).toBe('abc def');
+    // Round-trip stability: normalizing twice is a fixed point.
+    expect(tokenFromHash(`#p=${tokenFromHash('#p=abc+def')!}`)).toBe('abc def');
+  });
 });
