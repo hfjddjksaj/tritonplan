@@ -65,13 +65,21 @@ export function CalendarGrid({
   const colTemplate =
     variant === 'scroll' ? `repeat(${days.length}, var(--day-col-w))` : `repeat(${days.length}, 1fr)`;
 
-  // Day-scroll mode starts with today at the left edge.
+  // Day-scroll mode starts with today at the left edge. Re-arm whenever the
+  // scroll view is left or the grid unmounts (empty plan), so entering it —
+  // or adding the first course while already in it — scrolls exactly once.
+  const hasGrid = instances.length > 0;
+  const didAutoScroll = useRef(false);
   useEffect(() => {
-    if (variant !== 'scroll') return;
+    if (variant !== 'scroll' || !hasGrid) {
+      didAutoScroll.current = false;
+      return;
+    }
+    if (didAutoScroll.current) return;
+    didAutoScroll.current = true;
     const el = scrollRef.current?.querySelector('.cal-col--today');
     el?.scrollIntoView({ inline: 'start', block: 'nearest' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variant]);
+  }, [variant, hasGrid]);
 
   if (instances.length === 0) {
     return (
