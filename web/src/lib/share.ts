@@ -3,13 +3,19 @@
  *
  * JSON export/import keeps the FULL plan (a lossless local backup).
  *
- * The shareable `#p=…` URL, by contrast, carries a SLIM plan: only the section
- * you actually picked per course, and only the fields needed to render it
- * (times, place, instructor, final, seats). The other section-options and the
- * source/debug fields (rawSched, ids, emails, dates) are dropped, shrinking the
- * link ~85%. A shared plan therefore can't switch sections in place — reopen
- * the course in TSS to pull its full data back. Old full-format links still
- * open (decode falls back to the legacy shape).
+ * The shareable `#p=…` URL supports two wire formats, chosen via `ShareFormat`:
+ *  - 'full' (v3, default): the whole plan INCLUDING every section option,
+ *    prereqs and capturedAt, deflate-compressed. The receiving device can
+ *    switch sections in place. See share-v3.ts for the wire shape.
+ *  - 'lite' (v2 slim): only the section you actually picked per course, and
+ *    only the fields needed to render it (times, place, instructor, final,
+ *    seats). Other section-options and source/debug fields (rawSched, ids,
+ *    emails, dates) are dropped, shrinking the link further than 'full'. A
+ *    'lite' plan can't switch sections in place — reopen the course in TSS to
+ *    pull its full data back.
+ *
+ * Old links still open: decode tries v3 full, then v2 slim, then v1 legacy
+ * (the whole PlanState encoded verbatim, pre-dating both formats).
  */
 import LZString from 'lz-string';
 import type {
@@ -24,6 +30,7 @@ import type {
   Weekday,
 } from '@triton/shared';
 import { isPlanState } from './storage';
+import { V3_PREFIX, decodePlanV3, encodePlanV3 } from './share-v3';
 
 const HASH_KEY = 'p';
 /** Marks the slim share format; legacy links are a raw PlanState (`version:1`). */
@@ -175,13 +182,18 @@ function isSlimPlan(value: unknown): value is SlimPlan {
   );
 }
 
-/** Compress a plan into a URL-safe token (slim share format). */
-export function encodePlan(plan: PlanState): string {
+/** Which wire format a link carries: 'full' (v3, all sections) or 'lite' (v2 slim). */
+export type ShareFormat = 'full' | 'lite';
+
+/** Compress a plan into a URL-safe token. Default 'full' carries every section option. */
+export function encodePlan(plan: PlanState, format: ShareFormat = 'full'): string {
+  if (format === 'full') return encodePlanV3(plan);
   return LZString.compressToEncodedURIComponent(JSON.stringify(toSlim(plan)));
 }
 
-/** Inverse of encodePlan. Accepts slim links and legacy full-plan links. */
+/** Inverse of encodePlan. Accepts v3 full, v2 slim and v1 legacy tokens. */
 export function decodePlan(token: string): PlanState | null {
+  if (token.startsWith(V3_PREFIX)) return decodePlanV3(token);
   try {
     const json = LZString.decompressFromEncodedURIComponent(token);
     if (!json) return null;
@@ -195,16 +207,20 @@ export function decodePlan(token: string): PlanState | null {
 }
 
 /** Build a `#p=…` hash fragment (without the leading `#`). */
-export function planToHash(plan: PlanState): string {
-  return `${HASH_KEY}=${encodePlan(plan)}`;
+export function planToHash(plan: PlanState, format: ShareFormat = 'full'): string {
+  return `${HASH_KEY}=${encodePlan(plan, format)}`;
+}
+
+/** Extract the raw `#p=…` token from a location hash, or null. */
+export function tokenFromHash(hash: string): string | null {
+  const clean = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (!clean) return null;
+  return new URLSearchParams(clean).get(HASH_KEY);
 }
 
 /** Read a plan out of a raw location hash string ("#p=…" or "p=…"). */
 export function planFromHash(hash: string): PlanState | null {
-  const clean = hash.startsWith('#') ? hash.slice(1) : hash;
-  if (!clean) return null;
-  const params = new URLSearchParams(clean);
-  const token = params.get(HASH_KEY);
+  const token = tokenFromHash(hash);
   if (!token) return null;
   return decodePlan(token);
 }
@@ -223,9 +239,9 @@ export function planFromLinkText(text: string): PlanState | null {
 }
 
 /** A full absolute URL that restores this plan when opened. */
-export function shareUrl(plan: PlanState, base = window.location.href): string {
+export function shareUrl(plan: PlanState, format: ShareFormat = 'full', base = window.location.href): string {
   const url = new URL(base);
-  url.hash = planToHash(plan);
+  url.hash = planToHash(plan, format);
   return url.toString();
 }
 

@@ -8,6 +8,7 @@ import {
   planFromHash,
   planFromLinkText,
   shareUrl,
+  tokenFromHash,
   parsePlanJson,
 } from './share';
 import { makePlan } from './fixtures';
@@ -77,7 +78,7 @@ function richPlan(): PlanState {
 describe('slim share round-trip', () => {
   it('preserves everything needed to render the chosen section', () => {
     const plan = richPlan();
-    const back = decodePlan(encodePlan(plan))!;
+    const back = decodePlan(encodePlan(plan, 'lite'))!;
     expect(back).not.toBeNull();
     const src = plan.entries[0]!;
     const got = back.entries[0]!;
@@ -112,14 +113,14 @@ describe('slim share round-trip', () => {
 
   it('carries only the selected section (drops the others)', () => {
     const plan = richPlan(); // course has 2 options; SE00154302 selected
-    const back = decodePlan(encodePlan(plan))!;
+    const back = decodePlan(encodePlan(plan, 'lite'))!;
     expect(back.entries[0]!.course.options).toHaveLength(1);
     expect(back.entries[0]!.course.options[0]!.enrollCode).toBe('SE00154302');
   });
 
   it('is dramatically shorter than encoding the full plan', () => {
     const plan = richPlan();
-    const slim = encodePlan(plan).length;
+    const slim = encodePlan(plan, 'lite').length;
     const full = LZString.compressToEncodedURIComponent(JSON.stringify(plan)).length;
     expect(slim).toBeLessThan(full * 0.7);
   });
@@ -132,7 +133,7 @@ describe('slim share round-trip', () => {
   it('marks a component with no meetings as unscheduled on restore', () => {
     const plan = richPlan();
     plan.entries[0]!.course.options[0]!.components[0]!.meetings = [];
-    const back = decodePlan(encodePlan(plan))!;
+    const back = decodePlan(encodePlan(plan, 'lite'))!;
     expect(back.entries[0]!.course.options[0]!.components[0]!.unscheduled).toBe(true);
   });
 });
@@ -163,7 +164,7 @@ describe('hash helpers', () => {
 
   it('builds an absolute share URL carrying the plan', () => {
     const plan = richPlan();
-    const url = shareUrl(plan, 'https://plan.example/app/');
+    const url = shareUrl(plan, 'lite', 'https://plan.example/app/');
     expect(url.startsWith('https://plan.example/app/#p=')).toBe(true);
     expect(planFromHash(new URL(url).hash)!.entries[0]!.course.courseCode).toBe('CSE-008A');
   });
@@ -172,8 +173,8 @@ describe('hash helpers', () => {
 describe('planFromLinkText — pasted share links', () => {
   it('accepts a full URL, a hash fragment, and a bare token', () => {
     const plan = richPlan();
-    const url = shareUrl(plan, 'https://plan.example/app/');
-    const token = encodePlan(plan);
+    const url = shareUrl(plan, 'lite', 'https://plan.example/app/');
+    const token = encodePlan(plan, 'lite');
     for (const text of [url, `#p=${token}`, `p=${token}`, token, `  ${url}  `]) {
       const parsed = planFromLinkText(text);
       expect(parsed, `failed for: ${text.slice(0, 30)}`).not.toBeNull();
@@ -196,5 +197,21 @@ describe('parsePlanJson (full import, unchanged)', () => {
     expect(parsePlanJson(JSON.stringify(plan))).toEqual(plan);
     expect(parsePlanJson('{"nope":true}')).toBeNull();
     expect(parsePlanJson('not json')).toBeNull();
+  });
+});
+
+describe('v3 full format via the share.ts API', () => {
+  it('full links round-trip through decodePlan with every option intact', () => {
+    const plan = richPlan(); // course has 2 options
+    const token = encodePlan(plan, 'full');
+    const back = decodePlan(token)!;
+    expect(back.entries[0]!.course.options.length).toBe(plan.entries[0]!.course.options.length);
+  });
+
+  it('tokenFromHash extracts tokens from #p=… and returns null otherwise', () => {
+    expect(tokenFromHash('#p=abc')).toBe('abc');
+    expect(tokenFromHash('p=abc')).toBe('abc');
+    expect(tokenFromHash('#other=1')).toBeNull();
+    expect(tokenFromHash('')).toBeNull();
   });
 });
