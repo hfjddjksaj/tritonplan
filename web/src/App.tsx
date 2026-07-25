@@ -10,6 +10,7 @@ import { FinalsView } from './components/FinalsView';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
+import { BlockSheet } from './components/BlockSheet';
 import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
 import { Calendar, Cap, Check } from './components/icons';
 import { parsePlanJson, planFromLinkText } from './lib/share';
@@ -17,6 +18,7 @@ import { countConflictPairs } from './lib/plan';
 import { pluralize } from './lib/format';
 import { PRODUCT_NAME } from './lib/brand';
 import { loadCalView, saveCalView, type CalView } from './lib/storage';
+import type { PositionedBlock } from './lib/layout';
 
 export default function App() {
   const ctl = usePlan();
@@ -32,6 +34,7 @@ export default function App() {
   const view: MobileTab = !isMobile && tab === 'courses' ? 'calendar' : tab;
   const [toast, setToast] = useState<string | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
+  const [sheetBlock, setSheetBlock] = useState<PositionedBlock | null>(null);
   // Clicking a calendar block reveals that course's card in the rail. The nonce
   // makes a second click on the same course re-trigger the scroll/expand.
   const [focusReq, setFocusReq] = useState<{ courseId: string; nonce: number } | null>(null);
@@ -45,6 +48,10 @@ export default function App() {
     const t = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    setSheetBlock(null);
+  }, [view]);
 
   // When the plan changes while the calendar is off-screen (mobile Courses tab),
   // pulse the Calendar tab as a "your week updated" hint. No auto-switching.
@@ -238,6 +245,7 @@ export default function App() {
                   if (block.building) setMapLoc({ building: block.building, room: block.room });
                 }}
                 onFocusCourse={handleFocusCourse}
+                onBlockDetail={isMobile ? setSheetBlock : undefined}
                 variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
               />
             ) : (
@@ -266,6 +274,25 @@ export default function App() {
         <div className="toast" role="status">
           <Check size={16} className="toast__check" /> {toast}
         </div>
+      )}
+
+      {sheetBlock && (
+        <BlockSheet
+          block={sheetBlock}
+          onClose={() => setSheetBlock(null)}
+          onOpenCourse={(id) => {
+            setSheetBlock(null);
+            handleOpenCourse(id);
+          }}
+          onOpenLocation={(b) => {
+            setSheetBlock(null);
+            if (b.building) setMapLoc({ building: b.building, room: b.room });
+          }}
+          onFocusCourse={(id) => {
+            setSheetBlock(null);
+            handleFocusCourse(id);
+          }}
+        />
       )}
 
       {mapLoc && (

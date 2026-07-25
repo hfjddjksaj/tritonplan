@@ -1591,6 +1591,56 @@ button.menu__item:hover {
   color: var(--text-faint);
 }
 
+/* mobile block detail sheet (rides on the mappop modal shell) */
+.blocksheet {
+  border-top: 3px solid var(--c-spine, var(--ink));
+}
+.blocksheet__code {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--c-text, var(--ink));
+}
+.blocksheet__time {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+.blocksheet__warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--conflict-ink);
+  background: var(--conflict-soft);
+  border-radius: var(--r-sm);
+}
+.blocksheet__loc {
+  display: block;
+  width: fit-content;
+  margin-top: 8px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--c-text, var(--ink));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.blocksheet__loctext {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.blocksheet__instr {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
 /* gold current-time indicator, drawn on today's column only */
 .cal-nowline {
   position: absolute;
