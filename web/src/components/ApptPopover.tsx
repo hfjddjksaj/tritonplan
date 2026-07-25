@@ -63,7 +63,7 @@ export function ApptPopover({ appt, onClose }: Props) {
                   </div>
                   {local && (
                     <div className="apptpop__times apptpop__times--local mono">
-                      Your time · {local}
+                      Your time: {local}
                     </div>
                   )}
                   {(w.unitCap || w.waitlists) && (
