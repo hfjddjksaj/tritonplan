@@ -173,6 +173,48 @@ export function saveViewing(v: Viewing): void {
   }
 }
 
+/* --- address-bar auto-sync echo marker (sessionStorage, per-tab) ------------
+ * The token we last wrote into #p=… ourselves. On load, a hash that equals
+ * this marker is our own echo — NOT an incoming shared plan. */
+const SYNCED_KEY = 'triton-planner:synced-hash:v1';
+
+export function saveSyncedToken(token: string): void {
+  try {
+    sessionStorage.setItem(SYNCED_KEY, token);
+  } catch {
+    /* storage disabled — ignore */
+  }
+}
+
+export function loadSyncedToken(): string | null {
+  try {
+    return sessionStorage.getItem(SYNCED_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/* --- mobile calendar view preference ---------------------------------------- */
+const CAL_VIEW_KEY = 'triton-planner:cal-view:v1';
+
+export type CalView = 'fit' | 'scroll';
+
+export function loadCalView(): CalView {
+  try {
+    return localStorage.getItem(CAL_VIEW_KEY) === 'scroll' ? 'scroll' : 'fit';
+  } catch {
+    return 'fit';
+  }
+}
+
+export function saveCalView(v: CalView): void {
+  try {
+    localStorage.setItem(CAL_VIEW_KEY, v);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Course ids the demo sample data seeded — early builds shipped these to production. */
 const SEEDED_SAMPLE_IDS = new Set(['CSE-008A|2026|2', 'CSE-030|2026|2', 'CSE-011|2026|2']);
 const SAMPLE_PURGE_KEY = 'triton-planner:sample-purged:v1';

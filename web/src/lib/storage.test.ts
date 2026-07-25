@@ -10,11 +10,16 @@ import {
   saveReceived,
   loadReceived,
   clearReceived,
+  saveSyncedToken,
+  loadSyncedToken,
+  saveCalView,
+  loadCalView,
 } from './storage';
 import { makePlan, makeCourse } from './fixtures';
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 describe('storage', () => {
@@ -110,5 +115,25 @@ describe('pool storage', () => {
     expect(isCoursePool([])).toBe(true);
     expect(isCoursePool('x')).toBe(false);
     expect(isCoursePool([{ id: 'A' }])).toBe(false); // missing options[]
+  });
+});
+
+describe('synced-token marker', () => {
+  it('round-trips and defaults to null', () => {
+    expect(loadSyncedToken()).toBeNull();
+    saveSyncedToken('3~abc');
+    expect(loadSyncedToken()).toBe('3~abc');
+    saveSyncedToken('');
+    expect(loadSyncedToken()).toBe('');
+  });
+});
+
+describe('calendar view preference', () => {
+  it('defaults to fit and persists scroll', () => {
+    expect(loadCalView()).toBe('fit');
+    saveCalView('scroll');
+    expect(loadCalView()).toBe('scroll');
+    saveCalView('fit');
+    expect(loadCalView()).toBe('fit');
   });
 });

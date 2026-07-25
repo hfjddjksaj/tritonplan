@@ -27,3 +27,11 @@ if (globalThis.localStorage === undefined) {
     writable: true,
   });
 }
+
+if (globalThis.sessionStorage === undefined) {
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: memoryStorage(),
+    configurable: true,
+    writable: true,
+  });
+}
