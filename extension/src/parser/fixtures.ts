@@ -7,10 +7,12 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import type { TssPrereqRow, TssSectionRow } from './tss-types.js';
+import type { TssPrereqRow, TssSectionRow, TssApptPeriodsRow } from './tss-types.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIX_DIR = resolve(here, '../../../docs/tss-recon/fixtures');
+
+export { FIX_DIR };
 
 interface NormEvent {
   EventID: string; EventKey: string; EventAbbr: string;
@@ -77,4 +79,10 @@ export function denormalize(course: NormCourse): TssSectionRow[] {
     }
   }
   return rows;
+}
+
+/** The captured ysd_appttimes apptPeriods row (PII pre-redacted in the fixture file). */
+export function apptPeriodsFixture(): { context: string; row: TssApptPeriodsRow } {
+  const raw = JSON.parse(readFileSync(resolve(FIX_DIR, 'appt-times-fall2026.json'), 'utf8'));
+  return { context: raw['@odata.context'] as string, row: raw.value[0] as TssApptPeriodsRow };
 }

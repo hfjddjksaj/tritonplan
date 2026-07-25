@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { CaptureStore } from './capture-to-courses.js';
 import { classifyCapture } from './extract-odata.js';
-import { loadNormalizedFixture, denormalize, prereqTreeRows } from '../parser/fixtures.js';
+import { loadNormalizedFixture, denormalize, prereqTreeRows, apptPeriodsFixture } from '../parser/fixtures.js';
 import type { TssModuleRow, TssPrereqRow } from '../parser/tss-types.js';
 
 const fx = loadNormalizedFixture();
@@ -190,5 +190,37 @@ describe('prereq tree capture (YUCSD_I_PREREQ_TREE)', () => {
     delete legacy.prereqs;
     const old = CaptureStore.deserialize(JSON.parse(JSON.stringify(legacy)));
     expect(old.toCourses()[0]!.prereqs).toBeUndefined();
+  });
+});
+
+/** A $batch part carrying an apptPeriods collection, as the My Appointment Times app fetches it. */
+function apptBatchBody(context: string, rows: unknown[]): string {
+  const inner = JSON.stringify({ '@odata.context': context, value: rows });
+  return (
+    '--batch_id\r\nContent-Type: application/http\r\n\r\nHTTP/1.1 200 OK\r\n' +
+    'Content-Type: application/json\r\n\r\n' + inner + '\r\n--batch_id--\r\n'
+  );
+}
+
+describe('appointment-times classification', () => {
+  it('classifies the apptPeriods batch part by context', () => {
+    const fx = apptPeriodsFixture();
+    const res = classifyCapture(apptBatchBody(fx.context, [fx.row]));
+    expect(res.apptPeriods).toHaveLength(1);
+    expect(res.apptPeriods[0]!.academicYear).toBe('2026');
+    expect(res.apptPeriods[0]!.appointmentTimes).toHaveLength(4);
+    expect(res.moduleRows).toHaveLength(0);
+    expect(res.sectionRows).toHaveLength(0);
+  });
+
+  it('does not classify the same service\'s dropdown collections as anything', () => {
+    const body = JSON.stringify({
+      '@odata.context': '$metadata#acadSess(acSess,acSessText)',
+      value: [{ acSess: '2', acSessText: 'Fall Quarter' }],
+    });
+    const res = classifyCapture(body);
+    expect(res.apptPeriods).toHaveLength(0);
+    expect(res.moduleRows).toHaveLength(0);
+    expect(res.sectionRows).toHaveLength(0);
   });
 });

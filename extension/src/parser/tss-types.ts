@@ -54,3 +54,33 @@ export interface TssModuleRow {
   CreditsDisplay?: string;
   incrementDisplay?: string;
 }
+
+/** One row of ysd_appttimes `appointmentTimes` — an enrollment window. */
+export interface TssApptTimeRow {
+  timelimit: string;             // "9625"
+  timelimit_Text: string;        // "First Pass"
+  beginTimestamp: string;        // UTC ISO, e.g. "2026-08-10T21:00:00Z" (authoritative)
+  endTimestamp: string;
+  waitlists?: string;            // "Allowed" | "Not Allowed"
+  academicYear?: string;         // "2026"
+  academicYear_Text?: string;    // "2026/2027"
+  academicSession?: string;      // "2"
+  academicSession_Text?: string; // "Fall Quarter"
+}
+
+/** One row of ysd_appttimes `maxUnits` — unit cap by (session, window type). */
+export interface TssApptMaxUnitsRow {
+  Perid: string;     // academicSession code, e.g. "2"
+  Timelimit: string; // e.g. "9625"
+  MaxUnits: string;  // "11.50"
+}
+
+/** The single per-student `apptPeriods` row. The wire row ALSO carries PII
+ *  (studentNumber, studentObjid, studyObjid, programObjid) — deliberately NOT
+ *  declared here so no code path can read it; normalize whitelists fields. */
+export interface TssApptPeriodsRow {
+  academicYear: string;
+  academicSession: string;
+  appointmentTimes?: TssApptTimeRow[];
+  maxUnits?: TssApptMaxUnitsRow[];
+}
