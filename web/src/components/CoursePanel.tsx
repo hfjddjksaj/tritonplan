@@ -37,7 +37,9 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
           <span className="rail__title">
             {readOnly ? 'Courses in this plan' : 'Browsed & Added Courses'}
           </span>
-          <span className="rail__count mono">{entries.length} added</span>
+          <span className="rail__count mono">
+            {entries.length} added<span className="rail__units"> · {ctl.units} units</span>
+          </span>
         </div>
         <p className="rail__lede">
           {readOnly

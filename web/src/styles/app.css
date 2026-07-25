@@ -1917,6 +1917,10 @@ button.menu__item:hover {
   display: none;
 }
 
+.rail__units {
+  display: none;
+}
+
 @media (max-width: 760px) {
   /* one pane at a time; each pane scrolls internally (sticky cal header intact) */
   .app__body {
@@ -2005,6 +2009,41 @@ button.menu__item:hover {
   }
   .toast {
     bottom: calc(74px + env(safe-area-inset-bottom));
+  }
+
+  /* touch affordances */
+  .planmenu__acts {
+    opacity: 1; /* hover-reveal → always visible on touch */
+  }
+  .planmenu__new {
+    display: none; /* no extension on phones — an empty new plan can't be filled */
+  }
+  .menu {
+    width: min(320px, calc(100vw - 20px));
+  }
+  .opt {
+    padding-top: 9px;
+    padding-bottom: 9px; /* ≥40px touch rows */
+  }
+  .picker__toggle {
+    min-height: 40px;
+  }
+
+  /* banners & finals on narrow screens */
+  .received {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .final-row {
+    grid-template-columns: 86px 1fr auto;
+  }
+  .finals__intro,
+  .finals__timeline {
+    max-width: none;
+  }
+
+  .rail__units {
+    display: inline;
   }
 }
 
