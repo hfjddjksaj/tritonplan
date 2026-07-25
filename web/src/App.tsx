@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePlan } from './hooks/usePlan';
+import { useIsMobile } from './hooks/useIsMobile';
 import { Topbar } from './components/Topbar';
 import { PlanSwitcher } from './components/PlanSwitcher';
 import { CoursePanel } from './components/CoursePanel';
@@ -8,17 +9,20 @@ import { FinalsView } from './components/FinalsView';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
+import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
 import { Calendar, Cap, Check } from './components/icons';
 import { parsePlanJson, planFromLinkText } from './lib/share';
 import { countConflictPairs } from './lib/plan';
 import { pluralize } from './lib/format';
 import { PRODUCT_NAME } from './lib/brand';
 
-type Tab = 'calendar' | 'finals';
-
 export default function App() {
   const ctl = usePlan();
-  const [tab, setTab] = useState<Tab>('calendar');
+  const isMobile = useIsMobile();
+  const [tab, setTab] = useState<MobileTab>('calendar');
+  const [calPulse, setCalPulse] = useState(false);
+  // Desktop has no Courses tab — the rail is always visible there.
+  const view: MobileTab = !isMobile && tab === 'courses' ? 'calendar' : tab;
   const [toast, setToast] = useState<string | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   // Clicking a calendar block reveals that course's card in the rail. The nonce
@@ -34,6 +38,18 @@ export default function App() {
     const t = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // When the plan changes while the calendar is off-screen (mobile Courses tab),
+  // pulse the Calendar tab as a "your week updated" hint. No auto-switching.
+  const prevPlanRef = useRef(ctl.plan);
+  useEffect(() => {
+    const changed = prevPlanRef.current !== ctl.plan;
+    prevPlanRef.current = ctl.plan;
+    if (!changed || !isMobile || view !== 'courses') return;
+    setCalPulse(true);
+    const t = setTimeout(() => setCalPulse(false), 1600);
+    return () => clearTimeout(t);
+  }, [ctl.plan, isMobile, view]);
 
   const handleImportText = useCallback(
     (text: string) => {
@@ -100,9 +116,13 @@ export default function App() {
     [ctl.courseById, ctl.openCourseInTss],
   );
 
-  const handleFocusCourse = useCallback((courseId: string) => {
-    setFocusReq((prev) => ({ courseId, nonce: (prev?.nonce ?? 0) + 1 }));
-  }, []);
+  const handleFocusCourse = useCallback(
+    (courseId: string) => {
+      if (isMobile) setTab('courses'); // the card lives on the Courses tab
+      setFocusReq((prev) => ({ courseId, nonce: (prev?.nonce ?? 0) + 1 }));
+    },
+    [isMobile],
+  );
 
   const handleReset = useCallback(() => {
     if (ctl.plan.entries.length === 0) return;
@@ -124,7 +144,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app${isMobile ? ' app--mobile' : ''}`}>
       <Topbar
         termLabel={ctl.viewPlan.term.label}
         units={ctl.units}
@@ -158,64 +178,76 @@ export default function App() {
         />
       )}
       <div className="app__body">
-        <CoursePanel ctl={ctl} focus={focusReq} />
+        {(!isMobile || view === 'courses') && <CoursePanel ctl={ctl} focus={focusReq} />}
 
-        <main className="main">
-          <div className="toolbar">
-            <div className="tabs" role="tablist" aria-label="Planner views">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'calendar'}
-                className={`tab${tab === 'calendar' ? ' tab--active' : ''}`}
-                onClick={() => setTab('calendar')}
-              >
-                <Calendar size={15} /> Calendar
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'finals'}
-                className={`tab${tab === 'finals' ? ' tab--active' : ''}`}
-                onClick={() => setTab('finals')}
-              >
-                <Cap size={15} /> Finals
-                {ctl.finalConflicts.length > 0 && (
-                  <span className="tab__badge">{ctl.finalConflicts.length}</span>
-                )}
-              </button>
+        {(!isMobile || view !== 'courses') && (
+          <main className="main">
+            <div className="toolbar">
+              <div className="tabs" role="tablist" aria-label="Planner views">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'calendar'}
+                  className={`tab${view === 'calendar' ? ' tab--active' : ''}`}
+                  onClick={() => setTab('calendar')}
+                >
+                  <Calendar size={15} /> Calendar
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'finals'}
+                  className={`tab${view === 'finals' ? ' tab--active' : ''}`}
+                  onClick={() => setTab('finals')}
+                >
+                  <Cap size={15} /> Finals
+                  {ctl.finalConflicts.length > 0 && (
+                    <span className="tab__badge">{ctl.finalConflicts.length}</span>
+                  )}
+                </button>
+              </div>
+              <div className="toolbar__spacer" />
+              <span className="toolbar__hint">{hintText()}</span>
             </div>
-            <div className="toolbar__spacer" />
-            <span className="toolbar__hint">{hintText()}</span>
-          </div>
 
-          {tab === 'calendar' && (
-            <ConflictBanner
-              weekly={ctl.weeklyConflicts}
-              finals={ctl.finalConflicts}
-              codeById={ctl.codeById}
-            />
-          )}
+            {view === 'calendar' && (
+              <ConflictBanner
+                weekly={ctl.weeklyConflicts}
+                finals={ctl.finalConflicts}
+                codeById={ctl.codeById}
+              />
+            )}
 
-          {tab === 'calendar' ? (
-            <CalendarGrid
-              instances={ctl.instances}
-              onOpenCourse={handleOpenCourse}
-              onOpenLocation={(block) => {
-                if (block.building) setMapLoc({ building: block.building, room: block.room });
-              }}
-              onFocusCourse={handleFocusCourse}
-            />
-          ) : (
-            <FinalsView
-              finals={ctl.finals}
-              conflicts={ctl.finalConflicts}
-              onOpenCourse={handleOpenCourse}
-              onFocusCourse={handleFocusCourse}
-            />
-          )}
-        </main>
+            {view === 'calendar' ? (
+              <CalendarGrid
+                instances={ctl.instances}
+                onOpenCourse={handleOpenCourse}
+                onOpenLocation={(block) => {
+                  if (block.building) setMapLoc({ building: block.building, room: block.room });
+                }}
+                onFocusCourse={handleFocusCourse}
+              />
+            ) : (
+              <FinalsView
+                finals={ctl.finals}
+                conflicts={ctl.finalConflicts}
+                onOpenCourse={handleOpenCourse}
+                onFocusCourse={handleFocusCourse}
+              />
+            )}
+          </main>
+        )}
       </div>
+
+      {isMobile && (
+        <MobileTabBar
+          tab={view}
+          onTab={setTab}
+          coursesCount={ctl.viewPlan.entries.length}
+          finalsBadge={ctl.finalConflicts.length}
+          pulse={calPulse}
+        />
+      )}
 
       {toast && (
         <div className="toast" role="status">

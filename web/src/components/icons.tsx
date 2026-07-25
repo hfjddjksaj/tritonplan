@@ -142,6 +142,16 @@ export const External = (p: P) => (
     <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
   </svg>
 );
+export const List = (p: P) => (
+  <svg {...base(p)}>
+    <line x1="8" y1="6" x2="21" y2="6" />
+    <line x1="8" y1="12" x2="21" y2="12" />
+    <line x1="8" y1="18" x2="21" y2="18" />
+    <line x1="3" y1="6" x2="3.01" y2="6" />
+    <line x1="3" y1="12" x2="3.01" y2="12" />
+    <line x1="3" y1="18" x2="3.01" y2="18" />
+  </svg>
+);
 export const QrCode = (p: P) => (
   <svg {...base(p)}>
     <rect x="3" y="3" width="7" height="7" rx="1" />
