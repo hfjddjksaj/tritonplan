@@ -141,6 +141,42 @@ receives it; only the classifier discards it today.
   drops the anchor). Absence of requirements = empty set, not a missing call.
 - Fixture: `fixtures/prereq-tree-chem43a.json` (transcribed from the live capture same day).
 
+## Service: `ysd_appttimes` — My Appointment Times ⭐ (VERIFIED LIVE 2026-07-25)
+
+The launchpad's **My Appointment Times** tile (`#YStudent-apptTimes`, listed right under
+Schedule of Classes) opens a small Fiori app showing the student's enrollment windows
+(First Pass / Second Pass / Instruction Session Enrollment cards with Opens/Closes/Unit
+Cap/Waitlists). It is a **separate OData v4 service** from the Schedule of Classes one:
+
+`https://tss.ucsd.edu/sap/opu/odata4/sap/ysb_appttime/srvd/sap/ysd_appttimes/0001/` (`?sap-client=500`)
+
+- All data arrives via **`$batch` POST** (multipart, embedded JSON) fired by the app itself on
+  open — URL contains `/odata` → **our passive interceptor already receives it**; only the
+  classifier discards it today. Two batches observed: one with the dropdown sets
+  (`#defaults`, `#acadYear(...)`, `#acadSess(...)`), one with the payload set
+  `#apptPeriods(appointmentTimes(),maxUnits())`.
+- `apptPeriods.value[0]` is a per-student row: `academicYear`, `academicSession` (same codes
+  as course data — Fall = `'2'`), `keyDate` (term start), `holdLevel`, plus **PII we must
+  never store/forward**: `studentObjid`, `studyObjid`, `studentNumber`, `programObjid`.
+- `appointmentTimes[]` (expanded nav) — one row per enrollment window ⭐:
+  - `timelimit` (code) + `timelimit_Text` (display name). Observed: `9625` "First Pass",
+    `9626` "Second Pass" (**TWICE, different date ranges** — window count is variable, never
+    hardcode first+second), `9627` "Instruction Session Enrollment". `9624` exists only in
+    the maxUnits table (4.00 units) — meaning unknown, never seen as a window.
+  - `beginDate`/`beginTime` + `endDate`/`endTime` = **local Pacific wall-clock**;
+    `beginTimestamp`/`endTimestamp` = **UTC instants** (authoritative; PT wall-clock 14:00 =
+    21:00Z). UI shows "PT" explicitly.
+  - `timelimitStatus`: `'U'` (= the UI's "Upcoming" badge) is the only value observed;
+    $metadata says just `Edm.String MaxLength=1` (no enum) → open/past codes unverified.
+    **Compute status from the timestamps instead of trusting this field.**
+  - `waitlists`: display-ready text (`"Allowed"` / `"Not Allowed"`).
+- `maxUnits[]` (expanded nav) = lookup table keyed by (`Perid`, `Timelimit`) → `MaxUnits`
+  (e.g. Perid 2 × 9625 → `"11.50"`); the UI joins it to each card's Unit Cap. Rows repeat
+  per session (Perid 3, 4… same caps for this student).
+- Dropdowns for this student contained only 2026/2027 + Fall Quarter → captures are per
+  (year, session) shown; re-opening the tile after TSS publishes new terms yields new rows.
+- Fixture: `fixtures/appt-times-fall2026.json` (transcribed same day, PII redacted).
+
 ## Day-abbreviation → Weekday map
 `M`→Mon, `Tu`→Tue, `W`→Wed, `Th`→Thu, `F`→Fri, `Sa`→Sat, `Su`→Sun.
 
