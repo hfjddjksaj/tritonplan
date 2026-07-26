@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchBuilding, googleMapsLink } from './buildings';
+import { matchBuilding, googleMapsLink, ambiguousKeyCount } from './buildings';
 import dataset from '../data/ucsd-buildings.json';
 import { BUILDING_ALIASES } from './building-aliases';
 
@@ -15,6 +15,12 @@ describe('matchBuilding', () => {
 
   it('normalizes roman numerals (Unit 2 ↔ Unit II)', () => {
     expect(matchBuilding('Engineering Building Unit 2')?.name).toBe('Engineering Building Unit II');
+  });
+
+  it('normalizes roman numeral I (Unit 1 ↔ Unit I, a real TSS/official pairing)', () => {
+    // Jacobs Hall's official aliases include "Engineering Building Unit I"
+    // (web/src/data/ucsd-buildings.json); TSS-style queries use digits.
+    expect(matchBuilding('Engineering Building Unit 1')?.name).toBe('Jacobs Hall');
   });
 
   it('normalizes "&" to "and"', () => {
@@ -68,6 +74,22 @@ describe('dataset sanity', () => {
       expect(matchBuilding(n), n).not.toBeNull();
     }
   });
+
+  it('keeps ambiguous-key poisoning within a known-good range (dataset-drift guard)', () => {
+    // Baseline verified 2026-07-26: 32 ambiguous keys out of 2564 index keys.
+    // Some ambiguity is expected (short codes like "Building A" or "1" are
+    // legitimately shared by unrelated buildings) — the lower bound guards
+    // against the guard itself silently breaking (e.g. register() no longer
+    // poisoning anything). The upper bound guards against a future
+    // `npm run fetch:buildings -w @triton/web` refresh introducing many new
+    // cross-building alias collisions, which would silently null out
+    // matchBuilding() for a growing number of real buildings. If this test
+    // fails after a legitimate refresh, inspect the new collisions (they're
+    // usually short generic tokens) before raising the cap.
+    const count = ambiguousKeyCount();
+    expect(count).toBeGreaterThan(0);
+    expect(count).toBeLessThan(60);
+  });
 });
 
 describe('googleMapsLink', () => {
@@ -85,6 +107,16 @@ describe('googleMapsLink', () => {
 });
 
 describe('hand-curated overlay', () => {
+  // BUILDING_ALIASES is registered with an unconditional index.set(), not
+  // register(), so a hand-curated ruling always wins even if a future
+  // official dataset refresh happens to hang the same normalized key on two
+  // buildings (which would otherwise poison it to 'ambiguous'). As of the
+  // committed dataset, none of the three current overlay keys collide with
+  // an already-ambiguous dataset key, so there's no real poisoned-key case
+  // to assert against without fabricating a synthetic dataset row — which
+  // the spec for this fix explicitly disallows. The three tests below still
+  // exercise the overlay resolving correctly today.
+
   it('maps Ledden Auditorium into the HSS complex', () => {
     const hit = matchBuilding('Ledden Auditorium');
     expect(hit?.name).toBe('Humanities and Social Sciences');

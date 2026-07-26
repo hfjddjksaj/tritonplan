@@ -21,7 +21,7 @@ export interface BuildingMatch {
   lng: number;
 }
 
-const ROMAN: Record<string, string> = { ii: '2', iii: '3', iv: '4', v: '5' };
+const ROMAN: Record<string, string> = { i: '1', ii: '2', iii: '3', iv: '4', v: '5' };
 
 /** Lowercase, collapse whitespace, standalone "&"→"and", roman tokens→digits. */
 function normalizeKey(s: string): string {
@@ -76,7 +76,10 @@ EXTRA_BUILDINGS.forEach(addBuilding);
 for (const [alias, target] of Object.entries(BUILDING_ALIASES)) {
   const entry = byName.get(target);
   if (!entry) continue; // dataset drifted; the sanity test in Task 3 catches this
-  for (const key of keyVariants(alias)) register(key, entry);
+  // Unconditional set (not register()): the overlay is a deliberate human
+  // ruling and must win even if a dataset refresh later collides on this
+  // key, rather than being poisoned to 'ambiguous' like a plain data clash.
+  for (const key of keyVariants(alias)) index.set(key, entry);
 }
 
 /**
@@ -101,6 +104,19 @@ export function matchBuilding(raw: string | undefined): BuildingMatch | null {
     candidate = entry;
   }
   return candidate;
+}
+
+/**
+ * Count of index keys currently poisoned to 'ambiguous'. Exists for the
+ * dataset-drift guard test in buildings.test.ts, which caps this number so a
+ * future `npm run fetch:buildings` refresh that explodes cross-building
+ * alias collisions fails loudly instead of silently nulling out
+ * matchBuilding() for a growing set of real buildings.
+ */
+export function ambiguousKeyCount(): number {
+  let count = 0;
+  for (const v of index.values()) if (v === 'ambiguous') count++;
+  return count;
 }
 
 /**
