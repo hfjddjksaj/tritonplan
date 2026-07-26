@@ -87,6 +87,11 @@ issues, replays, retries, prefetches, or automates anything.
 The normalized model shared by both halves is `shared/src/types.ts`
 (`CourseOffering → SectionOption → Component → Meeting/FinalExam`, plus `PlanState`).
 
+`web/src/data/ucsd-buildings.json` is generated from UCSD's official campus-map GIS layer via
+`npm run fetch:buildings -w @triton/web` (dev-time only; the app never fetches it at runtime).
+Hand overrides for TSS-only names live in `web/src/lib/building-aliases.ts` — extend it when an
+unmatched name shows up in the popover.
+
 ## Reference material
 
 - [`docs/tss-recon/tss-api-notes.md`](./tss-recon/tss-api-notes.md) — TSS/SAP OData
