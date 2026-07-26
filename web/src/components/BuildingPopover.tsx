@@ -1,4 +1,4 @@
-import { canonicalBuilding, googleMapsLink, UCSD_CAMPUS_MAP_URL } from '../lib/buildings';
+import { googleMapsLink, matchBuilding, UCSD_CAMPUS_MAP_URL } from '../lib/buildings';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { External, X } from './icons';
 
@@ -14,8 +14,8 @@ interface Props {
  * Maps open only on the user's click (deep links), keeping the page request-free.
  */
 export function BuildingPopover({ building, room, onClose }: Props) {
-  const canonical = canonicalBuilding(building);
-  const name = canonical ?? building;
+  const hit = matchBuilding(building);
+  const name = hit?.name ?? building;
 
   useEscapeKey(onClose);
 
@@ -34,13 +34,13 @@ export function BuildingPopover({ building, room, onClose }: Props) {
         <div className="eyebrow">Building</div>
         <div className="mappop__name">{name}</div>
         {room && <div className="mappop__room mono">Room {room}</div>}
-        {canonical && canonical !== building && (
+        {hit && hit.name !== building && (
           <div className="mappop__raw">Listed in TSS as “{building}”</div>
         )}
         <div className="mappop__actions">
           <a
             className="btn btn--sm btn--primary"
-            href={googleMapsLink(name)}
+            href={googleMapsLink(hit ?? building)}
             target="_blank"
             rel="noopener noreferrer"
           >

@@ -1,28 +1,82 @@
 import { describe, it, expect } from 'vitest';
-import { canonicalBuilding, googleMapsLink } from './buildings';
+import { matchBuilding, googleMapsLink } from './buildings';
+import dataset from '../data/ucsd-buildings.json';
 
-describe('canonicalBuilding', () => {
-  it('matches an exact name (case/whitespace tolerant)', () => {
-    expect(canonicalBuilding('Galbraith Hall')).toBe('Galbraith Hall');
-    expect(canonicalBuilding('  galbraith   hall ')).toBe('Galbraith Hall');
+describe('matchBuilding', () => {
+  it('matches an exact official name (case/whitespace tolerant)', () => {
+    expect(matchBuilding('Galbraith Hall')?.name).toBe('Galbraith Hall');
+    expect(matchBuilding('  galbraith   hall ')?.name).toBe('Galbraith Hall');
   });
 
-  it('repairs a TSS-truncated name via unique prefix match', () => {
-    expect(canonicalBuilding('Computer Science and Engineering Buildin')).toBe(
+  it('matches an official alias', () => {
+    expect(matchBuilding('Undergraduate Sciences Building')?.name).toBe('York Hall');
+  });
+
+  it('normalizes roman numerals (Unit 2 ↔ Unit II)', () => {
+    expect(matchBuilding('Engineering Building Unit 2')?.name).toBe('Engineering Building Unit II');
+  });
+
+  it('normalizes "&" to "and"', () => {
+    expect(matchBuilding('Design & Innovation Building')?.name).toBe('Design and Innovation Building');
+  });
+
+  it('treats a trailing "Building" as optional on both sides', () => {
+    expect(matchBuilding('Applied Physics and Mathematics Building')?.name).toBe(
+      'Applied Physics and Mathematics',
+    );
+    expect(matchBuilding('Humanities and Social Sciences Building')?.name).toBe(
+      'Humanities and Social Sciences',
+    );
+  });
+
+  it('repairs the real 40-char TSS truncation via unique prefix', () => {
+    expect(matchBuilding('Computer Science and Engineering Buildin')?.name).toBe(
       'Computer Science and Engineering Building',
     );
-    expect(canonicalBuilding('Pepper Canyon')).toBe('Pepper Canyon Hall');
+  });
+
+  it('rejects prefixes shared by different buildings', () => {
+    expect(matchBuilding('Pepper Canyon')).toBeNull(); // Hall vs Apartments vs Lodge…
+    expect(matchBuilding('Price Cent')).toBeNull(); // West vs East Expansion
+  });
+
+  it('still matches a full name that is also a prefix of longer names', () => {
+    expect(matchBuilding('Pepper Canyon Hall')?.name).toBe('Pepper Canyon Hall');
+  });
+
+  it('returns coordinates for the maps link', () => {
+    const hit = matchBuilding('York Hall');
+    expect(hit?.lat).toBeCloseTo(32.8745, 3);
+    expect(hit?.lng).toBeCloseTo(-117.24, 2);
   });
 
   it('returns null for unknown, too-short, or missing names', () => {
-    expect(canonicalBuilding('Totally Unknown Hall')).toBeNull();
-    expect(canonicalBuilding('Ga')).toBeNull();
-    expect(canonicalBuilding(undefined)).toBeNull();
+    expect(matchBuilding('Totally Unknown Hall')).toBeNull();
+    expect(matchBuilding('Ga')).toBeNull();
+    expect(matchBuilding(undefined)).toBeNull();
+  });
+});
+
+describe('dataset sanity', () => {
+  it('carries the full campus', () => {
+    expect(dataset.buildings.length).toBeGreaterThan(700);
+  });
+
+  it('resolves every building seen in real TSS fixtures', () => {
+    for (const n of ['York Hall', 'Center Hall', 'Galbraith Hall', 'Warren Lecture Hall']) {
+      expect(matchBuilding(n), n).not.toBeNull();
+    }
   });
 });
 
 describe('googleMapsLink', () => {
-  it('builds an encoded campus-scoped search URL', () => {
+  it('pins exact coordinates for a matched building', () => {
+    expect(googleMapsLink({ lat: 32.87451, lng: -117.24 })).toBe(
+      'https://www.google.com/maps/search/?api=1&query=32.87451%2C-117.24',
+    );
+  });
+
+  it('falls back to a campus-scoped text search for raw names', () => {
     expect(googleMapsLink('Galbraith Hall')).toBe(
       'https://www.google.com/maps/search/?api=1&query=Galbraith%20Hall%2C%20UC%20San%20Diego',
     );
