@@ -9,6 +9,16 @@
  */
 export type BuildingRow = [name: string, aliases: string[], lat: number, lng: number];
 
-export const BUILDING_ALIASES: Record<string, string> = {};
+export const BUILDING_ALIASES: Record<string, string> = {
+  // Auditorium inside the Humanities and Social Sciences complex (HSS 2250);
+  // the GIS layer has no separate point for it. Verified 2026-07-26.
+  'Ledden Auditorium': 'Humanities and Social Sciences',
+  // TSS names the school; Otterson Hall is Rady's original/main building.
+  // Verified against the official layer 2026-07-26.
+  'Rady School of Management': 'Otterson Hall',
+  // The official layer splits the complex into West / East Expansion;
+  // West is the original main hall. Verified 2026-07-26.
+  'Price Center': 'Price Center West',
+};
 
 export const EXTRA_BUILDINGS: BuildingRow[] = [];

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { matchBuilding, googleMapsLink } from './buildings';
 import dataset from '../data/ucsd-buildings.json';
+import { BUILDING_ALIASES } from './building-aliases';
 
 describe('matchBuilding', () => {
   it('matches an exact official name (case/whitespace tolerant)', () => {
@@ -80,5 +81,27 @@ describe('googleMapsLink', () => {
     expect(googleMapsLink('Galbraith Hall')).toBe(
       'https://www.google.com/maps/search/?api=1&query=Galbraith%20Hall%2C%20UC%20San%20Diego',
     );
+  });
+});
+
+describe('hand-curated overlay', () => {
+  it('maps Ledden Auditorium into the HSS complex', () => {
+    const hit = matchBuilding('Ledden Auditorium');
+    expect(hit?.name).toBe('Humanities and Social Sciences');
+    expect(hit?.lat).toBeCloseTo(32.87851, 3);
+  });
+
+  it('maps Rady School of Management to Otterson Hall', () => {
+    expect(matchBuilding('Rady School of Management')?.name).toBe('Otterson Hall');
+  });
+
+  it('maps Price Center to Price Center West', () => {
+    expect(matchBuilding('Price Center')?.name).toBe('Price Center West');
+  });
+
+  it('every overlay alias targets an existing official record', () => {
+    for (const target of Object.values(BUILDING_ALIASES)) {
+      expect(matchBuilding(target), target).not.toBeNull();
+    }
   });
 });
