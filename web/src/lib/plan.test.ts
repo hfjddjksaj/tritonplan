@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { CourseOffering, SectionOption } from '@triton/shared';
-import { optionSummaryParts, refreshPlanEntries } from './plan';
+import type { CourseOffering, MidtermExam, SectionOption } from '@triton/shared';
+import { midtermOverlapKeys, midtermsSorted, optionSummaryParts, refreshPlanEntries } from './plan';
 import { makeCourse, makePlan } from './fixtures';
 
 /** A re-captured copy of `course` with new seat counts (and optionally new option ids). */
@@ -130,5 +130,98 @@ describe('refreshPlanEntries', () => {
     const next = refreshPlanEntries(plan, [fresh]);
     expect(next.entries[0]!.course.options[0]!.seatsAvailable).toBe(7);
     expect(next.entries[1]!).toBe(plan.entries[1]!);
+  });
+});
+
+describe('midtermsSorted / midtermOverlapKeys', () => {
+  const mt = (date: string, start: string, end: string, modality?: string): MidtermExam => ({
+    date,
+    start,
+    end,
+    ...(modality ? { modality } : {}),
+  });
+
+  function entryWith(id: string, midterms?: MidtermExam[], selected = true) {
+    const course = makeCourse(id, id);
+    if (midterms !== undefined) course.options[0]!.midterms = midterms;
+    return { course, selectedOptionId: selected ? course.options[0]!.id : null, color: '231' };
+  }
+
+  function plan(entries: ReturnType<typeof entryWith>[]) {
+    return { version: 1 as const, term: { year: '2026', period: '2', label: 'Fall 2026' }, entries };
+  }
+
+  it('splits courses into dated (sorted by date+start) and TBD (sorted by code)', () => {
+    const p = plan([
+      entryWith('CSE-100', [mt('2026-11-05', '19:00', '20:50', 'In Person')]),
+      entryWith('ZZZ-1'), // no midterms field, no rawSched → TBD
+      entryWith('AAA-1', []), // explicitly empty → still TBD
+      entryWith('CHEM-43A', [mt('2026-10-31', '10:00', '11:50')]),
+    ]);
+    const { dated, tbd } = midtermsSorted(p);
+    expect(dated.map((d) => d.courseCode)).toEqual(['CHEM-43A', 'CSE-100']);
+    expect(dated[1]!.midterm.modality).toBe('In Person');
+    expect(tbd.map((t) => t.courseCode)).toEqual(['AAA-1', 'ZZZ-1']);
+  });
+
+  it('labels multiple midterms of one course "Midterm N" in date order', () => {
+    const p = plan([
+      entryWith('CHEM-40A', [mt('2026-11-14', '10:00', '11:50'), mt('2026-10-17', '10:00', '11:50')]),
+      entryWith('CSE-100', [mt('2026-11-01', '08:00', '09:50')]),
+    ]);
+    const { dated } = midtermsSorted(p);
+    expect(dated.map((d) => [d.courseCode, d.label ?? ''])).toEqual([
+      ['CHEM-40A', 'Midterm 1'],
+      ['CSE-100', ''],
+      ['CHEM-40A', 'Midterm 2'],
+    ]);
+  });
+
+  it('derives midterms from component rawSched when the option has no explicit field', () => {
+    const course = makeCourse('CHEM-43A');
+    course.options[0]!.components = [
+      {
+        id: 'lec',
+        type: 'LE',
+        typeText: 'Lecture',
+        sectionCode: '001-000',
+        instructors: [],
+        meetings: [],
+        unscheduled: false,
+        rawSched:
+          'F 09:00 AM - 09:50 AM In Person @ York Hall Room 2622\n' +
+          'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person\n' +
+          'Final Examination 12/05/2026 11:30 AM - 02:29 PM In Person',
+      },
+    ];
+    const p = plan([{ course, selectedOptionId: course.options[0]!.id, color: '231' }]);
+    const { dated, tbd } = midtermsSorted(p);
+    expect(tbd).toHaveLength(0);
+    expect(dated).toHaveLength(1);
+    expect(dated[0]!.midterm).toEqual(mt('2026-10-31', '10:00', '11:50', 'In Person'));
+  });
+
+  it('a course with no selected option is TBD', () => {
+    const { dated, tbd } = midtermsSorted(plan([entryWith('CSE-8A', [mt('2026-11-01', '08:00', '09:50')], false)]));
+    expect(dated).toHaveLength(0);
+    expect(tbd.map((t) => t.courseCode)).toEqual(['CSE-8A']);
+  });
+
+  it('flags overlaps between DIFFERENT courses only, same date + overlapping time', () => {
+    const p = plan([
+      entryWith('A-1', [mt('2026-11-05', '19:00', '20:50'), mt('2026-11-05', '20:00', '21:00')]),
+      entryWith('B-1', [mt('2026-11-05', '20:00', '21:50')]),
+      entryWith('C-1', [mt('2026-11-06', '19:00', '20:50')]), // other day — clear
+    ]);
+    const { dated } = midtermsSorted(p);
+    const flagged = midtermOverlapKeys(dated);
+    // A's two own midterms overlap each other but that never flags; both hit B.
+    expect(flagged).toEqual(
+      new Set([
+        'A-1|2026-11-05|19:00',
+        'A-1|2026-11-05|20:00',
+        'B-1|2026-11-05|20:00',
+      ]),
+    );
   });
 });

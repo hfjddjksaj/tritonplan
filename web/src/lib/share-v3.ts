@@ -10,17 +10,19 @@
  * waitlist, status. JSON export (Import → Upload) remains the lossless path.
  */
 import { deflateSync, inflateSync, strFromU8, strToU8 } from 'fflate';
-import type {
-  Component,
-  CourseOffering,
-  FinalExam,
-  Meeting,
-  PlanState,
-  PrereqGroup,
-  SectionOption,
-  TeachingMethod,
-  Term,
-  Weekday,
+import {
+  optionMidterms,
+  type Component,
+  type CourseOffering,
+  type FinalExam,
+  type Meeting,
+  type MidtermExam,
+  type PlanState,
+  type PrereqGroup,
+  type SectionOption,
+  type TeachingMethod,
+  type Term,
+  type Weekday,
 } from '@triton/shared';
 
 export const V3_PREFIX = '3~';
@@ -49,6 +51,9 @@ type WireOpt = [
   limit: number, // -1 = undefined
   final: WireFinal | 0,
   compIdx: number[],
+  // Appended 2026-07-29; absent in older tokens (old decoders ignore it, this
+  // decoder reads undefined → no midterms → TBD rows).
+  midterms?: WireFinal[] | 0,
 ];
 interface WireEntry {
   c: string; // courseCode
@@ -87,14 +92,22 @@ function packEntry(course: CourseOffering, selectedOptionId: string | null, colo
     table.push([comp.type, comp.typeText, comp.sectionCode, comp.instructors, comp.meetings.map(packMeeting)]);
     return table.length - 1;
   };
-  const opts: WireOpt[] = course.options.map((o) => [
-    o.code,
-    o.enrollCode,
-    o.seatsAvailable ?? -1,
-    o.limit ?? -1,
-    o.final ? [o.final.date, o.final.start, o.final.end, o.final.modality ?? ''] : 0,
-    o.components.map(compIdx),
-  ]);
+  const opts: WireOpt[] = course.options.map((o) => {
+    // Midterms live in rawSched, which the wire drops — derive them at encode
+    // time so the receiving device (no rawSched) still sees them.
+    const midterms = optionMidterms(o);
+    return [
+      o.code,
+      o.enrollCode,
+      o.seatsAvailable ?? -1,
+      o.limit ?? -1,
+      o.final ? [o.final.date, o.final.start, o.final.end, o.final.modality ?? ''] : 0,
+      o.components.map(compIdx),
+      midterms.length
+        ? midterms.map((m): WireFinal => [m.date, m.start, m.end, m.modality ?? ''])
+        : 0,
+    ];
+  });
   const si = Math.max(0, course.options.findIndex((o) => o.id === selectedOptionId));
   const out: WireEntry = { c: course.courseCode, ti: course.title, mi: course.moduleId, x: table, o: opts, si };
   if (course.units !== undefined) out.u = course.units;
@@ -128,7 +141,7 @@ function entryFromWire(en: WireEntry, term: Term): PlanState['entries'][number] 
     };
   });
   const options: SectionOption[] = en.o.map((o) => {
-    const [code, enrollCode, seats, limit, fin, compIdx] = o;
+    const [code, enrollCode, seats, limit, fin, compIdx, mts] = o;
     const out: SectionOption = {
       id: enrollCode,
       code,
@@ -142,6 +155,13 @@ function entryFromWire(en: WireEntry, term: Term): PlanState['entries'][number] 
       const final: FinalExam = { date, start, end };
       if (modality) final.modality = modality;
       out.final = final;
+    }
+    if (Array.isArray(mts) && mts.length > 0) {
+      out.midterms = mts.map(([date, start, end, modality]) => {
+        const m: MidtermExam = { date, start, end };
+        if (modality) m.modality = modality;
+        return m;
+      });
     }
     return out;
   });

@@ -8,8 +8,10 @@ import {
   type Term,
   type SelectedCourse,
   type FinalExam,
+  type MidtermExam,
   type Weekday,
   type WeeklyConflict,
+  optionMidterms,
 } from '@triton/shared';
 import { hueFromEntryColor } from './colors';
 import type { MeetingInstance } from './layout';
@@ -133,6 +135,87 @@ export function finalsSorted(plan: PlanState): FinalItem[] {
     });
   }
   out.sort((a, b) => cmpStr(a.final.date, b.final.date) || cmpStr(a.final.start, b.final.start));
+  return out;
+}
+
+export interface MidtermItem {
+  courseId: string;
+  courseCode: string;
+  title: string;
+  hue: number;
+  midterm: MidtermExam;
+  /** "Midterm 1" / "Midterm 2" when a course has more than one; absent otherwise. */
+  label?: string;
+}
+
+/** A plan course with no midterm time visible in TSS data (row-list only, no calendar). */
+export interface MidtermTbdItem {
+  courseId: string;
+  courseCode: string;
+  title: string;
+  hue: number;
+}
+
+/**
+ * Midterms of chosen options: dated items sorted by date then start, plus a TBD
+ * row for every other course in the plan. TSS can't distinguish "no midterm"
+ * from "not announced yet", so any course without a parsed midterm is TBD.
+ */
+export function midtermsSorted(plan: PlanState): { dated: MidtermItem[]; tbd: MidtermTbdItem[] } {
+  const dated: MidtermItem[] = [];
+  const tbd: MidtermTbdItem[] = [];
+  for (const entry of plan.entries) {
+    const base = {
+      courseId: entry.course.id,
+      courseCode: entry.course.courseCode,
+      title: entry.course.title,
+      hue: entryHue(plan, entry),
+    };
+    const option = findOption(entry.course, entry.selectedOptionId);
+    // Sort per-course before labeling so "Midterm 1" is always the earlier one,
+    // even when an explicit midterms field arrives unsorted.
+    const midterms = (option ? [...optionMidterms(option)] : []).sort(
+      (a, b) => cmpStr(a.date, b.date) || cmpStr(a.start, b.start),
+    );
+    if (midterms.length === 0) {
+      tbd.push(base);
+      continue;
+    }
+    midterms.forEach((midterm, i) => {
+      dated.push({
+        ...base,
+        midterm,
+        ...(midterms.length > 1 ? { label: `Midterm ${i + 1}` } : {}),
+      });
+    });
+  }
+  dated.sort(
+    (a, b) => cmpStr(a.midterm.date, b.midterm.date) || cmpStr(a.midterm.start, b.midterm.start),
+  );
+  tbd.sort((a, b) => cmpStr(a.courseCode, b.courseCode));
+  return { dated, tbd };
+}
+
+/** Stable identity of a dated midterm item (also used for overlap flags). */
+export function midtermItemKey(item: MidtermItem): string {
+  return `${item.courseId}|${item.midterm.date}|${item.midterm.start}`;
+}
+
+/**
+ * Keys of midterms overlapping a DIFFERENT course's midterm on the same date.
+ * View-local flag only — midterm overlaps stay out of the global conflict count.
+ */
+export function midtermOverlapKeys(dated: MidtermItem[]): Set<string> {
+  const out = new Set<string>();
+  for (const a of dated) {
+    for (const b of dated) {
+      if (a.courseId === b.courseId || a.midterm.date !== b.midterm.date) continue;
+      if (a.midterm.start < b.midterm.end && b.midterm.start < a.midterm.end) {
+        out.add(midtermItemKey(a));
+        out.add(midtermItemKey(b));
+      }
+    }
+  }
   return out;
 }
 

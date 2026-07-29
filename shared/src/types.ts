@@ -40,6 +40,10 @@ export interface FinalExam {
   modality?: string;
 }
 
+/** A midterm examination — same `Sched` line shape as a final
+ *  ("Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person"). */
+export type MidtermExam = FinalExam;
+
 /** One teaching component (a lecture/discussion/lab) = a TSS Event. */
 export interface Component {
   id: string;                 // TSS EventID, e.g. "E 00000958"
@@ -66,6 +70,10 @@ export interface SectionOption {
   status?: string;
   components: Component[];     // events in this package (deduped)
   final?: FinalExam;          // derived from the lecture component(s)
+  /** Midterms with known times. `undefined` = derive from the components'
+   *  rawSched (see `optionMidterms`); set explicitly by v3 share decode,
+   *  whose components carry no rawSched. */
+  midterms?: MidtermExam[];
 }
 
 /**

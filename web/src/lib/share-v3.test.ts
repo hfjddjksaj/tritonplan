@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { deflateSync, strToU8 } from 'fflate';
 import { V3_PREFIX, decodePlanV3, encodePlanV3 } from './share-v3';
 import { makePlan } from './share-v3.test-helpers';
 
@@ -54,5 +55,49 @@ describe('encodePlanV3 / decodePlanV3', () => {
   it('rejects garbage tokens', () => {
     expect(decodePlanV3('3~not-base64!!!')).toBeNull();
     expect(decodePlanV3('nonsense')).toBeNull();
+  });
+
+  it('carries midterms derived from rawSched (receiver has no rawSched to derive from)', () => {
+    const plan = makePlan(2, 2);
+    // Give course 0's lecture (shared across options) a real midterm line.
+    for (const o of plan.entries[0]!.course.options) {
+      o.components[0]!.rawSched +=
+        '\nMidterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person';
+    }
+    const back = decodePlanV3(encodePlanV3(plan))!;
+    for (const o of back.entries[0]!.course.options) {
+      expect(o.midterms).toEqual([
+        { date: '2026-10-31', start: '10:00', end: '11:50', modality: 'In Person' },
+      ]);
+    }
+    // Course 1 has none — decoded options carry no midterms field.
+    expect(back.entries[1]!.course.options[0]!.midterms).toBeUndefined();
+  });
+
+  it('still decodes pre-midterms tokens (6-element option arrays)', () => {
+    // A wire plan exactly as the previous encoder wrote it — no 7th opt element.
+    const oldWire = {
+      v: 3,
+      y: '2026',
+      p: '2',
+      l: 'Fall 2026',
+      e: [
+        {
+          c: 'TEST-100',
+          ti: 'Test Course',
+          mi: '2000',
+          x: [['LE', 'Lecture', '001-000', [], []]],
+          o: [['P-001-001', 'SE001', -1, -1, 0, [0]]],
+          si: 0,
+        },
+      ],
+    };
+    const packed = deflateSync(strToU8(JSON.stringify(oldWire)), { level: 9 });
+    let bin = '';
+    for (const b of packed) bin += String.fromCharCode(b);
+    const token = V3_PREFIX + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const back = decodePlanV3(token);
+    expect(back).not.toBeNull();
+    expect(back!.entries[0]!.course.options[0]!.midterms).toBeUndefined();
   });
 });

@@ -98,6 +98,13 @@ export const Cap = (p: P) => (
     <path d="M5 11v5c0 1 3 3 7 3s7-2 7-3v-5" />
   </svg>
 );
+/** Pen over a line — exams/writing (the Midterms tab). */
+export const PenLine = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
 export const Plus = (p: P) => (
   <svg {...base(p)}>
     <path d="M12 5v14M5 12h14" />

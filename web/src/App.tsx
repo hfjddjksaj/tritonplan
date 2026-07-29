@@ -9,12 +9,13 @@ import { CoursePanel } from './components/CoursePanel';
 import { CalendarGrid } from './components/CalendarGrid';
 import { CalViewToggle } from './components/CalViewToggle';
 import { FinalsView } from './components/FinalsView';
+import { MidtermsView } from './components/MidtermsView';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
 import { BlockSheet } from './components/BlockSheet';
 import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
-import { Calendar, Cap, Check } from './components/icons';
+import { Calendar, Cap, Check, PenLine } from './components/icons';
 import { parsePlanJson, planFromLinkText } from './lib/share';
 import { countConflictPairs } from './lib/plan';
 import { pluralize } from './lib/format';
@@ -201,7 +202,7 @@ export default function App() {
         {(!isMobile || view !== 'courses') && (
           <main className="main">
             <div className="toolbar">
-              {isMobile && (view === 'calendar' || view === 'finals') && (
+              {isMobile && view !== 'courses' && (
                 <CalViewToggle value={calView} onChange={handleCalView} />
               )}
               <div className="tabs" role="tablist" aria-label="Planner views">
@@ -213,6 +214,15 @@ export default function App() {
                   onClick={() => setTab('calendar')}
                 >
                   <Calendar size={15} /> Calendar
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'midterms'}
+                  className={`tab${view === 'midterms' ? ' tab--active' : ''}`}
+                  onClick={() => setTab('midterms')}
+                >
+                  <PenLine size={15} /> Midterms
                 </button>
                 <button
                   type="button"
@@ -248,6 +258,14 @@ export default function App() {
                 }}
                 onFocusCourse={handleFocusCourse}
                 onBlockDetail={isMobile ? setSheetBlock : undefined}
+                variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
+              />
+            ) : view === 'midterms' ? (
+              <MidtermsView
+                dated={ctl.midterms.dated}
+                tbd={ctl.midterms.tbd}
+                onOpenCourse={handleOpenCourse}
+                onFocusCourse={handleFocusCourse}
                 variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
               />
             ) : (

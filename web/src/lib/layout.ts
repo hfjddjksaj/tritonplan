@@ -214,6 +214,8 @@ export interface FinalInstance {
   start: string;
   end: string;
   modality?: string;
+  /** Block label; defaults to "Final" (the midterms view passes "Midterm"). */
+  typeText?: string;
 }
 
 const ISO_DOW: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -278,13 +280,13 @@ export function layoutFinalsWeek(
       return {
         courseId: m.courseId,
         courseCode: m.courseCode,
-        typeText: 'Final',
+        typeText: m.typeText ?? 'Final',
         hue: m.hue,
         location: m.modality,
         start: m.start,
         end: m.end,
         day: isoWeekday(date),
-        key: `${m.courseId}:${date}`,
+        key: `${m.courseId}:${date}:${m.start}`,
         top,
         height,
         lane: m.lane,

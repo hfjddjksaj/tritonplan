@@ -1781,6 +1781,27 @@ button.menu__item:hover {
   color: var(--conflict);
   font-family: var(--font-sans);
 }
+.final-row__seq {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+/* Midterm not announced in TSS yet — listed, but visibly not a real time slot. */
+.final-row--tbd {
+  border-style: dashed;
+  border-left-style: solid;
+  box-shadow: none;
+  background: var(--surface-2, var(--surface));
+}
+.final-row--tbd .final-row__code,
+.final-row--tbd .final-row__time-range {
+  color: var(--text-muted);
+}
+.final-row__day--tbd {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-faint);
+  line-height: 1.05;
+}
 
 /* ============================================================== empty states */
 .empty {
@@ -1965,7 +1986,7 @@ button.menu__item:hover {
     bottom: 0;
     z-index: 35;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     background: var(--surface);
     border-top: 1px solid var(--line-strong);
     padding: 4px 6px calc(4px + env(safe-area-inset-bottom));

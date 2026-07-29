@@ -1,6 +1,6 @@
-import { Calendar, Cap, List } from './icons';
+import { Calendar, Cap, List, PenLine } from './icons';
 
-export type MobileTab = 'courses' | 'calendar' | 'finals';
+export type MobileTab = 'courses' | 'calendar' | 'midterms' | 'finals';
 
 interface Props {
   tab: MobileTab;
@@ -46,6 +46,7 @@ export function MobileTabBar({ tab, onTab, coursesCount, finalsBadge, pulse }: P
         '',
         pulse ? ' tabbar__btn--pulse' : '',
       )}
+      {item('midterms', 'Midterms', <PenLine size={18} />)}
       {item('finals', 'Finals', <Cap size={18} />, finalsBadge)}
     </nav>
   );

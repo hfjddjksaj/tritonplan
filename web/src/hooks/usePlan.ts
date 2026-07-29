@@ -48,6 +48,7 @@ import {
   emptyPlan,
   finalsSorted,
   meetingInstances,
+  midtermsSorted,
   planUnits,
   refreshPlanEntries,
 } from '../lib/plan';
@@ -365,6 +366,7 @@ export function usePlan() {
 
   const instances = useMemo(() => meetingInstances(viewPlan), [viewPlan]);
   const finals = useMemo(() => finalsSorted(viewPlan), [viewPlan]);
+  const midterms = useMemo(() => midtermsSorted(viewPlan), [viewPlan]);
   const units = useMemo(() => planUnits(viewPlan), [viewPlan]);
 
   const codeById = useMemo(() => {
@@ -426,6 +428,7 @@ export function usePlan() {
     conflictedCourseIds,
     instances,
     finals,
+    midterms,
     units,
     codeById,
     courseById,

@@ -19,13 +19,24 @@ interface Props {
   onFocusCourse?: (courseId: string) => void;
   /** 'desktop' (default) | mobile 'fit' (dates squeezed in) | mobile 'scroll' (wide snap-scrolling date columns). */
   variant?: 'desktop' | 'fit' | 'scroll';
+  /** Block label; the midterms view reuses this calendar with "Midterm". */
+  examLabel?: string;
+  ariaLabel?: string;
 }
 
 /**
- * Week-style calendar of finals: one column per date from the earliest to the
- * latest exam (weekends included — finals do land on Sat/Sun).
+ * Week-style calendar of dated exams (finals by default; the midterms view
+ * reuses it): one column per date from the earliest to the latest exam
+ * (weekends included — exams do land on Sat/Sun).
  */
-export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse, variant = 'desktop' }: Props) {
+export function FinalsCalendar({
+  finals,
+  onOpenCourse,
+  onFocusCourse,
+  variant = 'desktop',
+  examLabel = 'Final',
+  ariaLabel = 'Finals week calendar',
+}: Props) {
   const cfg = FINALS_GRID;
   const { dates, byDate } = useMemo(() => {
     const items: FinalInstance[] = finals.map((f) => ({
@@ -36,9 +47,10 @@ export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse, variant = 
       start: f.final.start,
       end: f.final.end,
       modality: f.final.modality,
+      typeText: examLabel,
     }));
     return layoutFinalsWeek(items, cfg);
-  }, [finals, cfg]);
+  }, [finals, cfg, examLabel]);
   const marks = useMemo(() => hourMarks(cfg), [cfg]);
   const height = gridHeightPx(cfg);
 
@@ -52,7 +64,7 @@ export function FinalsCalendar({ finals, onOpenCourse, onFocusCourse, variant = 
   return (
     <section
       className={`fincal${variant !== 'desktop' ? ` cal--${variant}` : ''}`}
-      aria-label="Finals week calendar"
+      aria-label={ariaLabel}
     >
       <div className="cal-head">
         <div className="cal-head__corner" />
