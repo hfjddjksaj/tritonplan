@@ -110,6 +110,23 @@ export class CaptureStore {
     return changed;
   }
 
+  /**
+   * Permanently drop everything captured for the given modules (the student removed
+   * them from the planner's browsed list). Re-browsing the course in TSS captures it
+   * afresh. Term-level apptTimes are untouched — they aren't course data. Returns
+   * true if anything was actually removed.
+   */
+  forgetModules(moduleIds: string[]): boolean {
+    let changed = false;
+    for (const id of moduleIds) {
+      changed = this.modules.delete(id) || changed;
+      changed = this.sections.delete(id) || changed;
+      changed = this.capturedAt.delete(id) || changed;
+      changed = this.prereqs.delete(id) || changed;
+    }
+    return changed;
+  }
+
   private metaFor(moduleId: string, rows: TssSectionRow[]): CourseMeta | null {
     const mod = this.modules.get(moduleId);
     if (mod) {

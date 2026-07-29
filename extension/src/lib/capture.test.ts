@@ -259,3 +259,46 @@ describe('appointment-times store', () => {
     expect(old.getApptTimes()).toEqual([]);
   });
 });
+
+describe('forget captured courses (planner removed them from the browsed list)', () => {
+  it('drops every trace of the module and reports whether anything changed', () => {
+    const store = new CaptureStore();
+    store.ingestBody(odataBody([cse008Meta]));
+    store.ingestBody(odataBody(denormalize(fx['CSE-008A']!)));
+    store.ingestBody(prereqBatchBody('8461', prereqTreeRows()));
+
+    expect(store.forgetModules(['8461'])).toBe(true);
+    expect(store.toCourses()).toHaveLength(0);
+    const shape = JSON.parse(JSON.stringify(store.serialize()));
+    expect(shape.modules).toEqual({});
+    expect(shape.sections).toEqual({});
+    expect(shape.capturedAt).toEqual({});
+    expect(shape.prereqs).toEqual({});
+    // Already forgotten / never captured → nothing changes, no need to re-persist.
+    expect(store.forgetModules(['8461', 'nope'])).toBe(false);
+  });
+
+  it('leaves other modules and term-level appt times untouched', () => {
+    const appt = apptPeriodsFixture();
+    const store = new CaptureStore();
+    store.ingestBody(odataBody([cse008Meta]));
+    store.ingestBody(odataBody(denormalize(fx['CSE-008A']!)));
+    store.ingestBody(odataBody(denormalize(fx['CSE-030']!)));
+    store.ingestBody(apptBatchBody(appt.context, [appt.row]));
+
+    expect(store.forgetModules(['8461'])).toBe(true);
+    const courses = store.toCourses();
+    expect(courses).toHaveLength(1);
+    expect(courses[0]!.courseCode).toBe('CSE-030');
+    expect(store.getApptTimes()).toHaveLength(1);
+  });
+
+  it('a forgotten course can be captured afresh by re-browsing', () => {
+    const store = new CaptureStore();
+    store.ingestBody(odataBody([cse008Meta]));
+    store.ingestBody(odataBody(denormalize(fx['CSE-008A']!)));
+    store.forgetModules(['8461']);
+    expect(store.ingestBody(odataBody(denormalize(fx['CSE-008A']!)))).toBe(true);
+    expect(store.toCourses()[0]!.options).toHaveLength(9);
+  });
+});

@@ -8,7 +8,9 @@ import {
   installBridgeListener,
   isApptTimesMessage,
   installApptTimesListener,
+  postForgetCourses,
   BRIDGE_SOURCE,
+  PAGE_BRIDGE_SOURCE,
   type PlanAddMessage,
 } from './bridge';
 import { makeCourse } from './fixtures';
@@ -221,5 +223,33 @@ describe('appt-times bridge', () => {
     cleanup();
     window.dispatchEvent(trustedEvent(apptMsg));
     expect(onApptTimes).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('postForgetCourses', () => {
+  it('posts a forget-courses envelope with the given moduleIds', async () => {
+    const seen: unknown[] = [];
+    const onMsg = (e: MessageEvent) => seen.push(e.data);
+    window.addEventListener('message', onMsg);
+    postForgetCourses(['8461', '2117']);
+    await new Promise((r) => setTimeout(r, 0)); // postMessage delivers async
+    window.removeEventListener('message', onMsg);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toEqual({
+      source: PAGE_BRIDGE_SOURCE,
+      type: 'forget-courses',
+      version: 1,
+      payload: { moduleIds: ['8461', '2117'] },
+    });
+  });
+
+  it('posts nothing for an empty list', async () => {
+    const seen: unknown[] = [];
+    const onMsg = (e: MessageEvent) => seen.push(e.data);
+    window.addEventListener('message', onMsg);
+    postForgetCourses([]);
+    await new Promise((r) => setTimeout(r, 0));
+    window.removeEventListener('message', onMsg);
+    expect(seen).toHaveLength(0);
   });
 });

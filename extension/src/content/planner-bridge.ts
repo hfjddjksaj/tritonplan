@@ -100,15 +100,36 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === MSG.FLUSH) void syncAll();
 });
 
-// Page → extension: "open this course/booking in TSS". The SW focuses/reuses an
-// existing TSS tab instead of the page spawning a new one per click.
-// This is user-driven navigation only — nothing is fetched or automated.
+// Page → extension requests:
+//  - "open this course/booking in TSS" — the SW focuses/reuses an existing TSS tab
+//    instead of the page spawning a new one per click. User-driven navigation only.
+//  - "forget these courses" — the student removed browsed courses in the planner;
+//    the SW drops their captured data so they don't come back on the next push.
 window.addEventListener('message', (event: MessageEvent) => {
   if (event.source !== window || event.origin !== window.location.origin) return;
   const d = event.data as
-    | { source?: unknown; type?: unknown; version?: unknown; payload?: { url?: unknown; moduleId?: unknown } }
+    | {
+        source?: unknown;
+        type?: unknown;
+        version?: unknown;
+        payload?: { url?: unknown; moduleId?: unknown; moduleIds?: unknown };
+      }
     | null;
   if (!d || d.source !== PAGE_BRIDGE_SOURCE || d.version !== 1) return;
+  if (d.type === 'forget-courses') {
+    const ids = Array.isArray(d.payload?.moduleIds)
+      ? (d.payload.moduleIds as unknown[]).filter((m): m is string => typeof m === 'string')
+      : [];
+    if (!ids.length) return;
+    try {
+      void chrome.runtime.sendMessage({ type: MSG.FORGET_COURSES, moduleIds: ids }).catch(() => {
+        /* SW unreachable — without a live store there's nothing to forget anyway */
+      });
+    } catch {
+      /* extension context gone — ignore */
+    }
+    return;
+  }
   if (d.type !== 'open-tss' && d.type !== 'open-booking') return;
   const url = d.payload?.url;
   if (typeof url !== 'string' || !url.startsWith(TSS_URL_PREFIX)) return;

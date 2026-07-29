@@ -10,7 +10,7 @@ import {
 } from '@triton/shared';
 import sampleCourses from '../data/sample-courses.json';
 import { pickHue } from '../lib/colors';
-import { installBridgeListener, mergeCourses } from '../lib/bridge';
+import { installBridgeListener, mergeCourses, postForgetCourses } from '../lib/bridge';
 import {
   loadPlan,
   loadPlans,
@@ -293,18 +293,26 @@ export function usePlan() {
 
   /**
    * Drop a browsed course from the pool. Plan entries keep their own course copy, so
-   * this only affects the "Browsed — not yet added" list. A course the extension has
-   * captured reappears on its next `courses` push (it's still "browsed" in TSS).
+   * this only affects the "Browsed — not yet added" list. The extension is asked to
+   * forget its captured data too, so the course stays gone instead of coming back on
+   * the next `courses` push — re-browsing it in TSS captures it afresh.
    */
-  const removeFromPool = useCallback((courseId: string) => {
-    setPool((prev) => prev.filter((c) => c.id !== courseId));
-  }, []);
+  const removeFromPool = useCallback(
+    (courseId: string) => {
+      const moduleId = pool.find((c) => c.id === courseId)?.moduleId;
+      if (moduleId) postForgetCourses([moduleId]);
+      setPool((prev) => prev.filter((c) => c.id !== courseId));
+    },
+    [pool],
+  );
 
-  /** Clear every browsed course that isn't in the plan. */
+  /** Clear every browsed course that isn't in the plan (the extension forgets them too). */
   const clearBrowsed = useCallback(() => {
     const added = new Set(plan.entries.map((e) => e.course.id));
+    const dropped = pool.filter((c) => !added.has(c.id));
+    postForgetCourses(dropped.map((c) => c.moduleId).filter((m) => m !== ''));
     setPool((prev) => prev.filter((c) => added.has(c.id)));
-  }, [plan]);
+  }, [plan, pool]);
 
   // True once the extension's bridge has delivered anything this session — used to
   // route "open in TSS" through the extension (which can reuse an open TSS tab).

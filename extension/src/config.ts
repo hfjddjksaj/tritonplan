@@ -66,6 +66,9 @@ export const MSG = {
   OPEN_TSS: 'tp:open-tss',
   /** planner-bridge → SW: open a booking page, reusing the one booking tab. */
   OPEN_BOOKING: 'tp:open-booking',
+  /** planner-bridge → SW: permanently drop captured data for these ModuleIDs
+   *  (the student removed the courses from the planner's browsed list). */
+  FORGET_COURSES: 'tp:forget-courses',
   /** SW → planner-bridge (via tabs.sendMessage): re-push courses + queued plan-adds.
    *  Sent when a plan-add arrives and (debounced) after fresh captures land. */
   FLUSH: 'tp:flush',

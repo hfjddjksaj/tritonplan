@@ -290,6 +290,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return true;
     }
 
+    case MSG.FORGET_COURSES: {
+      // Planner-side "remove browsed course": drop the captured data so the course
+      // doesn't come back on the next `courses` push. Local storage only — TSS is
+      // never contacted; re-browsing the course simply captures it afresh.
+      const moduleIds = Array.isArray(msg.moduleIds)
+        ? (msg.moduleIds as unknown[]).filter((m): m is string => typeof m === 'string')
+        : [];
+      (async () => {
+        try {
+          if (moduleIds.length) {
+            const store = await getStore();
+            if (store.forgetModules(moduleIds)) await persist(store);
+          }
+          sendResponse({ ok: true });
+        } catch {
+          sendResponse({ ok: false });
+        }
+      })();
+      return true;
+    }
+
     case MSG.DRAIN_PLAN_ADDS: {
       (async () => {
         try {

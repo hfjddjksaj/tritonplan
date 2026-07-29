@@ -155,6 +155,28 @@ export function postOpenBooking(url: string): void {
   window.postMessage(msg, window.location.origin);
 }
 
+/** Ask the extension to permanently drop captured data for these courses, so a
+ *  removed browsed course doesn't come back on the extension's next push. */
+export interface ForgetCoursesMessage {
+  source: typeof PAGE_BRIDGE_SOURCE;
+  type: 'forget-courses';
+  version: 1;
+  payload: { moduleIds: string[] };
+}
+
+/** Post a forget-courses request for the extension's content script. Without the
+ *  extension nothing listens — the message is a harmless no-op. */
+export function postForgetCourses(moduleIds: string[]): void {
+  if (moduleIds.length === 0) return;
+  const msg: ForgetCoursesMessage = {
+    source: PAGE_BRIDGE_SOURCE,
+    type: 'forget-courses',
+    version: 1,
+    payload: { moduleIds },
+  };
+  window.postMessage(msg, window.location.origin);
+}
+
 export interface BridgeHandlers {
   /** A `courses` message: merge these offerings into the browsed pool. */
   onCourses: (courses: CourseOffering[]) => void;
