@@ -42,8 +42,14 @@ export function pickDisplayTerm(list: ApptTimes[], now: Date): ApptTimes | null 
     }
   }
   if (best) return best;
-  const ended = list.filter((a) => a.windows.length > 0);
-  return [...ended].sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0] ?? null;
+  return latestCapturedTerm(list.filter((a) => a.windows.length > 0));
+}
+
+/** The most recently captured term regardless of its windows — what the popover
+ *  falls back to when nothing is display-worthy (e.g. captured but TSS lists no
+ *  windows yet), so the user still sees WHAT was captured and when. */
+export function latestCapturedTerm(list: ApptTimes[]): ApptTimes | null {
+  return [...list].sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0] ?? null;
 }
 
 const PT_DATE = new Intl.DateTimeFormat('en-US', {

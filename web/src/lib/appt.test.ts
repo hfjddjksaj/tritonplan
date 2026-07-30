@@ -4,6 +4,7 @@ import {
   apptWindowStatus,
   formatApptInstant,
   formatApptRangeInZone,
+  latestCapturedTerm,
   localZoneIfNotPacific,
   nextRelevantWindow,
   pickDisplayTerm,
@@ -69,6 +70,15 @@ describe('formatApptInstant', () => {
   });
   it('returns empty on garbage', () => {
     expect(formatApptInstant('nope')).toBe('');
+  });
+});
+
+describe('latestCapturedTerm', () => {
+  it('returns the most recently captured term, empty-windows terms included', () => {
+    const emptyButFresh = term({ capturedAt: '2026-07-27T12:00:00Z', windows: [] });
+    const older = term({ capturedAt: '2026-07-25T12:00:00Z' });
+    expect(latestCapturedTerm([older, emptyButFresh])).toBe(emptyButFresh);
+    expect(latestCapturedTerm([])).toBeNull();
   });
 });
 

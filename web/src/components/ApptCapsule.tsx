@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { ApptTimes } from '@triton/shared';
-import { apptWindowStatus, formatApptInstant, nextRelevantWindow, pickDisplayTerm } from '../lib/appt';
+import {
+  apptWindowStatus,
+  formatApptInstant,
+  latestCapturedTerm,
+  nextRelevantWindow,
+  pickDisplayTerm,
+} from '../lib/appt';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { ApptPopover } from './ApptPopover';
 import { Clock } from './icons';
@@ -11,8 +17,11 @@ interface Props {
 
 /** Topbar capsule for the student's next enrollment window: "First Pass ·
  *  8/10 2:00 PM PT", gold while a window is open, dimmed once all have ended.
- *  Renders NOTHING when no data was ever captured (old extension / tile never
- *  opened / no extension) — zero noise. */
+ *  ALWAYS rendered on desktop — with nothing captured it reads "Appointment
+ *  times" and its popover explains how to get the data (open the TSS tile
+ *  once), so the feature is discoverable. Mobile is the exception: phones
+ *  can't run the extension, so a no-data prompt would be a dead end there —
+ *  the capsule only shows on mobile when data exists. */
 export function ApptCapsule({ appt }: Props) {
   const [open, setOpen] = useState(false);
   // Minute tick so upcoming→open→ended flips without a reload (matches the
@@ -26,13 +35,17 @@ export function ApptCapsule({ appt }: Props) {
 
   const now = new Date();
   const term = pickDisplayTerm(appt, now);
-  if (!term) return null;
+  // Captured-but-windowless terms aren't display-worthy, but their popover
+  // (term header + "no windows listed yet" + captured-ago) still is.
+  const popoverTerm = term ?? latestCapturedTerm(appt);
+  if (!term && isMobile) return null;
 
-  const next = nextRelevantWindow(term, now);
+  const next = term ? nextRelevantWindow(term, now) : null;
   const status = next ? apptWindowStatus(next, now) : 'ended';
 
   let text: string;
-  if (!next) text = 'Enrollment ended';
+  if (!term) text = 'Appointment times'; // nothing captured (or none listed) — prompt state
+  else if (!next) text = 'Enrollment ended';
   else if (status === 'open') text = isMobile ? 'open now' : `${next.label} · open now`;
   else if (isMobile) text = formatApptInstant(next.beginsAt).split(' ')[0]!; // "8/10"
   else text = `${next.label} · ${formatApptInstant(next.beginsAt)} PT`;
@@ -43,8 +56,8 @@ export function ApptCapsule({ appt }: Props) {
         type="button"
         className={
           'appt-capsule' +
-          (status === 'open' ? ' appt-capsule--open' : '') +
-          (next ? '' : ' appt-capsule--ended')
+          (term && status === 'open' ? ' appt-capsule--open' : '') +
+          (term && !next ? ' appt-capsule--ended' : '')
         }
         title="Your enrollment appointment times"
         aria-haspopup="dialog"
@@ -54,7 +67,7 @@ export function ApptCapsule({ appt }: Props) {
         <Clock size={13} />
         <span className="appt-capsule__text">{text}</span>
       </button>
-      {open && <ApptPopover appt={term} onClose={() => setOpen(false)} />}
+      {open && <ApptPopover appt={popoverTerm} onClose={() => setOpen(false)} />}
     </>
   );
 }

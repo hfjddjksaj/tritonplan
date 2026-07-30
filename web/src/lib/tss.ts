@@ -30,6 +30,15 @@ export function openInTss(course: CourseOffering, viaExtension = false): void {
   else window.open(url, '_blank', 'noopener');
 }
 
+/** The "My Appointment Times" Fiori app (hash route verified live 2026-07-25). */
+export const TSS_APPT_TIMES_URL = 'https://tss.ucsd.edu/fiori#YStudent-apptTimes';
+
+/** Open the My Appointment Times app in TSS — the page the extension passively
+ *  captures enrollment windows from. Plain new tab (one-off page, no reuse). */
+export function openApptTimesInTss(): void {
+  window.open(TSS_APPT_TIMES_URL, '_blank', 'noopener');
+}
+
 /** Numeric part of an EventPackage code like "SE00152185" → "152185". */
 function pkgNumber(code: string | undefined): string | null {
   if (!code) return null;

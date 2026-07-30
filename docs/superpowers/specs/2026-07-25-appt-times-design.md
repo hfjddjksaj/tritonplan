@@ -92,7 +92,13 @@ export interface ApptTimes {
   - 胶囊文案 = 下一个未结束窗口：`"First Pass · 8/10 2:00 PM PT"`；
     该窗口开放中 → 金色高亮样式 + `"First Pass · open now"`；
     全部结束 → 淡化显示 `"Enrollment ended"`；
-    **无数据 → 胶囊整个不渲染**（旧扩展 / 没点过 tile / 无扩展用户零噪音）。
+    ~~**无数据 → 胶囊整个不渲染**（旧扩展 / 没点过 tile / 无扩展用户零噪音）~~
+    **【2026-07-30 用户推翻】**：1.0.1 上架后用户发现"不渲染=功能不可见"。改为
+    **桌面端常驻渲染**——无数据时胶囊显示中性 `"Appointment times"`，弹层为引导态
+    （说明 + 金色 "Open in TSS" 按钮直达 `#YStudent-apptTimes`，同 prereq 未捕获态
+    的方案 1 兜底模式）；**手机端无数据仍不渲染**（装不了扩展，提示是死胡同——同
+    手机端删 "Get the extension" 的先例）。捕获过但窗口为空 → 胶囊中性文案 +
+    弹层显示该学期的"暂无窗口"态与捕获时间。
   - 点开弹层（portal 挂 body——固定包含块老坑；复用 `useEscapeKey` + `useClickAway`）：
     学期标题（`Fall Quarter 2026/2027`）+ 全部窗口平铺：名称、Opens → Closes、
     Unit Cap、Waitlists、状态徽章（Upcoming / Open now / Ended，时间戳算）。
