@@ -1091,6 +1091,21 @@ button.menu__item:hover {
   border-color: var(--line);
 }
 
+/* Out of seats: the row recedes, but a selected row keeps its accent ring —
+   grey must never swallow "this is the one you picked". The red seat count
+   and its "waitlist" label are styled above and stay as they are. */
+.opt--full .opt__code,
+.opt--full .opt__instructor,
+.opt--full .opt__summary {
+  color: var(--text-faint);
+}
+.opt--full .opt__summary-kind {
+  color: var(--text-faint);
+}
+.picker__selected--full {
+  color: var(--text-faint);
+}
+
 /* =================================================================== main pane */
 .main {
   display: grid;

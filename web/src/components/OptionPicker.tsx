@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import type { CourseOffering } from '@triton/shared';
 import { findOption, optionSummaryParts } from '../lib/plan';
 import { pluralize } from '../lib/format';
+import { optionFull } from '../lib/seats';
 import { ChevronDown } from './icons';
 
 interface Props {
@@ -18,6 +19,9 @@ interface Props {
 export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = false, collapsed, onToggle }: Props) {
   if (course.options.length === 0) return null;
   const selected = findOption(course, selectedOptionId);
+  // With the list collapsed, this code is the only trace of the chosen section —
+  // grey it too, or a full pick shows up nowhere but the calendar.
+  const selectedFull = selected ? optionFull(selected) : false;
   const hasSeats = course.options.some((o) => o.seatsAvailable !== undefined);
   const optionCount = course.options.length;
   return (
@@ -39,14 +43,18 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
           <span className="eyebrow picker__count">
             {optionCount} {pluralize(optionCount, 'option')}
           </span>
-          {collapsed && selected && <span className="picker__selected mono">{selected.code}</span>}
+          {collapsed && selected && (
+            <span className={`picker__selected mono${selectedFull ? ' picker__selected--full' : ''}`}>
+              {selected.code}
+            </span>
+          )}
         </span>
       </button>
       {collapsed ? null : (
       <div className="picker__list" role="radiogroup" aria-label={`${course.courseCode} section`}>
         {course.options.map((opt) => {
           const active = opt.id === selectedOptionId;
-          const seatsFull = opt.seatsAvailable !== undefined && opt.seatsAvailable <= 0;
+          const seatsFull = optionFull(opt);
           const instructor = opt.components.find((c) => c.instructors[0])?.instructors[0];
           const parts = optionSummaryParts(opt);
           return (
@@ -56,7 +64,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
               role="radio"
               aria-checked={active}
               aria-disabled={readOnly}
-              className={`opt${active ? ' opt--active' : ''}${readOnly ? ' opt--readonly' : ''}`}
+              className={`opt${active ? ' opt--active' : ''}${seatsFull ? ' opt--full' : ''}${readOnly ? ' opt--readonly' : ''}`}
               onClick={readOnly ? undefined : () => onSelect(opt.id)}
               title={readOnly ? 'Read-only — save this plan as yours to switch sections' : undefined}
             >
