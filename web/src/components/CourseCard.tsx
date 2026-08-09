@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PlanEntry } from '@triton/shared';
 import { colorsForHue, hueFromEntryColor } from '../lib/colors';
 import { relativeTime } from '../lib/format';
+import { courseFull } from '../lib/seats';
 import { OptionPicker } from './OptionPicker';
 import { PrereqPopover } from './PrereqPopover';
 import { Trash, External } from './icons';
@@ -25,6 +26,8 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
+  // Every section is taken. Says so next to the code, where the eye lands first.
+  const full = courseFull(course);
   // Section list starts tucked away — long option lists otherwise dominate the rail.
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -59,7 +62,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
   return (
     <section
       ref={rootRef}
-      className={`course-card${conflicted ? ' course-card--conflict' : ''}${flash ? ' course-card--flash' : ''}`}
+      className={`course-card${conflicted ? ' course-card--conflict' : ''}${full ? ' course-card--full' : ''}${flash ? ' course-card--flash' : ''}`}
       style={{
         ['--c-spine' as string]: c.spine,
         ['--c-border' as string]: c.border,
@@ -68,7 +71,14 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
     >
       <div className="course-card__head">
         <div className="course-card__head-main">
-          <div className="course-card__code">{course.courseCode}</div>
+          <div className="course-card__codeline">
+            <span className="course-card__code">{course.courseCode}</span>
+            {full && (
+              <span className="tag tag--full" title="Every section of this course is full">
+                Full
+              </span>
+            )}
+          </div>
           <div className="course-card__title">{course.title}</div>
           <div className="course-card__meta">
             {course.units !== undefined && (

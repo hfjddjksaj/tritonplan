@@ -506,6 +506,18 @@ p {
   border-color: var(--conflict);
   box-shadow: 0 0 0 1px var(--conflict);
 }
+/* Every section taken: the card recedes and the accent spine goes neutral.
+   The action buttons keep their normal look — a full course is exactly when
+   you most need to click into TSS for the waitlist. */
+.course-card--full {
+  --c-spine: var(--line-strong);
+}
+.course-card--full .course-card__code {
+  color: var(--text-muted);
+}
+.course-card--full .course-card__title {
+  color: var(--text-faint);
+}
 /* brief pulse when a calendar-block click jumps here */
 .course-card--flash {
   animation: card-flash 1.3s ease both;
@@ -531,6 +543,13 @@ p {
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--c-text);
+}
+/* code + optional "Full" badge share one line */
+.course-card__codeline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 .course-card__title {
   font-size: 11.5px;
@@ -570,6 +589,11 @@ p {
   font-family: var(--font-mono);
 }
 .tag--conflict {
+  background: var(--conflict-soft);
+  color: var(--conflict-ink);
+  border-color: transparent;
+}
+.tag--full {
   background: var(--conflict-soft);
   color: var(--conflict-ink);
   border-color: transparent;
