@@ -509,8 +509,8 @@ p {
 /* Every section taken: the card recedes and the accent spine goes neutral.
    The action buttons keep their normal look — a full course is exactly when
    you most need to click into TSS for the waitlist. */
-.course-card--full {
-  --c-spine: var(--line-strong);
+.course-card--full::before {
+  background: var(--line-strong);
 }
 .course-card--full .course-card__code {
   color: var(--text-muted);
