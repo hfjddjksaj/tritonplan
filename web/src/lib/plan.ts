@@ -15,6 +15,7 @@ import {
 } from '@triton/shared';
 import { hueFromEntryColor } from './colors';
 import type { MeetingInstance } from './layout';
+import { optionFull } from './seats';
 
 export const DEFAULT_TERM: Term = { year: '2026', period: '2', label: 'Fall 2026' };
 
@@ -81,6 +82,7 @@ export function meetingInstances(plan: PlanState): MeetingInstance[] {
     const option = findOption(entry.course, entry.selectedOptionId);
     if (!option) continue;
     const hue = entryHue(plan, entry);
+    const full = optionFull(option);
     for (const comp of option.components) {
       if (comp.unscheduled || comp.meetings.length === 0) continue;
       for (const m of comp.meetings) {
@@ -97,6 +99,7 @@ export function meetingInstances(plan: PlanState): MeetingInstance[] {
             start: m.start,
             end: m.end,
             day,
+            full,
           });
         }
       }
@@ -111,6 +114,8 @@ export interface FinalItem {
   title: string;
   hue: number;
   final: FinalExam;
+  /** The selected section has no seats left. */
+  full: boolean;
 }
 
 /** Lexicographic string compare returning -1 / 0 / 1. */
@@ -132,6 +137,7 @@ export function finalsSorted(plan: PlanState): FinalItem[] {
       title: entry.course.title,
       hue: entryHue(plan, entry),
       final: option.final,
+      full: optionFull(option),
     });
   }
   out.sort((a, b) => cmpStr(a.final.date, b.final.date) || cmpStr(a.final.start, b.final.start));
@@ -146,6 +152,8 @@ export interface MidtermItem {
   midterm: MidtermExam;
   /** "Midterm 1" / "Midterm 2" when a course has more than one; absent otherwise. */
   label?: string;
+  /** The selected section has no seats left. */
+  full: boolean;
 }
 
 /** A plan course with no midterm time visible in TSS data (row-list only, no calendar). */
@@ -172,6 +180,7 @@ export function midtermsSorted(plan: PlanState): { dated: MidtermItem[]; tbd: Mi
       hue: entryHue(plan, entry),
     };
     const option = findOption(entry.course, entry.selectedOptionId);
+    const full = option ? optionFull(option) : false;
     // Sort per-course before labeling so "Midterm 1" is always the earlier one,
     // even when an explicit midterms field arrives unsorted.
     const midterms = (option ? [...optionMidterms(option)] : []).sort(
@@ -185,6 +194,7 @@ export function midtermsSorted(plan: PlanState): { dated: MidtermItem[]; tbd: Mi
       dated.push({
         ...base,
         midterm,
+        full,
         ...(midterms.length > 1 ? { label: `Midterm ${i + 1}` } : {}),
       });
     });

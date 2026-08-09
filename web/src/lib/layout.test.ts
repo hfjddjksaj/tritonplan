@@ -27,6 +27,7 @@ function inst(partial: Partial<MeetingInstance>): MeetingInstance {
     start: '09:00',
     end: '10:00',
     day: 'Mon',
+    full: false,
     ...partial,
   };
 }
@@ -169,6 +170,7 @@ describe('finals calendar layout', () => {
       date: '2026-12-09',
       start: '08:00',
       end: '10:59',
+      full: false,
       ...partial,
     });
     const { dates, byDate } = layoutFinalsWeek(

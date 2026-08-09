@@ -48,6 +48,7 @@ export function FinalsCalendar({
       end: f.final.end,
       modality: f.final.modality,
       typeText: examLabel,
+      full: f.full,
     }));
     return layoutFinalsWeek(items, cfg);
   }, [finals, cfg, examLabel]);

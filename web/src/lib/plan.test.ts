@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type { CourseOffering, MidtermExam, SectionOption } from '@triton/shared';
-import { midtermOverlapKeys, midtermsSorted, optionSummaryParts, refreshPlanEntries } from './plan';
+import type { CourseOffering, MidtermExam, PlanState, SectionOption } from '@triton/shared';
+import {
+  finalsSorted,
+  meetingInstances,
+  midtermOverlapKeys,
+  midtermsSorted,
+  optionSummaryParts,
+  refreshPlanEntries,
+} from './plan';
 import { makeCourse, makePlan } from './fixtures';
 
 /** A re-captured copy of `course` with new seat counts (and optionally new option ids). */
@@ -223,5 +230,52 @@ describe('midtermsSorted / midtermOverlapKeys', () => {
         'B-1|2026-11-05|20:00',
       ]),
     );
+  });
+});
+
+describe('full-section flag on calendar instances', () => {
+  /** A plan with one course whose selected option has `seats` seats left. */
+  function planWithSeats(seats: number | undefined): PlanState {
+    const course = makeCourse('CSE-008A|2026|2', 'CSE-008A');
+    const option = course.options[0]!;
+    if (seats !== undefined) option.seatsAvailable = seats;
+    option.components = [
+      {
+        id: 'E1',
+        type: 'LE',
+        typeText: 'Lecture',
+        sectionCode: '001-000-LE',
+        instructors: ['Leo Porter'],
+        meetings: [{ days: ['Mon'], start: '09:00', end: '09:50', modality: 'In Person' }],
+        unscheduled: false,
+        rawSched: 'M 09:00 AM - 09:50 AM In Person\nFinal Examination 12/09/2026 11:30 AM - 2:29 PM In Person\nMidterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person',
+      },
+    ];
+    option.final = { date: '2026-12-09', start: '11:30', end: '14:29' };
+    return {
+      version: 1,
+      term: course.term,
+      entries: [{ course, selectedOptionId: option.id, color: '231' }],
+    };
+  }
+
+  it('marks weekly meetings, finals and midterms of a full section', () => {
+    const plan = planWithSeats(0);
+    expect(meetingInstances(plan).every((m) => m.full)).toBe(true);
+    expect(finalsSorted(plan)[0]!.full).toBe(true);
+    expect(midtermsSorted(plan).dated[0]!.full).toBe(true);
+  });
+
+  it('leaves them unmarked when seats remain', () => {
+    const plan = planWithSeats(12);
+    expect(meetingInstances(plan).some((m) => m.full)).toBe(false);
+    expect(finalsSorted(plan)[0]!.full).toBe(false);
+    expect(midtermsSorted(plan).dated[0]!.full).toBe(false);
+  });
+
+  it('leaves them unmarked when the seat count is unknown', () => {
+    const plan = planWithSeats(undefined);
+    expect(meetingInstances(plan).some((m) => m.full)).toBe(false);
+    expect(finalsSorted(plan)[0]!.full).toBe(false);
   });
 });

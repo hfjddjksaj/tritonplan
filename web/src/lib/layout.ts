@@ -37,6 +37,8 @@ export interface MeetingInstance {
   start: string; // "HH:MM"
   end: string; // "HH:MM"
   day: Weekday;
+  /** The section this meeting belongs to has no seats left. */
+  full: boolean;
 }
 
 /** A positioned block ready to render. top/height are pixels from the grid top. */
@@ -216,6 +218,8 @@ export interface FinalInstance {
   modality?: string;
   /** Block label; defaults to "Final" (the midterms view passes "Midterm"). */
   typeText?: string;
+  /** The section this exam belongs to has no seats left. */
+  full: boolean;
 }
 
 const ISO_DOW: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -286,6 +290,7 @@ export function layoutFinalsWeek(
         start: m.start,
         end: m.end,
         day: isoWeekday(date),
+        full: m.full,
         key: `${m.courseId}:${date}:${m.start}`,
         top,
         height,

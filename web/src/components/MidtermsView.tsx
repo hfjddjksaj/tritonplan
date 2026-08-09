@@ -122,6 +122,7 @@ export function MidtermsView({ dated, tbd, onOpenCourse, onFocusCourse, variant 
               title: m.title,
               hue: m.hue,
               final: m.midterm,
+              full: m.full,
             }))}
             onOpenCourse={onOpenCourse}
             onFocusCourse={onFocusCourse}
