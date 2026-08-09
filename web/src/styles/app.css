@@ -1469,7 +1469,7 @@ button.menu__item:hover {
   border-left-color: var(--line-strong);
 }
 .block--full .block__type {
-  color: var(--line-strong);
+  color: var(--text-faint);
 }
 .block--full .block__code,
 .block--full .block__time,
