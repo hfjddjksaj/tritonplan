@@ -173,9 +173,12 @@ export function saveViewing(v: Viewing): void {
   }
 }
 
-/* --- address-bar auto-sync echo marker (sessionStorage, per-tab) ------------
- * The token we last wrote into #p=… ourselves. On load, a hash that equals
- * this marker is our own echo — NOT an incoming shared plan. */
+/* --- share-link echo marker (sessionStorage, per-tab) -----------------------
+ * A #p=… link this tab parked in its own address bar (the ShareMenu clipboard
+ * fallback). On load, a hash equal to this marker is our own echo, NOT an
+ * incoming shared plan. The address-bar mirror does NOT use this: it writes
+ * #m=…, whose key alone says "mine" — per-tab state cannot help a bookmark,
+ * which always opens in a fresh tab. See readHash() in share.ts. */
 const SYNCED_KEY = 'triton-planner:synced-hash:v1';
 
 export function saveSyncedToken(token: string): void {

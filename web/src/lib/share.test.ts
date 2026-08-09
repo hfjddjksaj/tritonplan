@@ -5,12 +5,17 @@ import {
   encodePlan,
   decodePlan,
   planToHash,
+  planToMirrorHash,
   planFromHash,
   planFromLinkText,
   shareUrl,
   tokenFromHash,
+  mirrorTokenFromHash,
+  mirrorSeedPlan,
+  readHash,
   parsePlanJson,
 } from './share';
+import { emptyPlan } from './plan';
 import { makePlan } from './fixtures';
 
 /** A realistic course: two sections, meetings, a final, extra debug fields. */
@@ -219,5 +224,60 @@ describe('v3 full format via the share.ts API', () => {
     expect(tokenFromHash('#p=abc+def')).toBe('abc def');
     // Round-trip stability: normalizing twice is a fixed point.
     expect(tokenFromHash(`#p=${tokenFromHash('#p=abc+def')!}`)).toBe('abc def');
+  });
+});
+
+/**
+ * Regression: the address-bar mirror wrote `#p=…` — the very same key a share
+ * link uses — and told the two apart with a sessionStorage echo marker. A
+ * bookmark always opens in a FRESH tab, where sessionStorage is empty, so the
+ * user's own mirrored plan came back every time as "this is not your plan".
+ * The mirror now has its own `#m=` key, which needs no per-tab state.
+ */
+describe('own mirror hash vs incoming share link', () => {
+  const own = { plans: [], syncedToken: null };
+
+  it('writes the mirror under its own key, invisible to the share-link reader', () => {
+    const hash = `#${planToMirrorHash(richPlan())}`;
+    expect(hash.startsWith('#m=')).toBe(true);
+    expect(tokenFromHash(hash)).toBeNull();
+    expect(decodePlan(mirrorTokenFromHash(hash)!)).toEqual(decodePlan(encodePlan(richPlan())));
+  });
+
+  it('reads our own mirror as mine in a fresh tab — no echo marker needed', () => {
+    expect(readHash(`#${planToMirrorHash(richPlan())}`, own).kind).toBe('mine');
+  });
+
+  it("reads someone else's #p= link as shared", () => {
+    expect(readHash(`#${planToHash(richPlan())}`, own).kind).toBe('shared');
+  });
+
+  it('treats a legacy #p= self-mirror as mine when it re-encodes a plan I hold', () => {
+    // Bookmarks and synced tabs minted before the #m= split still carry #p=<own token>.
+    const mine = decodePlan(encodePlan(richPlan()))!; // what "Replace current plan" stored
+    expect(readHash(`#${planToHash(mine)}`, { plans: [mine], syncedToken: null }).kind).toBe('mine');
+    // …but an unrelated plan under the same key is still someone else's.
+    expect(readHash(`#${planToHash(richPlan())}`, { plans: [makePlan()], syncedToken: null }).kind)
+      .toBe('shared');
+  });
+
+  it('still honours the per-tab echo marker (ShareMenu clipboard fallback)', () => {
+    const raw = encodePlan(richPlan(), 'lite'); // lite tokens can contain '+'
+    const marker = tokenFromHash(`#p=${raw}`)!; // …so ShareMenu stores it normalized
+    expect(readHash(`#p=${raw}`, { plans: [], syncedToken: marker }).kind).toBe('mine');
+  });
+
+  it('ignores an absent or undecodable hash', () => {
+    expect(readHash('', own).kind).toBe('ignore');
+    expect(readHash('#other=1', own).kind).toBe('ignore');
+    expect(readHash('#p=@@@', own).kind).toBe('ignore');
+    expect(readHash('#m=@@@', own).kind).toBe('ignore');
+  });
+
+  it('seeds a fresh device from a mirror hash, but never from a share link or an empty plan', () => {
+    expect(mirrorSeedPlan(`#${planToMirrorHash(richPlan())}`)!.entries).toHaveLength(1);
+    expect(mirrorSeedPlan(`#${planToHash(richPlan())}`)).toBeNull();
+    expect(mirrorSeedPlan(`#${planToMirrorHash(emptyPlan())}`)).toBeNull();
+    expect(mirrorSeedPlan('')).toBeNull();
   });
 });

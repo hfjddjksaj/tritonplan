@@ -16,6 +16,10 @@
  *
  * Old links still open: decode tries v3 full, then v2 slim, then v1 legacy
  * (the whole PlanState encoded verbatim, pre-dating both formats).
+ *
+ * Two hash keys, and the difference matters: `#p=` is a link someone SHARED
+ * (opens read-only in the received slot), `#m=` is the planner's mirror of the
+ * user's OWN active plan (see MIRROR_KEY below).
  */
 import LZString from 'lz-string';
 import type {
@@ -223,6 +227,71 @@ export function planFromHash(hash: string): PlanState | null {
   const token = tokenFromHash(hash);
   if (!token) return null;
   return decodePlan(token);
+}
+
+/* --- the address-bar mirror of the user's OWN plan --------------------------
+ * The planner mirrors the active plan into the address bar so the browser's own
+ * bookmark sync / "send this tab to my phone" carries the latest plan. That
+ * mirror used to share the `#p=` key with real share links and was told apart
+ * by a per-tab sessionStorage marker — which a bookmark, always opening in a
+ * fresh tab, never has. So the user's own plan came back as "not your plan".
+ * The mirror now has its own key: `#m=` means mine, `#p=` means someone sent it. */
+const MIRROR_KEY = 'm';
+
+/** Build the `#m=…` fragment for the address-bar mirror (without the leading `#`). */
+export function planToMirrorHash(plan: PlanState): string {
+  return `${MIRROR_KEY}=${encodePlan(plan, 'full')}`;
+}
+
+/** Extract the raw `#m=…` token from a location hash, or null. */
+export function mirrorTokenFromHash(hash: string): string | null {
+  const clean = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (!clean) return null;
+  return new URLSearchParams(clean).get(MIRROR_KEY);
+}
+
+/**
+ * The plan a `#m=` hash carries, for seeding a device that has none of its own
+ * (opening a synced tab on a phone for the first time). Null for anything else,
+ * including an empty plan — there is nothing to seed from that.
+ */
+export function mirrorSeedPlan(hash: string): PlanState | null {
+  const token = mirrorTokenFromHash(hash);
+  if (!token) return null;
+  const plan = decodePlan(token);
+  return plan && plan.entries.length > 0 ? plan : null;
+}
+
+/** What a location hash means on load. 'mine' never reaches the received slot. */
+export type HashIntent =
+  | { kind: 'ignore' }
+  | { kind: 'mine'; plan: PlanState }
+  | { kind: 'shared'; plan: PlanState };
+
+/**
+ * Classify the hash the page loaded with.
+ *
+ * `#m=` is our own mirror. `#p=` is a shared link — unless it re-encodes a plan
+ * the user already holds (bookmarks minted before the `#m=` split still carry
+ * `#p=<own token>`) or matches this tab's echo marker (the ShareMenu clipboard
+ * fallback parks a link in the address bar).
+ */
+export function readHash(
+  hash: string,
+  own: { plans: PlanState[]; syncedToken: string | null },
+): HashIntent {
+  const mirror = mirrorTokenFromHash(hash);
+  if (mirror) {
+    const plan = decodePlan(mirror);
+    return plan ? { kind: 'mine', plan } : { kind: 'ignore' };
+  }
+  const token = tokenFromHash(hash);
+  if (!token) return { kind: 'ignore' };
+  const plan = decodePlan(token);
+  if (!plan) return { kind: 'ignore' };
+  if (token === own.syncedToken) return { kind: 'mine', plan };
+  if (own.plans.some((p) => encodePlan(p, 'full') === token)) return { kind: 'mine', plan };
+  return { kind: 'shared', plan };
 }
 
 /**

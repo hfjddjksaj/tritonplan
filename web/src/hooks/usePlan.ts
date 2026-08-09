@@ -24,7 +24,6 @@ import {
   loadViewing,
   saveViewing,
   loadSyncedToken,
-  saveSyncedToken,
   type ReceivedPlan,
   type Viewing,
 } from '../lib/storage';
@@ -41,7 +40,7 @@ import {
   switchActive,
   type PlansState,
 } from '../lib/plans';
-import { decodePlan, encodePlan, tokenFromHash } from '../lib/share';
+import { mirrorSeedPlan, planToMirrorHash, readHash } from '../lib/share';
 import { openBooking, openInTss } from '../lib/tss';
 import {
   buildSelectedCourses,
@@ -60,7 +59,14 @@ const SAMPLE = import.meta.env.DEV ? (sampleCourses as unknown as CourseOffering
 
 /** Named-plans list: stored list wins, else the legacy single plan is migrated in. */
 function initialPlans(): PlansState {
-  return migratePlans(loadPlans(), loadPlan(), new Date().toISOString());
+  const now = new Date().toISOString();
+  const base = migratePlans(loadPlans(), loadPlan(), now);
+  // Nothing saved on this device yet, but the address bar carries our own mirror:
+  // this is a synced/bookmarked tab opened somewhere new, so adopt it as the plan.
+  // A device that already holds a plan always keeps its own copy (see below).
+  if (base.plans.some((p) => p.plan.entries.length > 0)) return base;
+  const seed = mirrorSeedPlan(window.location.hash);
+  return seed ? updateActivePlan(base, () => seed, now) : base;
 }
 
 /** Seed the browsed pool from anything persisted from a prior session (+ dev samples). */
@@ -91,6 +97,11 @@ export function usePlan() {
     loadReceived() ? loadViewing() : 'mine',
   );
   const firstRun = useRef(true);
+  // Latest plans for the hash-consume effect, which must not re-subscribe on every edit.
+  const plansRef = useRef(plansState);
+  useEffect(() => {
+    plansRef.current = plansState;
+  }, [plansState]);
 
   // The plan every existing action/selector works on = the ACTIVE named plan.
   const active = activePlan(plansState);
@@ -111,15 +122,15 @@ export function usePlan() {
   // on hashchange: pasting a link into an already-open planner tab doesn't reload.
   useEffect(() => {
     const consume = () => {
-      const token = tokenFromHash(window.location.hash);
-      if (!token) return;
-      // Our own auto-synced hash (see the mirror effect below) is not an
-      // incoming share — leave it alone or every reload would "receive" it.
-      if (token === loadSyncedToken()) return;
-      const fromHash = decodePlan(token);
-      if (!fromHash) return;
+      const intent = readHash(window.location.hash, {
+        plans: plansRef.current.plans.map((p) => p.plan),
+        syncedToken: loadSyncedToken(),
+      });
+      // Our own mirror — including a bookmark minted before the #m= split. The copy
+      // saved on this device wins; the mirror effect below rewrites the hash from it.
+      if (intent.kind !== 'shared') return;
       const rec: ReceivedPlan = {
-        plan: fromHash,
+        plan: intent.plan,
         source: 'link',
         receivedAt: new Date().toISOString(),
       };
@@ -133,21 +144,18 @@ export function usePlan() {
     return () => window.removeEventListener('hashchange', consume);
   }, [switchViewing]);
 
-  // Mirror the ACTIVE plan into the address bar as a #p=<full token> so the
+  // Mirror the ACTIVE plan into the address bar as a #m=<full token> so the
   // browser's own "send this tab to your device" / bookmark sync always carry
-  // the latest plan. The token is also remembered per-tab (sessionStorage) so
-  // a reload recognizes its own echo instead of importing it as a received
-  // plan. Depends on `received` too: after consuming a foreign hash we restore
-  // our own hash right away.
+  // the latest plan. The `#m=` key is what marks it as ours — a bookmark opens
+  // in a fresh tab, so nothing per-tab could ever do that job. Depends on
+  // `received` too: after consuming a foreign hash we restore our own hash
+  // right away.
   useEffect(() => {
     if (plan.entries.length === 0) {
-      saveSyncedToken('');
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
       return;
     }
-    const token = encodePlan(plan, 'full');
-    saveSyncedToken(token);
-    window.history.replaceState(null, '', `#p=${token}`);
+    window.history.replaceState(null, '', `#${planToMirrorHash(plan)}`);
   }, [plan, received]);
 
   // Persist the plans list on change (skip first render so we don't clobber before load).
