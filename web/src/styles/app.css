@@ -1450,6 +1450,34 @@ button.menu__item:hover {
   cursor: pointer;
 }
 
+/* No seats left in the section this block belongs to: drop the course hue for
+   a neutral ramp. CourseBlock.tsx sets --b-spine/--b-fill/--b-border/--b-text
+   inline on the block element, and an inline style always beats a class
+   selector for the same property — so overriding those custom properties here
+   would be dead. Override the painted properties directly instead, and give
+   the descendants that read --b-spine/--b-text for their own `color` (the
+   custom property is inherited from the inline-styled block, which a class on
+   that same element can't shadow) their own higher-specificity selector.
+   Declared before .block--conflict so a block that is both full and
+   conflicting still reads as conflicting (conflict's border/box-shadow/stripe
+   overlay are declared after and win on source order for the properties they
+   share; conflict doesn't touch background or text color, so those stay
+   greyed even on a conflicting+full block). */
+.block--full {
+  background: var(--surface-2);
+  border-color: var(--line);
+  border-left-color: var(--line-strong);
+}
+.block--full .block__type {
+  color: var(--line-strong);
+}
+.block--full .block__code,
+.block--full .block__time,
+.block--full .block__loc,
+.block--full .block__instr {
+  color: var(--text-faint);
+}
+
 /* the signature: an unmistakable conflict state */
 .block--conflict {
   border-color: var(--conflict);
@@ -1643,6 +1671,12 @@ button.menu__item:hover {
   font-size: 19px;
   font-weight: 800;
   color: var(--c-text, var(--ink));
+}
+.blocksheet__full {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--conflict-ink);
 }
 .blocksheet__time {
   margin-top: 4px;

@@ -26,7 +26,7 @@ export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse, onDe
 
   return (
     <article
-      className={`block${block.conflict ? ' block--conflict' : ''}${compact ? ' block--sm' : ''}${onDetail || onFocusCourse ? ' block--focusable' : ''}`}
+      className={`block${block.full ? ' block--full' : ''}${block.conflict ? ' block--conflict' : ''}${compact ? ' block--sm' : ''}${onDetail || onFocusCourse ? ' block--focusable' : ''}`}
       onClick={
         onDetail
           ? () => onDetail(block)
@@ -45,7 +45,7 @@ export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse, onDe
         ['--b-border' as string]: c.border,
         ['--b-text' as string]: c.text,
       }}
-      title={`${block.courseCode} · ${block.typeText}\n${formatDisplay(block.start)} – ${formatDisplay(block.end)}${block.location ? `\n${block.location}` : ''}${block.instructor ? `\n${block.instructor}` : ''}${block.conflict ? '\n⚠ Time conflict' : ''}`}
+      title={`${block.courseCode} · ${block.typeText}\n${formatDisplay(block.start)} – ${formatDisplay(block.end)}${block.location ? `\n${block.location}` : ''}${block.instructor ? `\n${block.instructor}` : ''}${block.conflict ? '\n⚠ Time conflict' : ''}${block.full ? '\nNo seats left in this section' : ''}`}
     >
       {block.conflict && (
         <span className="block__warn" aria-hidden>

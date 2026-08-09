@@ -37,6 +37,7 @@ export function BlockSheet({ block, onOpenCourse, onOpenLocation, onFocusCourse,
         </button>
         <div className="eyebrow">{block.typeText}</div>
         <div className="blocksheet__code mono">{block.courseCode}</div>
+        {block.full && <div className="blocksheet__full">No seats left in this section</div>}
         <div className="blocksheet__time">
           {weekdayLong(block.day)} · {formatDisplay(block.start)} – {formatDisplay(block.end)}
         </div>
