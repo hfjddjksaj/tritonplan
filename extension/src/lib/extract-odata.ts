@@ -19,8 +19,8 @@ export function extractODataCollections(body: string): ODataCollection[] {
   const trimmed = body.trimStart();
   if (trimmed.startsWith('{')) {
     try {
-      const obj = JSON.parse(body) as ODataCollection;
-      if (obj && Array.isArray(obj.value)) return [obj];
+      const coll = asCollection(JSON.parse(body));
+      if (coll) return [coll];
     } catch {
       /* fall through to batch scan */
     }
@@ -34,14 +34,36 @@ export function extractODataCollections(body: string): ODataCollection[] {
     const end = matchBrace(body, start);
     if (end === -1) break;
     try {
-      const obj = JSON.parse(body.slice(start, end + 1)) as ODataCollection;
-      if (obj && Array.isArray(obj.value)) out.push(obj);
+      const coll = asCollection(JSON.parse(body.slice(start, end + 1)));
+      if (coll) out.push(coll);
     } catch {
       /* skip malformed block */
     }
     idx = end + 1;
   }
   return out;
+}
+
+/**
+ * Normalize one parsed OData document into a collection, or null if it carries
+ * no rows we understand.
+ *
+ * A collection response wraps its rows in `value`. A SINGLE-ENTITY response
+ * (`@odata.context` ending in `/$entity`) puts one row's fields at the top level
+ * with no `value` at all — that is what TSS returns when a course page is opened
+ * by deep link, including from this planner's own "open in TSS" button. Dropping
+ * those left a deep-linked course with sections but no title and no credits
+ * (real report: PHYS-002CL, 2026-08-10).
+ */
+function asCollection(parsed: unknown): ODataCollection | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const doc = parsed as ODataCollection;
+  if (Array.isArray(doc.value)) return doc;
+  if (looksLikeModuleRow(doc) || looksLikeSectionRow(doc) || looksLikePrereqRow(doc)) {
+    const ctx = doc['@odata.context'];
+    return { ...(ctx !== undefined ? { '@odata.context': ctx } : {}), value: [doc] };
+  }
+  return null;
 }
 
 /** Index of the `}` matching the `{` at `start` (string/escape aware). */

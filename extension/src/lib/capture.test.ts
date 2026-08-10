@@ -302,3 +302,69 @@ describe('forget captured courses (planner removed them from the browsed list)',
     expect(store.toCourses()[0]!.options).toHaveLength(9);
   });
 });
+
+describe('single-entity responses (deep-link navigation)', () => {
+  /**
+   * Verbatim shape captured on 2026-08-10 from a live TSS page opened by deep
+   * link (`#YSchedule-view?…/YUCSD_CON_MODULE(…ModuleID='14502')`) — the exact
+   * URL the planner's own "open in TSS" button produces.
+   *
+   * A course search returns a COLLECTION (`{"value":[…]}`). A deep link returns
+   * a SINGLE ENTITY: `@odata.context` ends in `/$entity` and the row's fields
+   * sit at the top level with no `value` array at all. Dropping these is why a
+   * deep-linked course arrived with sections but no title and no credits.
+   */
+  const phys2clEntity = JSON.stringify({
+    '@odata.context': '$metadata#YUCSD_CON_MODULE(AcademicLevel,CourseAbbr,CreditsDisplay)/$entity',
+    '@odata.metadataEtag': 'W/"20260804031325"',
+    AcademicYear: '2026',
+    AcademicPeriod: '2',
+    ModuleID: '14502',
+    AcademicLevel: 'Lower Division',
+    CourseAbbr: 'PHYS-002CL',
+    CourseTitle: 'Physics Laboratory- Electricity and Magnetism',
+    CreditsDisplay: '2.00',
+    incrementDisplay: '',
+    MaterialsFee: '20.00',
+  });
+
+  it('classifies a bare single-entity module response', () => {
+    const { moduleRows } = classifyCapture(phys2clEntity);
+    expect(moduleRows).toHaveLength(1);
+    expect(moduleRows[0]!.CourseAbbr).toBe('PHYS-002CL');
+    expect(moduleRows[0]!.CreditsDisplay).toBe('2.00');
+  });
+
+  it('classifies a single-entity module embedded in a $batch', () => {
+    // How it actually arrives: the deep-linked page fetches it inside a batch.
+    const batch =
+      '--batch_id\r\nContent-Type: application/http\r\n\r\nHTTP/1.1 200 OK\r\n' +
+      'Content-Type: application/json\r\n\r\n' +
+      phys2clEntity +
+      '\r\n--batch_id--\r\n';
+    const { moduleRows } = classifyCapture(batch);
+    expect(moduleRows).toHaveLength(1);
+    expect(moduleRows[0]!.ModuleID).toBe('14502');
+  });
+
+  it('gives the course its real title and units end to end', () => {
+    // The regression in full: sections alone yield {courseCode, title: code}
+    // with no units. With the module entity recognized, both come back.
+    const store = new CaptureStore();
+    store.ingestBody(phys2clEntity);
+    expect(store.toCourses().find((c) => c.moduleId === '14502')).toBeUndefined();
+    // Now its sections arrive, keyed by the same ModuleID:
+    const rows = denormalize(fx['CSE-008A']!).map((r) => ({ ...r, ModuleID: '14502' }));
+    store.ingestBody(odataBody(rows));
+    const withMeta = store.toCourses().find((c) => c.moduleId === '14502')!;
+    expect(withMeta.title).toBe('Physics Laboratory- Electricity and Magnetism');
+    expect(withMeta.units).toBe(2);
+  });
+
+  it('still ignores a single object that is not a row we know', () => {
+    const junk = JSON.stringify({ '@odata.context': '$metadata#Currencies/$entity', Code: 'USD' });
+    const out = classifyCapture(junk);
+    expect(out.moduleRows).toHaveLength(0);
+    expect(out.sectionRows).toHaveLength(0);
+  });
+});

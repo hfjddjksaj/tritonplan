@@ -28,6 +28,38 @@ what the page already fetched (this is the exact technique the shipped extension
 Course search and some reads go through OData **`$batch`** (multipart/mixed containing embedded JSON
 `{"@odata.context":..., "value":[...]}`). The **sections** call is a plain GET returning JSON directly.
 
+### ⭐ Collection vs single-entity responses (verified live 2026-08-10)
+
+The same entity comes back in **two different shapes** depending on how the user got there:
+
+| Path into a course | Module row shape |
+|---|---|
+| Course **search list** | collection — `{"@odata.context":"…", "value":[ …rows… ]}` |
+| **Deep link** to one course (`#YSchedule-view?…/YUCSD_CON_MODULE(…ModuleID='14502')`) | **single entity** — `@odata.context` ends in **`/$entity`**, the row's fields sit at the **top level, with no `value` array** |
+
+Full request sequence observed on a deep-link open of PHYS-002CL (ModuleID `14502`), passive
+page-hook capture, logged-in session:
+
+```
+$metadata · $batch ×2 · Currencies
+YUCSD_I_SM_TITLE(Smobjid='14502',Peryr='2026',Perid='2')   ← title only, NO credits
+YUCSD_I_PERYRT_SOC · YUCSD_I_PERIDT_SOC · YUCSD_I_MINMAXUNITS
+$batch  ← contains the single-entity YUCSD_CON_MODULE: CourseAbbr, CourseTitle, CreditsDisplay "2.00"
+_sections  ← 20 section rows, 23 fields, NO credits field anywhere
+```
+
+Two consequences worth remembering:
+
+- **Credits live only on `YUCSD_CON_MODULE`.** Neither `_sections` (23 fields, checked
+  exhaustively) nor `YUCSD_I_SM_TITLE` carries units. A course captured from sections alone can
+  never have its unit count filled in.
+- `YUCSD_I_SM_TITLE` returns `Smobjid`, `Short` (course code), `Stext` (short name), `Title` (full
+  name), `acLevel`, `isPAE`, `search` — useful for a title, useless for credits.
+
+Until 2026-08-10 `extract-odata.ts` only accepted documents with a `value` array, so every
+single-entity response was silently dropped — a deep-linked course arrived with sections but no
+title and no units. Any new shape check must handle both forms.
+
 ## Entity: `YUCSD_CON_MODULE` (course / "module" — the search-results row)
 Fields: `AcademicYear`, `AcademicPeriod`, `ModuleID`, `AcademicLevel`, `DepartmentAbbr`,
 `DepartmentText`, `CourseAbbr` (e.g. `"CSE-003"`), `CourseTitle`, `CreditsDisplay`, `incrementDisplay`.
