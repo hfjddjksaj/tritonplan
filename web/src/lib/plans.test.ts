@@ -140,6 +140,24 @@ describe('storage round-trip', () => {
     localStorage.setItem('triton-planner:plans:v1', JSON.stringify({ activeId: 'x', plans: [{ id: 'x' }] }));
     expect(loadPlans()).toBeNull();
   });
+
+  it('round-trips a plan with `hidden`, and rejects a non-array `hidden`', async () => {
+    const { savePlans, loadPlans } = await import('./storage');
+    localStorage.clear();
+    const s = hideInActivePlan(seeded(), ['CSE-008A|2026|2'], NOW);
+    savePlans(s);
+    expect(loadPlans()).toEqual(s);
+
+    // A corrupt/foreign `hidden` (e.g. a string, from a hand-edited or
+    // otherwise mangled value) must not crash `new Set(...)` downstream —
+    // reject the whole plan list rather than load a shape that isn't real.
+    const corrupt = {
+      ...s,
+      plans: s.plans.map((p) => (p.id === s.activeId ? { ...p, hidden: 'not-an-array' } : p)),
+    };
+    localStorage.setItem('triton-planner:plans:v1', JSON.stringify(corrupt));
+    expect(loadPlans()).toBeNull();
+  });
 });
 
 describe('empty-state guard', () => {

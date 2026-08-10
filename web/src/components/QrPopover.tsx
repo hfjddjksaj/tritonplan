@@ -9,9 +9,12 @@ import { X } from './icons';
 /** Widest the code is allowed to get; past this, bigger stops buying clarity. */
 const MAX_PX = 820;
 
+/** `.mappop` padding (`18px 20px 16px`, border-box) — the code's box lives inside that, not the viewport. */
+const CARD_PADDING_X = 20;
+
 /** Room for the code: bounded by width on a phone, by height on a short screen. */
 function availablePx(): number {
-  return Math.min(window.innerWidth * 0.92, window.innerHeight * 0.78, MAX_PX);
+  return Math.min(window.innerWidth * 0.92 - 2 * CARD_PADDING_X, window.innerHeight * 0.78, MAX_PX);
 }
 
 interface Props {
@@ -70,6 +73,12 @@ export function QrPopover({ plan, format, onClose }: Props) {
               <p className="qrpop__note">
                 Plan too large for a full QR — this code carries the Lite version. Use Copy link to
                 send everything.
+              </p>
+            )}
+            {qr!.mode === 'full' && format === 'lite' && (
+              <p className="qrpop__note">
+                Full came out shorter than Lite for this plan, so this code carries the Full
+                version — editable on the other device, not view-only.
               </p>
             )}
           </>

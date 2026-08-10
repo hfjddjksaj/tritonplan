@@ -92,7 +92,8 @@ function isNamedPlan(value: unknown): boolean {
     typeof v.name === 'string' &&
     typeof v.createdAt === 'string' &&
     typeof v.updatedAt === 'string' &&
-    isPlanState(v.plan)
+    isPlanState(v.plan) &&
+    (v.hidden === undefined || Array.isArray(v.hidden))
   );
 }
 

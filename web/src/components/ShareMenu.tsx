@@ -111,7 +111,14 @@ export function ShareMenu({ plan, onFlash }: Props) {
               className="menu__item"
               role="menuitem"
               aria-expanded={qrOpen}
-              onClick={() => setQrOpen((v) => !v)}
+              onClick={() => {
+                // Close the dropdown itself (z-index 40) so it doesn't sit dimmed and
+                // unclickable behind the modal's backdrop (z-index 90). The modal
+                // (qrOpen) is a separate, portaled sibling — see the useClickAway
+                // comment above for why closing `open` here must not touch it.
+                setOpen(false);
+                setQrOpen((v) => !v);
+              }}
             >
               <span className="menu__item-title">
                 <QrCode size={14} /> QR code
