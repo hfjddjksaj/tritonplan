@@ -1,8 +1,8 @@
 /**
  * QR share codes, generated fully offline (bundled lib, zero requests).
  * A single QR holds at most ~2953 bytes (version 40, EC level L); we keep a
- * margin. When the Full link is too big, the QR silently carries the Lite
- * link instead — the ShareMenu labels which one the code holds.
+ * margin. When the requested format doesn't fit, the QR silently falls back
+ * to the other one — the ShareMenu labels which one the code actually holds.
  */
 import qrcode from 'qrcode-generator';
 import type { PlanState } from '@triton/shared';
@@ -17,19 +17,26 @@ export interface QrShare {
 }
 
 /**
- * Pick the link that makes the easiest-to-scan code: whichever of the two
- * formats is shorter and fits, preferring the requested one on a tie. Fewer
- * characters means a lower QR version, which means larger modules.
+ * Honor the format the user picked in the Share dropdown whenever it fits the
+ * QR budget — Full and Lite differ in what the receiving device can do with
+ * them (Full stays editable; Lite is view-only), so that choice is the user's
+ * to make, not ours to override for a denser code. The modal is sized to scan
+ * fine even at the higher module count a fitting-but-longer link produces.
+ *
+ * Only fall back to the other format when the requested one doesn't fit —
+ * and that fallback runs both directions: Lite is usually shorter than Full,
+ * but not always (a plan with few courses and many section options can make
+ * Full the shorter one), so a requested Lite can legitimately overflow and
+ * fall back to Full. `null` means neither format fits; the caller points the
+ * user at Copy link instead.
  */
 export function qrShareForPlan(plan: PlanState, requested: ShareFormat): QrShare | null {
-  const candidates: QrShare[] = [
-    { url: shareUrl(plan, 'full'), mode: 'full' as const },
-    { url: shareUrl(plan, 'lite'), mode: 'lite' as const },
-  ].filter((c) => c.url.length <= QR_URL_BUDGET);
-  if (candidates.length === 0) return null;
-  const shortest = Math.min(...candidates.map((c) => c.url.length));
-  const best = candidates.filter((c) => c.url.length === shortest);
-  return best.find((c) => c.mode === requested) ?? best[0]!;
+  const requestedUrl = shareUrl(plan, requested);
+  if (requestedUrl.length <= QR_URL_BUDGET) return { url: requestedUrl, mode: requested };
+  const other: ShareFormat = requested === 'full' ? 'lite' : 'full';
+  const otherUrl = shareUrl(plan, other);
+  if (otherUrl.length <= QR_URL_BUDGET) return { url: otherUrl, mode: other };
+  return null;
 }
 
 /**

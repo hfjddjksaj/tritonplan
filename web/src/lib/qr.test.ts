@@ -5,43 +5,82 @@ import { shareUrl } from './share';
 import { makePlan } from './share-v3.test-helpers';
 
 describe('qrShareForPlan', () => {
-  it('uses the full link when it fits the QR budget', () => {
-    const plan = makePlan(3, 5);
+  it('honors a requested Full that fits, even though Lite would be shorter', () => {
+    // Measured: makePlan(5, 20) -> full=1645 chars, lite=1471 chars. Both fit
+    // the 2900 budget, and Lite is the shorter one — this is the exact
+    // regression: picking "shortest" here would silently hand back a
+    // view-only Lite code when the user asked for the editable Full one.
+    const plan = makePlan(5, 20);
+    const full = shareUrl(plan, 'full');
+    const lite = shareUrl(plan, 'lite');
+    expect(full.length).toBeLessThanOrEqual(QR_URL_BUDGET);
+    expect(lite.length).toBeLessThanOrEqual(QR_URL_BUDGET);
+    expect(lite.length).toBeLessThan(full.length); // Lite really is shorter here
     const qr = qrShareForPlan(plan, 'full');
     expect(qr).not.toBeNull();
     expect(qr!.mode).toBe('full');
-    expect(qr!.url).toBe(shareUrl(plan, 'full'));
-    expect(qr!.url.length).toBeLessThanOrEqual(QR_URL_BUDGET);
+    expect(qr!.url).toBe(full);
   });
 
-  it('degrades to lite when the full link exceeds the budget', () => {
-    // Many options per course inflates the Full (all-options) link while Lite
-    // (selected option only) stays flat — the combination that actually
-    // exercises degrade-to-lite for this fixture shape.
-    const plan = makePlan(3, 80); // deliberately huge
-    const full = shareUrl(plan, 'full');
-    const qr = qrShareForPlan(plan, 'full');
-    expect(full.length).toBeGreaterThan(QR_URL_BUDGET); // fixture must actually exceed the budget
-    expect(qr!.mode).toBe('lite');
-  });
-
-  it('returns whichever format is shorter, preferring the requested on a tie', () => {
-    const plan = makePlan(2, 3);
+  it('honors a requested Lite that fits, even though Full would be shorter', () => {
+    // Measured: makePlan(5, 1) -> full=619 chars, lite=1456 chars. Both fit
+    // the budget, and Full is the shorter one — mirrors the case above in
+    // the other direction, so a requested Lite must not be swapped for a
+    // shorter Full behind the user's back.
+    const plan = makePlan(5, 1);
     const full = shareUrl(plan, 'full');
     const lite = shareUrl(plan, 'lite');
+    expect(full.length).toBeLessThanOrEqual(QR_URL_BUDGET);
+    expect(lite.length).toBeLessThanOrEqual(QR_URL_BUDGET);
+    expect(full.length).toBeLessThan(lite.length); // Full really is shorter here
     const qr = qrShareForPlan(plan, 'lite');
-    expect(qr!.url.length).toBe(Math.min(full.length, lite.length));
+    expect(qr).not.toBeNull();
+    expect(qr!.mode).toBe('lite');
+    expect(qr!.url).toBe(lite);
   });
 
-  it('carries whichever format is actually shorter', () => {
-    // Full (deflate) often beats Lite on real plans; fewer bytes = lower version
-    // = bigger modules, so the QR should take the shorter one either way.
-    const plan = makePlan(4, 5);
+  it('falls back to Lite when the requested Full overflows the budget', () => {
+    // Measured: makePlan(3, 80) -> full=3639 chars (over budget), lite=1038
+    // chars (fits). Many options per course inflates Full (it carries every
+    // option) while Lite (selected option only) stays flat.
+    const plan = makePlan(3, 80);
     const full = shareUrl(plan, 'full');
     const lite = shareUrl(plan, 'lite');
-    const picked = qrShareForPlan(plan, 'full')!;
-    expect(picked.url.length).toBe(Math.min(full.length, lite.length));
-    expect(picked.mode).toBe(full.length <= lite.length ? 'full' : 'lite');
+    expect(full.length).toBeGreaterThan(QR_URL_BUDGET);
+    expect(lite.length).toBeLessThanOrEqual(QR_URL_BUDGET);
+    const qr = qrShareForPlan(plan, 'full');
+    expect(qr).not.toBeNull();
+    expect(qr!.mode).toBe('lite');
+    expect(qr!.url).toBe(lite);
+  });
+
+  it('falls back to Full when the requested Lite overflows the budget', () => {
+    // Measured: makePlan(20, 1) -> full=1010 chars (fits), lite=3848 chars
+    // (over budget). Many courses inflates Lite (one entry per course, no
+    // dedup) faster than Full (which dedupes the shared-lecture component
+    // table), so this is the direction where Lite is the one that overflows.
+    const plan = makePlan(20, 1);
+    const full = shareUrl(plan, 'full');
+    const lite = shareUrl(plan, 'lite');
+    expect(lite.length).toBeGreaterThan(QR_URL_BUDGET);
+    expect(full.length).toBeLessThanOrEqual(QR_URL_BUDGET);
+    const qr = qrShareForPlan(plan, 'lite');
+    expect(qr).not.toBeNull();
+    expect(qr!.mode).toBe('full');
+    expect(qr!.url).toBe(full);
+  });
+
+  it('returns null when both formats overflow the budget', () => {
+    // Measured: makePlan(20, 20) -> full=3710 chars, lite=3898 chars, both
+    // over the 2900 budget. Neither format fits, so there is no QR to show —
+    // the modal falls back to telling the user to use Copy link.
+    const plan = makePlan(20, 20);
+    const full = shareUrl(plan, 'full');
+    const lite = shareUrl(plan, 'lite');
+    expect(full.length).toBeGreaterThan(QR_URL_BUDGET);
+    expect(lite.length).toBeGreaterThan(QR_URL_BUDGET);
+    expect(qrShareForPlan(plan, 'full')).toBeNull();
+    expect(qrShareForPlan(plan, 'lite')).toBeNull();
   });
 });
 

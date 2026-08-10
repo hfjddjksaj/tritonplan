@@ -71,14 +71,14 @@ export function QrPopover({ plan, format, onClose }: Props) {
             />
             {qr!.mode === 'lite' && format === 'full' && (
               <p className="qrpop__note">
-                Plan too large for a full QR — this code carries the Lite version. Use Copy link to
-                send everything.
+                The Full link was too large for a QR here — this code carries the Lite version
+                instead. Use Copy link to send everything.
               </p>
             )}
             {qr!.mode === 'full' && format === 'lite' && (
               <p className="qrpop__note">
-                Full came out shorter than Lite for this plan, so this code carries the Full
-                version — editable on the other device, not view-only.
+                The Lite link was too large for a QR here — this code carries the Full version
+                instead, editable on the other device, not view-only.
               </p>
             )}
           </>
