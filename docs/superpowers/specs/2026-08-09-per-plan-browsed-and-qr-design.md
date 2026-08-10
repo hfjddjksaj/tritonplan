@@ -98,11 +98,34 @@ menu is what constrains the size in the first place). The menu item becomes
 "QR code" that opens the modal.
 
 **Size it in whole pixels per module.** `qrSvg` also returns the module count.
-The modal computes `scale = max(2, floor(availableWidth / moduleCount))` and sets
-the SVG to exactly `moduleCount * scale` pixels. Every module then occupies a
-whole number of device-independent pixels, so edges stay hard instead of grey.
-Available width: `min(90vw, 560px)`, which gives 133 modules 4px each and even a
-worst-case 177-module code 3px — against 1.27 today.
+The modal computes `scale = max(2, floor(available / moduleCount))` and sets the
+SVG to exactly `moduleCount * scale` pixels. Every module then occupies a whole
+number of device-independent pixels, so edges stay hard instead of grey.
+
+**Make it big — the modal is centered, so use the room.** Available size is
+`min(92vw, 78vh, 820px)`: bounded by width on a phone, by height on a short
+laptop screen, and capped at 820px so it stops growing on a large monitor. The
+height bound matters because the code is square and the modal also carries a
+heading, the format note and a close button; sizing on width alone pushes the
+box off a 768px-tall screen.
+
+Because the scale is a whole number, size gains arrive in steps — what each
+bound actually buys:
+
+| available | 133 modules (typical plan) | 177 modules (largest plan) |
+|---|---|---|
+| 560px | 4px/module | 3px/module |
+| **820px** | **6px/module** | **4px/module** |
+| 885px | 6px/module | 5px/module |
+
+820px is where the typical plan reaches 6px per module — three and a half times
+today's 1.68. Going past it only helps the largest plans, and only above 885px,
+by which point the height bound governs on most screens anyway.
+
+**The code stays black-on-white regardless of theme.** Scanners need the light
+quiet zone to actually be light; the current `.menu__qr-box` already hardcodes a
+white background, and the modal keeps that rather than inheriting a surface
+token.
 
 **Quiet zone to 4 modules**, per spec.
 
@@ -136,8 +159,11 @@ The "plan too large for any QR" case keeps its current message.
 - `bridge.test.ts` — the `postForgetCourses` tests are deleted with the function.
 - Puppeteer: two plans side by side — hide a course in one, confirm it is gone
   there and present in the other, and still gone after a reload. Then open the QR
-  modal on a realistic plan, measure the rendered SVG's pixel width against its
-  module count, and confirm the ratio is a whole number ≥ 3 on desktop.
+  modal on a realistic plan and measure the rendered SVG's pixel width against
+  its module count: the ratio must be a whole number, ≥ 5 at 1440×900 and ≥ 3 at
+  a 1366×768 viewport (where the height bound governs). Also confirm the modal
+  fits inside the viewport at 1366×768 — no clipping, no page scroll — and that
+  the code's background is white.
 
 ## Release
 
