@@ -24,11 +24,15 @@ export interface QrShare {
  * fine even at the higher module count a fitting-but-longer link produces.
  *
  * Only fall back to the other format when the requested one doesn't fit —
- * and that fallback runs both directions: Lite is usually shorter than Full,
- * but not always (a plan with few courses and many section options can make
- * Full the shorter one), so a requested Lite can legitimately overflow and
- * fall back to Full. `null` means neither format fits; the caller points the
- * user at Copy link instead.
+ * and that fallback runs both directions: Full (deflate, options deduped by
+ * shared component) is usually the shorter encoding, since Lite pays a flat
+ * per-course cost regardless of option count. But Full encodes every section
+ * option, so its size grows with total option count across the plan; once a
+ * plan carries enough of those, Full outgrows Lite's flat cost and becomes
+ * the one that overflows. Neither format is reliably shorter across every
+ * plan shape, so a requested Lite can legitimately overflow and fall back to
+ * Full. `null` means neither format fits; the caller points the user at Copy
+ * link instead.
  */
 export function qrShareForPlan(plan: PlanState, requested: ShareFormat): QrShare | null {
   const requestedUrl = shareUrl(plan, requested);
