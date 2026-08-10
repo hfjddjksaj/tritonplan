@@ -10,7 +10,7 @@ import {
 } from '@triton/shared';
 import sampleCourses from '../data/sample-courses.json';
 import { pickHue } from '../lib/colors';
-import { installBridgeListener, mergeCourses, postForgetCourses } from '../lib/bridge';
+import { installBridgeListener, mergeCourses } from '../lib/bridge';
 import {
   loadPlan,
   loadPlans,
@@ -38,6 +38,8 @@ import {
   duplicatePlan as duplicatePlanIn,
   deletePlan as deletePlanIn,
   switchActive,
+  activeHidden,
+  hideInActivePlan,
   type PlansState,
 } from '../lib/plans';
 import { mirrorSeedPlan, planToMirrorHash, readHash } from '../lib/share';
@@ -301,26 +303,20 @@ export function usePlan() {
   }, [switchViewing]);
 
   /**
-   * Drop a browsed course from the pool. Plan entries keep their own course copy, so
-   * this only affects the "Browsed — not yet added" list. The extension is asked to
-   * forget its captured data too, so the course stays gone instead of coming back on
-   * the next `courses` push — re-browsing it in TSS captures it afresh.
+   * Drop a browsed course from THIS plan's list. The pool itself is the global
+   * record of what you browsed in TSS and is left alone — another plan still
+   * lists the course. Plan entries keep their own course copy, so an added
+   * course is unaffected either way.
    */
-  const removeFromPool = useCallback(
-    (courseId: string) => {
-      const moduleId = pool.find((c) => c.id === courseId)?.moduleId;
-      if (moduleId) postForgetCourses([moduleId]);
-      setPool((prev) => prev.filter((c) => c.id !== courseId));
-    },
-    [pool],
-  );
+  const removeFromPool = useCallback((courseId: string) => {
+    setPlansState((s) => hideInActivePlan(s, [courseId], new Date().toISOString()));
+  }, []);
 
-  /** Clear every browsed course that isn't in the plan (the extension forgets them too). */
+  /** Hide every browsed course that isn't in the plan — this plan only. */
   const clearBrowsed = useCallback(() => {
     const added = new Set(plan.entries.map((e) => e.course.id));
-    const dropped = pool.filter((c) => !added.has(c.id));
-    postForgetCourses(dropped.map((c) => c.moduleId).filter((m) => m !== ''));
-    setPool((prev) => prev.filter((c) => added.has(c.id)));
+    const ids = pool.filter((c) => !added.has(c.id)).map((c) => c.id);
+    setPlansState((s) => hideInActivePlan(s, ids, new Date().toISOString()));
   }, [plan, pool]);
 
   // True once the extension's bridge has delivered anything this session — used to
@@ -394,8 +390,9 @@ export function usePlan() {
   /** Pool courses not yet in the plan — the "Browsed — not yet added" list. */
   const browsedNotAdded = useMemo(() => {
     const added = new Set(plan.entries.map((e) => e.course.id));
-    return pool.filter((c) => !added.has(c.id));
-  }, [pool, plan]);
+    const hidden = activeHidden(plansState);
+    return pool.filter((c) => !added.has(c.id) && !hidden.has(c.id));
+  }, [pool, plan, plansState]);
 
   return {
     pool,
