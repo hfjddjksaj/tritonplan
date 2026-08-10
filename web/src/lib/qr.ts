@@ -16,21 +16,42 @@ export interface QrShare {
   mode: ShareFormat;
 }
 
-/** Pick the best link that fits a QR: requested format first, then Lite, else null. */
+/**
+ * Pick the link that makes the easiest-to-scan code: whichever of the two
+ * formats is shorter and fits, preferring the requested one on a tie. Fewer
+ * characters means a lower QR version, which means larger modules.
+ */
 export function qrShareForPlan(plan: PlanState, requested: ShareFormat): QrShare | null {
-  if (requested === 'full') {
-    const full = shareUrl(plan, 'full');
-    if (full.length <= QR_URL_BUDGET) return { url: full, mode: 'full' };
-  }
-  const lite = shareUrl(plan, 'lite');
-  if (lite.length <= QR_URL_BUDGET) return { url: lite, mode: 'lite' };
-  return null;
+  const candidates: QrShare[] = [
+    { url: shareUrl(plan, 'full'), mode: 'full' },
+    { url: shareUrl(plan, 'lite'), mode: 'lite' },
+  ].filter((c) => c.url.length <= QR_URL_BUDGET);
+  if (candidates.length === 0) return null;
+  const shortest = Math.min(...candidates.map((c) => c.url.length));
+  const best = candidates.filter((c) => c.url.length === shortest);
+  return best.find((c) => c.mode === requested) ?? best[0]!;
 }
 
-/** Standalone scalable SVG markup for a QR of the given URL. */
-export function qrSvg(url: string): string {
+/**
+ * Scalable SVG for a URL, plus the module count the caller needs to size it in
+ * whole pixels. `margin: 4` is the quiet zone the QR spec requires — with less,
+ * a scanner cannot lock onto the finder patterns.
+ */
+export function qrSvg(url: string): { svg: string; moduleCount: number } {
   const qr = qrcode(0, 'L'); // typeNumber 0 = auto-size
   qr.addData(url);
   qr.make();
-  return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  return {
+    svg: qr.createSvgTag({ cellSize: 1, margin: 4, scalable: true }),
+    moduleCount: qr.getModuleCount(),
+  };
+}
+
+/**
+ * Whole pixels per module that fit in `available`. A fractional scale puts
+ * module edges mid-pixel, where antialiasing greys them out and the camera
+ * stops resolving them — so this floors, and never goes below 2.
+ */
+export function qrScale(moduleCount: number, available: number): number {
+  return Math.max(2, Math.floor(available / moduleCount));
 }

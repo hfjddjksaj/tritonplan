@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanState } from '@triton/shared';
-import { QR_URL_BUDGET, qrShareForPlan, qrSvg } from './qr';
+import { QR_URL_BUDGET, qrShareForPlan, qrSvg, qrScale } from './qr';
 import { shareUrl } from './share';
 import { makePlan } from './share-v3.test-helpers';
 
@@ -25,18 +25,65 @@ describe('qrShareForPlan', () => {
     expect(qr!.mode).toBe('lite');
   });
 
-  it('honors an explicit lite request without trying full', () => {
+  it('returns whichever format is shorter, preferring the requested on a tie', () => {
     const plan = makePlan(2, 3);
+    const full = shareUrl(plan, 'full');
+    const lite = shareUrl(plan, 'lite');
     const qr = qrShareForPlan(plan, 'lite');
-    expect(qr!.mode).toBe('lite');
-    expect(qr!.url).toBe(shareUrl(plan, 'lite'));
+    expect(qr!.url.length).toBe(Math.min(full.length, lite.length));
+  });
+
+  it('carries whichever format is actually shorter', () => {
+    // Full (deflate) often beats Lite on real plans; fewer bytes = lower version
+    // = bigger modules, so the QR should take the shorter one either way.
+    const plan = makePlan(4, 5);
+    const full = shareUrl(plan, 'full');
+    const lite = shareUrl(plan, 'lite');
+    const picked = qrShareForPlan(plan, 'full')!;
+    expect(picked.url.length).toBe(Math.min(full.length, lite.length));
+    expect(picked.mode).toBe(full.length <= lite.length ? 'full' : 'lite');
   });
 });
 
 describe('qrSvg', () => {
   it('renders scalable standalone SVG markup', () => {
-    const svg = qrSvg('https://example.com/#p=3~abc');
-    expect(svg).toContain('<svg');
-    expect(svg).toContain('viewBox');
+    const out = qrSvg('https://example.com/#p=3~abc');
+    expect(out.svg).toContain('<svg');
+    expect(out.svg).toContain('viewBox');
+  });
+});
+
+describe('qr rendering inputs', () => {
+  it('reports the module count alongside the markup', () => {
+    const out = qrSvg('https://plan.example/#p=abc');
+    expect(out.svg.startsWith('<svg')).toBe(true);
+    // Smallest QR is 21x21; anything real is bigger and always odd-sized.
+    expect(out.moduleCount).toBeGreaterThanOrEqual(21);
+  });
+
+  it('grows the module count with the payload', () => {
+    const small = qrSvg('https://plan.example/#p=' + 'x'.repeat(100)).moduleCount;
+    const big = qrSvg('https://plan.example/#p=' + 'x'.repeat(1500)).moduleCount;
+    expect(big).toBeGreaterThan(small);
+  });
+
+  it('carries a 4-module quiet zone, as the spec requires', () => {
+    // createSvgTag emits viewBox "0 0 <total> <total>" where total = modules + 2*margin.
+    const { svg, moduleCount } = qrSvg('https://plan.example/#p=abc');
+    const box = /viewBox="0 0 (\d+) \1"/.exec(svg);
+    expect(box).not.toBeNull();
+    expect(Number(box![1]) - moduleCount).toBe(8);
+  });
+});
+
+describe('qrScale', () => {
+  it('gives whole pixels per module', () => {
+    expect(qrScale(133, 820)).toBe(6);
+    expect(qrScale(177, 820)).toBe(4);
+    expect(qrScale(81, 820)).toBe(10);
+  });
+
+  it('never drops below 2, even when the viewport is tiny', () => {
+    expect(qrScale(177, 200)).toBe(2);
   });
 });
