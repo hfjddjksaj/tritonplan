@@ -1030,26 +1030,6 @@ button.menu__item:hover {
   line-height: 1.45;
   color: var(--text-faint);
 }
-.menu__qr {
-  padding: 6px 8px 8px;
-}
-.menu__qr-box {
-  padding: 10px;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-}
-.menu__qr-box svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.menu__qr-note {
-  margin: 6px 8px 4px;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--gold-ink);
-}
 
 /* =============================== received plan (share link / imported JSON) banner */
 /* Constant reminder that what's on screen (or parked nearby) is someone else's
@@ -1595,6 +1575,46 @@ button.menu__item:hover {
   font-size: 11px;
   line-height: 1.5;
   color: var(--text-faint);
+}
+
+/* The share QR needs far more room than a normal popover: a realistic plan is
+   ~133 modules, and anything under ~3 device pixels per module stops scanning.
+   Width is set inline from the module count so every module lands on whole
+   pixels — the box just centers it. */
+.qrpop {
+  width: auto;
+  max-width: min(92vw, 860px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.qrpop__code {
+  /* White stays white in every theme — scanners need the quiet zone light. */
+  background: #fff;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  /* Backstop for tiny screens with a large (high-version) plan: qrScale floors
+     at 2px/module, so the whole-pixel size computed in JS can still come out
+     wider or taller than the viewport. These mirror availablePx()'s own 92vw
+     / 78vh budget, so on any normal screen they never bind (JS already fits);
+     they only clip the rare pathological case, accepting a non-integer scale
+     there rather than letting the modal spill off-screen. */
+  max-width: 92vw;
+  max-height: 78vh;
+}
+.qrpop__code svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.qrpop__note {
+  margin: 0;
+  max-width: 44ch;
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--gold-ink);
 }
 
 /* ================================= enrollment requirements popover (in-card) */

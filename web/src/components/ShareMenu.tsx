@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { PlanState } from '@triton/shared';
 import { useClickAway } from '../hooks/useClickAway';
 import { encodePlan, shareUrl, tokenFromHash, type ShareFormat } from '../lib/share';
-import { qrShareForPlan, qrSvg } from '../lib/qr';
 import { saveSyncedToken } from '../lib/storage';
 import { ChevronDown, Link, QrCode, Share } from './icons';
+import { QrPopover } from './QrPopover';
 
 interface Props {
   /** The plan on screen — yours, or a received one you're passing along. */
@@ -23,16 +23,11 @@ export function ShareMenu({ plan, onFlash }: Props) {
   const [format, setFormat] = useState<ShareFormat>('full');
   const [qrOpen, setQrOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  useClickAway(open, ref, () => {
-    setOpen(false);
-    setQrOpen(false);
-  });
-
-  const qr = useMemo(
-    () => (open && qrOpen ? qrShareForPlan(plan, format) : null),
-    [open, qrOpen, plan, format],
-  );
-  const qrMarkup = useMemo(() => (qr ? qrSvg(qr.url) : ''), [qr]);
+  // Only the dropdown closes on an outside click — the QR modal is portaled
+  // to <body>, outside `ref`, so a click inside it would otherwise register
+  // as "outside" too and take the modal down with the dropdown. The modal
+  // closes on its own terms (backdrop click, its close button, or Escape).
+  useClickAway(open, ref, () => setOpen(false));
 
   const close = () => {
     setOpen(false);
@@ -63,94 +58,80 @@ export function ShareMenu({ plan, onFlash }: Props) {
   };
 
   return (
-    <div className="menu-wrap" ref={ref}>
-      <button
-        type="button"
-        className="btn btn--sm btn--primary"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <Share size={15} /> Share <ChevronDown size={12} />
-      </button>
-      {open && (
-        <div className="menu menu--right" role="menu">
-          <div className="menu__seg" role="group" aria-label="Share format">
+    <>
+      <div className="menu-wrap" ref={ref}>
+        <button
+          type="button"
+          className="btn btn--sm btn--primary"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <Share size={15} /> Share <ChevronDown size={12} />
+        </button>
+        {open && (
+          <div className="menu menu--right" role="menu">
+            <div className="menu__seg" role="group" aria-label="Share format">
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={format === 'full'}
+                className={`menu__seg-btn${format === 'full' ? ' menu__seg-btn--on' : ''}`}
+                onClick={() => setFormat('full')}
+              >
+                Full
+              </button>
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={format === 'lite'}
+                className={`menu__seg-btn${format === 'lite' ? ' menu__seg-btn--on' : ''}`}
+                onClick={() => setFormat('lite')}
+              >
+                Lite
+              </button>
+            </div>
+            <p className="menu__seg-desc">
+              {format === 'full'
+                ? 'All sections included — editable on the other device.'
+                : 'Selected sections only — smaller link, view-only.'}
+            </p>
+
+            <button type="button" className="menu__item" role="menuitem" onClick={copyLink}>
+              <span className="menu__item-title">
+                <Link size={14} /> Copy link
+              </span>
+              <span className="menu__item-desc">
+                Send it anywhere — the plan travels inside the link itself.
+              </span>
+            </button>
+
             <button
               type="button"
-              role="menuitemradio"
-              aria-checked={format === 'full'}
-              className={`menu__seg-btn${format === 'full' ? ' menu__seg-btn--on' : ''}`}
-              onClick={() => setFormat('full')}
+              className="menu__item"
+              role="menuitem"
+              aria-expanded={qrOpen}
+              onClick={() => setQrOpen((v) => !v)}
             >
-              Full
+              <span className="menu__item-title">
+                <QrCode size={14} /> QR code
+              </span>
+              <span className="menu__item-desc">Scan with your phone to open this plan there.</span>
             </button>
-            <button
-              type="button"
-              role="menuitemradio"
-              aria-checked={format === 'lite'}
-              className={`menu__seg-btn${format === 'lite' ? ' menu__seg-btn--on' : ''}`}
-              onClick={() => setFormat('lite')}
-            >
-              Lite
+
+            {/* Export as JSON — shelved 2026-07-24 (user decision; Import → Upload still works).
+                Re-enable by restoring this block and the downloadPlanJson import.
+            <button type="button" className="menu__item" role="menuitem"
+              onClick={() => { close(); downloadPlanJson(plan); onFlash('Plan exported as JSON'); }}>
+              <span className="menu__item-title"><Download size={14} /> Export as JSON</span>
+              <span className="menu__item-desc">The complete plan, every section option included.
+                To open it: click Import → upload the file, and the plan is right there.</span>
             </button>
+            */}
           </div>
-          <p className="menu__seg-desc">
-            {format === 'full'
-              ? 'All sections included — editable on the other device.'
-              : 'Selected sections only — smaller link, view-only.'}
-          </p>
-
-          <button type="button" className="menu__item" role="menuitem" onClick={copyLink}>
-            <span className="menu__item-title">
-              <Link size={14} /> Copy link
-            </span>
-            <span className="menu__item-desc">
-              Send it anywhere — the plan travels inside the link itself.
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className="menu__item"
-            role="menuitem"
-            aria-expanded={qrOpen}
-            onClick={() => setQrOpen((v) => !v)}
-          >
-            <span className="menu__item-title">
-              <QrCode size={14} /> QR code
-            </span>
-            <span className="menu__item-desc">Scan with your phone to open this plan there.</span>
-          </button>
-          {qrOpen &&
-            (qr ? (
-              <div className="menu__qr">
-                {/* qrSvg output is generated locally from qrcode-generator — trusted markup */}
-                <div className="menu__qr-box" dangerouslySetInnerHTML={{ __html: qrMarkup }} />
-                {qr.mode === 'lite' && format === 'full' && (
-                  <p className="menu__qr-note">
-                    Plan too large for a full QR — this code carries the Lite version. Use Copy
-                    link for the full plan.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="menu__qr-note">
-                This plan is too large for a QR code — use Copy link instead.
-              </p>
-            ))}
-
-          {/* Export as JSON — shelved 2026-07-24 (user decision; Import → Upload still works).
-              Re-enable by restoring this block and the downloadPlanJson import.
-          <button type="button" className="menu__item" role="menuitem"
-            onClick={() => { close(); downloadPlanJson(plan); onFlash('Plan exported as JSON'); }}>
-            <span className="menu__item-title"><Download size={14} /> Export as JSON</span>
-            <span className="menu__item-desc">The complete plan, every section option included.
-              To open it: click Import → upload the file, and the plan is right there.</span>
-          </button>
-          */}
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+      {qrOpen && <QrPopover plan={plan} format={format} onClose={() => setQrOpen(false)} />}
+    </>
   );
 }

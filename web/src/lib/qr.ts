@@ -23,8 +23,8 @@ export interface QrShare {
  */
 export function qrShareForPlan(plan: PlanState, requested: ShareFormat): QrShare | null {
   const candidates: QrShare[] = [
-    { url: shareUrl(plan, 'full'), mode: 'full' },
-    { url: shareUrl(plan, 'lite'), mode: 'lite' },
+    { url: shareUrl(plan, 'full'), mode: 'full' as const },
+    { url: shareUrl(plan, 'lite'), mode: 'lite' as const },
   ].filter((c) => c.url.length <= QR_URL_BUDGET);
   if (candidates.length === 0) return null;
   const shortest = Math.min(...candidates.map((c) => c.url.length));
