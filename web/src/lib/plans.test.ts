@@ -11,6 +11,8 @@ import {
   deletePlan,
   switchActive,
   mapAllPlans,
+  activeHidden,
+  hideInActivePlan,
   type PlansState,
 } from './plans';
 import { emptyPlan, DEFAULT_TERM } from './plan';
@@ -145,5 +147,63 @@ describe('empty-state guard', () => {
     const s = migratePlans(null, null, NOW);
     expect(activePlan(s).plan).toEqual(emptyPlan(s.plans[0]!.plan.term));
     expect(makeCourse('X|2026|2')).toBeTruthy(); // fixture sanity, keeps import used
+  });
+});
+
+describe('per-plan hidden browsed courses', () => {
+  /** Two plans, the first active. */
+  function twoPlans(): PlansState {
+    const base = migratePlans(null, null, '2026-08-09T00:00:00.000Z');
+    return createPlan(base, '2026-08-09T00:01:00.000Z', 'Plan B');
+  }
+
+  it('starts with nothing hidden', () => {
+    expect(activeHidden(migratePlans(null, null, 'now')).size).toBe(0);
+  });
+
+  it('hides only in the active plan', () => {
+    const two = twoPlans(); // active is "Plan B"
+    const next = hideInActivePlan(two, ['CSE-008A|2026|2'], 'now');
+    expect(activeHidden(next).has('CSE-008A|2026|2')).toBe(true);
+    // …and the other plan is untouched
+    const other = next.plans.find((p) => p.id !== next.activeId)!;
+    expect(other.hidden ?? []).toEqual([]);
+  });
+
+  it('accumulates without duplicating', () => {
+    let s = migratePlans(null, null, 'now');
+    s = hideInActivePlan(s, ['A'], 'now');
+    s = hideInActivePlan(s, ['A', 'B'], 'now');
+    expect([...activeHidden(s)].sort()).toEqual(['A', 'B']);
+  });
+
+  it('is a no-op that preserves identity when nothing new is hidden', () => {
+    const s = hideInActivePlan(migratePlans(null, null, 'now'), ['A'], 'now');
+    expect(hideInActivePlan(s, ['A'], 'later')).toBe(s);
+    expect(hideInActivePlan(s, [], 'later')).toBe(s);
+  });
+
+  it('follows the active plan when you switch', () => {
+    const two = twoPlans();
+    const hidden = hideInActivePlan(two, ['X'], 'now');
+    const back = switchActive(hidden, hidden.plans[0]!.id);
+    expect(activeHidden(back).size).toBe(0);
+  });
+
+  it('carries hidden into a duplicated plan', () => {
+    // duplicatePlan hand-builds the NamedPlan — hidden does not come along for free.
+    const s = hideInActivePlan(migratePlans(null, null, 'now'), ['X'], 'now');
+    const dup = duplicatePlan(s, s.activeId, 'now');
+    expect(activeHidden(dup).has('X')).toBe(true);
+    // …as a copy, not the same array
+    const source = dup.plans.find((p) => p.id !== dup.activeId)!;
+    const copy = dup.plans.find((p) => p.id === dup.activeId)!;
+    expect(copy.hidden).not.toBe(source.hidden);
+  });
+
+  it('treats stored data with no hidden key as nothing hidden', () => {
+    const stored = migratePlans(null, null, 'now');
+    expect(stored.plans[0]!.hidden).toBeUndefined();
+    expect(activeHidden(stored).size).toBe(0);
   });
 });
