@@ -46,10 +46,12 @@ describe('qrShareForPlan', () => {
 });
 
 describe('qrSvg', () => {
-  it('renders scalable standalone SVG markup', () => {
+  it('renders scalable standalone SVG markup with viewBox size', () => {
     const out = qrSvg('https://example.com/#p=3~abc');
     expect(out.svg).toContain('<svg');
     expect(out.svg).toContain('viewBox');
+    // viewBoxSize should include the quiet zone (moduleCount + 2*margin)
+    expect(out.viewBoxSize).toBe(out.moduleCount + 8);
   });
 });
 
@@ -77,13 +79,15 @@ describe('qr rendering inputs', () => {
 });
 
 describe('qrScale', () => {
-  it('gives whole pixels per module', () => {
-    expect(qrScale(133, 820)).toBe(6);
-    expect(qrScale(177, 820)).toBe(4);
-    expect(qrScale(81, 820)).toBe(10);
+  it('gives whole pixels per viewBox unit (code + quiet zone)', () => {
+    // Test values are viewBox sizes (moduleCount + 8 for the quiet zone)
+    expect(qrScale(141, 820)).toBe(5); // (133+8) mod code, 820px available
+    expect(qrScale(185, 820)).toBe(4); // (177+8) mod code, 820px available
+    expect(qrScale(89, 820)).toBe(9);  // (81+8) mod code, 820px available
   });
 
   it('never drops below 2, even when the viewport is tiny', () => {
-    expect(qrScale(177, 200)).toBe(2);
+    // With a tiny viewport, scale floors to 2 to keep modules readable
+    expect(qrScale(185, 200)).toBe(2); // (177+8) mod code, only 200px available
   });
 });
