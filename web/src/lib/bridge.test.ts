@@ -69,6 +69,14 @@ describe('isPlanAddMessage', () => {
 });
 
 describe('mergeCourses', () => {
+  it('keeps units and title a section-only re-capture does not carry', () => {
+    const full = { ...makeCourse('A'), title: 'Real Course Title', units: 4 };
+    const { units: _units, ...partial } = makeCourse('A');
+    const merged = mergeCourses([full], [{ ...partial, title: partial.courseCode }]);
+    expect(merged[0]!.units).toBe(4);
+    expect(merged[0]!.title).toBe('Real Course Title');
+  });
+
   it('appends genuinely new courses', () => {
     const merged = mergeCourses([makeCourse('A')], [makeCourse('B')]);
     expect(merged.map((c) => c.id)).toEqual(['A', 'B']);

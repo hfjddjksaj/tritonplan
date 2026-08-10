@@ -16,6 +16,7 @@ import {
 import { hueFromEntryColor } from './colors';
 import type { MeetingInstance } from './layout';
 import { optionFull } from './seats';
+import { foldCourse } from './course-merge';
 
 export const DEFAULT_TERM: Term = { year: '2026', period: '2', label: 'Fall 2026' };
 
@@ -48,7 +49,9 @@ export function refreshPlanEntries(prev: PlanState, incoming: CourseOffering[]):
     changed = true;
     const keep = e.selectedOptionId !== null && findOption(fresh, e.selectedOptionId) !== undefined;
     const selectedOptionId = keep ? e.selectedOptionId : (fresh.options[0]?.id ?? null);
-    return { ...e, course: fresh, selectedOptionId };
+    // Fold, don't replace: a browse that captured sections but no module row
+    // carries no units/title, and must not erase what we already know.
+    return { ...e, course: foldCourse(e.course, fresh), selectedOptionId };
   });
   return changed ? { ...prev, entries } : prev;
 }

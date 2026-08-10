@@ -22,8 +22,10 @@ function complete(): CourseOffering {
  * no level, no department. This is what erased the user's units in the wild.
  */
 function sectionOnly(): CourseOffering {
-  const c = makeCourse('PHYS-002CL|2026|2', 'PHYS-002CL');
-  return { ...c, title: 'PHYS-002CL', capturedAt: '2026-08-10T04:54:35.560Z' };
+  // No `units` KEY at all — that is how the real capture arrives, and the
+  // fixture helper would otherwise hand us a default 4.
+  const { units: _units, ...rest } = makeCourse('PHYS-002CL|2026|2', 'PHYS-002CL');
+  return { ...rest, title: 'PHYS-002CL', capturedAt: '2026-08-10T04:54:35.560Z' };
 }
 
 describe('foldCourse', () => {
@@ -77,7 +79,7 @@ describe('foldCourse', () => {
   });
 
   it('leaves a field undefined when neither copy has it', () => {
-    const bare = makeCourse('X-001|2026|2', 'X-001');
+    const { units: _units, ...bare } = makeCourse('X-001|2026|2', 'X-001');
     expect(foldCourse(bare, { ...bare })).not.toHaveProperty('units');
   });
 

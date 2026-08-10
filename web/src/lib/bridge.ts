@@ -12,6 +12,7 @@
  */
 import type { ApptTimes, BridgeMessage, CourseOffering } from '@triton/shared';
 import { isApptTimesList } from './storage';
+import { foldCourse } from './course-merge';
 
 export const BRIDGE_SOURCE = 'triton-planner-extension';
 
@@ -100,7 +101,9 @@ export function mergeCourses(
   const merged: CourseOffering[] = [];
 
   for (const existing of pool) {
-    merged.push(incomingById.get(existing.id) ?? existing);
+    const fresh = incomingById.get(existing.id);
+    // Fold, don't replace — see course-merge.ts for what a partial capture drops.
+    merged.push(fresh ? foldCourse(existing, fresh) : existing);
     seen.add(existing.id);
   }
   for (const c of incoming) {

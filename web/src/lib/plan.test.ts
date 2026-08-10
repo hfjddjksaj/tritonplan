@@ -106,6 +106,21 @@ describe('optionSummaryParts', () => {
 });
 
 describe('refreshPlanEntries', () => {
+  it('does not let a section-only re-capture erase units and title', () => {
+    // Real report: browsing TSS again captured PHYS-002CL's section rows but not
+    // its module row, so the fresh copy had no units and a title equal to the
+    // course code. Replacing wholesale made the course lose its units on screen.
+    const plan = makePlan();
+    const original = plan.entries[0]!.course;
+    plan.entries[0]!.course = { ...original, title: 'Introduction to Programming', units: 4 };
+    const { units: _units, ...partial } = recaptured(original, 0);
+    const next = refreshPlanEntries(plan, [{ ...partial, title: partial.courseCode }]);
+    expect(next.entries[0]!.course.units).toBe(4);
+    expect(next.entries[0]!.course.title).toBe('Introduction to Programming');
+    // …while the point of the refresh still lands:
+    expect(next.entries[0]!.course.options[0]!.seatsAvailable).toBe(0);
+  });
+
   it('replaces an entry’s frozen course with the fresh copy, keeping the selection', () => {
     const plan = makePlan();
     const fresh = recaptured(plan.entries[0]!.course, 3);
