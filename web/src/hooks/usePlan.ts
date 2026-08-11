@@ -10,11 +10,12 @@ import {
 } from '@triton/shared';
 import sampleCourses from '../data/sample-courses.json';
 import { pickHue } from '../lib/colors';
-import { installBridgeListener, mergeCourses } from '../lib/bridge';
+import { installBridgeListener, mergeCourses, postForgetCourses } from '../lib/bridge';
 import {
   loadPlan,
   loadPlans,
-  savePlans,
+  loadTerms,
+  saveTerms,
   loadPool,
   savePool,
   purgeSeededSamples,
@@ -28,7 +29,6 @@ import {
   type Viewing,
 } from '../lib/storage';
 import {
-  migratePlans,
   activePlan,
   updateActivePlan,
   mapAllPlans,
@@ -38,10 +38,25 @@ import {
   duplicatePlan as duplicatePlanIn,
   deletePlan as deletePlanIn,
   switchActive,
-  activeHidden,
-  hideInActivePlan,
+  addBrowsed,
+  removeBrowsed,
   type PlansState,
 } from '../lib/plans';
+import {
+  activeWorkspace,
+  adoptSeedPlan,
+  allPlansEmpty,
+  archiveSweep,
+  ensureWorkspace,
+  mapWorkspaces,
+  migrateToTermsState,
+  newestTermKey,
+  routeCapture,
+  switchTermIn,
+  updateWorkspace,
+  type TermsState,
+} from '../lib/terms-state';
+import { isArchived, termKey, type TermKey } from '../lib/terms';
 import { mirrorSeedPlan, planToMirrorHash, readHash } from '../lib/share';
 import { openBooking, openInTss } from '../lib/tss';
 import {
@@ -59,21 +74,23 @@ import {
 // the extension re-pushes the real pool on each load via a `courses` bridge message.
 const SAMPLE = import.meta.env.DEV ? (sampleCourses as unknown as CourseOffering[]) : [];
 
-/** Named-plans list: stored list wins, else the legacy single plan is migrated in. */
-function initialPlans(): PlansState {
-  const now = new Date().toISOString();
-  const base = migratePlans(loadPlans(), loadPlan(), now);
-  // Nothing saved on this device yet, but the address bar carries our own mirror:
-  // this is a synced/bookmarked tab opened somewhere new, so adopt it as the plan.
-  // A device that already holds a plan always keeps its own copy (see below).
-  if (base.plans.some((p) => p.plan.entries.length > 0)) return base;
-  const seed = mirrorSeedPlan(window.location.hash);
-  return seed ? updateActivePlan(base, () => seed, now) : base;
-}
-
-/** Seed the browsed pool from anything persisted from a prior session (+ dev samples). */
-function initialPool(): CourseOffering[] {
-  return mergeCourses(SAMPLE, purgeSeededSamples(loadPool() ?? []));
+/** One-shot boot: pool repository + terms container + the archive sweep's forget list. */
+function initialState(): { pool: CourseOffering[]; terms: TermsState; forgetModuleIds: string[] } {
+  const now = new Date();
+  const iso = now.toISOString();
+  const pool = mergeCourses(SAMPLE, purgeSeededSamples(loadPool() ?? []));
+  let terms = migrateToTermsState(loadTerms(), loadPlans(), loadPlan(), pool, iso);
+  if (allPlansEmpty(terms)) {
+    // Nothing saved on this device yet, but the address bar carries our own mirror:
+    // this is a synced/bookmarked tab opened somewhere new, so adopt it as the plan.
+    const seed = mirrorSeedPlan(window.location.hash);
+    if (seed) terms = adoptSeedPlan(terms, seed, iso);
+  }
+  const swept = archiveSweep(terms, pool, now);
+  // Default view is always the NEWEST term (spec §6): the stored activeTermKey is
+  // ignored on load.
+  const state = switchTermIn(swept.state, newestTermKey(swept.state));
+  return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds };
 }
 
 /** Append a fresh plan entry, coloring it with the next hue in the palette. */
@@ -90,8 +107,11 @@ function appendEntry(
 }
 
 export function usePlan() {
-  const [pool, setPool] = useState<CourseOffering[]>(initialPool);
-  const [plansState, setPlansState] = useState<PlansState>(initialPlans);
+  const bootRef = useRef<ReturnType<typeof initialState> | null>(null);
+  if (bootRef.current === null) bootRef.current = initialState();
+  const [pool, setPool] = useState<CourseOffering[]>(bootRef.current.pool);
+  const [termsState, setTermsState] = useState<TermsState>(bootRef.current.terms);
+  const [pendingQueue, setPendingQueue] = useState<{ course: CourseOffering; optionId: string }[]>([]);
   // A plan someone else sent (share link or imported JSON). Lives in its own slot,
   // shown read-only — it can never overwrite any of the user's plans.
   const [received, setReceived] = useState<ReceivedPlan | null>(loadReceived);
@@ -99,18 +119,48 @@ export function usePlan() {
     loadReceived() ? loadViewing() : 'mine',
   );
   const firstRun = useRef(true);
-  // Latest plans for the hash-consume effect, which must not re-subscribe on every edit.
-  const plansRef = useRef(plansState);
+  // Latest pool/terms for effects that must not re-subscribe on every edit.
+  const poolRef = useRef(pool);
+  const termsRef = useRef(termsState);
   useEffect(() => {
-    plansRef.current = plansState;
-  }, [plansState]);
+    poolRef.current = pool;
+    termsRef.current = termsState;
+  }, [pool, termsState]);
 
-  // The plan every existing action/selector works on = the ACTIVE named plan.
+  // One-time: tell the extension to release captured data the archive sweep dropped.
+  useEffect(() => {
+    postForgetCourses(bootRef.current?.forgetModuleIds ?? []);
+  }, []);
+
+  // The plan every existing action/selector works on = the ACTIVE named plan of
+  // the ACTIVE TERM's workspace.
+  const workspace = activeWorkspace(termsState);
+  const plansState = workspace.plans;
   const active = activePlan(plansState);
   const plan = active.plan;
-  /** Route a PlanState update into the active member of the plans list. */
+  const archived = useMemo(
+    () => isArchived(workspace.term, new Date()),
+    [workspace.term],
+  );
+
+  /** Route a PlanState update into the active plan of the active term. Archived terms are frozen. */
   const setPlan = useCallback((update: (prev: PlanState) => PlanState) => {
-    setPlansState((s) => updateActivePlan(s, update, new Date().toISOString()));
+    setTermsState((s) => {
+      const ws = activeWorkspace(s);
+      if (isArchived(ws.term, new Date())) return s;
+      return updateWorkspace(s, s.activeTermKey, (ps) =>
+        updateActivePlan(ps, update, new Date().toISOString()),
+      );
+    });
+  }, []);
+
+  /** Same guard for plans-level ops (create/rename/duplicate/delete/browsed). */
+  const setPlans = useCallback((update: (ps: PlansState) => PlansState) => {
+    setTermsState((s) => {
+      const ws = activeWorkspace(s);
+      if (isArchived(ws.term, new Date())) return s;
+      return updateWorkspace(s, s.activeTermKey, update);
+    });
   }, []);
 
   const switchViewing = useCallback((v: Viewing) => {
@@ -125,7 +175,7 @@ export function usePlan() {
   useEffect(() => {
     const consume = () => {
       const intent = readHash(window.location.hash, {
-        plans: plansRef.current.plans.map((p) => p.plan),
+        plans: Object.values(termsRef.current.terms).flatMap((ws) => ws.plans.plans.map((p) => p.plan)),
         syncedToken: loadSyncedToken(),
       });
       // Our own mirror — including a bookmark minted before the #m= split. The copy
@@ -160,55 +210,102 @@ export function usePlan() {
     window.history.replaceState(null, '', `#${planToMirrorHash(plan)}`);
   }, [plan, received]);
 
-  // Persist the plans list on change (skip first render so we don't clobber before load).
+  // Persist the terms container on change (skip first render so we don't clobber before load).
   useEffect(() => {
     if (firstRun.current) {
       firstRun.current = false;
       return;
     }
-    savePlans(plansState);
-  }, [plansState]);
+    saveTerms(termsState);
+  }, [termsState]);
 
   // Persist the browsed pool so the "Browsed — not yet added" list survives reloads.
   useEffect(() => {
     savePool(pool);
   }, [pool]);
 
+  // ---- term switching ----------------------------------------------------
+  const switchTerm = useCallback((key: TermKey) => {
+    setTermsState((s) => switchTermIn(s, key));
+    switchViewing('mine');
+  }, [switchViewing]);
+
+  const termList = useMemo(() => Object.values(termsState.terms).map((ws) => ws.term), [termsState]);
+
   /** Add a course to the plan (default to its first option); no-op if already added. */
   const addCourse = useCallback((course: CourseOffering) => {
-    setPlan((prev) => {
-      if (prev.entries.some((e) => e.course.id === course.id)) return prev;
-      return appendEntry(prev, course, course.options[0]?.id ?? null);
+    setPlans((ps) => {
+      const withEntry = updateActivePlan(ps, (prev) => {
+        if (prev.entries.some((e) => e.course.id === course.id)) return prev;
+        return appendEntry(prev, course, course.options[0]?.id ?? null);
+      }, new Date().toISOString());
+      return addBrowsed(withEntry, withEntry.activeId, [course.id], new Date().toISOString());
+    });
+  }, [setPlans]);
+
+  /** Add into the course's OWN term (creating it if needed), into `planId` or that term's active plan. */
+  const addIntoTerm = useCallback((course: CourseOffering, optionId: string, planId: string | null) => {
+    const nowIso = new Date().toISOString();
+    setTermsState((s) => {
+      const key = termKey(course.term);
+      let next = ensureWorkspace(s, course.term, nowIso);
+      next = updateWorkspace(next, key, (ps) => {
+        let out = planId ? switchActive(ps, planId) : ps;
+        out = updateActivePlan(out, (prev) => {
+          const existing = prev.entries.find((e) => e.course.id === course.id);
+          if (existing) {
+            return {
+              ...prev,
+              entries: prev.entries.map((e) =>
+                e.course.id === course.id ? { ...e, course, selectedOptionId: optionId } : e,
+              ),
+            };
+          }
+          return appendEntry(prev, course, optionId);
+        }, nowIso);
+        return addBrowsed(out, out.activeId, [course.id], nowIso);
+      });
+      return switchTermIn(next, key);
     });
   }, []);
 
   /**
    * Add a course with a specific option pre-selected, or — if it's already in the
    * plan — switch it to that option. Also merges the (fresh) course into the pool.
-   * This is the `plan-add` path and the "+" quick-add can reuse it too.
+   * This is the `plan-add` direct path and the "+" quick-add can reuse it too.
    */
   const addCourseWithOption = useCallback((course: CourseOffering, optionId: string) => {
     setPool((prev) => mergeCourses(prev, [course]));
-    setPlan((prev) => {
-      const existing = prev.entries.find((e) => e.course.id === course.id);
-      if (existing) {
-        return {
-          ...prev,
-          entries: prev.entries.map((e) =>
-            e.course.id === course.id ? { ...e, course, selectedOptionId: optionId } : e,
-          ),
-        };
-      }
-      return appendEntry(prev, course, optionId);
+    addIntoTerm(course, optionId, null);
+  }, [addIntoTerm]);
+
+  // ---- plan-add picker queue (course's term has several plans) -----------
+  const pendingAdd = pendingQueue[0] ?? null;
+  const confirmPendingAdd = useCallback((planId: string) => {
+    const head = pendingQueue[0];
+    if (!head) return;
+    addIntoTerm(head.course, head.optionId, planId);
+    setPendingQueue((q) => q.slice(1));
+  }, [pendingQueue, addIntoTerm]);
+  const cancelPendingAdd = useCallback(() => {
+    const head = pendingQueue[0];
+    if (!head) return;
+    // The capture still happened — keep it as a browsed record in that term's active plan.
+    const nowIso = new Date().toISOString();
+    setTermsState((s) => {
+      const key = termKey(head.course.term);
+      const next = ensureWorkspace(s, head.course.term, nowIso);
+      return updateWorkspace(next, key, (ps) => addBrowsed(ps, ps.activeId, [head.course.id], nowIso));
     });
-  }, []);
+    setPendingQueue((q) => q.slice(1));
+  }, [pendingQueue]);
 
   const removeCourse = useCallback((courseId: string) => {
     setPlan((prev) => ({
       ...prev,
       entries: prev.entries.filter((e) => e.course.id !== courseId),
     }));
-  }, []);
+  }, [setPlan]);
 
   const selectOption = useCallback((courseId: string, optionId: string) => {
     setPlan((prev) => ({
@@ -217,7 +314,7 @@ export function usePlan() {
         e.course.id === courseId ? { ...e, selectedOptionId: optionId } : e,
       ),
     }));
-  }, []);
+  }, [setPlan]);
 
   const replacePlan = useCallback(
     (next: PlanState) => {
@@ -233,34 +330,36 @@ export function usePlan() {
   }, [setPlan]);
 
   // ---- named-plans management -------------------------------------------
+  // switchPlan must work in archived terms too: viewing another archived plan
+  // is read-only navigation, not an edit — so no archived guard here.
   const switchPlan = useCallback(
     (id: string) => {
-      setPlansState((s) => switchActive(s, id));
+      setTermsState((s) => updateWorkspace(s, s.activeTermKey, (ps) => switchActive(ps, id)));
       switchViewing('mine');
     },
     [switchViewing],
   );
 
   const createNewPlan = useCallback(() => {
-    setPlansState((s) => createPlan(s, new Date().toISOString()));
+    setPlans((s) => createPlan(s, new Date().toISOString()));
     switchViewing('mine');
-  }, [switchViewing]);
+  }, [setPlans, switchViewing]);
 
   const renamePlan = useCallback((id: string, name: string) => {
-    setPlansState((s) => renamePlanIn(s, id, name));
-  }, []);
+    setPlans((s) => renamePlanIn(s, id, name));
+  }, [setPlans]);
 
   const duplicatePlan = useCallback(
     (id: string) => {
-      setPlansState((s) => duplicatePlanIn(s, id, new Date().toISOString()));
+      setPlans((s) => duplicatePlanIn(s, id, new Date().toISOString()));
       switchViewing('mine');
     },
-    [switchViewing],
+    [setPlans, switchViewing],
   );
 
   const deletePlan = useCallback((id: string) => {
-    setPlansState((s) => deletePlanIn(s, id));
-  }, []);
+    setPlans((s) => deletePlanIn(s, id));
+  }, [setPlans]);
 
   /** Bring in a plan someone sent (imported JSON / pasted link) — read-only view. */
   const importReceived = useCallback(
@@ -273,27 +372,41 @@ export function usePlan() {
     [switchViewing],
   );
 
-  /** Replace the ACTIVE plan with the received one (destructive — caller confirms). */
-  const saveReceivedAsMine = useCallback(() => {
-    if (received) replacePlan(received.plan);
-    clearReceived();
-    setReceived(null);
-    switchViewing('mine');
-  }, [received, replacePlan, switchViewing]);
-
-  /** Keep the received plan as a NEW named plan ("朋友的plan") and switch to it. */
+  /** Keep the received plan as a NEW named plan ("朋友的plan") in ITS OWN term and switch to it. */
   const saveReceivedAsNewPlan = useCallback(
     (name: string) => {
       if (!received) return;
       const incoming = received.plan;
       setPool((prev) => mergeCourses(prev, incoming.entries.map((e) => e.course)));
-      setPlansState((s) => addPlan(s, incoming, name, new Date().toISOString()));
+      const nowIso = new Date().toISOString();
+      setTermsState((s) => {
+        const key = termKey(incoming.term);
+        let next = ensureWorkspace(s, incoming.term, nowIso);
+        next = updateWorkspace(next, key, (ps) => {
+          const withPlan = addPlan(ps, incoming, name, nowIso);
+          return addBrowsed(withPlan, withPlan.activeId, incoming.entries.map((e) => e.course.id), nowIso);
+        });
+        return switchTermIn(next, key);
+      });
       clearReceived();
       setReceived(null);
       switchViewing('mine');
     },
     [received, switchViewing],
   );
+
+  /** Replace the ACTIVE plan with the received one (destructive — caller confirms). */
+  const saveReceivedAsMine = useCallback(() => {
+    if (received && termKey(received.plan.term) !== termsRef.current.activeTermKey) {
+      // Different term: replacing the current term's plan with it would corrupt both.
+      saveReceivedAsNewPlan('Shared plan');
+      return;
+    }
+    if (received) replacePlan(received.plan);
+    clearReceived();
+    setReceived(null);
+    switchViewing('mine');
+  }, [received, replacePlan, switchViewing, saveReceivedAsNewPlan]);
 
   /** Drop the received plan and go back to my own. */
   const discardReceived = useCallback(() => {
@@ -302,47 +415,58 @@ export function usePlan() {
     switchViewing('mine');
   }, [switchViewing]);
 
-  /**
-   * Drop a browsed course from THIS plan's list. The pool itself is the global
-   * record of what you browsed in TSS and is left alone — another plan still
-   * lists the course. Plan entries keep their own course copy, so an added
-   * course is unaffected either way.
-   */
+  /** Drop a browsed course from THIS plan's own list (per-plan, per-term). */
   const removeFromPool = useCallback((courseId: string) => {
-    setPlansState((s) => hideInActivePlan(s, [courseId], new Date().toISOString()));
-  }, []);
+    setPlans((ps) => removeBrowsed(ps, [courseId], new Date().toISOString()));
+  }, [setPlans]);
 
-  /** Hide every browsed course that isn't in the plan — this plan only. */
+  /** Clear this plan's browsed list — added courses keep their membership. */
   const clearBrowsed = useCallback(() => {
     const added = new Set(plan.entries.map((e) => e.course.id));
-    const ids = pool.filter((c) => !added.has(c.id)).map((c) => c.id);
-    setPlansState((s) => hideInActivePlan(s, ids, new Date().toISOString()));
-  }, [plan, pool]);
+    const ids = (active.browsed ?? []).filter((id) => !added.has(id));
+    setPlans((ps) => removeBrowsed(ps, ids, new Date().toISOString()));
+  }, [plan, active, setPlans]);
 
   // True once the extension's bridge has delivered anything this session — used to
   // route "open in TSS" through the extension (which can reuse an open TSS tab).
   const bridgeSeen = useRef(false);
 
-  // Data bridge: `courses` merges into the pool; `plan-add` adds to the plan.
+  // Data bridge: `courses` routes into each course's own term; `plan-add` adds to
+  // the course's term (via the picker when that term has several plans).
   useEffect(() => {
     return installBridgeListener({
       onCourses: (incoming) => {
         bridgeSeen.current = true;
-        setPool((prev) => mergeCourses(prev, incoming));
-        // EVERY plan holds its own course copies — refresh them all, or seat
-        // counts stay frozen at whatever they were when the course was added.
-        setPlansState((s) =>
-          mapAllPlans(s, (p) => refreshPlanEntries(p, incoming), new Date().toISOString()),
-        );
+        const prevPool = poolRef.current;
+        setPool(mergeCourses(prevPool, incoming));
+        setTermsState((s) => {
+          const nowIso = new Date().toISOString();
+          const routed = routeCapture(s, prevPool, incoming, nowIso, new Date());
+          // EVERY plan holds its own course copies — refresh them all, or seat
+          // counts stay frozen at whatever they were when the course was added.
+          const refreshed = mapWorkspaces(routed.state, (ws) =>
+            isArchived(ws.term, new Date())
+              ? ws.plans // archived terms are frozen — no seat refreshes
+              : mapAllPlans(ws.plans, (p) => refreshPlanEntries(p, incoming), nowIso),
+          );
+          return routed.switchTo ? switchTermIn(refreshed, routed.switchTo) : refreshed;
+        });
       },
       onPlanAdd: (course, optionId) => {
         bridgeSeen.current = true;
-        addCourseWithOption(course, optionId);
-        // Adds always land in MY plan — surface it, even if a received plan was up.
+        if (isArchived(course.term, new Date())) return; // defensive: cannot add into an archive
+        setPool((prev) => mergeCourses(prev, [course]));
+        const ws = termsRef.current.terms[termKey(course.term)];
+        if (ws && ws.plans.plans.length > 1) {
+          setPendingQueue((q) => [...q, { course, optionId }]);
+        } else {
+          addIntoTerm(course, optionId, null);
+        }
+        // Adds always land in MY plans — surface them, even if a received plan was up.
         switchViewing('mine');
       },
     });
-  }, [addCourseWithOption, switchViewing]);
+  }, [addIntoTerm, switchViewing]);
 
   /** Jump back to TSS — through the extension when present, else a plain new tab. */
   const openCourseInTss = useCallback((course: CourseOffering) => {
@@ -356,9 +480,9 @@ export function usePlan() {
 
   // ---- derived view data (memoized) --------------------------------------
   // Everything the screen shows derives from the plan being VIEWED — the user's
-  // own, or a received one (read-only).
+  // own, or a received one (read-only). Archived terms are read-only too.
   const viewPlan = viewing === 'received' && received ? received.plan : plan;
-  const readOnly = viewing === 'received' && received !== null;
+  const readOnly = (viewing === 'received' && received !== null) || archived;
 
   const selectedCourses = useMemo(() => buildSelectedCourses(viewPlan), [viewPlan]);
   const weeklyConflicts = useMemo(() => findWeeklyConflicts(selectedCourses), [selectedCourses]);
@@ -387,12 +511,15 @@ export function usePlan() {
     return m;
   }, [pool, viewPlan]);
 
-  /** Pool courses not yet in the plan — the "Browsed — not yet added" list. */
+  /** THIS plan's browsed list, minus courses already added, resolved from the pool repository. */
   const browsedNotAdded = useMemo(() => {
     const added = new Set(plan.entries.map((e) => e.course.id));
-    const hidden = activeHidden(plansState);
-    return pool.filter((c) => !added.has(c.id) && !hidden.has(c.id));
-  }, [pool, plan, plansState]);
+    const byId = new Map(pool.map((c) => [c.id, c]));
+    return (active.browsed ?? [])
+      .filter((id) => !added.has(id))
+      .map((id) => byId.get(id))
+      .filter((c): c is CourseOffering => c !== undefined);
+  }, [pool, plan, active]);
 
   return {
     pool,
@@ -407,6 +534,15 @@ export function usePlan() {
     clearBrowsed,
     openCourseInTss,
     openBookingInTss,
+    // terms
+    activeTermKey: termsState.activeTermKey,
+    termList,
+    archived,
+    switchTerm,
+    // plan-add picker
+    pendingAdd,
+    confirmPendingAdd,
+    cancelPendingAdd,
     // named plans
     plans: plansState.plans,
     activePlanId: plansState.activeId,
