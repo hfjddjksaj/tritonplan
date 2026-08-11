@@ -1,20 +1,33 @@
-import { courseIdsInConflicts, formatDisplay, type FinalConflict } from '@triton/shared';
+import { courseIdsInConflicts, examDisplay, formatDisplay, type FinalConflict } from '@triton/shared';
 import { colorsForHue } from '../lib/colors';
 import { dateParts } from '../lib/format';
 import type { FinalItem } from '../lib/plan';
 import { FinalsCalendar } from './FinalsCalendar';
 import { Warning, Calendar } from './icons';
+import type { PositionedBlock } from '../lib/layout';
 
 interface Props {
   finals: FinalItem[];
   conflicts: FinalConflict[];
   onOpenCourse: (courseId: string) => void;
   onFocusCourse?: (courseId: string) => void;
+  /** Show where this exam's building is; when absent the location stays plain text. */
+  onOpenLocation?: (loc: { building: string; room?: string }) => void;
+  /** When set, calendar blocks become a single tap target opening a detail sheet (mobile). */
+  onBlockDetail?: (block: PositionedBlock) => void;
   /** Forwarded to the finals-week calendar (mobile fit/scroll variants). */
   variant?: 'desktop' | 'fit' | 'scroll';
 }
 
-export function FinalsView({ finals, conflicts, onOpenCourse, onFocusCourse, variant }: Props) {
+export function FinalsView({
+  finals,
+  conflicts,
+  onOpenCourse,
+  onFocusCourse,
+  onOpenLocation,
+  onBlockDetail,
+  variant,
+}: Props) {
   const conflicted = courseIdsInConflicts(conflicts);
 
   if (finals.length === 0) {
@@ -41,6 +54,7 @@ export function FinalsView({ finals, conflicts, onOpenCourse, onFocusCourse, var
           const c = colorsForHue(f.hue);
           const dp = dateParts(f.final.date);
           const isConflict = conflicted.has(f.courseId);
+          const loc = examDisplay(f.final);
           return (
             <div
               key={f.courseId}
@@ -65,9 +79,22 @@ export function FinalsView({ finals, conflicts, onOpenCourse, onFocusCourse, var
                 <div className="final-row__time-range">
                   {formatDisplay(f.final.start)} – {formatDisplay(f.final.end)}
                 </div>
-                {f.final.modality && (
-                  <div className="opt__seats-label">{f.final.modality}</div>
+                {loc.modality && (
+                  <div className="opt__seats-label">{loc.modality}{loc.location ? ' @' : ''}</div>
                 )}
+                {loc.location &&
+                  (loc.building && onOpenLocation ? (
+                    <button
+                      type="button"
+                      className="final-row__loc"
+                      onClick={() => onOpenLocation({ building: loc.building!, room: loc.room })}
+                      title={`Where is ${loc.building}?`}
+                    >
+                      {loc.location}
+                    </button>
+                  ) : (
+                    <div className="final-row__loc final-row__loc--plain">{loc.location}</div>
+                  ))}
               </div>
             </div>
           );
@@ -79,6 +106,14 @@ export function FinalsView({ finals, conflicts, onOpenCourse, onFocusCourse, var
         finals={finals}
         onOpenCourse={onOpenCourse}
         onFocusCourse={onFocusCourse}
+        onOpenLocation={
+          onOpenLocation
+            ? (b) => {
+                if (b.building) onOpenLocation({ building: b.building, room: b.room });
+              }
+            : undefined
+        }
+        onBlockDetail={onBlockDetail}
         variant={variant}
       />
     </div>

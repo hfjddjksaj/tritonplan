@@ -1,4 +1,4 @@
-import { formatDisplay } from '@triton/shared';
+import { examDisplay, formatDisplay } from '@triton/shared';
 import { colorsForHue } from '../lib/colors';
 import { dateParts } from '../lib/format';
 import {
@@ -9,12 +9,17 @@ import {
 } from '../lib/plan';
 import { FinalsCalendar } from './FinalsCalendar';
 import { Warning, Calendar } from './icons';
+import type { PositionedBlock } from '../lib/layout';
 
 interface Props {
   dated: MidtermItem[];
   tbd: MidtermTbdItem[];
   onOpenCourse: (courseId: string) => void;
   onFocusCourse?: (courseId: string) => void;
+  /** Show where this exam's building is; when absent the location stays plain text. */
+  onOpenLocation?: (loc: { building: string; room?: string }) => void;
+  /** When set, calendar blocks become a single tap target opening a detail sheet (mobile). */
+  onBlockDetail?: (block: PositionedBlock) => void;
   /** Forwarded to the at-a-glance calendar (mobile fit/scroll variants). */
   variant?: 'desktop' | 'fit' | 'scroll';
 }
@@ -25,7 +30,15 @@ interface Props {
  * other plan course shows as a TBD row only (TSS can't distinguish "no
  * midterm" from "not announced yet").
  */
-export function MidtermsView({ dated, tbd, onOpenCourse, onFocusCourse, variant }: Props) {
+export function MidtermsView({
+  dated,
+  tbd,
+  onOpenCourse,
+  onFocusCourse,
+  onOpenLocation,
+  onBlockDetail,
+  variant,
+}: Props) {
   const overlapping = midtermOverlapKeys(dated);
 
   if (dated.length === 0 && tbd.length === 0) {
@@ -53,6 +66,7 @@ export function MidtermsView({ dated, tbd, onOpenCourse, onFocusCourse, variant 
           const dp = dateParts(m.midterm.date);
           const key = midtermItemKey(m);
           const isOverlap = overlapping.has(key);
+          const loc = examDisplay(m.midterm);
           return (
             <div
               key={key}
@@ -80,9 +94,22 @@ export function MidtermsView({ dated, tbd, onOpenCourse, onFocusCourse, variant 
                 <div className="final-row__time-range">
                   {formatDisplay(m.midterm.start)} – {formatDisplay(m.midterm.end)}
                 </div>
-                {m.midterm.modality && (
-                  <div className="opt__seats-label">{m.midterm.modality}</div>
+                {loc.modality && (
+                  <div className="opt__seats-label">{loc.modality}{loc.location ? ' @' : ''}</div>
                 )}
+                {loc.location &&
+                  (loc.building && onOpenLocation ? (
+                    <button
+                      type="button"
+                      className="final-row__loc"
+                      onClick={() => onOpenLocation({ building: loc.building!, room: loc.room })}
+                      title={`Where is ${loc.building}?`}
+                    >
+                      {loc.location}
+                    </button>
+                  ) : (
+                    <div className="final-row__loc final-row__loc--plain">{loc.location}</div>
+                  ))}
               </div>
             </div>
           );
@@ -126,6 +153,14 @@ export function MidtermsView({ dated, tbd, onOpenCourse, onFocusCourse, variant 
             }))}
             onOpenCourse={onOpenCourse}
             onFocusCourse={onFocusCourse}
+            onOpenLocation={
+              onOpenLocation
+                ? (b) => {
+                    if (b.building) onOpenLocation({ building: b.building, room: b.room });
+                  }
+                : undefined
+            }
+            onBlockDetail={onBlockDetail}
             variant={variant}
             examLabel="Midterm"
             ariaLabel="Midterms calendar"

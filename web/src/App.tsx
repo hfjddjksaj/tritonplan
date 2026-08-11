@@ -284,6 +284,8 @@ export default function App() {
                 tbd={ctl.midterms.tbd}
                 onOpenCourse={handleOpenCourse}
                 onFocusCourse={handleFocusCourse}
+                onOpenLocation={(l) => setMapLoc(l)}
+                onBlockDetail={isMobile ? setSheetBlock : undefined}
                 variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
               />
             ) : (
@@ -292,6 +294,8 @@ export default function App() {
                 conflicts={ctl.finalConflicts}
                 onOpenCourse={handleOpenCourse}
                 onFocusCourse={handleFocusCourse}
+                onOpenLocation={(l) => setMapLoc(l)}
+                onBlockDetail={isMobile ? setSheetBlock : undefined}
                 variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
               />
             )}

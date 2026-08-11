@@ -1874,6 +1874,26 @@ button.menu__item:hover {
   color: var(--conflict);
   font-family: var(--font-sans);
 }
+/* full exam location under the time — its own line, wraps, never ellipsized */
+.final-row__loc {
+  display: block;
+  margin-left: auto;
+  margin-top: 2px;
+  max-width: 230px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-align: right;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+.final-row__loc:hover { color: var(--ink); }
+.final-row__loc--plain { cursor: default; text-decoration: none; }
 .final-row__seq {
   font-weight: 600;
   color: var(--text-muted);
