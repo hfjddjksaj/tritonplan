@@ -118,7 +118,6 @@ export function usePlan() {
   const [viewing, setViewing] = useState<Viewing>(() =>
     loadReceived() ? loadViewing() : 'mine',
   );
-  const firstRun = useRef(true);
   // Latest pool/terms for effects that must not re-subscribe on every edit.
   const poolRef = useRef(pool);
   const termsRef = useRef(termsState);
@@ -210,12 +209,11 @@ export function usePlan() {
     window.history.replaceState(null, '', `#${planToMirrorHash(plan)}`);
   }, [plan, received]);
 
-  // Persist the terms container on change (skip first render so we don't clobber before load).
+  // Persist the terms container on change. No first-render skip: loading and
+  // migration happen synchronously in the same initializer, so the first write
+  // is exactly what was loaded — and it makes a fresh migration (or an archive
+  // sweep that changed nothing else) durable without waiting for an edit.
   useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
     saveTerms(termsState);
   }, [termsState]);
 
