@@ -90,6 +90,32 @@ Per-row fields we keep (see `fixtures/cse-sections-normalized.json` for real cap
 - `EventPkgText` (e.g. `"CSE-008A (P-001-001)"`) — human label
 - `EventPkgLimit`, `EventPkgSeatsAvailable`, `EventPkgNumOnWaitl`, `EventPkgStatusText`
 
+### Re-verified 2026-08-10 (CHEM-043A, ModuleID 2117, Fall 2026 — fully booked course)
+
+The page's own `_sections` GET now uses this `$select` (63 rows / 21 packages returned in ONE page,
+`$top=1000`): `AcPeriod,AcYear,EventAbbr,EventID,EventPkgDisable,EventPkgDisplayID,EventPkgLimit,
+EventPkgNumOnWaitl,EventPkgObjid,EventPkgOtjid,EventPkgSeatsAvailable,EventPkgSemanticColorCapacity,
+EventPkgStatusText,EventPkgText,InstructorEmail,InstructorName,ModuleID,Sched,Status,StatusSemantic,
+TeachingMethod,TeachingMethod_Text,locationText`. Notes against the 2026-07-21 fixtures:
+
+- **Numbers, not strings**: `EventPkgLimit: 23`, `EventPkgSeatsAvailable: 0`, `EventPkgNumOnWaitl: 0`,
+  `StatusSemantic: 0|2`, `EventPkgSemanticColorCapacity: 1` all arrive as JSON numbers. The 07-21
+  captures had limit/seats as strings — `toNum` in the parser accepts both
+  (regression: `extension/src/lib/capture-numeric-seats.test.ts`, real captured rows).
+- **Field set is `$select`-dependent**: this feed has `locationText` (lowercase) and NO `EventKey` /
+  `BeginDate` / `EndDate` / `LocationText` / `Limit`. Treat all of those as optional.
+- **Fullness has TWO looks in the TSS UI** (all 21 packages had `EventPkgSeatsAvailable: 0`):
+  - `EventPkgStatusText: "Waitlist Only"` + `EventPkgDisable: "X"` (13 pkgs) — the UI **hides** the
+    `Limit` / `Available` badges entirely and shows only ⚠ `Waitlist Only`; the member Event that is
+    waitlist-gated carries `Status: "Waitlist Only"`, `StatusSemantic: 2`.
+  - `EventPkgStatusText: ""` + `EventPkgDisable: ""` (8 pkgs) — the UI shows `Limit: 23` and a red
+    `Available: 0`. So "no seats" in the UI is `seats === 0`, with or without a status text.
+- **UI5 model caching (why seat counts can look frozen)**: `_sections` is fetched once per full page
+  load of the course view. In-app navigation afterwards — switching detail tabs, closing/reopening
+  the panel, re-running the search — renders from the cached OData model and does NOT refetch, so
+  nothing new is emitted for the extension to capture. Only a full page (re)load (F5, new tab, deep
+  link) produces a fresh `_sections` response.
+
 > **Parser step 1:** group rows by `EventPkgOtjid` → each package = a bookable option whose member
 > Events (deduped by `EventID`) are what should be drawn on the calendar together, e.g.
 > `Lecture 001-000-LE` + `Lab 001-004-LA` + `Discussion 001-001-DI`.

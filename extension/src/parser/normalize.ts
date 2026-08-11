@@ -45,7 +45,8 @@ function typeRank(t: string): number {
   return TYPE_ORDER[t] ?? 9;
 }
 
-function toNum(s: string | undefined): number | undefined {
+/** Live feeds send counts as JSON numbers, older captures as strings — accept both. */
+function toNum(s: string | number | undefined): number | undefined {
   if (s == null || s === '') return undefined;
   const n = Number(s);
   return Number.isFinite(n) ? n : undefined;

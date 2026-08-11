@@ -13,6 +13,13 @@ export interface TssPrereqRow {
   text: string;
 }
 
+/**
+ * Which fields a row carries depends on the requesting page's `$select` — e.g. the
+ * 2026-08-10 live feed has `locationText` (lowercase) but no `EventKey` / `BeginDate` /
+ * `EndDate` / `LocationText`, while the 2026-07-21 fixtures are the other way around.
+ * Numeric-looking fields arrive as JSON NUMBERS in the live feed (2026-08-10) but as
+ * strings in older captures — declare both and normalize with `toNum`.
+ */
 export interface TssSectionRow {
   AcYear: string;
   AcPeriod: string;
@@ -25,20 +32,25 @@ export interface TssSectionRow {
   TeachingMethod_Text: string;   // "Lecture"
   InstructorName?: string;
   InstructorEmail?: string;      // "mailto: LEPORTER@UCSD.EDU"
-  LocationText?: string;         // "UC San Diego" | "MC Online"
-  Status?: string;
-  Limit?: string;
+  LocationText?: string;         // "UC San Diego" | "MC Online" (2026-07-21 captures)
+  locationText?: string;         // same content, lowercase key (2026-08-10 feed)
+  Status?: string;               // "Scheduled" | "Waitlist Only" | …
+  StatusSemantic?: number;       // 0 = Scheduled, 2 = Waitlist Only (observed 2026-08-10)
+  Limit?: string | number;
   BeginDate?: string;            // ISO
   EndDate?: string;
   Sched: string;                 // the pre-formatted schedule string ⭐
   // EventPackage (bookable option)
   EventPkgOtjid: string;         // "SE00154302"
+  EventPkgObjid?: string;        // "154302" — Otjid without the SE prefix
   EventPkgDisplayID?: string;
   EventPkgText?: string;         // "CSE-008A (P-001-001)"
-  EventPkgLimit?: string;
-  EventPkgSeatsAvailable?: string;
+  EventPkgLimit?: string | number;
+  EventPkgSeatsAvailable?: string | number;
   EventPkgNumOnWaitl?: number;
-  EventPkgStatusText?: string;
+  EventPkgStatusText?: string;   // "" when simply full; "Waitlist Only" when waitlist-gated
+  EventPkgSemanticColorCapacity?: number; // 1 observed on fully-booked packages
+  EventPkgDisable?: string;      // "X" | "" — TSS greys its booking button on "X"
 }
 
 /** One row of the course-search list (`YUCSD_CON_MODULE`). */
