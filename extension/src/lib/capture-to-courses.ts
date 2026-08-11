@@ -71,7 +71,7 @@ export class CaptureStore {
    * browse replaces them (freshest seats/status win).
    */
   ingestBody(body: string, url?: string): boolean {
-    const { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows } = classifyCapture(body);
+    const { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows, isV2Doc } = classifyCapture(body);
     let changed = false;
     for (const m of moduleRows) {
       this.modules.set(m.ModuleID, m);
@@ -113,8 +113,11 @@ export class CaptureStore {
     }
     // An empty v2 body from the booked feed itself CLEARS (zero bookings is real news);
     // an empty body from any other feed must not touch a list it has nothing to do with.
+    // The same feed URL also serves a $metadata XML doc (and can serve error/HTML
+    // bodies) — only a REAL v2 JSON document (isV2Doc) counts as "the feed reported
+    // its list", even when that report is zero rows.
     const isBookedFeed = url?.includes('BC_OVP_BOOKED_MODULES_SRV') ?? false;
-    if (bookedRows.length || isBookedFeed) {
+    if (bookedRows.length || (isBookedFeed && isV2Doc)) {
       this.booked = bookedRows
         .map(bookedRowToModule)
         .filter((m): m is BookedModule => m !== null);

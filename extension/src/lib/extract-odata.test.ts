@@ -23,4 +23,14 @@ describe('booked-modules classification (OData v2)', () => {
   it('v2 bodies that are not booked rows are ignored', () => {
     expect(classifyCapture('{"d":{"results":[{"Foo":1}]}}').bookedRows).toEqual([]);
   });
+
+  it('a malformed / non-JSON body yields no booked rows and isV2Doc=false, without throwing', () => {
+    expect(() => classifyCapture('<?xml version="1.0"?><edmx:Edmx></edmx:Edmx>')).not.toThrow();
+    const xml = classifyCapture('<?xml version="1.0"?><edmx:Edmx></edmx:Edmx>');
+    expect(xml.bookedRows).toEqual([]);
+    expect(xml.isV2Doc).toBe(false);
+    const truncated = classifyCapture('{"d":{"results":[');
+    expect(truncated.bookedRows).toEqual([]);
+    expect(truncated.isV2Doc).toBe(false);
+  });
 });

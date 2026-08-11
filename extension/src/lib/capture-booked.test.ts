@@ -37,6 +37,20 @@ describe('CaptureStore booked list', () => {
     store.ingestBody(JSON.stringify({ d: { results: [] } }), 'https://tss.ucsd.edu/sap/opu/odata/ited/OTHER_SRV/Set');
     expect(store.getBooked()).toHaveLength(1);
   });
+  it('an XML $metadata body on the booked-feed URL does not clear an existing booked list', () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    const xml = '<?xml version="1.0" encoding="utf-8"?><edmx:Edmx Version="1.0"></edmx:Edmx>';
+    expect(store.ingestBody(xml, URL)).toBe(false);
+    expect(store.getBooked()).toEqual([bookedRowToModule(ROW)]);
+  });
+  it('a malformed-JSON body on the booked-feed URL does not clear an existing booked list', () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    const malformed = '{"d":{"results":[';
+    expect(store.ingestBody(malformed, URL)).toBe(false);
+    expect(store.getBooked()).toEqual([bookedRowToModule(ROW)]);
+  });
   it('survives serialize/deserialize (and old stores without the field load as null)', () => {
     const store = new CaptureStore();
     store.ingestBody(BODY, URL);

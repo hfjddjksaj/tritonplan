@@ -110,15 +110,21 @@ function looksLikeApptPeriodsRow(v: unknown): v is TssApptPeriodsRow {
   );
 }
 
-/** OData v2 wraps rows in {"d":{"results":[...]}} (the booked feed is v2). */
-function extractV2Results(body: string): unknown[] {
+/** OData v2 wraps rows in {"d":{"results":[...]}} (the booked feed is v2).
+ *  Returns null when the body isn't a real v2 document at all (not JSON, JSON
+ *  but not `{`-rooted, or missing/malformed `d.results`) — as opposed to a
+ *  genuine v2 document reporting zero rows (`d.results: []`), which returns
+ *  `[]`. Callers need to tell these apart: the same service URL also serves a
+ *  `$metadata` XML document and can serve error/HTML bodies, and those must
+ *  never be read as "captured, zero rows". */
+function extractV2Results(body: string): unknown[] | null {
   const trimmed = body.trimStart();
-  if (!trimmed.startsWith('{')) return [];
+  if (!trimmed.startsWith('{')) return null;
   try {
     const parsed = JSON.parse(body) as { d?: { results?: unknown[] } };
-    return Array.isArray(parsed.d?.results) ? parsed.d.results : [];
+    return Array.isArray(parsed.d?.results) ? parsed.d.results : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -146,6 +152,11 @@ export interface ClassifiedCapture {
   prereqTrees: PrereqTreeCapture[];
   apptPeriods: TssApptPeriodsRow[];
   bookedRows: TssBookedModuleRow[];
+  /** True when the body was a genuine OData-v2 JSON document (`{"d":{"results":[...]}}`),
+   *  including a real zero-row document. False for anything else (XML `$metadata`,
+   *  malformed/truncated JSON, HTML error pages, ...) — callers must not treat those
+   *  as "the feed reported zero rows". */
+  isV2Doc: boolean;
 }
 
 /** Classify all collections found in a body into module / section / prereq-tree rows. */
@@ -173,6 +184,8 @@ export function classifyCapture(body: string): ClassifiedCapture {
     if (looksLikeSectionRow(first)) sectionRows.push(...(coll.value as TssSectionRow[]));
     else if (looksLikeModuleRow(first)) moduleRows.push(...(coll.value as TssModuleRow[]));
   }
-  bookedRows.push(...extractV2Results(body).filter(looksLikeBookedRow));
-  return { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows };
+  const v2Results = extractV2Results(body);
+  const isV2Doc = v2Results !== null;
+  bookedRows.push(...(v2Results ?? []).filter(looksLikeBookedRow));
+  return { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows, isV2Doc };
 }
