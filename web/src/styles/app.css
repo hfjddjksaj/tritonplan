@@ -598,6 +598,12 @@ p {
   color: var(--conflict-ink);
   border-color: transparent;
 }
+/* Booked: confirmed-positive counterpart to Full — mutually exclusive, Booked wins */
+.tag--booked {
+  background: #e7f5ec;
+  color: #1b7f4d;
+  border-color: transparent;
+}
 /* "book section" + "prerequisites" wrap as one unit — always on the same line */
 .course-card__pair {
   display: inline-flex;

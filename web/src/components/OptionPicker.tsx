@@ -11,17 +11,20 @@ interface Props {
   onSelect: (optionId: string) => void;
   /** Received (shared/imported) plan: options are visible but not switchable. */
   readOnly?: boolean;
+  /** User has confirmed enrollment — supersedes the collapsed-row "full" greying. */
+  booked?: boolean;
   /** Collapsed: only the toggle row shows (with the selected section's code). */
   collapsed: boolean;
   onToggle: () => void;
 }
 
-export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = false, collapsed, onToggle }: Props) {
+export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = false, booked, collapsed, onToggle }: Props) {
   if (course.options.length === 0) return null;
   const selected = findOption(course, selectedOptionId);
   // With the list collapsed, this code is the only trace of the chosen section —
-  // grey it too, or a full pick shows up nowhere but the calendar.
-  const selectedFull = selected ? optionFull(selected) : false;
+  // grey it too, or a full pick shows up nowhere but the calendar. Not when booked,
+  // though: a 0-seat count doesn't apply to a section the user already has.
+  const selectedFull = !booked && (selected ? optionFull(selected) : false);
   const hasSeats = course.options.some((o) => o.seatsAvailable !== undefined);
   const optionCount = course.options.length;
   return (

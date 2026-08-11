@@ -20,14 +20,18 @@ interface Props {
   onOpenTss: () => void;
   /** Open the selected section's booking page; absent when no link can be built. */
   onBook?: () => void;
+  /** User has confirmed enrollment — supersedes the "Full" seat-count treatment. */
+  booked: boolean;
+  onToggleBooked?: () => void;
 }
 
-export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook }: Props) {
+export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, onToggleBooked }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
-  // Every section is taken. Says so next to the code, where the eye lands first.
-  const full = courseFull(course);
+  // Every section is taken. Says so next to the code, where the eye lands first —
+  // unless the user is booked, in which case a 0-seat count doesn't apply to them.
+  const full = !booked && courseFull(course);
   // Section list starts tucked away — long option lists otherwise dominate the rail.
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -73,10 +77,16 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
         <div className="course-card__head-main">
           <div className="course-card__codeline">
             <span className="course-card__code">{course.courseCode}</span>
-            {full && (
-              <span className="tag tag--full" title="Every section of this course is full">
-                Full
+            {booked ? (
+              <span className="tag tag--booked" title="You are enrolled in this course">
+                Booked
               </span>
+            ) : (
+              full && (
+                <span className="tag tag--full" title="Every section of this course is full">
+                  Full
+                </span>
+              )
             )}
           </div>
           <div className="course-card__title">{course.title}</div>
@@ -113,6 +123,20 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               >
                 prerequisites
               </button>
+              {onToggleBooked && (
+                <button
+                  type="button"
+                  className="course-card__tss"
+                  onClick={onToggleBooked}
+                  title={
+                    booked
+                      ? `Unmark ${course.courseCode} as booked`
+                      : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
+                  }
+                >
+                  {booked ? 'unmark' : 'mark booked'}
+                </button>
+              )}
             </span>
           </div>
         </div>
@@ -143,6 +167,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
         selectedOptionId={entry.selectedOptionId}
         onSelect={onSelect}
         readOnly={readOnly}
+        booked={booked}
         collapsed={!sectionsOpen}
         onToggle={() => setSectionsOpen((v) => !v)}
       />

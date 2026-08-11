@@ -71,6 +71,8 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                 onBook={
                   bookable ? () => ctl.openBookingInTss(entry.course, option) : undefined
                 }
+                booked={ctl.bookedIds.has(entry.course.id)}
+                onToggleBooked={readOnly ? undefined : () => ctl.toggleBooked(entry.course)}
               />
             );
           })
