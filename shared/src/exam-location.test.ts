@@ -27,6 +27,13 @@ describe('splitModalityLocation', () => {
     expect(splitModalityLocation(undefined)).toEqual({});
     expect(splitModalityLocation('  ')).toEqual({});
   });
+  it('splits a leading "@ <location>" tail (empty modality; share-v3 wireExamModality emits this)', () => {
+    expect(splitModalityLocation('@ York Hall Room 2622')).toEqual({
+      location: 'York Hall Room 2622',
+      building: 'York Hall',
+      room: '2622',
+    });
+  });
 });
 
 describe('examDisplay', () => {

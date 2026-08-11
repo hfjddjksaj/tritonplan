@@ -27,15 +27,23 @@ export function splitLocationText(location: string): { building?: string; room?:
   };
 }
 
-/** Split a stored modality tail ("In Person @ York Hall Room 2622") at " @ ". */
+/** Split a stored modality tail ("In Person @ York Hall Room 2622") at " @ ".
+ *  Also recognizes a tail that STARTS with "@ " (no modality, e.g. share-v3's
+ *  wireExamModality emits "@ <location>" when an exam has a location but an
+ *  empty/undefined modality) — that yields no modality, all location. */
 export function splitModalityLocation(tail: string | undefined): ExamLocation {
   const t = tail?.trim();
   if (!t) return {};
-  const at = t.indexOf(' @ ');
-  const head = at === -1 ? t : t.slice(0, at).trim();
-  const locText = at === -1 ? '' : t.slice(at + 3).trim();
   const out: ExamLocation = {};
-  if (head) out.modality = head;
+  let locText: string;
+  if (t.startsWith('@ ')) {
+    locText = t.slice('@ '.length).trim();
+  } else {
+    const at = t.indexOf(' @ ');
+    const head = at === -1 ? t : t.slice(0, at).trim();
+    locText = at === -1 ? '' : t.slice(at + 3).trim();
+    if (head) out.modality = head;
+  }
   if (locText) {
     out.location = locText;
     const { building, room } = splitLocationText(locText);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deflateSync, strToU8 } from 'fflate';
+import { splitModalityLocation } from '@triton/shared';
 import { V3_PREFIX, decodePlanV3, encodePlanV3 } from './share-v3';
 import { makePlan } from './share-v3.test-helpers';
 
@@ -115,6 +116,26 @@ describe('encodePlanV3 / decodePlanV3', () => {
     expect(back.entries[0]!.course.options[0]!.final).toEqual({
       date: '2026-12-05', start: '11:30', end: '14:29',
       modality: 'In Person @ York Hall Room 2622',
+    });
+  });
+
+  it('round-trips a final with a location but no modality (decode side must re-split "@ <location>")', () => {
+    const plan = makePlan(1, 2);
+    for (const o of plan.entries[0]!.course.options) {
+      o.final = {
+        date: '2026-12-05', start: '11:30', end: '14:29',
+        location: 'York Hall Room 2622', building: 'York Hall', room: '2622',
+      };
+    }
+    const back = decodePlanV3(encodePlanV3(plan))!;
+    // Wire slot carries the frozen "@ <location>" tail (no modality prefix)...
+    expect(back.entries[0]!.course.options[0]!.final).toEqual({
+      date: '2026-12-05', start: '11:30', end: '14:29',
+      modality: '@ York Hall Room 2622',
+    });
+    // ...and splitModalityLocation must recover it as a location with no modality.
+    expect(splitModalityLocation(back.entries[0]!.course.options[0]!.final!.modality)).toEqual({
+      location: 'York Hall Room 2622', building: 'York Hall', room: '2622',
     });
   });
 
