@@ -174,3 +174,19 @@ describe('appointment-times slot', () => {
     expect(loadApptTimes()).toBeNull();
   });
 });
+
+describe('terms storage', () => {
+  it('round-trips a TermsState', async () => {
+    const { saveTerms, loadTerms } = await import('./storage');
+    const { newWorkspace } = await import('./terms-state');
+    const state = { version: 1 as const, activeTermKey: '2026|2', terms: { '2026|2': newWorkspace({ year: '2026', period: '2', label: 'Fall 2026' }, '2026-08-11T00:00:00.000Z') } };
+    saveTerms(state);
+    expect(loadTerms()).toEqual(state);
+  });
+  it('rejects junk', async () => {
+    const { isTermsState } = await import('./storage');
+    expect(isTermsState(null)).toBe(false);
+    expect(isTermsState({ version: 1, activeTermKey: 'x', terms: {} })).toBe(false); // empty terms
+    expect(isTermsState({ version: 2, activeTermKey: 'x', terms: {} })).toBe(false);
+  });
+});

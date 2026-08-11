@@ -93,7 +93,8 @@ function isNamedPlan(value: unknown): boolean {
     typeof v.createdAt === 'string' &&
     typeof v.updatedAt === 'string' &&
     isPlanState(v.plan) &&
-    (v.hidden === undefined || Array.isArray(v.hidden))
+    (v.hidden === undefined || Array.isArray(v.hidden)) &&
+    (v.browsed === undefined || Array.isArray(v.browsed))
   );
 }
 
@@ -114,6 +115,39 @@ export function savePlans(state: import('./plans').PlansState): void {
 
 export function loadPlans(): import('./plans').PlansState | null {
   return readJson(PLANS_KEY, isPlansState);
+}
+
+/* ---- per-term workspaces (the term switcher container) --------------------- */
+
+const TERMS_KEY = 'triton-planner:terms:v1';
+
+function isTermShape(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.year === 'string' && typeof v.period === 'string' && typeof v.label === 'string';
+}
+
+function isTermWorkspace(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return isTermShape(v.term) && isPlansState(v.plans);
+}
+
+export function isTermsState(value: unknown): value is import('./terms-state').TermsState {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  if (v.version !== 1 || typeof v.activeTermKey !== 'string') return false;
+  if (!v.terms || typeof v.terms !== 'object') return false;
+  const workspaces = Object.values(v.terms as Record<string, unknown>);
+  return workspaces.length > 0 && workspaces.every(isTermWorkspace);
+}
+
+export function saveTerms(state: import('./terms-state').TermsState): void {
+  writeJson(TERMS_KEY, state);
+}
+
+export function loadTerms(): import('./terms-state').TermsState | null {
+  return readJson(TERMS_KEY, isTermsState);
 }
 
 /* ---- received plans (opened from a share link or an imported JSON file) ----

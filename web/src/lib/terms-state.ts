@@ -8,7 +8,7 @@
 import type { CourseOffering, PlanState, Term } from '@triton/shared';
 import { emptyPlan } from './plan';
 import {
-  addBrowsed, newPlanId, updateActivePlan,
+  addBrowsed, migratePlans, newPlanId, updateActivePlan,
   type NamedPlan, type PlansState,
 } from './plans';
 import { chronoIndex, termKey, type TermKey } from './terms';
@@ -109,4 +109,51 @@ export function adoptSeedPlan(state: TermsState, seed: PlanState, now: string): 
 export function isPristine(ws: TermWorkspace): boolean {
   const only = ws.plans.plans.length === 1 ? ws.plans.plans[0]! : null;
   return only !== null && only.plan.entries.length === 0 && (only.browsed ?? []).length === 0;
+}
+
+/**
+ * Build the working TermsState. Precedence: valid stored terms:v1 (repairing a
+ * dangling activeTermKey) → flat plans:v1 / legacy plan:v1 grouped by term →
+ * fresh DEFAULT_TERM bootstrap. Old keys are read-only rollback backstops.
+ */
+export function migrateToTermsState(
+  existing: TermsState | null,
+  plansV1: PlansState | null,
+  legacyPlan: PlanState | null,
+  pool: CourseOffering[],
+  now: string,
+): TermsState {
+  if (existing && Object.keys(existing.terms).length > 0) {
+    if (existing.terms[existing.activeTermKey]) return existing;
+    return { ...existing, activeTermKey: newestTermKey(existing) };
+  }
+
+  const flat = migratePlans(plansV1, legacyPlan, now);
+  const poolIdsByTerm = new Map<TermKey, string[]>();
+  for (const c of pool) {
+    const key = termKey(c.term);
+    poolIdsByTerm.set(key, [...(poolIdsByTerm.get(key) ?? []), c.id]);
+  }
+
+  const terms: Record<TermKey, TermWorkspace> = {};
+  for (const p of flat.plans) {
+    const key = termKey(p.plan.term);
+    const hidden = new Set(p.hidden ?? []);
+    const entryIds = p.plan.entries.map((e) => e.course.id);
+    const browsed = [
+      ...new Set([...(poolIdsByTerm.get(key) ?? []).filter((id) => !hidden.has(id)), ...entryIds]),
+    ];
+    const { hidden: _dropped, ...rest } = p;
+    const migrated: NamedPlan = { ...rest, browsed };
+    const ws = terms[key];
+    if (!ws) {
+      terms[key] = { term: p.plan.term, plans: { activeId: p.id, plans: [migrated] } };
+    } else {
+      const activeId = p.id === flat.activeId ? p.id : ws.plans.activeId;
+      terms[key] = { ...ws, plans: { activeId, plans: [...ws.plans.plans, migrated] } };
+    }
+  }
+
+  const state: TermsState = { version: 1, activeTermKey: Object.keys(terms)[0]!, terms };
+  return { ...state, activeTermKey: newestTermKey(state) };
 }
