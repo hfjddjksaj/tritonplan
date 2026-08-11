@@ -219,3 +219,57 @@ export function archiveSweep(state: TermsState, pool: CourseOffering[], now: Dat
     forgetModuleIds: [...new Set(droppedCourses.map((c) => c.moduleId))],
   };
 }
+
+export interface RouteResult {
+  state: TermsState;
+  switchTo: TermKey | null;
+}
+
+/**
+ * Route freshly-captured courses into their own term's active plan (spec §3).
+ * "Fresh" = new id, or a strictly newer capturedAt (a deliberate re-open in
+ * TSS — the × -recovery path). Seat-refresh pushes with unchanged capturedAt
+ * route nowhere.
+ */
+export function routeCapture(
+  state: TermsState,
+  prevPool: CourseOffering[],
+  incoming: CourseOffering[],
+  nowIso: string,
+  now: Date,
+): RouteResult {
+  const prevById = new Map(prevPool.map((c) => [c.id, c]));
+  const fresh = incoming.filter((c) => {
+    if (isArchived(c.term, now)) return false;
+    const prev = prevById.get(c.id);
+    return !prev || (c.capturedAt ?? '') > (prev.capturedAt ?? '');
+  });
+  if (fresh.length === 0) return { state, switchTo: null };
+
+  const targetKeys = new Set<TermKey>();
+  let next = state;
+  for (const c of fresh) {
+    const hadWorkspace = !!next.terms[termKey(c.term)];
+    next = ensureWorkspace(next, c.term, nowIso);
+    targetKeys.add(termKey(c.term));
+    if (!hadWorkspace) {
+      // A real term arrived: pristine bootstrap placeholders give way.
+      const keep: Record<TermKey, TermWorkspace> = {};
+      for (const [key, ws] of Object.entries(next.terms)) {
+        if (key === termKey(c.term) || targetKeys.has(key) || !isPristine(ws)) keep[key] = ws;
+      }
+      if (Object.keys(keep).length !== Object.keys(next.terms).length) {
+        next = { ...next, terms: keep };
+        if (!keep[next.activeTermKey]) next = { ...next, activeTermKey: newestTermKey(next) };
+      }
+    }
+  }
+  for (const key of targetKeys) {
+    const ids = fresh.filter((c) => termKey(c.term) === key).map((c) => c.id);
+    next = updateWorkspace(next, key, (ps) => addBrowsed(ps, ps.activeId, ids, nowIso));
+  }
+
+  const freshest = [...fresh].sort((a, b) => ((a.capturedAt ?? '') < (b.capturedAt ?? '') ? 1 : -1))[0]!;
+  const freshestKey = termKey(freshest.term);
+  return { state: next, switchTo: freshestKey === state.activeTermKey ? null : freshestKey };
+}

@@ -3,7 +3,7 @@ import type { Term } from '@triton/shared';
 import {
   newWorkspace, ensureWorkspace, activeWorkspace, updateWorkspace,
   switchTermIn, newestTermKey, allPlansEmpty, adoptSeedPlan, migrateToTermsState,
-  archiveSweep, type TermsState,
+  archiveSweep, routeCapture, type TermsState,
 } from './terms-state';
 import { emptyPlan } from './plan';
 import { makeCourse } from './fixtures';
@@ -152,5 +152,43 @@ describe('archiveSweep', () => {
     expect(second.forgetModuleIds).toEqual([]);
     expect(second.state).toBe(first.state);
     expect(second.pool).toBe(first.pool);
+  });
+});
+
+describe('routeCapture', () => {
+  const NOW_D = new Date(2026, 10, 15); // Nov 2026: nothing archived
+
+  it('new course joins its own term active-plan browsed list and does not leak elsewhere', () => {
+    const winterCourse = { ...makeCourse('CSE-101'), term: WINTER27, id: 'CSE-101|2027|3', capturedAt: '2026-11-15T00:00:00.000Z' };
+    const { state, switchTo } = routeCapture(base(), [], [winterCourse], NOW, NOW_D);
+    expect(switchTo).toBe('2027|3');
+    const winterWs = state.terms['2027|3']!;
+    expect(winterWs.plans.plans[0]!.browsed).toEqual(['CSE-101|2027|3']);
+  });
+
+  it('a pool course with unchanged capturedAt is NOT fresh (seat refresh does not re-add)', () => {
+    const c = { ...makeCourse('CSE-100'), capturedAt: '2026-11-01T00:00:00.000Z' };
+    const s = base();
+    const r = routeCapture(s, [c], [c], NOW, NOW_D);
+    expect(r.state).toBe(s);
+    expect(r.switchTo).toBeNull();
+  });
+
+  it('a RE-browsed course (newer capturedAt) re-enters the current active plan (the ×-recovery path)', () => {
+    const old = { ...makeCourse('CSE-100'), capturedAt: '2026-11-01T00:00:00.000Z' };
+    const fresh = { ...old, capturedAt: '2026-11-16T00:00:00.000Z' };
+    const { state } = routeCapture(base(), [old], [fresh], NOW, NOW_D);
+    expect(state.terms['2026|2']!.plans.plans[0]!.browsed).toContain(old.id);
+  });
+
+  it('fresh courses in the ACTIVE term do not trigger a switch', () => {
+    const c = { ...makeCourse('CSE-100'), capturedAt: '2026-11-15T00:00:00.000Z' };
+    expect(routeCapture(base(), [], [c], NOW, NOW_D).switchTo).toBeNull();
+  });
+
+  it('routing to a real term drops the pristine bootstrap workspace', () => {
+    const winterCourse = { ...makeCourse('CSE-101'), term: WINTER27, id: 'CSE-101|2027|3', capturedAt: '2026-11-15T00:00:00.000Z' };
+    const { state } = routeCapture(base(), [], [winterCourse], NOW, NOW_D); // base() Fall ws is pristine
+    expect(Object.keys(state.terms)).toEqual(['2027|3']);
   });
 });
