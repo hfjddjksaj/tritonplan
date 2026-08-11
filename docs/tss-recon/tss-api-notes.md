@@ -134,9 +134,13 @@ separated by `\n`. Three line kinds:
   - Parse room as the substring after the last `" Room "` if present; keep the rest as building.
 - Robust parse: split modality/location off the END (find `" @ "` → location; the trailing known-modality phrase → modality), then the head is `<Days> <Start> - <End>`. Don't split modality by first space.
 
-**2. Final-exam line:** `Final Examination <MM/DD/YYYY> <StartTime> - <EndTime> <Modality>`
+**2. Final-exam line:** `Final Examination <MM/DD/YYYY> <StartTime> - <EndTime> <Modality>[ @ <Location>]`
 - Present on most in-person **Lecture (`LE`)** rows, but **OPTIONAL even on lectures** (async/online lectures have none).
 - Date is US `MM/DD/YYYY` (e.g. `12/09/2026`); times are 12-hour.
+- ⚠ **`@ <Location>` tail appeared later** (real line seen 2026-08-11:
+  `Final Examination 12/05/2026 11:30 AM - 02:29 PM In Person @ York Hall Room 2622`) —
+  all 19 rows of the 2026-07 corpus below predate it and have none. Peel it exactly like a
+  meeting line's location; assume `Midterm Examination` lines can carry the same tail.
 
 **3. Midterm-exam line (2026-07-24, user TSS screenshot of CHEM-043A):** `Midterm Examination <MM/DD/YYYY> <StartTime> - <EndTime> <Modality>`
 - Seen on the CHEM-043A Lecture row between the meeting line and the final-exam line:
@@ -234,6 +238,34 @@ Cap/Waitlists). It is a **separate OData v4 service** from the Schedule of Class
 - Dropdowns for this student contained only 2026/2027 + Fall Quarter → captures are per
   (year, session) shown; re-opening the tile after TSS publishes new terms yields new rows.
 - Fixture: `fixtures/appt-times-fall2026.json` (transcribed same day, PII redacted).
+
+## Service: `BC_OVP_BOOKED_MODULES_SRV` — homepage "Booked Courses" ⭐ (VERIFIED LIVE 2026-08-11)
+
+The launchpad homepage (`#YStudent-Overview`, OVP app `yucsd.ovp.student`) shows a
+**Booked Courses** card — the student's own enrolled modules. Its data source:
+
+`GET https://tss.ucsd.edu/sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/ModuleSet` (OData v2)
+
+- Fired on every **full page load** of the homepage only (UI5 SPA — in-page navigation
+  re-renders from the cached model; same staleness model as `_sections`).
+- URL contains `/odata` → **our passive interceptor already receives it**; the classifier
+  discards it today (rows lack `EventPkgOtjid`/`Sched`).
+- $metadata: single entity set `ModuleSet`, entity `Module`, key `ModregId`, 15 flat
+  properties, **no navigation properties** → strictly module-level, no section/enrollCode
+  info anywhere in this service.
+- Row shape (live capture, 3 booked courses, Fall 2026):
+  - `SmShort: "CHEM-114A"` — exactly our `courseCode` format; `SmStext` = course title.
+  - `SmObjid: "00002077"` — **zero-padded** ModuleID; strip leading zeros → the `ModuleID`
+    used by `_sections` / deep links.
+  - `AcademicYear: "2026"` + `AcademicSession: "002"` (`AcademicSessionText: "Fall
+    Quarter"`, `AcademicYearText: "2026/2027"`) — strip zeros from the session → the same
+    period code as course data (Fall = `'2'`); year matches `_sections`.
+  - `ModregId` = booking-record GUID (row key). Also `Credits`/`CreditUnit` (`"4.00"`/
+    `"CRH"`), `ConditionalBooking` (bool — semantics unverified, do not interpret),
+    `ScObjid`/`AssignedCg`/`AssignedCgTop` (program/course-group ids — ignore).
+- Waitlisted-vs-booked distinction unverified (this student had plain bookings only).
+- Related lead, same page, NOT yet reverse-engineered: `EVENT_TIMETABLE_SRV/EventListSet`
+  (`$filter=EventDate ge … le …`) — the student's own dated timetable events.
 
 ## Day-abbreviation → Weekday map
 `M`→Mon, `Tu`→Tue, `W`→Wed, `Th`→Thu, `F`→Fri, `Sa`→Sat, `Su`→Sun.
