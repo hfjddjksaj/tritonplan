@@ -8,7 +8,7 @@ import {
 import { emptyPlan } from './plan';
 import { makeCourse } from './fixtures';
 import {
-  migratePlans, addPlan, hideInActivePlan, addBrowsed, updateActivePlan,
+  migratePlans, addPlan, addBrowsed, updateActivePlan,
   type PlansState,
 } from './plans';
 
@@ -72,7 +72,13 @@ describe('migrateToTermsState', () => {
     const hiddenOne = makeCourse('CSE-102');
     const plan = { ...emptyPlan(FALL26), entries: [{ course: inPlan, selectedOptionId: null }] };
     let flat = migratePlans(null, plan, NOW);
-    flat = hideInActivePlan(flat, [hiddenOne.id], NOW);
+    // Legacy `hidden` is migration INPUT — hand-built, the writer API is gone.
+    flat = {
+      ...flat,
+      plans: flat.plans.map((p) =>
+        p.id === flat.activeId ? { ...p, hidden: [hiddenOne.id] } : p,
+      ),
+    };
     const s = migrateToTermsState(null, flat, null, [inPlan, browsedKept, hiddenOne], NOW);
     const migrated = s.terms['2026|2']!.plans.plans[0]!;
     expect(migrated.browsed).toEqual(expect.arrayContaining([browsedKept.id, inPlan.id]));

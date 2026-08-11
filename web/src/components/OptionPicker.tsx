@@ -66,7 +66,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
               aria-disabled={readOnly}
               className={`opt${active ? ' opt--active' : ''}${seatsFull ? ' opt--full' : ''}${readOnly ? ' opt--readonly' : ''}`}
               onClick={readOnly ? undefined : () => onSelect(opt.id)}
-              title={readOnly ? 'Read-only — save this plan as yours to switch sections' : undefined}
+              title={readOnly ? 'Read-only plan — sections can’t be changed' : undefined}
             >
               <span className="opt__radio" aria-hidden />
               <span className="opt__main">

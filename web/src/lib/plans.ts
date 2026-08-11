@@ -17,10 +17,9 @@ export interface NamedPlan {
   createdAt: string;
   updatedAt: string;
   /**
-   * Browsed courses this plan does not want listed (course ids). Absent means
-   * nothing hidden. Deliberately on NamedPlan and not inside PlanState: share
-   * links, QR codes and JSON exports carry PlanState, and this is a local
-   * list preference, not part of the schedule.
+   * LEGACY (pre-terms migration input only): course ids the plan used to hide
+   * from the shared browsed pool. Read once by `migrateToTermsState` to seed
+   * `browsed` (pool − hidden + entries), then stripped. Never written again.
    */
   hidden?: string[];
   /**
@@ -84,24 +83,6 @@ export function updateActivePlan(
     plans: state.plans.map((p) =>
       p.id === current.id ? { ...p, plan: nextPlan, updatedAt: now } : p,
     ),
-  };
-}
-
-/** Course ids the active plan hides from its browsed list. */
-export function activeHidden(state: PlansState): ReadonlySet<string> {
-  return new Set(activePlan(state).hidden ?? []);
-}
-
-/** Hide course ids in the ACTIVE plan only; same state back when nothing is new. */
-export function hideInActivePlan(state: PlansState, ids: string[], now: string): PlansState {
-  if (ids.length === 0) return state;
-  const current = activePlan(state);
-  const before = current.hidden ?? [];
-  const next = [...new Set([...before, ...ids])];
-  if (next.length === before.length) return state;
-  return {
-    ...state,
-    plans: state.plans.map((p) => (p.id === current.id ? { ...p, hidden: next, updatedAt: now } : p)),
   };
 }
 
@@ -179,7 +160,6 @@ export function duplicatePlan(state: PlansState, id: string, now: string): Plans
     plan: JSON.parse(JSON.stringify(source.plan)) as PlanState,
     createdAt: now,
     updatedAt: now,
-    ...(source.hidden ? { hidden: [...source.hidden] } : {}),
     ...(source.browsed ? { browsed: [...source.browsed] } : {}),
   };
   return { activeId: copyId, plans: [...state.plans, copy] };

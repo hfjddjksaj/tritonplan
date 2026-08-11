@@ -45,7 +45,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
         </div>
         <p className="rail__lede">
           {readOnly
-            ? 'A plan someone sent you — read-only. Save it as yours to edit it.'
+            ? 'This plan is read-only — a plan someone sent you, or a past term kept as an archive.'
             : isMobile
               ? 'Courses can only be added on a computer. Open a plan here via a share link or QR code, save it as yours, and edit its sections below.'
               : 'Sections you pick in TSS land here. Switch a section below to clear a conflict.'}
