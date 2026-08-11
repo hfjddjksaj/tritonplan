@@ -5,7 +5,13 @@
  * Grounded in real captured payloads — see docs/tss-recon/tss-api-notes.md.
  */
 
-import type { TssModuleRow, TssPrereqRow, TssSectionRow, TssApptPeriodsRow } from '../parser/tss-types.js';
+import type {
+  TssModuleRow,
+  TssPrereqRow,
+  TssSectionRow,
+  TssApptPeriodsRow,
+  TssBookedModuleRow,
+} from '../parser/tss-types.js';
 
 interface ODataCollection {
   '@odata.context'?: string;
@@ -104,6 +110,22 @@ function looksLikeApptPeriodsRow(v: unknown): v is TssApptPeriodsRow {
   );
 }
 
+/** OData v2 wraps rows in {"d":{"results":[...]}} (the booked feed is v2). */
+function extractV2Results(body: string): unknown[] {
+  const trimmed = body.trimStart();
+  if (!trimmed.startsWith('{')) return [];
+  try {
+    const parsed = JSON.parse(body) as { d?: { results?: unknown[] } };
+    return Array.isArray(parsed.d?.results) ? parsed.d.results : [];
+  } catch {
+    return [];
+  }
+}
+
+function looksLikeBookedRow(v: unknown): v is TssBookedModuleRow {
+  return !!v && typeof v === 'object' && 'ModregId' in v && 'SmShort' in v && 'SmObjid' in v;
+}
+
 /** The requirements tree can be EMPTY (course without prereqs), so it's recognized
  *  by its @odata.context — which is also the only place the owning moduleid lives:
  *  `…$metadata#YUCSD_I_PREREQ_TREE(moduleid='2117',keydate=2026-09-21)/Set`. */
@@ -123,6 +145,7 @@ export interface ClassifiedCapture {
   sectionRows: TssSectionRow[];
   prereqTrees: PrereqTreeCapture[];
   apptPeriods: TssApptPeriodsRow[];
+  bookedRows: TssBookedModuleRow[];
 }
 
 /** Classify all collections found in a body into module / section / prereq-tree rows. */
@@ -131,6 +154,7 @@ export function classifyCapture(body: string): ClassifiedCapture {
   const sectionRows: TssSectionRow[] = [];
   const prereqTrees: PrereqTreeCapture[] = [];
   const apptPeriods: TssApptPeriodsRow[] = [];
+  const bookedRows: TssBookedModuleRow[] = [];
   for (const coll of extractODataCollections(body)) {
     const ctx = coll['@odata.context'];
     if (typeof ctx === 'string' && APPT_CONTEXT_RE.test(ctx)) {
@@ -149,5 +173,6 @@ export function classifyCapture(body: string): ClassifiedCapture {
     if (looksLikeSectionRow(first)) sectionRows.push(...(coll.value as TssSectionRow[]));
     else if (looksLikeModuleRow(first)) moduleRows.push(...(coll.value as TssModuleRow[]));
   }
-  return { moduleRows, sectionRows, prereqTrees, apptPeriods };
+  bookedRows.push(...extractV2Results(body).filter(looksLikeBookedRow));
+  return { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows };
 }

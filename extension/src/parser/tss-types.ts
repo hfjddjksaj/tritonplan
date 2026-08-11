@@ -96,3 +96,21 @@ export interface TssApptPeriodsRow {
   appointmentTimes?: TssApptTimeRow[];
   maxUnits?: TssApptMaxUnitsRow[];
 }
+
+/** One row of the homepage "Booked Courses" feed —
+ *  GET /sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/ModuleSet.
+ *  ⚠ OData **v2**: the body is `{"d":{"results":[...]}}`, not an
+ *  `@odata.context` collection. Verified live 2026-08-11. */
+export interface TssBookedModuleRow {
+  ModregId: string;            // booking-record GUID (entity key) — personal
+  SmShort: string;             // course code, e.g. "CHEM-114A"
+  SmStext?: string;            // course title
+  SmObjid: string;             // ZERO-PADDED module objid: "00002077" → ModuleID "2077"
+  AcademicYear: string;        // "2026"
+  AcademicSession: string;     // ZERO-PADDED session: "002" → period "2"
+  AcademicSessionText?: string;
+  AcademicYearText?: string;
+  Credits?: string;
+  CreditUnit?: string;
+  ConditionalBooking?: boolean; // semantics unverified — do not interpret
+}
