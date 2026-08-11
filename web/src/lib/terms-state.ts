@@ -11,7 +11,7 @@ import {
   addBrowsed, migratePlans, newPlanId, updateActivePlan,
   type NamedPlan, type PlansState,
 } from './plans';
-import { chronoIndex, termKey, type TermKey } from './terms';
+import { chronoIndex, isArchived, termKey, type TermKey } from './terms';
 
 export interface TermWorkspace {
   term: Term;
@@ -156,4 +156,66 @@ export function migrateToTermsState(
 
   const state: TermsState = { version: 1, activeTermKey: Object.keys(terms)[0]!, terms };
   return { ...state, activeTermKey: newestTermKey(state) };
+}
+
+export interface SweepResult {
+  state: TermsState;
+  pool: CourseOffering[];
+  forgetModuleIds: string[];
+}
+
+/** Empty every plan's browsed list; same PlansState back when already clear. */
+function clearAllBrowsed(ps: PlansState, now: string): PlansState {
+  if (ps.plans.every((p) => (p.browsed ?? []).length === 0)) return ps;
+  return {
+    ...ps,
+    plans: ps.plans.map((p) => ((p.browsed ?? []).length === 0 ? p : { ...p, browsed: [], updatedAt: now })),
+  };
+}
+
+/**
+ * Runs on every app load (spec §6). Archived-ness is DERIVED from the date —
+ * no stored flag — and the cleanup converges: after one sweep the pool holds
+ * nothing from archived terms, so the next run finds nothing to do.
+ */
+export function archiveSweep(state: TermsState, pool: CourseOffering[], now: Date): SweepResult {
+  const nowIso = now.toISOString();
+  const archivedKeys = new Set(
+    Object.entries(state.terms).filter(([, ws]) => isArchived(ws.term, now)).map(([key]) => key),
+  );
+
+  const droppedCourses = pool.filter((c) => archivedKeys.has(termKey(c.term)));
+  const nextPool = droppedCourses.length === 0 ? pool : pool.filter((c) => !archivedKeys.has(termKey(c.term)));
+
+  let termsChanged = false;
+  const terms: Record<TermKey, TermWorkspace> = {};
+  for (const [key, ws] of Object.entries(state.terms)) {
+    if (!archivedKeys.has(key)) { terms[key] = ws; continue; }
+    const hasCourses = ws.plans.plans.some((p) => p.plan.entries.length > 0);
+    if (!hasCourses) { termsChanged = true; continue; } // delete empty archived term
+    const cleared = clearAllBrowsed(ws.plans, nowIso);
+    if (cleared === ws.plans) { terms[key] = ws; continue; }
+    termsChanged = true;
+    terms[key] = { ...ws, plans: cleared };
+  }
+  // Never end up with zero workspaces: resurrect the newest one, browsed cleared.
+  if (Object.keys(terms).length === 0) {
+    const key = newestTermKey(state);
+    const ws = state.terms[key]!;
+    terms[key] = { ...ws, plans: clearAllBrowsed(ws.plans, nowIso) };
+    termsChanged = true;
+  }
+
+  if (!termsChanged && droppedCourses.length === 0) {
+    return { state, pool, forgetModuleIds: [] };
+  }
+  let nextState: TermsState = termsChanged ? { ...state, terms } : state;
+  if (!nextState.terms[nextState.activeTermKey]) {
+    nextState = { ...nextState, activeTermKey: newestTermKey(nextState) };
+  }
+  return {
+    state: nextState,
+    pool: nextPool,
+    forgetModuleIds: [...new Set(droppedCourses.map((c) => c.moduleId))],
+  };
 }

@@ -3,11 +3,14 @@ import type { Term } from '@triton/shared';
 import {
   newWorkspace, ensureWorkspace, activeWorkspace, updateWorkspace,
   switchTermIn, newestTermKey, allPlansEmpty, adoptSeedPlan, migrateToTermsState,
-  type TermsState,
+  archiveSweep, type TermsState,
 } from './terms-state';
 import { emptyPlan } from './plan';
 import { makeCourse } from './fixtures';
-import { migratePlans, addPlan, hideInActivePlan } from './plans';
+import {
+  migratePlans, addPlan, hideInActivePlan, addBrowsed, updateActivePlan,
+  type PlansState,
+} from './plans';
 
 const NOW = '2026-08-11T10:00:00.000Z';
 const FALL26: Term = { year: '2026', period: '2', label: 'Fall 2026' };
@@ -100,5 +103,54 @@ describe('adoptSeedPlan', () => {
     const ws = activeWorkspace(s);
     expect(ws.plans.plans[0]!.plan.entries).toHaveLength(1);
     expect(ws.plans.plans[0]!.browsed).toContain(course.id);
+  });
+});
+
+describe('archiveSweep', () => {
+  const DEC25 = new Date(2026, 11, 25); // past Fall 12/20 boundary, before Winter's
+
+  // Test helper: put one course into the active plan AND its browsed list.
+  function updateActivePlanForTest(ps: PlansState, course: ReturnType<typeof makeCourse>) {
+    const withEntry = updateActivePlan(ps, (p) => ({ ...p, entries: [{ course, selectedOptionId: null }] }), NOW);
+    return addBrowsed(withEntry, withEntry.activeId, [course.id], NOW);
+  }
+  function withCourse(state: TermsState, key: string, course = makeCourse('CHEM-043A')): TermsState {
+    return updateWorkspace(state, key, (ps) => updateActivePlanForTest(ps, course));
+  }
+
+  it('deletes an archived EMPTY workspace, keeps + freezes a non-empty one, purges pool + collects moduleIds', () => {
+    let s = ensureWorkspace(base(), WINTER27, NOW);       // Fall(empty at first) + Winter
+    const fallCourse = makeCourse('CSE-100');
+    s = withCourse(s, '2026|2', fallCourse);              // Fall now has a course
+    const strayFallPoolCourse = makeCourse('CSE-199');    // browsed-only, in pool
+    const winterCourse = { ...makeCourse('CSE-101'), term: WINTER27, id: `CSE-101|2027|3` };
+    const { state, pool, forgetModuleIds } = archiveSweep(s, [fallCourse, strayFallPoolCourse, winterCourse], DEC25);
+    expect(Object.keys(state.terms).sort()).toEqual(['2026|2', '2027|3']); // Fall kept (has a course)
+    expect(state.terms['2026|2']!.plans.plans.every((p) => (p.browsed ?? []).length === 0)).toBe(true);
+    expect(pool.map((c) => c.id)).toEqual([winterCourse.id]); // all Fall pool objects dropped
+    expect(forgetModuleIds.sort()).toEqual([fallCourse.moduleId, strayFallPoolCourse.moduleId].sort());
+  });
+
+  it('deletes an archived empty workspace and repairs activeTermKey', () => {
+    let s = ensureWorkspace(base(), WINTER27, NOW); // Fall stays empty
+    s = { ...s, activeTermKey: '2026|2' };
+    const { state } = archiveSweep(s, [], DEC25);
+    expect(Object.keys(state.terms)).toEqual(['2027|3']);
+    expect(state.activeTermKey).toBe('2027|3');
+  });
+
+  it('never deletes the last remaining workspace', () => {
+    const { state } = archiveSweep(base(), [], DEC25); // only an empty archived Fall
+    expect(Object.keys(state.terms)).toEqual(['2026|2']);
+  });
+
+  it('is idempotent', () => {
+    const fallCourse = makeCourse('CSE-100');
+    const s = withCourse(base(), '2026|2', fallCourse);
+    const first = archiveSweep(s, [fallCourse], DEC25);
+    const second = archiveSweep(first.state, first.pool, DEC25);
+    expect(second.forgetModuleIds).toEqual([]);
+    expect(second.state).toBe(first.state);
+    expect(second.pool).toBe(first.pool);
   });
 });
