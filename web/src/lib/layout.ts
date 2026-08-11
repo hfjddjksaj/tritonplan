@@ -216,6 +216,9 @@ export interface FinalInstance {
   start: string;
   end: string;
   modality?: string;
+  location?: string;
+  building?: string;
+  room?: string;
   /** Block label; defaults to "Final" (the midterms view passes "Midterm"). */
   typeText?: string;
   /** The section this exam belongs to has no seats left. */
@@ -286,7 +289,9 @@ export function layoutFinalsWeek(
         courseCode: m.courseCode,
         typeText: m.typeText ?? 'Final',
         hue: m.hue,
-        location: m.modality,
+        location: m.location ?? m.modality,
+        building: m.building,
+        room: m.room,
         start: m.start,
         end: m.end,
         day: isoWeekday(date),

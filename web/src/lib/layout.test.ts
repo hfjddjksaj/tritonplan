@@ -9,6 +9,7 @@ import {
   finalsDateRange,
   isoWeekday,
   layoutFinalsWeek,
+  FINALS_GRID,
   DEFAULT_GRID,
   MOBILE_GRID,
   type FinalInstance,
@@ -188,5 +189,31 @@ describe('finals calendar layout', () => {
     expect(new Set(wed.map((b) => b.lane))).toEqual(new Set([0, 1])); // side by side
     expect(byDate['2026-12-11']![0]!.conflict).toBe(false);
     expect(byDate['2026-12-10']).toEqual([]); // exam-free day still gets a column
+  });
+
+  it('passes exam location fields through to the positioned block', () => {
+    const { byDate } = layoutFinalsWeek(
+      [{
+        courseId: 'c1', courseCode: 'CHEM-43A', hue: 10, date: '2026-12-05',
+        start: '11:30', end: '14:29', modality: 'In Person',
+        location: 'York Hall Room 2622', building: 'York Hall', room: '2622',
+        typeText: 'Final', full: false,
+      }],
+      FINALS_GRID,
+    );
+    const block = byDate['2026-12-05']![0]!;
+    expect(block.location).toBe('York Hall Room 2622');
+    expect(block.building).toBe('York Hall');
+    expect(block.room).toBe('2622');
+  });
+
+  it('blocks without a location keep showing the modality as their location line', () => {
+    const { byDate } = layoutFinalsWeek(
+      [{ courseId: 'c1', courseCode: 'CSE-8A', hue: 1, date: '2026-12-09',
+         start: '11:30', end: '14:29', modality: 'In Person', typeText: 'Final', full: false }],
+      FINALS_GRID,
+    );
+    expect(byDate['2026-12-09']![0]!.location).toBe('In Person');
+    expect(byDate['2026-12-09']![0]!.building).toBeUndefined();
   });
 });

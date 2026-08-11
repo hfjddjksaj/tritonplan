@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { formatDisplay } from '@triton/shared';
+import { examDisplay, formatDisplay } from '@triton/shared';
 import {
   FINALS_GRID,
   gridHeightPx,
@@ -8,6 +8,7 @@ import {
   isoWeekday,
   layoutFinalsWeek,
   type FinalInstance,
+  type PositionedBlock,
 } from '../lib/layout';
 import { dateParts, shortHour } from '../lib/format';
 import type { FinalItem } from '../lib/plan';
@@ -17,6 +18,10 @@ interface Props {
   finals: FinalItem[];
   onOpenCourse: (courseId: string) => void;
   onFocusCourse?: (courseId: string) => void;
+  /** Show where this block's building is; when absent the location stays plain text. */
+  onOpenLocation?: (block: PositionedBlock) => void;
+  /** When set, the whole block is a single tap target opening a detail sheet. */
+  onBlockDetail?: (block: PositionedBlock) => void;
   /** 'desktop' (default) | mobile 'fit' (dates squeezed in) | mobile 'scroll' (wide snap-scrolling date columns). */
   variant?: 'desktop' | 'fit' | 'scroll';
   /** Block label; the midterms view reuses this calendar with "Midterm". */
@@ -33,23 +38,24 @@ export function FinalsCalendar({
   finals,
   onOpenCourse,
   onFocusCourse,
+  onOpenLocation,
+  onBlockDetail,
   variant = 'desktop',
   examLabel = 'Final',
   ariaLabel = 'Finals week calendar',
 }: Props) {
   const cfg = FINALS_GRID;
   const { dates, byDate } = useMemo(() => {
-    const items: FinalInstance[] = finals.map((f) => ({
-      courseId: f.courseId,
-      courseCode: f.courseCode,
-      hue: f.hue,
-      date: f.final.date,
-      start: f.final.start,
-      end: f.final.end,
-      modality: f.final.modality,
-      typeText: examLabel,
-      full: f.full,
-    }));
+    const items: FinalInstance[] = finals.map((f) => {
+      const loc = examDisplay(f.final);
+      return {
+        courseId: f.courseId, courseCode: f.courseCode, hue: f.hue,
+        date: f.final.date, start: f.final.start, end: f.final.end,
+        modality: loc.modality ?? f.final.modality,
+        location: loc.location, building: loc.building, room: loc.room,
+        typeText: examLabel, full: f.full,
+      };
+    });
     return layoutFinalsWeek(items, cfg);
   }, [finals, cfg, examLabel]);
   const marks = useMemo(() => hourMarks(cfg), [cfg]);
@@ -131,6 +137,8 @@ export function FinalsCalendar({
                     block={block}
                     onOpen={onOpenCourse}
                     onFocusCourse={onFocusCourse}
+                    onOpenLocation={onOpenLocation}
+                    onDetail={onBlockDetail}
                   />
                 ))}
               </div>
