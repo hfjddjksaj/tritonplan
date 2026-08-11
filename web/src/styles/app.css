@@ -2309,3 +2309,50 @@ button.menu__item:hover {
   .appt-capsule { padding: 4px 8px; }
   .appt-capsule__text { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* ---- plan-add picker (term has several plans) ---- */
+.planpick {
+  max-width: 380px;
+}
+.planpick__title {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.planpick__sub {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.planpick__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.planpick__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.planpick__item:hover {
+  background: var(--surface-2);
+  border-color: var(--ink-2);
+}
+.planpick__name {
+  font-weight: 600;
+}
+.planpick__count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.planpick__cancel {
+  width: 100%;
+  justify-content: center;
+}

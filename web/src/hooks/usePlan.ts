@@ -539,8 +539,14 @@ export function usePlan() {
     termList,
     archived,
     switchTerm,
-    // plan-add picker
+    // plan-add picker — lists the plans of the COURSE's term, not the viewed term
     pendingAdd,
+    pendingAddPlans:
+      pendingAdd === null
+        ? []
+        : (termsState.terms[termKey(pendingAdd.course.term)]?.plans.plans ?? []).map((p) => ({
+            id: p.id, name: p.name, count: p.plan.entries.length,
+          })),
     confirmPendingAdd,
     cancelPendingAdd,
     // named plans

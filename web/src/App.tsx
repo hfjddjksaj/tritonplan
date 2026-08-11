@@ -13,6 +13,7 @@ import { MidtermsView } from './components/MidtermsView';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
+import { PlanPickerModal } from './components/PlanPickerModal';
 import { BlockSheet } from './components/BlockSheet';
 import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
 import { Calendar, Cap, Check, PenLine } from './components/icons';
@@ -321,6 +322,15 @@ export default function App() {
           building={mapLoc.building}
           room={mapLoc.room}
           onClose={() => setMapLoc(null)}
+        />
+      )}
+
+      {ctl.pendingAdd && (
+        <PlanPickerModal
+          course={ctl.pendingAdd.course}
+          plans={ctl.pendingAddPlans}
+          onPick={ctl.confirmPendingAdd}
+          onCancel={ctl.cancelPendingAdd}
         />
       )}
     </div>
