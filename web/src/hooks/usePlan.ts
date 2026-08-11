@@ -11,6 +11,7 @@ import {
 import sampleCourses from '../data/sample-courses.json';
 import { pickHue } from '../lib/colors';
 import { installBridgeListener, mergeCourses, postForgetCourses } from '../lib/bridge';
+import { applyAutoBooked, bookedSet, toggleBooked as toggleBookedIn } from '../lib/booked';
 import {
   loadPlan,
   loadPlans,
@@ -425,6 +426,18 @@ export function usePlan() {
     setPlans((ps) => removeBrowsed(ps, ids, new Date().toISOString()));
   }, [plan, active, setPlans]);
 
+  /** Manual "I'm enrolled" toggle — acts on the course's OWN term, frozen when archived. */
+  const toggleBooked = useCallback((course: CourseOffering) => {
+    setTermsState((s) => {
+      if (isArchived(course.term, new Date())) return s;
+      const key = termKey(course.term);
+      const ws = s.terms[key];
+      if (!ws) return s;
+      const next = toggleBookedIn(ws, course.id);
+      return next === ws ? s : { ...s, terms: { ...s.terms, [key]: next } };
+    });
+  }, []);
+
   // True once the extension's bridge has delivered anything this session — used to
   // route "open in TSS" through the extension (which can reuse an open TSS tab).
   const bridgeSeen = useRef(false);
@@ -463,6 +476,37 @@ export function usePlan() {
         // Adds always land in MY plans — surface them, even if a received plan was up.
         switchViewing('mine');
       },
+      onBooked: (rows) => {
+        bridgeSeen.current = true;
+        setTermsState((s) => {
+          const nowIso = new Date().toISOString();
+          const now = new Date();
+          // The payload is the FULL current booking list across terms.
+          const idsByKey = new Map<string, string[]>();
+          for (const r of rows) {
+            const key = termKey(r.term);
+            const id = `${r.courseCode}|${r.term.year}|${r.term.period}`;
+            idsByKey.set(key, [...(idsByKey.get(key) ?? []), id]);
+          }
+          // Terms with bookings the student never browsed get a workspace
+          // (background data — never auto-switch the active term).
+          let next = s;
+          for (const r of rows) {
+            if (!isArchived(r.term, now)) next = ensureWorkspace(next, r.term, nowIso);
+          }
+          // Every non-archived workspace gets its slice — [] clears (a drop, or a
+          // feed with zero bookings for that term).
+          let changed = next !== s;
+          const terms: typeof next.terms = {};
+          for (const [key, ws] of Object.entries(next.terms)) {
+            if (isArchived(ws.term, now)) { terms[key] = ws; continue; }
+            const applied = applyAutoBooked(ws, idsByKey.get(key) ?? []);
+            if (applied !== ws) changed = true;
+            terms[key] = applied;
+          }
+          return changed ? { ...next, terms } : s;
+        });
+      },
     });
   }, [addIntoTerm, switchViewing]);
 
@@ -482,6 +526,12 @@ export function usePlan() {
   const viewPlan = viewing === 'received' && received ? received.plan : plan;
   const readOnly = (viewing === 'received' && received !== null) || archived;
 
+  /** Booked (enrolled) course ids of the VIEWED plan's own term. */
+  const bookedIds = useMemo<ReadonlySet<string>>(() => {
+    const ws = termsState.terms[termKey(viewPlan.term)];
+    return ws ? bookedSet(ws) : new Set<string>();
+  }, [termsState, viewPlan.term]);
+
   const selectedCourses = useMemo(() => buildSelectedCourses(viewPlan), [viewPlan]);
   const weeklyConflicts = useMemo(() => findWeeklyConflicts(selectedCourses), [selectedCourses]);
   const finalConflicts = useMemo(() => findFinalConflicts(selectedCourses), [selectedCourses]);
@@ -490,9 +540,9 @@ export function usePlan() {
     [weeklyConflicts, finalConflicts],
   );
 
-  const instances = useMemo(() => meetingInstances(viewPlan), [viewPlan]);
-  const finals = useMemo(() => finalsSorted(viewPlan), [viewPlan]);
-  const midterms = useMemo(() => midtermsSorted(viewPlan), [viewPlan]);
+  const instances = useMemo(() => meetingInstances(viewPlan, bookedIds), [viewPlan, bookedIds]);
+  const finals = useMemo(() => finalsSorted(viewPlan, bookedIds), [viewPlan, bookedIds]);
+  const midterms = useMemo(() => midtermsSorted(viewPlan, bookedIds), [viewPlan, bookedIds]);
   const units = useMemo(() => planUnits(viewPlan), [viewPlan]);
 
   const codeById = useMemo(() => {
@@ -530,6 +580,8 @@ export function usePlan() {
     resetPlan,
     removeFromPool,
     clearBrowsed,
+    bookedIds,
+    toggleBooked,
     openCourseInTss,
     openBookingInTss,
     // terms
