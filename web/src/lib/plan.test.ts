@@ -293,4 +293,34 @@ describe('full-section flag on calendar instances', () => {
     expect(meetingInstances(plan).some((m) => m.full)).toBe(false);
     expect(finalsSorted(plan)[0]!.full).toBe(false);
   });
+
+  it('a booked course is never marked full on any calendar surface', () => {
+    const term = { year: '2026', period: '2', label: 'Fall 2026' };
+    const course: CourseOffering = {
+      id: 'CHEM-43A|2026|2', moduleId: '2117', subject: 'CHEM', number: '043A',
+      courseCode: 'CHEM-43A', title: 'Organic Chemistry', term,
+      options: [{
+        id: 'SE1', code: 'P-001-001', enrollCode: 'SE1', seatsAvailable: 0, limit: 23,
+        final: { date: '2026-12-05', start: '11:30', end: '14:29' },
+        components: [{
+          id: 'E1', type: 'LE', typeText: 'Lecture', sectionCode: '001-000-LE',
+          instructors: [], unscheduled: false,
+          meetings: [{ days: ['Fri'], start: '09:00', end: '09:50', modality: 'In Person' }],
+          rawSched:
+            'F 09:00 AM - 09:50 AM In Person\nMidterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person',
+        }],
+      }],
+    };
+    const plan: PlanState = { version: 1, term, entries: [{ course, selectedOptionId: 'SE1', color: '10' }] };
+    const booked = new Set([course.id]);
+
+    // regression guard: WITHOUT the set the option still reads full everywhere
+    expect(meetingInstances(plan).some((i) => i.full)).toBe(true);
+    expect(finalsSorted(plan).some((f) => f.full)).toBe(true);
+    expect(midtermsSorted(plan).dated.some((m) => m.full)).toBe(true);
+    // booked → never full, on every surface
+    expect(meetingInstances(plan, booked).every((i) => !i.full)).toBe(true);
+    expect(finalsSorted(plan, booked).every((f) => !f.full)).toBe(true);
+    expect(midtermsSorted(plan, booked).dated.every((m) => !m.full)).toBe(true);
+  });
 });

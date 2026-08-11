@@ -79,13 +79,14 @@ export function buildSelectedCourses(plan: PlanState): SelectedCourse[] {
 }
 
 /** Flatten chosen options into placeable weekly meeting instances (skips unscheduled/empty). */
-export function meetingInstances(plan: PlanState): MeetingInstance[] {
+export function meetingInstances(plan: PlanState, bookedIds?: ReadonlySet<string>): MeetingInstance[] {
   const out: MeetingInstance[] = [];
   for (const entry of plan.entries) {
     const option = findOption(entry.course, entry.selectedOptionId);
     if (!option) continue;
     const hue = entryHue(plan, entry);
-    const full = optionFull(option);
+    const booked = bookedIds?.has(entry.course.id) ?? false;
+    const full = !booked && optionFull(option);
     for (const comp of option.components) {
       if (comp.unscheduled || comp.meetings.length === 0) continue;
       for (const m of comp.meetings) {
@@ -129,18 +130,20 @@ function cmpStr(a: string, b: string): number {
 }
 
 /** Finals of chosen options, sorted by date then start time. */
-export function finalsSorted(plan: PlanState): FinalItem[] {
+export function finalsSorted(plan: PlanState, bookedIds?: ReadonlySet<string>): FinalItem[] {
   const out: FinalItem[] = [];
   for (const entry of plan.entries) {
     const option = findOption(entry.course, entry.selectedOptionId);
     if (!option || !option.final) continue;
+    const booked = bookedIds?.has(entry.course.id) ?? false;
+    const full = !booked && optionFull(option);
     out.push({
       courseId: entry.course.id,
       courseCode: entry.course.courseCode,
       title: entry.course.title,
       hue: entryHue(plan, entry),
       final: option.final,
-      full: optionFull(option),
+      full,
     });
   }
   out.sort((a, b) => cmpStr(a.final.date, b.final.date) || cmpStr(a.final.start, b.final.start));
@@ -172,7 +175,7 @@ export interface MidtermTbdItem {
  * row for every other course in the plan. TSS can't distinguish "no midterm"
  * from "not announced yet", so any course without a parsed midterm is TBD.
  */
-export function midtermsSorted(plan: PlanState): { dated: MidtermItem[]; tbd: MidtermTbdItem[] } {
+export function midtermsSorted(plan: PlanState, bookedIds?: ReadonlySet<string>): { dated: MidtermItem[]; tbd: MidtermTbdItem[] } {
   const dated: MidtermItem[] = [];
   const tbd: MidtermTbdItem[] = [];
   for (const entry of plan.entries) {
@@ -183,7 +186,8 @@ export function midtermsSorted(plan: PlanState): { dated: MidtermItem[]; tbd: Mi
       hue: entryHue(plan, entry),
     };
     const option = findOption(entry.course, entry.selectedOptionId);
-    const full = option ? optionFull(option) : false;
+    const booked = bookedIds?.has(entry.course.id) ?? false;
+    const full = option ? !booked && optionFull(option) : false;
     // Sort per-course before labeling so "Midterm 1" is always the earlier one,
     // even when an explicit midterms field arrives unsorted.
     const midterms = (option ? [...optionMidterms(option)] : []).sort(
