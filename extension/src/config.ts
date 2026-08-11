@@ -56,6 +56,8 @@ export const MSG = {
   GET_COURSES: 'tp:get-courses',
   /** any → SW: return the captured ApptTimes[] (student's enrollment windows). */
   GET_APPT_TIMES: 'tp:get-appt-times',
+  /** any → SW: return the captured booked-modules list (null = never captured). */
+  GET_BOOKED: 'tp:get-booked',
   /** tss-inject → SW: student clicked "+ TritonPlan" on a section. */
   PLAN_ADD: 'tp:plan-add',
   /** popup → SW: open/focus the planner tab. */

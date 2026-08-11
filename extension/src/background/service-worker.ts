@@ -238,6 +238,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return true;
     }
 
+    case MSG.GET_BOOKED: {
+      (async () => {
+        try {
+          const store = await getStore();
+          sendResponse(store.getBooked()); // null = never captured → bridge won't push
+        } catch {
+          sendResponse(null);
+        }
+      })();
+      return true;
+    }
+
     case MSG.PLAN_ADD: {
       const course = msg.course as CourseOffering | undefined;
       const selectedOptionId = typeof msg.selectedOptionId === 'string' ? msg.selectedOptionId : '';

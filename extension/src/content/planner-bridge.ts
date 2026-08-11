@@ -5,6 +5,7 @@
  * validates (see web/src/lib/bridge.ts):
  *   - `courses`   — re-push the whole captured pool on every planner load.
  *   - `appt-times` — re-push the student's enrollment windows.
+ *   - `booked`    — re-push the student's booked modules (homepage feed).
  *   - `plan-add`  — deliver any queued "+ TritonPlan" intents.
  *
  * ⛔ NO-BAN RED LINE: touches ONLY our own extension + our own page. No TSS traffic.
@@ -67,6 +68,22 @@ async function pushApptTimes(): Promise<void> {
   }
 }
 
+/** Post the student's own booked modules. null = homepage never captured →
+ *  push nothing (a manual-only planner stays untouched). An EMPTY list IS
+ *  pushed — a captured feed with zero bookings must clear stale marks. */
+async function pushBooked(): Promise<void> {
+  try {
+    const booked = await chrome.runtime.sendMessage({ type: MSG.GET_BOOKED });
+    if (!Array.isArray(booked)) return;
+    window.postMessage(
+      { source: BRIDGE_SOURCE, type: 'booked', version: BRIDGE_VERSION, payload: booked },
+      TARGET_ORIGIN,
+    );
+  } catch {
+    /* SW asleep or context gone */
+  }
+}
+
 /** Drain queued plan-add intents from the SW and deliver each to the page. */
 async function flushPlanAdds(): Promise<void> {
   try {
@@ -92,6 +109,7 @@ async function flushPlanAdds(): Promise<void> {
 async function syncAll(): Promise<void> {
   await pushCourses();
   await pushApptTimes();
+  await pushBooked();
   await flushPlanAdds();
 }
 
