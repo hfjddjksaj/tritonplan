@@ -12,6 +12,7 @@
 
 import type { MidtermExam, SectionOption } from './types.js';
 import { parse12h } from './time.js';
+import { splitModalityLocation } from './exam-location.js';
 
 const TIME = '\\d{1,2}:\\d{2}\\s*[AP]M';
 const MIDTERM_RE = new RegExp(
@@ -35,8 +36,11 @@ export function midtermsFromSched(sched: string | null | undefined): MidtermExam
       start,
       end,
     };
-    const mod = modality?.trim();
+    const { modality: mod, location, building, room } = splitModalityLocation(modality);
     if (mod) exam.modality = mod;
+    if (location) exam.location = location;
+    if (building) exam.building = building;
+    if (room) exam.room = room;
     out.push(exam);
   }
   return out;

@@ -50,6 +50,20 @@ describe('midtermsFromSched', () => {
     expect(midtermsFromSched(undefined)).toEqual([]);
     expect(midtermsFromSched('Midterm Examination someday 10:00 AM - 11:50 AM')).toEqual([]);
   });
+
+  it('peels an "@ <Location>" tail off a midterm line (grammar change seen 2026-08-11)', () => {
+    const rows = midtermsFromSched(
+      'F 09:00 AM - 09:50 AM In Person @ York Hall Room 2622\n' +
+        'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 115',
+    );
+    expect(rows).toEqual([
+      {
+        date: '2026-10-31', start: '10:00', end: '11:50',
+        modality: 'In Person', location: 'Center Hall Room 115',
+        building: 'Center Hall', room: '115',
+      },
+    ]);
+  });
 });
 
 describe('optionMidterms', () => {
