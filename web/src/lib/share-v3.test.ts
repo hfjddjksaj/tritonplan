@@ -100,4 +100,33 @@ describe('encodePlanV3 / decodePlanV3', () => {
     expect(back).not.toBeNull();
     expect(back!.entries[0]!.course.options[0]!.midterms).toBeUndefined();
   });
+
+  it('keeps the exam location inside the frozen modality slot (new-parser senders)', () => {
+    const plan = makePlan(1, 2);
+    for (const o of plan.entries[0]!.course.options) {
+      o.final = {
+        date: '2026-12-05', start: '11:30', end: '14:29',
+        modality: 'In Person', location: 'York Hall Room 2622',
+        building: 'York Hall', room: '2622',
+      };
+    }
+    const back = decodePlanV3(encodePlanV3(plan))!;
+    // Old and new planners alike receive the combined tail; new ones split at render.
+    expect(back.entries[0]!.course.options[0]!.final).toEqual({
+      date: '2026-12-05', start: '11:30', end: '14:29',
+      modality: 'In Person @ York Hall Room 2622',
+    });
+  });
+
+  it('recombines midterm locations the same way (derived from rawSched at encode)', () => {
+    const plan = makePlan(1, 2);
+    for (const o of plan.entries[0]!.course.options) {
+      o.components[0]!.rawSched +=
+        '\nMidterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 115';
+    }
+    const back = decodePlanV3(encodePlanV3(plan))!;
+    expect(back.entries[0]!.course.options[0]!.midterms).toEqual([
+      { date: '2026-10-31', start: '10:00', end: '11:50', modality: 'In Person @ Center Hall Room 115' },
+    ]);
+  });
 });

@@ -79,6 +79,13 @@ function packMeeting(m: Meeting): WireMeeting {
   return [m.days, m.start, m.end, m.modality, m.building ?? '', m.room ?? '', m.location ?? ''];
 }
 
+/** The v3 schema is frozen: recombine a structured location back into the
+ *  modality slot so no recipient — old or new planner — loses it. */
+function wireExamModality(exam: FinalExam): string {
+  const m = exam.modality ?? '';
+  return exam.location ? `${m ? `${m} ` : ''}@ ${exam.location}` : m;
+}
+
 function packEntry(course: CourseOffering, selectedOptionId: string | null, color?: string): WireEntry {
   const table: WireComp[] = [];
   const idxByKey = new Map<string, number>();
@@ -101,10 +108,10 @@ function packEntry(course: CourseOffering, selectedOptionId: string | null, colo
       o.enrollCode,
       o.seatsAvailable ?? -1,
       o.limit ?? -1,
-      o.final ? [o.final.date, o.final.start, o.final.end, o.final.modality ?? ''] : 0,
+      o.final ? [o.final.date, o.final.start, o.final.end, wireExamModality(o.final)] : 0,
       o.components.map(compIdx),
       midterms.length
-        ? midterms.map((m): WireFinal => [m.date, m.start, m.end, m.modality ?? ''])
+        ? midterms.map((m): WireFinal => [m.date, m.start, m.end, wireExamModality(m)])
         : 0,
     ];
   });
