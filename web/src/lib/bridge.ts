@@ -10,7 +10,7 @@
  * Implemented to the shared BridgeMessage contract (for `courses`) plus the `plan-add`
  * envelope below — the extension targets these exact shapes.
  */
-import type { ApptTimes, BridgeMessage, CourseOffering } from '@triton/shared';
+import type { ApptTimes, BridgeMessage, BookedModule, CourseOffering } from '@triton/shared';
 import { isApptTimesList } from './storage';
 import { foldCourse } from './course-merge';
 
@@ -70,6 +70,39 @@ export function isApptTimesMessage(data: unknown): data is ApptTimesMessage {
   const m = data as Record<string, unknown>;
   if (m.source !== BRIDGE_SOURCE || m.type !== 'appt-times' || m.version !== 1) return false;
   return isApptTimesList(m.payload);
+}
+
+/** Envelope for the student's own booked (enrolled) modules. An EMPTY payload is
+ *  meaningful — a captured feed with zero bookings clears the auto list. */
+export interface BookedMessage {
+  source: typeof BRIDGE_SOURCE;
+  type: 'booked';
+  version: 1;
+  payload: BookedModule[];
+}
+
+function isBookedModule(v: unknown): v is BookedModule {
+  if (!v || typeof v !== 'object') return false;
+  const m = v as Record<string, unknown>;
+  const t = m.term as Record<string, unknown> | undefined;
+  return (
+    typeof m.courseCode === 'string' &&
+    typeof m.moduleId === 'string' &&
+    !!t && typeof t === 'object' &&
+    typeof t.year === 'string' && typeof t.period === 'string' && typeof t.label === 'string'
+  );
+}
+
+export function isBookedMessage(data: unknown): data is BookedMessage {
+  if (!data || typeof data !== 'object') return false;
+  const m = data as Record<string, unknown>;
+  return (
+    m.source === BRIDGE_SOURCE &&
+    m.type === 'booked' &&
+    m.version === 1 &&
+    Array.isArray(m.payload) &&
+    m.payload.every(isBookedModule)
+  );
 }
 
 /** Same-window/same-origin listener for `appt-times` pushes. Separate from
@@ -185,6 +218,8 @@ export interface BridgeHandlers {
   onCourses: (courses: CourseOffering[]) => void;
   /** A `plan-add` message: add this course to the plan with the given option selected. */
   onPlanAdd: (course: CourseOffering, selectedOptionId: string) => void;
+  /** A `booked` message: update the student's enrolled modules. */
+  onBooked?: (rows: BookedModule[]) => void;
 }
 
 /**
@@ -200,6 +235,8 @@ export function installBridgeListener(handlers: BridgeHandlers): () => void {
       handlers.onPlanAdd(event.data.payload.course, event.data.payload.selectedOptionId);
     } else if (isCoursesMessage(event.data)) {
       handlers.onCourses(event.data.payload);
+    } else if (isBookedMessage(event.data)) {
+      handlers.onBooked?.(event.data.payload);
     }
   };
   window.addEventListener('message', handler);

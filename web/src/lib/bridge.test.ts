@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { ApptTimes, BridgeMessage } from '@triton/shared';
+import type { ApptTimes, BridgeMessage, BookedModule } from '@triton/shared';
 import {
   isBridgeMessage,
   isCoursesMessage,
@@ -11,6 +11,8 @@ import {
   postForgetCourses,
   BRIDGE_SOURCE,
   type PlanAddMessage,
+  isBookedMessage,
+  type BookedMessage,
 } from './bridge';
 import { makeCourse } from './fixtures';
 
@@ -174,6 +176,20 @@ describe('installBridgeListener', () => {
     expect(onPlanAdd).not.toHaveBeenCalled();
     cleanup();
   });
+
+  it('routes booked envelopes to onBooked', () => {
+    const onCourses = vi.fn();
+    const onPlanAdd = vi.fn();
+    const onBooked = vi.fn();
+    const cleanup = installBridgeListener({ onCourses, onPlanAdd, onBooked });
+    window.dispatchEvent(
+      trustedEvent({ source: BRIDGE_SOURCE, type: 'booked', version: 1, payload: [BOOKED_ROW] }),
+    );
+    expect(onBooked).toHaveBeenCalledTimes(1);
+    expect(onBooked.mock.calls[0]![0]).toEqual([BOOKED_ROW]);
+    expect(onCourses).not.toHaveBeenCalled();
+    cleanup();
+  });
 });
 
 describe('appt-times bridge', () => {
@@ -230,6 +246,28 @@ describe('appt-times bridge', () => {
     cleanup();
     window.dispatchEvent(trustedEvent(apptMsg));
     expect(onApptTimes).toHaveBeenCalledTimes(1);
+  });
+});
+
+const BOOKED_ROW: BookedModule = {
+  courseCode: 'CHEM-114A',
+  moduleId: '2077',
+  term: { year: '2026', period: '2', label: 'Fall 2026' },
+};
+
+describe('isBookedMessage', () => {
+  const good: BookedMessage = { source: BRIDGE_SOURCE, type: 'booked', version: 1, payload: [BOOKED_ROW] };
+
+  it('accepts a valid envelope, including an EMPTY payload (= zero bookings)', () => {
+    expect(isBookedMessage(good)).toBe(true);
+    expect(isBookedMessage({ ...good, payload: [] })).toBe(true);
+  });
+
+  it('rejects malformed rows and foreign envelopes', () => {
+    expect(isBookedMessage({ ...good, source: 'someone-else' })).toBe(false);
+    expect(isBookedMessage({ ...good, version: 2 })).toBe(false);
+    expect(isBookedMessage({ ...good, payload: [{ courseCode: 'X' }] })).toBe(false);
+    expect(isBookedMessage({ ...good, payload: [{ ...BOOKED_ROW, term: 'Fall' }] })).toBe(false);
   });
 });
 

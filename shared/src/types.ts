@@ -159,3 +159,11 @@ export interface BridgeMessage {
   version: 1;
   payload: CourseOffering[];
 }
+
+/** One booked (enrolled) module from the TSS homepage "Booked Courses" feed.
+ *  PERSONAL data — bridge payload only, never inside plans or shares. */
+export interface BookedModule {
+  courseCode: string; // SmShort, e.g. "CHEM-114A"
+  moduleId: string;   // SmObjid with leading zeros stripped, e.g. "2077"
+  term: Term;
+}
