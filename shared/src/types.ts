@@ -38,6 +38,12 @@ export interface FinalExam {
   start: string;         // "HH:MM" 24h
   end: string;           // "HH:MM" 24h
   modality?: string;
+  /** Exam location — TSS appends "@ <Location>" to exam lines (seen 2026-08-11).
+   *  Absent on older captures, where the raw tail sits inside `modality` instead
+   *  (split it with exam-location.ts helpers at display time). */
+  location?: string;
+  building?: string;
+  room?: string;
 }
 
 /** A midterm examination — same `Sched` line shape as a final
