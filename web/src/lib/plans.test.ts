@@ -13,6 +13,9 @@ import {
   mapAllPlans,
   activeHidden,
   hideInActivePlan,
+  activeBrowsed,
+  addBrowsed,
+  removeBrowsed,
   type PlansState,
 } from './plans';
 import { emptyPlan, DEFAULT_TERM } from './plan';
@@ -223,5 +226,42 @@ describe('per-plan hidden browsed courses', () => {
     const stored = migratePlans(null, null, 'now');
     expect(stored.plans[0]!.hidden).toBeUndefined();
     expect(activeHidden(stored).size).toBe(0);
+  });
+});
+
+describe('per-plan browsed lists', () => {
+  it('addBrowsed appends to the NAMED plan only, deduplicated', () => {
+    const s = seeded(); // active = "Backup" (second plan)
+    const first = s.plans[0]!.id;
+    const next = addBrowsed(addBrowsed(s, first, ['CSE-100|2026|2'], NOW), first, ['CSE-100|2026|2', 'CSE-101|2026|2'], NOW);
+    expect(next.plans[0]!.browsed).toEqual(['CSE-100|2026|2', 'CSE-101|2026|2']);
+    expect(next.plans[1]!.browsed ?? []).toEqual([]); // other plan untouched
+  });
+  it('addBrowsed with nothing new returns the same state reference', () => {
+    const s = addBrowsed(seeded(), seeded().plans[0]!.id, [], NOW);
+    expect(addBrowsed(s, s.plans[0]!.id, [], NOW)).toBe(s);
+  });
+  it('addBrowsed on an unknown plan id is a no-op', () => {
+    const s = seeded();
+    expect(addBrowsed(s, 'nope', ['x'], NOW)).toBe(s);
+  });
+  it('removeBrowsed drops ids from the ACTIVE plan only', () => {
+    let s = seeded();
+    const activeId = s.activeId;
+    s = addBrowsed(s, activeId, ['a', 'b'], NOW);
+    const next = removeBrowsed(s, ['a'], NOW);
+    expect(next.plans.find((p) => p.id === activeId)!.browsed).toEqual(['b']);
+  });
+  it('createPlan starts with an empty browsed list; duplicatePlan copies it', () => {
+    let s = seeded();
+    s = addBrowsed(s, s.activeId, ['a'], NOW);
+    expect(createPlan(s, NOW).plans.at(-1)!.browsed).toEqual([]);
+    const dup = duplicatePlan(s, s.activeId, NOW);
+    expect(dup.plans.at(-1)!.browsed).toEqual(['a']);
+  });
+  it('activeBrowsed reads the active plan', () => {
+    let s = seeded();
+    s = addBrowsed(s, s.activeId, ['a'], NOW);
+    expect([...activeBrowsed(s)]).toEqual(['a']);
   });
 });

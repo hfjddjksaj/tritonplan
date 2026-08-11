@@ -23,6 +23,13 @@ export interface NamedPlan {
    * list preference, not part of the schedule.
    */
   hidden?: string[];
+  /**
+   * THIS plan's own browsed-courses list (course ids referencing the pool
+   * repository). Fully independent per plan AND per term: new captures land
+   * only in the target term's active plan; a new plan starts empty; ×/Clear
+   * touch only this plan. Replaces `hidden` (kept above for migration input).
+   */
+  browsed?: string[];
 }
 
 export interface PlansState {
@@ -133,6 +140,7 @@ export function createPlan(state: PlansState, now: string, name?: string): Plans
     plan: emptyPlan(activePlan(state).plan.term),
     createdAt: now,
     updatedAt: now,
+    browsed: [],
   };
   return { activeId: id, plans: [...state.plans, entry] };
 }
@@ -172,6 +180,7 @@ export function duplicatePlan(state: PlansState, id: string, now: string): Plans
     createdAt: now,
     updatedAt: now,
     ...(source.hidden ? { hidden: [...source.hidden] } : {}),
+    ...(source.browsed ? { browsed: [...source.browsed] } : {}),
   };
   return { activeId: copyId, plans: [...state.plans, copy] };
 }
@@ -188,4 +197,37 @@ export function deletePlan(state: PlansState, id: string): PlansState {
 export function switchActive(state: PlansState, id: string): PlansState {
   if (state.activeId === id || !state.plans.some((p) => p.id === id)) return state;
   return { ...state, activeId: id };
+}
+
+/** Course ids the ACTIVE plan lists as browsed. */
+export function activeBrowsed(state: PlansState): ReadonlySet<string> {
+  return new Set(activePlan(state).browsed ?? []);
+}
+
+/** Append ids to a SPECIFIC plan's browsed list (dedup); same state when nothing is new. */
+export function addBrowsed(state: PlansState, planId: string, ids: string[], now: string): PlansState {
+  if (ids.length === 0) return state;
+  const target = state.plans.find((p) => p.id === planId);
+  if (!target) return state;
+  const before = target.browsed ?? [];
+  const next = [...new Set([...before, ...ids])];
+  if (next.length === before.length) return state;
+  return {
+    ...state,
+    plans: state.plans.map((p) => (p.id === planId ? { ...p, browsed: next, updatedAt: now } : p)),
+  };
+}
+
+/** Remove ids from the ACTIVE plan's browsed list; same state when nothing matched. */
+export function removeBrowsed(state: PlansState, ids: string[], now: string): PlansState {
+  if (ids.length === 0) return state;
+  const current = activePlan(state);
+  const before = current.browsed ?? [];
+  const drop = new Set(ids);
+  const next = before.filter((id) => !drop.has(id));
+  if (next.length === before.length) return state;
+  return {
+    ...state,
+    plans: state.plans.map((p) => (p.id === current.id ? { ...p, browsed: next, updatedAt: now } : p)),
+  };
 }
