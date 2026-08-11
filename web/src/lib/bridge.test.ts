@@ -8,6 +8,7 @@ import {
   installBridgeListener,
   isApptTimesMessage,
   installApptTimesListener,
+  postForgetCourses,
   BRIDGE_SOURCE,
   type PlanAddMessage,
 } from './bridge';
@@ -229,5 +230,23 @@ describe('appt-times bridge', () => {
     cleanup();
     window.dispatchEvent(trustedEvent(apptMsg));
     expect(onApptTimes).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('postForgetCourses', () => {
+  it('posts the forget-courses envelope to the page origin', () => {
+    const posted: unknown[] = [];
+    const orig = window.postMessage.bind(window);
+    window.postMessage = ((msg: unknown) => { posted.push(msg); }) as typeof window.postMessage;
+    try {
+      postForgetCourses(['8461', '8462']);
+      expect(posted).toEqual([
+        { source: 'triton-planner-page', type: 'forget-courses', version: 1, payload: { moduleIds: ['8461', '8462'] } },
+      ]);
+      postForgetCourses([]);
+      expect(posted).toHaveLength(1); // empty list posts nothing
+    } finally {
+      window.postMessage = orig;
+    }
   });
 });
