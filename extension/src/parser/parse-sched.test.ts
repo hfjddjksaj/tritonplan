@@ -99,4 +99,16 @@ describe('parseSched — real captured TSS strings', () => {
     expect(parseSched(undefined).unscheduled).toBe(true);
     expect(parseSched(null).unscheduled).toBe(true);
   });
+
+  it('final line with "@ <Location>" tail (CHEM, live TSS 2026-08-11)', () => {
+    const r = parseSched(
+      'F 09:00 AM - 09:50 AM In Person @ York Hall Room 2622\n' +
+        'Final Examination 12/05/2026 11:30 AM - 02:29 PM In Person @ York Hall Room 2622',
+    );
+    expect(r.final).toEqual({
+      date: '2026-12-05', start: '11:30', end: '14:29',
+      modality: 'In Person', location: 'York Hall Room 2622',
+      building: 'York Hall', room: '2622',
+    });
+  });
 });

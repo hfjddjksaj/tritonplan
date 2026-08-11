@@ -5,7 +5,7 @@
  *   "Schedule Not Defined"                                  → TBA/async, no placeable time
  * or one-or-more `\n`-separated lines, each one of:
  *   meeting: `<Days> <Start> - <End> <Modality>[ @ <Location>]`
- *   final:   `Final Examination <MM/DD/YYYY> <Start> - <End> <Modality>`
+ *   final:   `Final Examination <MM/DD/YYYY> <Start> - <End> <Modality>[ @ <Location>]`
  *   other dated one-offs: `Midterm Examination <MM/DD/YYYY> <Start> - <End> <Modality>`
  *     (seen on CHEM-043A, 2026-07-24) — NOT a weekly meeting; dropped into unparsedLines.
  *
@@ -16,7 +16,7 @@
  */
 
 import type { Meeting, FinalExam, Weekday } from '@triton/shared';
-import { parse12h } from '@triton/shared';
+import { parse12h, splitLocationText, splitModalityLocation } from '@triton/shared';
 
 export const TBA_SCHED = 'Schedule Not Defined';
 
@@ -56,16 +56,6 @@ function parseDays(daysPart: string): Weekday[] | null {
   return days.length === tokens.length ? days : null;
 }
 
-/** Split a raw location like "Galbraith Hall Room 242" into building + room. */
-function splitLocation(location: string): { building?: string; room?: string } {
-  const idx = location.lastIndexOf(' Room ');
-  if (idx === -1) return { building: location.trim() || undefined };
-  return {
-    building: location.slice(0, idx).trim() || undefined,
-    room: location.slice(idx + ' Room '.length).trim() || undefined,
-  };
-}
-
 function parseMeetingLine(line: string): Meeting | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
@@ -91,7 +81,7 @@ function parseMeetingLine(line: string): Meeting | null {
   const days = parseDays(daysPart);
   if (days === null) return null; // e.g. "Midterm Examination 10/31/2026 …" — dated one-off, not weekly
 
-  const loc = location ? splitLocation(location) : {};
+  const loc = location ? splitLocationText(location) : {};
   return {
     days,
     start,
@@ -106,12 +96,18 @@ function parseMeetingLine(line: string): Meeting | null {
 function parseFinalLine(line: string): FinalExam | null {
   const m = line.trim().match(FINAL_RE);
   if (!m) return null;
-  const [, mm = '', dd = '', yyyy = '', s = '', e = '', modality] = m;
+  const [, mm = '', dd = '', yyyy = '', s = '', e = '', tail] = m;
   const start = parse12h(s);
   const end = parse12h(e);
   if (!start || !end) return null;
   const date = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
-  return { date, start, end, modality: modality?.trim() || undefined };
+  const out: FinalExam = { date, start, end };
+  const { modality, location, building, room } = splitModalityLocation(tail);
+  if (modality) out.modality = modality;
+  if (location) out.location = location;
+  if (building) out.building = building;
+  if (room) out.room = room;
+  return out;
 }
 
 export function parseSched(sched: string | null | undefined): ParsedSched {
