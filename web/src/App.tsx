@@ -14,11 +14,13 @@ import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
 import { PlanPickerModal } from './components/PlanPickerModal';
+import { TermSwitcher } from './components/TermSwitcher';
 import { BlockSheet } from './components/BlockSheet';
 import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
 import { Calendar, Cap, Check, PenLine } from './components/icons';
 import { parsePlanJson, planFromLinkText } from './lib/share';
 import { countConflictPairs } from './lib/plan';
+import { displayTermLabel } from './lib/terms';
 import { pluralize } from './lib/format';
 import { PRODUCT_NAME } from './lib/brand';
 import { loadCalView, saveCalView, type CalView } from './lib/storage';
@@ -165,7 +167,22 @@ export default function App() {
   return (
     <div className={`app${isMobile ? ' app--mobile' : ''}`}>
       <Topbar
-        termLabel={ctl.viewPlan.term.label}
+        termSlot={
+          ctl.viewing === 'received' && ctl.received ? (
+            <div className="topbar__term">
+              <span className="eyebrow">Term</span>
+              <span className="topbar__term-label">{displayTermLabel(ctl.viewPlan.term)}</span>
+            </div>
+          ) : (
+            <TermSwitcher
+              terms={ctl.termList}
+              activeKey={ctl.activeTermKey}
+              activeLabel={displayTermLabel(ctl.viewPlan.term)}
+              archived={ctl.archived}
+              onSwitch={ctl.switchTerm}
+            />
+          )
+        }
         units={ctl.units}
         readOnly={ctl.readOnly}
         planSwitcher={

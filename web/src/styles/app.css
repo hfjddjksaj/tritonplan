@@ -2054,10 +2054,17 @@ button.menu__item:hover {
     padding: 0 10px;
     gap: 8px;
   }
-  .topbar__term,
   .brand__sub,
   .unit-pill {
     display: none;
+  }
+  /* Keep the term chip visible on mobile (it is the term SWITCHER now) —
+     compact: drop the eyebrow, tighten the divider inset. */
+  .topbar__term .eyebrow {
+    display: none;
+  }
+  .topbar__term {
+    padding-left: 8px;
   }
   .toolbar {
     padding: 8px 10px 0;
@@ -2355,4 +2362,106 @@ button.menu__item:hover {
 .planpick__cancel {
   width: 100%;
   justify-content: center;
+}
+
+/* ---- term switcher ---- */
+.termsw {
+  position: relative;
+}
+.termsw__trigger {
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--line);
+  padding: 0 0 0 18px;
+  text-align: left;
+}
+.termsw__trigger .topbar__term-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.termsw__tag {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 6px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--line);
+}
+.termsw__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  min-width: 420px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md, 10px);
+  box-shadow: 0 10px 28px rgba(11, 31, 58, 0.16);
+}
+.termsw__row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.termsw__row:last-child {
+  margin-bottom: 0;
+}
+.termsw__row--summer {
+  grid-template-columns: repeat(2, 1fr);
+}
+.termsw__row--other {
+  grid-template-columns: 1fr;
+}
+.termsw__cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-align: center;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+button.termsw__cell:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+.termsw__cell--current {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+.termsw__cell--placeholder {
+  cursor: default;
+  opacity: 0.45;
+  font-weight: 500;
+}
+.termsw__divider {
+  border-top: 2px solid var(--line-strong);
+  margin: 10px 0;
+}
+@media (max-width: 720px) {
+  .termsw__trigger {
+    padding-left: 8px;
+  }
+  .termsw__panel {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 12px;
+    min-width: 0;
+  }
 }

@@ -6,7 +6,8 @@ import { ShareMenu } from './ShareMenu';
 import { Trident, Upload, Trash, Link, ChevronDown } from './icons';
 
 interface Props {
-  termLabel: string;
+  /** The term chip / switcher, rendered after the plan switcher. */
+  termSlot: ReactNode;
   units: number;
   /** Viewing someone else's plan — editing actions (Clear) hide. */
   readOnly: boolean;
@@ -23,7 +24,7 @@ interface Props {
 }
 
 export function Topbar({
-  termLabel,
+  termSlot,
   units,
   readOnly,
   planSwitcher,
@@ -65,10 +66,7 @@ export function Topbar({
 
       {planSwitcher}
 
-      <div className="topbar__term">
-        <span className="eyebrow">Term</span>
-        <span className="topbar__term-label">{termLabel}</span>
-      </div>
+      {termSlot}
 
       <div className="topbar__spacer" />
 
