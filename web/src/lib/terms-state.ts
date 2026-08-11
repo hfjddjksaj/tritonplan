@@ -16,6 +16,11 @@ import { chronoIndex, isArchived, termKey, type TermKey } from './terms';
 export interface TermWorkspace {
   term: Term;
   plans: PlansState;
+  /** Booked (enrolled) status — see lib/booked.ts. Course-id lists; absent = empty.
+   *  PERSONAL data: local only, never in plans/shares/exports. */
+  bookedAuto?: string[];
+  bookedOn?: string[];
+  bookedOff?: string[];
 }
 
 export interface TermsState {

@@ -127,10 +127,20 @@ function isTermShape(value: unknown): boolean {
   return typeof v.year === 'string' && typeof v.period === 'string' && typeof v.label === 'string';
 }
 
+function isOptionalIdList(v: unknown): boolean {
+  return v === undefined || (Array.isArray(v) && v.every((x) => typeof x === 'string'));
+}
+
 function isTermWorkspace(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  return isTermShape(v.term) && isPlansState(v.plans);
+  return (
+    isTermShape(v.term) &&
+    isPlansState(v.plans) &&
+    isOptionalIdList(v.bookedAuto) &&
+    isOptionalIdList(v.bookedOn) &&
+    isOptionalIdList(v.bookedOff)
+  );
 }
 
 export function isTermsState(value: unknown): value is import('./terms-state').TermsState {

@@ -189,4 +189,19 @@ describe('terms storage', () => {
     expect(isTermsState({ version: 1, activeTermKey: 'x', terms: {} })).toBe(false); // empty terms
     expect(isTermsState({ version: 2, activeTermKey: 'x', terms: {} })).toBe(false);
   });
+  it('round-trips booked fields', async () => {
+    const { saveTerms, loadTerms } = await import('./storage');
+    const { newWorkspace } = await import('./terms-state');
+    const A = 'CHEM-114A|2026|2';
+    const ws = newWorkspace({ year: '2026', period: '2', label: 'Fall 2026' }, '2026-08-11T00:00:00.000Z');
+    const state = { version: 1 as const, activeTermKey: '2026|2', terms: { '2026|2': { ...ws, bookedAuto: [A], bookedOn: [], bookedOff: [] } } };
+    saveTerms(state);
+    expect(loadTerms()).toEqual(state);
+  });
+  it('rejects malformed booked fields', async () => {
+    const { isTermsState } = await import('./storage');
+    const { newWorkspace } = await import('./terms-state');
+    const ws = newWorkspace({ year: '2026', period: '2', label: 'Fall 2026' }, '2026-08-11T00:00:00.000Z');
+    expect(isTermsState({ version: 1, activeTermKey: '2026|2', terms: { '2026|2': { ...ws, bookedAuto: 'nope' } } })).toBe(false);
+  });
 });
