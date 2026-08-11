@@ -8,6 +8,8 @@ import {
   chronoIndex,
   archiveBoundary,
   isArchived,
+  buildSwitcherRows,
+  layoutRows,
 } from './terms';
 
 const FALL26: Term = { year: '2026', period: '2', label: 'Fall 2026' };
@@ -71,5 +73,74 @@ describe('isArchived (fixed month-day boundaries: Fall 12/20, Winter 3/22, Sprin
   it('unknown periods NEVER auto-archive', () => {
     expect(isArchived({ year: '2020', period: '9', label: '' }, new Date(2030, 0, 1))).toBe(false);
     expect(archiveBoundary({ year: '2020', period: '9', label: '' })).toBeNull();
+  });
+});
+
+const K = (y: string, p: string) => `${y}|${p}`;
+
+describe('buildSwitcherRows', () => {
+  it('one AY row: Fall present, Winter/Spring placeholders with correct labels', () => {
+    const rows = buildSwitcherRows([{ year: '2026', period: '2', label: 'Fall 2026' }], K('2026', '2'), new Date(2026, 9, 1));
+    expect(rows.quarterRows).toHaveLength(1);
+    const [fall, winter, spring] = rows.quarterRows[0]!;
+    expect(fall).toMatchObject({ key: '2026|2', label: 'Fall 2026', selectable: true, current: true, archived: false });
+    expect(winter).toMatchObject({ key: null, label: 'Winter 2026', selectable: false });
+    expect(spring).toMatchObject({ key: null, label: 'Spring 2027', selectable: false });
+    expect(rows.summerRows).toHaveLength(0);
+    expect(rows.otherRows).toHaveLength(0);
+  });
+
+  it('Winter (calendar 2027) lands in the Fall-2026 row and marks archived terms', () => {
+    const rows = buildSwitcherRows(
+      [
+        { year: '2026', period: '2', label: 'Fall 2026' },
+        { year: '2027', period: '3', label: '' },
+      ],
+      K('2027', '3'),
+      new Date(2027, 0, 10), // Jan 2027: Fall archived (>=12/20/2026), Winter live
+    );
+    expect(rows.quarterRows).toHaveLength(1);
+    const [fall, winter] = rows.quarterRows[0]!;
+    expect(fall).toMatchObject({ key: '2026|2', archived: true, selectable: true, current: false });
+    expect(winter).toMatchObject({ key: '2027|3', label: 'Winter 2026', current: true, archived: false });
+  });
+
+  it('rows sort ascending by academic year', () => {
+    const rows = buildSwitcherRows(
+      [
+        { year: '2027', period: '2', label: 'Fall 2027' },
+        { year: '2026', period: '2', label: 'Fall 2026' },
+      ],
+      K('2027', '2'),
+      new Date(2027, 9, 1),
+    );
+    expect(rows.quarterRows[0]![0]!.label).toBe('Fall 2026');
+    expect(rows.quarterRows[1]![0]!.label).toBe('Fall 2027');
+  });
+
+  it('unknown periods go to otherRows with fallback labels', () => {
+    const rows = buildSwitcherRows([{ year: '2027', period: '9', label: 'Period 9 2027' }], K('2027', '9'), new Date(2027, 0, 1));
+    expect(rows.quarterRows).toHaveLength(0);
+    expect(rows.otherRows).toEqual([
+      { key: '2027|9', label: 'Period 9 2027', selectable: true, current: true, archived: false },
+    ]);
+  });
+});
+
+describe('layoutRows (summer, via the test seam until real codes exist)', () => {
+  it('summer rows appear per calendar year with a placeholder for the unused session', () => {
+    const s1: Term = { year: '2027', period: 'S1', label: '' };
+    const rows = layoutRows(
+      [
+        { term: { year: '2026', period: '2', label: 'Fall 2026' }, season: 'fall' },
+        { term: s1, season: 'summer1' },
+      ],
+      K('2026', '2'),
+      new Date(2026, 9, 1),
+    );
+    expect(rows.summerRows).toHaveLength(1);
+    const [a, b] = rows.summerRows[0]!;
+    expect(a).toMatchObject({ key: '2027|S1', label: 'Summer I 2027', selectable: true });
+    expect(b).toMatchObject({ key: null, label: 'Summer II 2027', selectable: false });
   });
 });

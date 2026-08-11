@@ -49,10 +49,16 @@ export function displayYear(term: Term): number {
   return seasonOf(term) === 'winter' ? y - 1 : y;
 }
 
-export function displayTermLabel(term: Term): string {
-  const season = seasonOf(term);
+/** Label for a term whose season is already known (the layoutRows test seam
+ *  passes seasons explicitly, before the real SAP codes are mapped). */
+function labelFor(term: Term, season: Season | null): string {
   if (!season) return term.label || `Period ${term.period} ${term.year}`;
-  return `${SEASON_NAMES[season]} ${displayYear(term)}`;
+  const y = Number(term.year);
+  return `${SEASON_NAMES[season]} ${season === 'winter' ? y - 1 : y}`;
+}
+
+export function displayTermLabel(term: Term): string {
+  return labelFor(term, seasonOf(term));
 }
 
 /** Season order within ONE calendar year: Winter(Jan) < Spring < Summer I/II < Fall(Sep). */
@@ -94,4 +100,89 @@ export function archiveBoundary(term: Term): Date | null {
 export function isArchived(term: Term, now: Date): boolean {
   const b = archiveBoundary(term);
   return b !== null && now.getTime() >= b.getTime();
+}
+
+export interface SwitcherCell {
+  key: TermKey | null; // null = grey placeholder, not clickable
+  label: string;
+  selectable: boolean;
+  current: boolean;
+  archived: boolean;
+}
+
+export interface SwitcherRows {
+  quarterRows: SwitcherCell[][]; // rows of 3: Fall | Winter | Spring, ascending AY
+  summerRows: SwitcherCell[][]; // rows of 2: Summer I | Summer II, ascending year
+  otherRows: SwitcherCell[]; // unknown-period terms, fallback label
+}
+
+function cellFor(term: Term, season: Season | null, activeKey: TermKey, now: Date): SwitcherCell {
+  const key = termKey(term);
+  return {
+    key,
+    label: labelFor(term, season),
+    selectable: true,
+    current: key === activeKey,
+    archived: isArchived(term, now),
+  };
+}
+
+function placeholder(label: string): SwitcherCell {
+  return { key: null, label, selectable: false, current: false, archived: false };
+}
+
+/**
+ * Layout core, parameterized by season so summer rows are testable before the
+ * real SAP summer codes are known. Production callers use buildSwitcherRows.
+ */
+export function layoutRows(
+  items: { term: Term; season: Season | null }[],
+  activeKey: TermKey,
+  now: Date,
+): SwitcherRows {
+  // Academic-year start for a quarter: fall → its year; winter/spring → year − 1.
+  const ayOf = (season: Season, year: number) => (season === 'fall' ? year : year - 1);
+
+  const byAy = new Map<number, Partial<Record<'fall' | 'winter' | 'spring', Term>>>();
+  const bySummerYear = new Map<number, Partial<Record<'summer1' | 'summer2', Term>>>();
+  const otherRows: SwitcherCell[] = [];
+
+  for (const { term, season } of items) {
+    const year = Number(term.year);
+    if (season === 'fall' || season === 'winter' || season === 'spring') {
+      const ay = ayOf(season, year);
+      const row = byAy.get(ay) ?? {};
+      row[season] = term;
+      byAy.set(ay, row);
+    } else if (season === 'summer1' || season === 'summer2') {
+      const row = bySummerYear.get(year) ?? {};
+      row[season] = term;
+      bySummerYear.set(year, row);
+    } else {
+      otherRows.push(cellFor(term, null, activeKey, now));
+    }
+  }
+
+  const quarterRows = [...byAy.keys()].sort((a, b) => a - b).map((ay) => {
+    const row = byAy.get(ay)!;
+    return [
+      row.fall ? cellFor(row.fall, 'fall', activeKey, now) : placeholder(`Fall ${ay}`),
+      row.winter ? cellFor(row.winter, 'winter', activeKey, now) : placeholder(`Winter ${ay}`),
+      row.spring ? cellFor(row.spring, 'spring', activeKey, now) : placeholder(`Spring ${ay + 1}`),
+    ];
+  });
+
+  const summerRows = [...bySummerYear.keys()].sort((a, b) => a - b).map((y) => {
+    const row = bySummerYear.get(y)!;
+    return [
+      row.summer1 ? cellFor(row.summer1, 'summer1', activeKey, now) : placeholder(`Summer I ${y}`),
+      row.summer2 ? cellFor(row.summer2, 'summer2', activeKey, now) : placeholder(`Summer II ${y}`),
+    ];
+  });
+
+  return { quarterRows, summerRows, otherRows };
+}
+
+export function buildSwitcherRows(terms: Term[], activeKey: TermKey, now: Date): SwitcherRows {
+  return layoutRows(terms.map((term) => ({ term, season: seasonOf(term) })), activeKey, now);
 }
