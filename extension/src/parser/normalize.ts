@@ -10,6 +10,7 @@
 import type {
   ApptTimes,
   ApptWindow,
+  BookedModule,
   Component,
   CourseOffering,
   FinalExam,
@@ -18,7 +19,7 @@ import type {
   TeachingMethod,
   Term,
 } from '@triton/shared';
-import type { TssApptPeriodsRow, TssPrereqRow, TssSectionRow } from './tss-types.js';
+import type { TssApptPeriodsRow, TssBookedModuleRow, TssPrereqRow, TssSectionRow } from './tss-types.js';
 import { parseSched } from './parse-sched.js';
 
 export interface CourseMeta {
@@ -235,4 +236,17 @@ export function apptPeriodsToApptTimes(
     windows,
     capturedAt,
   };
+}
+
+const stripLeadingZeros = (s: string): string => s.replace(/^0+(?=.)/, '');
+
+/** Homepage booked row → BookedModule. moduleId/period are zero-padded in this
+ *  feed ("00002077"/"002") but must match course-capture keys ("2077"/"2"). */
+export function bookedRowToModule(row: TssBookedModuleRow): BookedModule | null {
+  const courseCode = row.SmShort?.trim();
+  const moduleId = stripLeadingZeros(row.SmObjid ?? '');
+  const year = row.AcademicYear?.trim();
+  const period = stripLeadingZeros(row.AcademicSession ?? '');
+  if (!courseCode || !moduleId || !year || !period) return null;
+  return { courseCode, moduleId, term: termFromRow(year, period) };
 }

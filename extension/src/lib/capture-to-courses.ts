@@ -4,9 +4,9 @@
  * the student themselves browsed — nothing is fetched here.
  */
 
-import type { ApptTimes, CourseOffering } from '@triton/shared';
+import type { ApptTimes, BookedModule, CourseOffering } from '@triton/shared';
 import type { TssModuleRow, TssPrereqRow, TssSectionRow } from '../parser/tss-types.js';
-import { apptPeriodsToApptTimes, normalizeSections, prereqTreeToGroups, type CourseMeta } from '../parser/normalize.js';
+import { apptPeriodsToApptTimes, bookedRowToModule, normalizeSections, prereqTreeToGroups, type CourseMeta } from '../parser/normalize.js';
 import { classifyCapture } from './extract-odata.js';
 
 interface StoreShape {
@@ -15,6 +15,7 @@ interface StoreShape {
   capturedAt?: Record<string, string>;                 // by ModuleID; absent in old stores
   prereqs?: Record<string, TssPrereqRow[]>;            // by ModuleID; absent in old stores
   apptTimes?: Record<string, ApptTimes>;               // by "<year>|<session>"; absent in old stores
+  booked?: BookedModule[];                             // homepage feed; absent in old stores
 }
 
 function creditsToUnits(s: string | undefined): number | undefined {
@@ -59,6 +60,9 @@ export class CaptureStore {
   private prereqs = new Map<string, TssPrereqRow[]>();
   /** Student's enrollment windows by term — normalized (PII already stripped). */
   private apptTimes = new Map<string, ApptTimes>();
+  /** Student's booked modules (homepage feed). null = never captured; [] = captured,
+   *  zero bookings. PERSONAL — never merged into course data. */
+  private booked: BookedModule[] | null = null;
 
   /**
    * Ingest one captured OData response body (plain or $batch). Returns true if anything
@@ -67,7 +71,7 @@ export class CaptureStore {
    * browse replaces them (freshest seats/status win).
    */
   ingestBody(body: string, url?: string): boolean {
-    const { moduleRows, sectionRows, prereqTrees, apptPeriods } = classifyCapture(body);
+    const { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows } = classifyCapture(body);
     let changed = false;
     for (const m of moduleRows) {
       this.modules.set(m.ModuleID, m);
@@ -107,13 +111,23 @@ export class CaptureStore {
         changed = true;
       }
     }
+    // An empty v2 body from the booked feed itself CLEARS (zero bookings is real news);
+    // an empty body from any other feed must not touch a list it has nothing to do with.
+    const isBookedFeed = url?.includes('BC_OVP_BOOKED_MODULES_SRV') ?? false;
+    if (bookedRows.length || isBookedFeed) {
+      this.booked = bookedRows
+        .map(bookedRowToModule)
+        .filter((m): m is BookedModule => m !== null);
+      changed = true;
+    }
     return changed;
   }
 
   /**
    * Permanently drop everything captured for the given modules (the student removed
    * them from the planner's browsed list). Re-browsing the course in TSS captures it
-   * afresh. Term-level apptTimes are untouched — they aren't course data. Returns
+   * afresh. Term-level apptTimes are untouched — they aren't course data. `booked` is
+   * also deliberately untouched — it reflects TSS enrollment, not browsed data. Returns
    * true if anything was actually removed.
    */
   forgetModules(moduleIds: string[]): boolean {
@@ -176,6 +190,11 @@ export class CaptureStore {
     );
   }
 
+  /** The student's booked modules. null = homepage never captured; [] = captured, zero bookings. */
+  getBooked(): BookedModule[] | null {
+    return this.booked;
+  }
+
   serialize(): StoreShape {
     return {
       modules: Object.fromEntries(this.modules),
@@ -183,6 +202,7 @@ export class CaptureStore {
       capturedAt: Object.fromEntries(this.capturedAt),
       prereqs: Object.fromEntries(this.prereqs),
       apptTimes: Object.fromEntries(this.apptTimes),
+      ...(this.booked !== null ? { booked: this.booked } : {}),
     };
   }
 
@@ -194,6 +214,7 @@ export class CaptureStore {
     fillMap(store.capturedAt, shape.capturedAt);
     fillMap(store.prereqs, shape.prereqs);
     fillMap(store.apptTimes, shape.apptTimes);
+    if (Array.isArray(shape.booked)) store.booked = shape.booked;
     return store;
   }
 }
