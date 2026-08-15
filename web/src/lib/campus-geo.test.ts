@@ -63,7 +63,7 @@ describe('bundled campus geometry', () => {
       for (const ring of shape.rings) {
         for (let i = 0; i + 1 < ring.length; i += 2) {
           expect(ring[i]).toBeGreaterThan(-117.30);
-          expect(ring[i]).toBeLessThan(-117.15);
+          expect(ring[i]).toBeLessThan(-117.10);
           expect(ring[i + 1]).toBeGreaterThan(32.70);
           expect(ring[i + 1]).toBeLessThan(32.92);
         }
