@@ -329,3 +329,21 @@ export function saveApptTimes(appt: ApptTimes[]): void {
 export function loadApptTimes(): ApptTimes[] | null {
   return readJson(APPT_KEY, isApptTimesList);
 }
+
+/* --- campus map "booked only" preference ------------------------------------- */
+const MAP_BOOKED_ONLY_KEY = 'triton-planner:map-booked-only:v1';
+
+/**
+ * "Booked only" toggle for the campus map. null = never chosen, so the map can
+ * pick its own default (on when booked data exists, off when it doesn't).
+ *
+ * A LOCAL view preference, exactly like cal-view: it never enters a plan, a
+ * share link, or a QR code.
+ */
+export function loadMapBookedOnly(): boolean | null {
+  return readJson(MAP_BOOKED_ONLY_KEY, (v): v is boolean => typeof v === 'boolean');
+}
+
+export function saveMapBookedOnly(value: boolean): void {
+  writeJson(MAP_BOOKED_ONLY_KEY, value);
+}

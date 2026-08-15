@@ -17,6 +17,8 @@ import {
   loadCalView,
   saveApptTimes,
   loadApptTimes,
+  loadMapBookedOnly,
+  saveMapBookedOnly,
 } from './storage';
 import { makePlan, makeCourse } from './fixtures';
 
@@ -203,5 +205,19 @@ describe('terms storage', () => {
     const { newWorkspace } = await import('./terms-state');
     const ws = newWorkspace({ year: '2026', period: '2', label: 'Fall 2026' }, '2026-08-11T00:00:00.000Z');
     expect(isTermsState({ version: 1, activeTermKey: '2026|2', terms: { '2026|2': { ...ws, bookedAuto: 'nope' } } })).toBe(false);
+  });
+});
+
+describe('campus map "booked only" preference', () => {
+  it('returns null before the user has ever chosen', () => {
+    localStorage.clear();
+    expect(loadMapBookedOnly()).toBeNull();
+  });
+
+  it('round-trips both values', () => {
+    saveMapBookedOnly(true);
+    expect(loadMapBookedOnly()).toBe(true);
+    saveMapBookedOnly(false);
+    expect(loadMapBookedOnly()).toBe(false);
   });
 });
