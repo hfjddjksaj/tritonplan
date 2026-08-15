@@ -95,6 +95,7 @@ export function meetingInstances(plan: PlanState, bookedIds?: ReadonlySet<string
             courseId: entry.course.id,
             courseCode: entry.course.courseCode,
             typeText: comp.typeText,
+            type: comp.type,
             hue,
             instructor: comp.instructors[0],
             location: locationText(m.building, m.room, m.location),
@@ -272,6 +273,17 @@ const TYPE_TAG: Record<string, string> = {
   OT: 'OTH',
 };
 
+/**
+ * Three-letter display tag for a component: 'LEC' / 'DIS' / 'LAB'. Unknown TSS
+ * TeachingMethod codes fall back to the first three letters of the human text.
+ * Exported because the calendar's section summaries and the campus map's pin
+ * labels must agree — two copies would drift the moment TSS adds a code.
+ */
+export function typeTag(code: string | undefined, typeText: string | undefined): string {
+  const c = code?.trim() ?? '';
+  return TYPE_TAG[c] ?? (typeText?.slice(0, 3).toUpperCase() || c);
+}
+
 /** One schedule fragment of an option, tagged with its component type. */
 export interface OptionSummaryPart {
   /** Component type tag shown before the times, e.g. "LEC" / "DIS" / "LAB". */
@@ -307,8 +319,7 @@ export function optionSummaryParts(
   const parts: OptionSummaryPart[] = [];
   for (const comp of option.components) {
     if (hideOther && isOtherComponent(comp)) continue;
-    const code = comp.type?.trim() ?? '';
-    const type = TYPE_TAG[code] ?? (comp.typeText?.slice(0, 3).toUpperCase() || code);
+    const type = typeTag(comp.type, comp.typeText);
     // "Schedule Not Defined" in TSS — say so honestly; TSS fills these in over time
     // and the next capture refresh will replace this with real times.
     if (comp.unscheduled || comp.meetings.length === 0) {

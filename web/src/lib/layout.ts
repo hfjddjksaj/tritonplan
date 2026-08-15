@@ -27,6 +27,8 @@ export interface MeetingInstance {
   courseCode: string;
   /** "Lecture" | "Discussion" | "Laboratory" ... */
   typeText: string;
+  /** Raw TSS TeachingMethod code ("LE" / "DI" / "LA"), for tag lookup. */
+  type?: string;
   hue: number;
   instructor?: string;
   /** Combined display text, e.g. "Galbraith Hall 242". */
