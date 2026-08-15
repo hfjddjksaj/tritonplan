@@ -22,7 +22,6 @@ import { Calendar, Cap, Check, PenLine } from './components/icons';
 import { countConflictPairs } from './lib/plan';
 import { displayTermLabel } from './lib/terms';
 import { pluralize } from './lib/format';
-import { PRODUCT_NAME } from './lib/brand';
 import { loadCalView, saveCalView, type CalView } from './lib/storage';
 import type { PositionedBlock } from './lib/layout';
 
