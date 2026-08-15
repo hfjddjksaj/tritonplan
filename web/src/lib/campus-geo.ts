@@ -44,3 +44,28 @@ export function decodeRing(wire: number[]): number[] {
 export function decodeShapes(wire: WireShape[]): CampusShape[] {
   return wire.map(([name, rings]) => ({ name, rings: rings.map(decodeRing) }));
 }
+
+interface RawCampusGeo {
+  footprints: WireShape[];
+  districts: WireShape[];
+}
+
+let cached: Promise<CampusGeo> | null = null;
+
+/**
+ * Load and decode the bundled campus geometry. Imported dynamically and as a
+ * raw string: `?raw` keeps TypeScript from deep-typing ~11k numeric literals,
+ * keeps the payload out of the first-paint chunk, and makes JSON.parse the
+ * cost instead of evaluating a giant JS array literal. Memoized — reopening
+ * the map never re-parses.
+ */
+export function loadCampusGeo(): Promise<CampusGeo> {
+  cached ??= import('../data/ucsd-campus-geo.json?raw').then((mod) => {
+    const raw = JSON.parse(mod.default) as RawCampusGeo;
+    return {
+      footprints: decodeShapes(raw.footprints),
+      districts: decodeShapes(raw.districts),
+    };
+  });
+  return cached;
+}
