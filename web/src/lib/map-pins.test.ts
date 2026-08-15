@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { CourseOffering, PlanState } from '@triton/shared';
 import { meetingPins } from './map-pins';
+import { entryHue } from './plan';
 
 /** A course whose lecture meets in a real, matchable UCSD building. */
 function courseWithMeetings(): CourseOffering {
@@ -70,13 +71,17 @@ function planWith(course: CourseOffering): PlanState {
 
 describe('meetingPins', () => {
   it('emits one pin per weekday of every meeting, tagged LEC / LAB', () => {
-    const pins = meetingPins(planWith(courseWithMeetings()));
+    const plan = planWith(courseWithMeetings());
+    const pins = meetingPins(plan);
     expect(pins).toHaveLength(3); // Mon + Wed lecture, Fri lab
     expect(pins.map((p) => p.label)).toEqual(['LEC', 'LEC', 'LAB']);
     expect(pins.map((p) => p.when.weekday)).toEqual(['Mon', 'Wed', 'Fri']);
     expect(pins.every((p) => p.kind === 'meeting')).toBe(true);
     expect(pins[0]!.courseCode).toBe('CSE-8A');
     expect(pins[0]!.when.start).toBe('11:00');
+    // Same hue the calendar uses for this course's blocks — the colour link to the map.
+    expect(pins[0]!.hue).toBe(entryHue(plan, plan.entries[0]!));
+    expect(pins[0]!.rawLocation).toBe('Center Hall 109');
   });
 
   it('resolves coordinates for a known building', () => {

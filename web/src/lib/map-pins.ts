@@ -41,7 +41,7 @@ export interface MapPin {
   booked: boolean;
 }
 
-export function coordsFor(building: string | undefined): { lat: number; lng: number } | null {
+function coordsFor(building: string | undefined): { lat: number; lng: number } | null {
   const hit = matchBuilding(building);
   return hit ? { lat: hit.lat, lng: hit.lng } : null;
 }
