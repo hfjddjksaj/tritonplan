@@ -76,10 +76,12 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
   const groups = useMemo(() => groupPins(shown), [shown]);
   const open = groups.find((g) => g.key === openKey) ?? null;
 
-  // The generic "nothing to place" copy is false when the plan HAS courses and the
-  // booked-only toggle is the thing hiding them — say so, and name the way out.
+  // The generic "nothing to place" copy is false only when a LOCATABLE class exists that
+  // booked-only is hiding — an unbooked pin with no coords was never going on the map
+  // either way, and turning the toggle off wouldn't change that.
   const bookedOnlyHidesEverything =
-    showBookedToggle && bookedOnly && groups.length === 0 && allPins.length > 0;
+    showBookedToggle && bookedOnly && groups.length === 0 &&
+    allPins.some((p) => p.coords !== null && !p.booked);
 
   return (
     <div className="campusmap" role="dialog" aria-modal="true" aria-label="Campus map">
