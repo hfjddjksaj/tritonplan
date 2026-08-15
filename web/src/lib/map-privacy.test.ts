@@ -1,13 +1,27 @@
 /**
  * Booked status is device-local. The campus map reads it, so this file exists
  * to keep the map from ever becoming the leak: a plan whose courses are all
- * booked must encode to the same bytes as one with nothing booked.
+ * booked must encode to the same bytes as one with nothing booked, and asking
+ * for pins must never grow a new field — of ANY name, not just "booked" — on
+ * the plan or its entries. (`entry.course`, the extension-sourced
+ * CourseOffering shape, is out of scope here; it has its own surface and its
+ * own tests.)
  */
 import { describe, it, expect } from 'vitest';
 import type { PlanState } from '@triton/shared';
 import { encodePlan } from './share';
 import { makePlan } from './fixtures';
 import { meetingPins } from './map-pins';
+
+const PLAN_STATE_KEYS = ['version', 'term', 'entries'];
+const PLAN_ENTRY_KEYS = ['course', 'selectedOptionId', 'color'];
+
+/** Keys present on `obj` that aren't in `allowed` — a subset check, not exact
+ *  equality, since e.g. PlanEntry.color is optional and may legitimately be
+ *  absent from a given fixture. */
+function unexpectedKeys(obj: object, allowed: string[]): string[] {
+  return Object.keys(obj).filter((k) => !allowed.includes(k));
+}
 
 describe('booked status never reaches a share payload', () => {
   const plan: PlanState = makePlan();
@@ -19,9 +33,19 @@ describe('booked status never reaches a share payload', () => {
     expect(encodePlan(plan, 'lite')).toBe(encodePlan(makePlan(), 'lite'));
   });
 
-  it('leaves no booked marker in the plan object itself', () => {
+  it('never grows an unexpected field on the plan or its entries', () => {
     meetingPins(plan, allBooked);
-    expect(JSON.stringify(plan).toLowerCase()).not.toContain('booked');
+
+    const planKeys = unexpectedKeys(plan, PLAN_STATE_KEYS);
+    expect(planKeys, `PlanState grew unexpected key(s): ${planKeys.join(', ')}`).toEqual([]);
+
+    for (const entry of plan.entries) {
+      const entryKeys = unexpectedKeys(entry, PLAN_ENTRY_KEYS);
+      expect(
+        entryKeys,
+        `PlanEntry for ${entry.course.id} grew unexpected key(s): ${entryKeys.join(', ')}`,
+      ).toEqual([]);
+    }
   });
 
   it('computes booked per call, never caching it onto the pin source', () => {
