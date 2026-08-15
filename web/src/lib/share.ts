@@ -1,7 +1,6 @@
 /**
- * Portable plans.
- *
- * JSON export/import keeps the FULL plan (a lossless local backup).
+ * Portable plans. A link IS the whole plan — there is no JSON export/import
+ * path; a shared plan arrives only by opening its URL.
  *
  * The shareable `#p=…` URL supports two wire formats, chosen via `ShareFormat`:
  *  - 'full' (v3, default): the whole plan INCLUDING every section option,
@@ -294,45 +293,9 @@ export function readHash(
   return { kind: 'shared', plan };
 }
 
-/**
- * Parse a pasted share link into a plan. Accepts the full URL, just the hash
- * fragment ("#p=…" / "p=…"), or the bare token.
- */
-export function planFromLinkText(text: string): PlanState | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  const hashIdx = trimmed.indexOf('#');
-  if (hashIdx !== -1) return planFromHash(trimmed.slice(hashIdx));
-  if (trimmed.includes('=')) return planFromHash(trimmed);
-  return decodePlan(trimmed);
-}
-
 /** A full absolute URL that restores this plan when opened. */
 export function shareUrl(plan: PlanState, format: ShareFormat = 'full', base = window.location.href): string {
   const url = new URL(base);
   url.hash = planToHash(plan, format);
   return url.toString();
-}
-
-/** Trigger a browser download of the plan as a .json file (FULL, lossless). */
-export function downloadPlanJson(plan: PlanState): void {
-  const blob = new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `triton-plan-${plan.term.year}-${plan.term.period}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-/** Parse an imported JSON string into a PlanState, or null if invalid. */
-export function parsePlanJson(text: string): PlanState | null {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return isPlanState(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
 }

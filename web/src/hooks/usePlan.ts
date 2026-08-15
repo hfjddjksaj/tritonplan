@@ -360,17 +360,6 @@ export function usePlan() {
     setPlans((s) => deletePlanIn(s, id));
   }, [setPlans]);
 
-  /** Bring in a plan someone sent (imported JSON / pasted link) — read-only view. */
-  const importReceived = useCallback(
-    (incoming: PlanState, source: ReceivedPlan['source']) => {
-      const rec: ReceivedPlan = { plan: incoming, source, receivedAt: new Date().toISOString() };
-      saveReceived(rec);
-      setReceived(rec);
-      switchViewing('received');
-    },
-    [switchViewing],
-  );
-
   /** Keep the received plan as a NEW named plan ("朋友的plan") in ITS OWN term and switch to it. */
   const saveReceivedAsNewPlan = useCallback(
     (name: string) => {
@@ -614,7 +603,6 @@ export function usePlan() {
     viewPlan,
     readOnly,
     switchViewing,
-    importReceived,
     saveReceivedAsMine,
     saveReceivedAsNewPlan,
     discardReceived,

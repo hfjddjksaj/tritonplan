@@ -7,7 +7,8 @@
  *
  * Dropped on purpose (debug/source-only, not rendered): rawSched, ids of
  * options/components (regenerated), instructorEmails, beginDate/endDate,
- * waitlist, status. JSON export (Import → Upload) remains the lossless path.
+ * waitlist, status — none of them are rendered, and with the JSON path gone
+ * this token is the most complete plan that ever leaves the device.
  */
 import { deflateSync, inflateSync, strFromU8, strToU8 } from 'fflate';
 import {

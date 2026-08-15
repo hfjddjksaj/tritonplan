@@ -15,8 +15,9 @@ interface Props {
 /**
  * Share ▾ — Copy link / QR code, with a Full (default) vs Lite format toggle.
  * Full = v3 token, every section option included, editable after saving on the
- * other device. Lite = v2 slim snapshot, view-only. "Export as JSON" is shelved
- * for now (kept below, commented out) — Import → Upload still accepts old files.
+ * other device. Lite = v2 slim snapshot, view-only. A link IS the whole plan,
+ * so there is no JSON export/import path — pasting a link in the address bar
+ * is the only way a plan comes in.
  */
 export function ShareMenu({ plan, onFlash }: Props) {
   const [open, setOpen] = useState(false);
@@ -125,16 +126,6 @@ export function ShareMenu({ plan, onFlash }: Props) {
               </span>
               <span className="menu__item-desc">Scan with your phone to open this plan there.</span>
             </button>
-
-            {/* Export as JSON — shelved 2026-07-24 (user decision; Import → Upload still works).
-                Re-enable by restoring this block and the downloadPlanJson import.
-            <button type="button" className="menu__item" role="menuitem"
-              onClick={() => { close(); downloadPlanJson(plan); onFlash('Plan exported as JSON'); }}>
-              <span className="menu__item-title"><Download size={14} /> Export as JSON</span>
-              <span className="menu__item-desc">The complete plan, every section option included.
-                To open it: click Import → upload the file, and the plan is right there.</span>
-            </button>
-            */}
           </div>
         )}
       </div>

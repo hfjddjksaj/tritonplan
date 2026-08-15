@@ -962,9 +962,6 @@ p {
 button.menu__item:hover {
   background: var(--surface-2);
 }
-.menu__item--static {
-  cursor: default;
-}
 .menu__item + .menu__item {
   margin-top: 2px;
 }
@@ -982,26 +979,6 @@ button.menu__item:hover {
   font-size: 10.5px;
   line-height: 1.5;
   color: var(--text-muted);
-}
-.menu__linkrow {
-  display: flex;
-  gap: 6px;
-  margin-top: 7px;
-}
-.menu__input {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 8px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--ink);
-}
-.menu__input:focus {
-  outline: none;
-  border-color: var(--line-strong);
 }
 
 /* Share menu: format segment + QR panel */
@@ -2227,7 +2204,7 @@ button.menu__item:hover {
     padding: 0 9px;
   }
   .menu-wrap > .btn > svg:last-child {
-    display: none; /* the ▾ chevron on Import/Share */
+    display: none; /* the ▾ chevron on Share */
   }
 }
 

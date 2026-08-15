@@ -169,6 +169,12 @@ const RECEIVED_KEY = 'triton-planner:received:v1';
 
 export interface ReceivedPlan {
   plan: PlanState;
+  /**
+   * How the plan arrived. Only 'link' is produced now — the JSON import/export
+   * path was removed (a share link carries the whole plan). 'json' stays in the
+   * union so a record persisted by an older build still validates and keeps
+   * showing, instead of being silently dropped on load.
+   */
   source: 'link' | 'json';
   receivedAt: string; // ISO timestamp
 }

@@ -52,20 +52,6 @@ export const Share = (p: P) => (
     <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
   </svg>
 );
-export const Download = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M12 3v12" />
-    <path d="m7 11 5 5 5-5" />
-    <path d="M5 21h14" />
-  </svg>
-);
-export const Upload = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M12 21V9" />
-    <path d="m7 13 5-5 5 5" />
-    <path d="M5 3h14" />
-  </svg>
-);
 export const Warning = (p: P) => (
   <svg {...base(p)}>
     <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />

@@ -18,7 +18,6 @@ import { TermSwitcher } from './components/TermSwitcher';
 import { BlockSheet } from './components/BlockSheet';
 import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
 import { Calendar, Cap, Check, PenLine } from './components/icons';
-import { parsePlanJson, planFromLinkText } from './lib/share';
 import { countConflictPairs } from './lib/plan';
 import { displayTermLabel } from './lib/terms';
 import { pluralize } from './lib/format';
@@ -71,33 +70,6 @@ export default function App() {
     const t = setTimeout(() => setCalPulse(false), 1600);
     return () => clearTimeout(t);
   }, [ctl.plan, isMobile, view]);
-
-  const handleImportText = useCallback(
-    (text: string) => {
-      const plan = parsePlanJson(text);
-      if (!plan) {
-        flash(`That file isn’t a valid ${PRODUCT_NAME} plan`);
-        return;
-      }
-      ctl.importReceived(plan, 'json');
-      flash('Imported plan opened — read-only, your own plan is untouched');
-    },
-    [ctl, flash],
-  );
-
-  const handleImportLink = useCallback(
-    (text: string): boolean => {
-      const plan = planFromLinkText(text);
-      if (!plan) {
-        flash('That doesn’t look like a valid share link');
-        return false;
-      }
-      ctl.importReceived(plan, 'link');
-      flash('Shared plan opened — read-only, your own plan is untouched');
-      return true;
-    },
-    [ctl, flash],
-  );
 
   const handleSaveAsMine = useCallback(() => {
     const n = ctl.plan.entries.length;
@@ -199,8 +171,6 @@ export default function App() {
         apptSlot={<ApptCapsule appt={appt} />}
         sharePlan={ctl.viewPlan}
         onFlash={flash}
-        onImportText={handleImportText}
-        onImportLink={handleImportLink}
         onReset={handleReset}
       />
       {ctl.received && (

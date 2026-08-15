@@ -7,13 +7,11 @@ import {
   planToHash,
   planToMirrorHash,
   planFromHash,
-  planFromLinkText,
   shareUrl,
   tokenFromHash,
   mirrorTokenFromHash,
   mirrorSeedPlan,
   readHash,
-  parsePlanJson,
 } from './share';
 import { emptyPlan } from './plan';
 import { makePlan } from './fixtures';
@@ -172,36 +170,6 @@ describe('hash helpers', () => {
     const url = shareUrl(plan, 'lite', 'https://plan.example/app/');
     expect(url.startsWith('https://plan.example/app/#p=')).toBe(true);
     expect(planFromHash(new URL(url).hash)!.entries[0]!.course.courseCode).toBe('CSE-008A');
-  });
-});
-
-describe('planFromLinkText — pasted share links', () => {
-  it('accepts a full URL, a hash fragment, and a bare token', () => {
-    const plan = richPlan();
-    const url = shareUrl(plan, 'lite', 'https://plan.example/app/');
-    const token = encodePlan(plan, 'lite');
-    for (const text of [url, `#p=${token}`, `p=${token}`, token, `  ${url}  `]) {
-      const parsed = planFromLinkText(text);
-      expect(parsed, `failed for: ${text.slice(0, 30)}`).not.toBeNull();
-      expect(parsed!.entries[0]!.course.courseCode).toBe('CSE-008A');
-    }
-  });
-
-  it('rejects garbage and empty input', () => {
-    expect(planFromLinkText('')).toBeNull();
-    expect(planFromLinkText('   ')).toBeNull();
-    expect(planFromLinkText('hello world')).toBeNull();
-    expect(planFromLinkText('https://plan.example/app/')).toBeNull();
-    expect(planFromLinkText('https://plan.example/app/#other=1')).toBeNull();
-  });
-});
-
-describe('parsePlanJson (full import, unchanged)', () => {
-  it('parses a valid plan and rejects junk', () => {
-    const plan = makePlan();
-    expect(parsePlanJson(JSON.stringify(plan))).toEqual(plan);
-    expect(parsePlanJson('{"nope":true}')).toBeNull();
-    expect(parsePlanJson('not json')).toBeNull();
   });
 });
 
