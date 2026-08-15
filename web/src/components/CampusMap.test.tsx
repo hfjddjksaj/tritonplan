@@ -60,6 +60,22 @@ function planWithMeeting(): PlanState {
   };
 }
 
+/**
+ * A course whose meeting cites a building `matchBuilding()` cannot resolve, so its pin's
+ * `coords` stays null — it can never land on the canvas, booked-only or not.
+ */
+function planWithUnlocatableMeeting(): PlanState {
+  const course = courseWithMeeting();
+  const meeting = course.options[0]!.components[0]!.meetings[0]!;
+  meeting.building = 'A Building That Does Not Exist';
+  meeting.location = 'A Building That Does Not Exist 000';
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Let the dynamic geo import and its promise settle. */
@@ -183,5 +199,17 @@ describe('CampusMap', () => {
       'Booked only is on and nothing here is booked yet. Turn it off to see every course in your plan.',
     );
     expect(container.textContent).not.toContain('No class locations to place yet');
+  });
+
+  it('does not blame booked-only when the only class was never locatable to begin with', async () => {
+    // Unbooked + hasBookedData true ⇒ booked-only defaults on here too, but the course's
+    // building can't be matched — turning the toggle off would NOT put it on the map, so
+    // the booked-only explanation would be a lie. The generic empty state is the honest one.
+    render({ plan: planWithUnlocatableMeeting(), hasBookedData: true, booked: new Set() });
+    await settle();
+    expect(container.textContent).not.toContain(
+      'Booked only is on and nothing here is booked yet',
+    );
+    expect(container.textContent).toContain('No class locations to place yet');
   });
 });

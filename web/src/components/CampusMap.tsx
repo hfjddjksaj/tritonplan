@@ -80,7 +80,9 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
   // booked-only is hiding — an unbooked pin with no coords was never going on the map
   // either way, and turning the toggle off wouldn't change that.
   const bookedOnlyHidesEverything =
-    showBookedToggle && bookedOnly && groups.length === 0 &&
+    showBookedToggle &&
+    bookedOnly &&
+    groups.length === 0 &&
     allPins.some((p) => p.coords !== null && !p.booked);
 
   return (
