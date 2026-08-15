@@ -6,7 +6,9 @@
  *
  * Pure geometry — no React, no DOM — so the fiddly part is unit-testable.
  */
-import type { MapPin } from './map-pins';
+import { campusViewport, type CampusGeo } from './campus-geo';
+import { isOnlineModality, type MapPin } from './map-pins';
+import { project, toScreen } from './map-projection';
 
 export interface PinGroup {
   /** Stable identity: the rounded coordinate pair. */
@@ -46,6 +48,81 @@ export function groupPins(pins: MapPin[]): PinGroup[] {
  */
 export function unlocatedPins(pins: MapPin[]): MapPin[] {
   return pins.filter((p) => p.coords === null);
+}
+
+/** Whether a projected point lands inside the drawn canvas. */
+function inside(x: number, y: number, w: number, h: number): boolean {
+  return x >= 0 && x <= w && y >= 0 && y <= h;
+}
+
+/**
+ * Split groups by whether the viewport can show them. The map frames the
+ * academic core, so a class at Hillcrest, Scripps or the Preuss School projects
+ * outside the canvas: drawing it there is the same as not drawing it, except
+ * that it silently inflates the "N buildings" count. Callers draw `onCanvas`
+ * and list `offCanvas`.
+ */
+export function splitByViewport(
+  groups: PinGroup[],
+  geo: CampusGeo,
+  w: number,
+  h: number,
+): { onCanvas: PinGroup[]; offCanvas: PinGroup[] } {
+  const view = campusViewport(geo, w, h);
+  const onCanvas: PinGroup[] = [];
+  const offCanvas: PinGroup[] = [];
+  for (const g of groups) {
+    const p = toScreen(project(g.lng, g.lat), view);
+    (inside(p.x, p.y, w, h) ? onCanvas : offCanvas).push(g);
+  }
+  return { onCanvas, offCanvas };
+}
+
+/** Just the drawable half of splitByViewport, for the renderer. */
+export function onCanvasGroups(groups: PinGroup[], geo: CampusGeo, w: number, h: number): PinGroup[] {
+  return splitByViewport(groups, geo, w, h).onCanvas;
+}
+
+/** Why a class isn't a dot on the map. */
+export type UnplacedReason = 'online' | 'unmatched' | 'off-map';
+
+export interface UnplacedPin {
+  pin: MapPin;
+  reason: UnplacedReason;
+  /** The trailing half of the list line — what to say instead of a location. */
+  detail: string;
+}
+
+/**
+ * Everything the student has that the map is not drawing, each with its reason.
+ * Three different things used to look like one failure (or like nothing at all):
+ *
+ * - `online`   — a Live Online section. Nothing went wrong; it has no building.
+ * - `unmatched`— matchBuilding() couldn't resolve the TSS text. Show that text
+ *                raw rather than pointing at the wrong building.
+ * - `off-map`  — a real, located class outside the framed academic core
+ *                (Hillcrest, Scripps, Preuss). Previously it just vanished.
+ */
+export function unplacedPins(pins: MapPin[], offCanvas: readonly PinGroup[] = []): UnplacedPin[] {
+  const out: UnplacedPin[] = [];
+  for (const p of unlocatedPins(pins)) {
+    if (isOnlineModality(p.modality)) {
+      out.push({ pin: p, reason: 'online', detail: p.modality! });
+    } else {
+      out.push({
+        pin: p,
+        reason: 'unmatched',
+        detail: p.rawLocation ?? p.building ?? 'no location listed in TSS',
+      });
+    }
+  }
+  for (const g of offCanvas) {
+    for (const p of g.pins) {
+      const place = p.building ?? p.rawLocation ?? 'this location';
+      out.push({ pin: p, reason: 'off-map', detail: `${place} — outside the mapped area` });
+    }
+  }
+  return out;
 }
 
 export interface LabelAnchor {

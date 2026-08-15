@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
+import type { CampusGeo } from './campus-geo';
 import type { MapPin } from './map-pins';
-import { groupPins, unlocatedPins, placeLabels } from './map-labels';
+import {
+  groupPins,
+  onCanvasGroups,
+  placeLabels,
+  splitByViewport,
+  unlocatedPins,
+  unplacedPins,
+} from './map-labels';
 
 function pin(over: Partial<MapPin>): MapPin {
   return {
@@ -52,6 +60,71 @@ describe('unlocatedPins', () => {
     const out = unlocatedPins([pin({}), pin({ coords: null, building: 'Mystery Hall' })]);
     expect(out).toHaveLength(1);
     expect(out[0]!.building).toBe('Mystery Hall');
+  });
+});
+
+/** A one-district campus: enough to fix a viewport around Revelle-sized ground. */
+const geo: CampusGeo = {
+  footprints: [],
+  districts: [
+    { name: 'Revelle', rings: [[-117.243, 32.872, -117.238, 32.872, -117.238, 32.877]] },
+  ],
+};
+
+/** UCSD Health's Hillcrest campus — real, in the point data, 13 km off this map. */
+const HILLCREST = { lat: 32.755, lng: -117.166 };
+
+describe('splitByViewport', () => {
+  it('separates markers the canvas can show from the ones it cannot', () => {
+    const groups = groupPins([
+      pin({}),
+      pin({ building: 'Hillcrest Medical Offices', coords: HILLCREST }),
+    ]);
+    const { onCanvas, offCanvas } = splitByViewport(groups, geo, 800, 600);
+    expect(onCanvas.map((g) => g.building)).toEqual(['York Hall']);
+    expect(offCanvas.map((g) => g.building)).toEqual(['Hillcrest Medical Offices']);
+  });
+
+  it('onCanvasGroups is exactly the drawable half', () => {
+    const groups = groupPins([pin({}), pin({ building: 'Far', coords: HILLCREST })]);
+    expect(onCanvasGroups(groups, geo, 800, 600).map((g) => g.building)).toEqual(['York Hall']);
+  });
+});
+
+describe('unplacedPins', () => {
+  it('says an online class is online rather than blaming the building match', () => {
+    const out = unplacedPins([
+      pin({ coords: null, building: undefined, rawLocation: undefined, modality: 'Live Online' }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.reason).toBe('online');
+    expect(out[0]!.detail).toBe('Live Online');
+  });
+
+  it('shows the raw TSS text for a building it could not match', () => {
+    const out = unplacedPins([
+      pin({ coords: null, building: 'Mystery Hall', rawLocation: 'Mystery Hall 101', modality: 'In Person' }),
+    ]);
+    expect(out[0]!.reason).toBe('unmatched');
+    expect(out[0]!.detail).toBe('Mystery Hall 101');
+  });
+
+  it('says so plainly when TSS listed no location at all', () => {
+    const out = unplacedPins([pin({ coords: null, building: undefined, rawLocation: undefined })]);
+    expect(out[0]!.reason).toBe('unmatched');
+    expect(out[0]!.detail).toBe('no location listed in TSS');
+  });
+
+  it('surfaces a real location that falls outside the mapped area', () => {
+    const off = groupPins([pin({ building: 'Hillcrest Medical Offices', coords: HILLCREST })]);
+    const out = unplacedPins([], off);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.reason).toBe('off-map');
+    expect(out[0]!.detail).toBe('Hillcrest Medical Offices — outside the mapped area');
+  });
+
+  it('is empty when every pin is drawn', () => {
+    expect(unplacedPins([pin({})], [])).toEqual([]);
   });
 });
 
