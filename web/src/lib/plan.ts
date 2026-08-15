@@ -96,6 +96,7 @@ export function meetingInstances(plan: PlanState, bookedIds?: ReadonlySet<string
             courseCode: entry.course.courseCode,
             typeText: comp.typeText,
             type: comp.type,
+            modality: m.modality,
             hue,
             instructor: comp.instructors[0],
             location: locationText(m.building, m.room, m.location),

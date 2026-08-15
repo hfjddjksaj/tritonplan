@@ -29,6 +29,8 @@ export interface MeetingInstance {
   typeText: string;
   /** Raw TSS TeachingMethod code ("LE" / "DI" / "LA"), for tag lookup. */
   type?: string;
+  /** Raw TSS modality ("In Person" | "Live Online" | …) — how this meeting is held. */
+  modality?: string;
   hue: number;
   instructor?: string;
   /** Combined display text, e.g. "Galbraith Hall 242". */

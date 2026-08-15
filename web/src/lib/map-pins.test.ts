@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { CourseOffering, PlanState } from '@triton/shared';
-import { meetingPins, midtermPins, finalPins, slicesFor, defaultSliceId } from './map-pins';
+import {
+  meetingPins,
+  midtermPins,
+  finalPins,
+  slicesFor,
+  defaultSliceId,
+  isOnlineModality,
+} from './map-pins';
 import { entryHue } from './plan';
 
 /** A course whose lecture meets in a real, matchable UCSD building. */
@@ -106,6 +113,18 @@ describe('meetingPins', () => {
     expect(some.every((p) => p.booked === true)).toBe(true);
   });
 
+  it('carries the meeting modality through, so an online section is not a failed match', () => {
+    const course = courseWithMeetings();
+    const lab = course.options[0]!.components[1]!.meetings[0]!;
+    lab.modality = 'Live Online';
+    lab.building = undefined;
+    lab.room = undefined;
+    const pins = meetingPins(planWith(course));
+    expect(pins[0]!.modality).toBe('In Person');
+    expect(pins[2]!.modality).toBe('Live Online');
+    expect(pins[2]!.coords).toBeNull();
+  });
+
   it('falls back to the first three letters for an unknown teaching method', () => {
     const course = courseWithMeetings();
     course.options[0]!.components[0]!.type = 'ZZ';
@@ -167,6 +186,9 @@ describe('finalPins', () => {
     expect(legacy.room).toBe('2622');
     expect(legacy.coords).toEqual(modern.coords);
     expect(legacy.coords).not.toBeNull();
+    // …and the modality half of that tail, split off, not left glued to the location.
+    expect(legacy.modality).toBe('In Person');
+    expect(modern.modality).toBe('In Person');
   });
 
   it('emits nothing for a course with no final', () => {
@@ -194,6 +216,22 @@ describe('midtermPins', () => {
 
   it('emits nothing when TSS has announced no midterm', () => {
     expect(midtermPins(planWith(courseWithMeetings()))).toEqual([]);
+  });
+});
+
+describe('isOnlineModality', () => {
+  it('recognizes the remote modalities TSS actually emits', () => {
+    // "Live Online" is what real Sched lines carry; "Online" is what the site's
+    // own Modality filter lists (docs/tss-recon/tss-api-notes.md).
+    expect(isOnlineModality('Live Online')).toBe(true);
+    expect(isOnlineModality('Online')).toBe(true);
+  });
+
+  it('never guesses from In Person, Other, or missing text', () => {
+    expect(isOnlineModality('In Person')).toBe(false);
+    expect(isOnlineModality('Other')).toBe(false);
+    expect(isOnlineModality('Unknown')).toBe(false);
+    expect(isOnlineModality(undefined)).toBe(false);
   });
 });
 
@@ -232,13 +270,26 @@ describe('slicesFor', () => {
 
 describe('defaultSliceId', () => {
   it("opens on today's column when today is on the map", () => {
-    const { slices } = slicesFor(meetingPins(planWith(courseWithMeetings())));
-    expect(defaultSliceId(slices, 'Wed')).toBe('Wed');
+    const pins = meetingPins(planWith(courseWithMeetings()));
+    const { slices } = slicesFor(pins);
+    expect(defaultSliceId(slices, pins, 'Wed')).toBe('Wed');
   });
 
   it('falls back to All when today has no column', () => {
-    const { slices } = slicesFor(meetingPins(planWith(courseWithMeetings())));
-    expect(defaultSliceId(slices, 'Sun')).toBe('all');
-    expect(defaultSliceId(slicesFor([]).slices, 'Wed')).toBe('all');
+    const pins = meetingPins(planWith(courseWithMeetings()));
+    const { slices } = slicesFor(pins);
+    expect(defaultSliceId(slices, pins, 'Sun')).toBe('all');
+    expect(defaultSliceId(slicesFor([]).slices, [], 'Wed')).toBe('all');
+  });
+
+  it('falls back to All on a weekday column that carries no class', () => {
+    // visibleDays() renders Mon–Fri whether or not they're used, so a Tue column
+    // EXISTS for this MWF course — opening on it would show an empty map above
+    // "no class locations to place yet", which is a lie about a located plan.
+    const pins = meetingPins(planWith(courseWithMeetings()));
+    const { slices } = slicesFor(pins);
+    expect(slices.map((s) => s.id)).toContain('Tue');
+    expect(pins.some((p) => p.when.weekday === 'Tue')).toBe(false);
+    expect(defaultSliceId(slices, pins, 'Tue')).toBe('all');
   });
 });

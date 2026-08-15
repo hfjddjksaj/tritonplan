@@ -34,6 +34,9 @@ export interface MapPin {
   kind: PinKind;
   /** 'LEC' | 'DIS' | 'LAB' | 'Midterm 2' | 'Final' … */
   label: string;
+  /** Raw TSS modality ("In Person" | "Live Online" | …), so the UI can say
+   *  "this class is online" instead of "TritonPlan couldn't find the building". */
+  modality?: string;
   when: PinWhen;
   /** Raw TSS building text, kept so the UI can show it when unmatched. */
   building?: string;
@@ -42,6 +45,19 @@ export interface MapPin {
   /** null = no confident building match; shown in a list, never guessed onto the map. */
   coords: { lat: number; lng: number } | null;
   booked: boolean;
+}
+
+/**
+ * Whether a TSS modality means "not in a room on campus".
+ *
+ * TSS modality is free text. Real captured `Sched` lines carry "In Person" and
+ * "Live Online"; the site's own Modality filter additionally lists "Online" and
+ * "Other" (docs/tss-recon/tss-api-notes.md). "Other" is not reliably remote, so
+ * only the "online" family counts — a wrong "this class is online" would be
+ * worse than the generic unmatched copy.
+ */
+export function isOnlineModality(modality: string | undefined): boolean {
+  return /online/i.test(modality ?? '');
 }
 
 function coordsFor(building: string | undefined): { lat: number; lng: number } | null {
@@ -57,6 +73,7 @@ export function meetingPins(plan: PlanState, booked?: ReadonlySet<string>): MapP
     hue: m.hue,
     kind: 'meeting' as const,
     label: typeTag(m.type, m.typeText),
+    modality: m.modality,
     when: { weekday: m.day, start: m.start, end: m.end },
     building: m.building,
     room: m.room,
@@ -85,6 +102,7 @@ function examPin(
     hue: item.hue,
     kind,
     label,
+    modality: place.modality,
     when: { date: exam.date, start: exam.start, end: exam.end },
     building: place.building,
     room: place.room,
@@ -153,7 +171,17 @@ export function slicesFor(pins: MapPin[]): PinSlices {
   };
 }
 
-/** Open on today's column when it exists, otherwise show everything. */
-export function defaultSliceId(slices: PinSlice[], today?: Weekday): string {
-  return slices.find((s) => s.id === today)?.id ?? ALL.id;
+/**
+ * Open on today's column — but only when today actually carries a class.
+ *
+ * The weekday slices come from visibleDays(), which renders Mon–Fri
+ * unconditionally. That is right for a calendar grid, where an empty Tuesday
+ * column is visibly empty inside a visible week; here it would open a MWF
+ * student's map on a blank Tuesday above copy claiming there is nothing to
+ * place. Falling back to All shows the week they do have.
+ */
+export function defaultSliceId(slices: PinSlice[], pins: MapPin[], today?: Weekday): string {
+  const hit = slices.find((s) => s.id === today);
+  if (!hit) return ALL.id;
+  return pins.some((p) => p.when.weekday === today) ? hit.id : ALL.id;
 }
