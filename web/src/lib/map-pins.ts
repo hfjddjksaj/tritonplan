@@ -13,6 +13,8 @@ import type { PlanState, Weekday, FinalExam } from '@triton/shared';
 import { examDisplay } from '@triton/shared';
 import { matchBuilding } from './buildings';
 import { finalsSorted, meetingInstances, midtermsSorted, typeTag } from './plan';
+import { visibleDays } from './layout';
+import { dateParts } from './format';
 
 export type PinKind = 'meeting' | 'midterm' | 'final';
 
@@ -104,4 +106,54 @@ export function midtermPins(plan: PlanState, booked?: ReadonlySet<string>): MapP
   return midtermsSorted(plan).dated.map((item) =>
     examPin('midterm', item, item.midterm, item.label ?? 'Midterm', booked),
   );
+}
+
+export interface PinSlice {
+  id: string;
+  label: string;
+}
+
+export interface PinSlices {
+  slices: PinSlice[];
+  /** A filter for one slice id. 'all' passes everything. */
+  predicate(sliceId: string): (pin: MapPin) => boolean;
+}
+
+const ALL: PinSlice = { id: 'all', label: 'All' };
+
+/**
+ * Available time slices for a pin set, plus the matching filter.
+ *
+ * Recurring pins slice by weekday (reusing the calendar's own visibleDays
+ * rule: Mon–Fri always, weekends only when something meets then); dated pins
+ * slice by the dates that actually have an exam. The caller gets a list of
+ * ids and a predicate and never has to know which kind it is holding.
+ */
+export function slicesFor(pins: MapPin[]): PinSlices {
+  const dates = [...new Set(pins.map((p) => p.when.date).filter((d): d is string => !!d))].sort();
+  if (dates.length > 0) {
+    const slices = [
+      ALL,
+      ...dates.map((d) => {
+        const { month, day } = dateParts(d);
+        return { id: d, label: `${month} ${day}` };
+      }),
+    ];
+    return {
+      slices,
+      predicate: (id) => (id === ALL.id ? () => true : (pin) => pin.when.date === id),
+    };
+  }
+
+  const used = new Set(pins.map((p) => p.when.weekday).filter((d): d is Weekday => !!d));
+  const slices = used.size === 0 ? [ALL] : [ALL, ...visibleDays(used).map((d) => ({ id: d, label: d }))];
+  return {
+    slices,
+    predicate: (id) => (id === ALL.id ? () => true : (pin) => pin.when.weekday === id),
+  };
+}
+
+/** Open on today's column when it exists, otherwise show everything. */
+export function defaultSliceId(slices: PinSlice[], today?: Weekday): string {
+  return slices.find((s) => s.id === today)?.id ?? ALL.id;
 }

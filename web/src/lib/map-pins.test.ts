@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { CourseOffering, PlanState } from '@triton/shared';
-import { meetingPins, midtermPins, finalPins } from './map-pins';
+import { meetingPins, midtermPins, finalPins, slicesFor, defaultSliceId } from './map-pins';
 import { entryHue } from './plan';
 
 /** A course whose lecture meets in a real, matchable UCSD building. */
@@ -194,5 +194,51 @@ describe('midtermPins', () => {
 
   it('emits nothing when TSS has announced no midterm', () => {
     expect(midtermPins(planWith(courseWithMeetings()))).toEqual([]);
+  });
+});
+
+describe('slicesFor', () => {
+  it('offers All plus the calendar weekday set for weekly meetings', () => {
+    const { slices, predicate } = slicesFor(meetingPins(planWith(courseWithMeetings())));
+    expect(slices.map((s) => s.id)).toEqual(['all', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+    expect(slices[1]!.label).toBe('Mon');
+
+    const pins = meetingPins(planWith(courseWithMeetings()));
+    expect(pins.filter(predicate('all'))).toHaveLength(3);
+    expect(pins.filter(predicate('Fri'))).toHaveLength(1);
+    expect(pins.filter(predicate('Tue'))).toHaveLength(0);
+  });
+
+  it('appends a weekend column only when something actually meets then', () => {
+    const c = courseWithMeetings();
+    c.options[0]!.components[1]!.meetings[0]!.days = ['Sat'];
+    const { slices } = slicesFor(meetingPins(planWith(c)));
+    expect(slices.map((s) => s.id)).toEqual(['all', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+  });
+
+  it('offers All plus real exam dates for dated pins', () => {
+    const { slices, predicate } = slicesFor(finalPins(planWith(courseWithModernFinal())));
+    expect(slices.map((s) => s.id)).toEqual(['all', '2026-12-09']);
+    expect(slices[1]!.label).toBe('Dec 09');
+    const pins = finalPins(planWith(courseWithModernFinal()));
+    expect(pins.filter(predicate('2026-12-09'))).toHaveLength(1);
+    expect(pins.filter(predicate('2026-12-10'))).toHaveLength(0);
+  });
+
+  it('offers only All when there are no pins', () => {
+    expect(slicesFor([]).slices.map((s) => s.id)).toEqual(['all']);
+  });
+});
+
+describe('defaultSliceId', () => {
+  it("opens on today's column when today is on the map", () => {
+    const { slices } = slicesFor(meetingPins(planWith(courseWithMeetings())));
+    expect(defaultSliceId(slices, 'Wed')).toBe('Wed');
+  });
+
+  it('falls back to All when today has no column', () => {
+    const { slices } = slicesFor(meetingPins(planWith(courseWithMeetings())));
+    expect(defaultSliceId(slices, 'Sun')).toBe('all');
+    expect(defaultSliceId(slicesFor([]).slices, 'Wed')).toBe('all');
   });
 });
