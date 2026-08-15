@@ -7,9 +7,11 @@ import { CampusMapCanvas } from './CampusMapCanvas';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// The district ring is what the viewport is framed to, so it has to contain every
+// pin these tests expect to see drawn — a marker outside it is deliberately dropped.
 const geo: CampusGeo = {
   footprints: [{ name: 'York Hall', rings: [[-117.2410, 32.8740, -117.2400, 32.8740, -117.2400, 32.8750]] }],
-  districts: [{ name: 'Revelle', rings: [[-117.2430, 32.8720, -117.2380, 32.8720, -117.2380, 32.8770]] }],
+  districts: [{ name: 'Revelle', rings: [[-117.2450, 32.8700, -117.2350, 32.8700, -117.2350, 32.8800]] }],
 };
 
 function pin(over: Partial<MapPin>): MapPin {
@@ -82,6 +84,34 @@ describe('CampusMapCanvas', () => {
     });
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect.mock.calls[0]![0]).toMatch(/^32\.87450,-117\.24050$/);
+  });
+
+  it('never draws a marker the viewport cannot show', () => {
+    // A real, located class 13 km south (UCSD Health, Hillcrest). Drawing it
+    // off-canvas is the same as not drawing it — CampusMap lists it instead.
+    render([pin({ building: 'Hillcrest', coords: { lat: 32.755, lng: -117.166 } })]);
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
+  });
+
+  it('opens a marker from the keyboard, since it is the only route to the details', () => {
+    const onSelect = render([pin({})]);
+    const marker = container.querySelector('.campusmap__marker') as SVGGElement;
+    expect(marker.getAttribute('role')).toBe('button');
+    expect(marker.getAttribute('tabindex')).toBe('0');
+    expect(marker.getAttribute('aria-label')).toBe('York Hall: CSE-8A LEC');
+
+    act(() => {
+      marker.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    act(() => {
+      marker.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    });
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    act(() => {
+      marker.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
+    });
+    expect(onSelect).toHaveBeenCalledTimes(2);
   });
 
   it('distinguishes booked from unbooked markers', () => {

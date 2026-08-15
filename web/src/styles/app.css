@@ -2552,9 +2552,12 @@ button.termsw__cell:hover {
   display: flex;
   justify-content: center;
 }
+/* min-width: 0 lets the SVG shrink inside the flex stage, which would otherwise
+   hold it at its intrinsic width and ignore max-width. */
 .campusmap__svg {
   max-width: 100%;
   height: auto;
+  min-width: 0;
 }
 .campusmap__district {
   fill: var(--surface-2);
@@ -2617,11 +2620,9 @@ button.termsw__cell:hover {
 .campusmap__marker--open .campusmap__dot {
   stroke-width: 3;
 }
-
-/* .campusmap__stage is a row flex container, and a flex item's automatic
-   min-width defaults to its intrinsic content size — without this the
-   1100px-wide SVG refuses to shrink below that on phones, despite its own
-   max-width: 100%, and overflows .campusmap horizontally. */
-.campusmap__svg {
-  min-width: 0;
+/* Keyboard focus has to be visible on an SVG group too — the browser default
+   outline lands on the <g>'s bounding box, which is exactly the dot + chip. */
+.campusmap__marker:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }

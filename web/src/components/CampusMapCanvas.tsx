@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import type { CampusGeo } from '../lib/campus-geo';
+import { campusViewport, type CampusGeo } from '../lib/campus-geo';
 import type { MapPin } from '../lib/map-pins';
-import { groupPins, placeLabels } from '../lib/map-labels';
-import { fitBounds, project, toScreen, type Point } from '../lib/map-projection';
+import { groupPins, onCanvasGroups, placeLabels, type PinGroup } from '../lib/map-labels';
+import { project, toScreen, type Point } from '../lib/map-projection';
 import { colorsForHue } from '../lib/colors';
 
 interface Props {
@@ -15,7 +15,6 @@ interface Props {
   onSelect: (key: string | null) => void;
 }
 
-const PADDING = 28;
 /** Rough chip width per character — good enough for collision avoidance. */
 const CHAR_W = 6.2;
 const CHIP_H = 16;
@@ -35,19 +34,17 @@ function ringPath(ring: number[], toPx: (p: Point) => Point): string {
  * map-projection / map-labels so this file stays a renderer.
  */
 export function CampusMapCanvas({ geo, pins, width, height, selectedKey, onSelect }: Props) {
-  const groups = useMemo(() => groupPins(pins), [pins]);
+  // Only groups the viewport can actually show: an off-canvas marker would be
+  // clipped by the <svg> anyway, and reserving a label box for it would shove
+  // visible chips around for nothing. CampusMap lists them instead.
+  const groups = useMemo(() => onCanvasGroups(groupPins(pins), geo, width, height), [
+    pins,
+    geo,
+    width,
+    height,
+  ]);
 
-  const view = useMemo(() => {
-    // Frame the campus, not the pins: a plan with two neighbouring classes
-    // should still read as "UCSD", not as an unrecognizable zoom.
-    const pts: Point[] = [];
-    for (const shape of geo.districts) {
-      for (const ring of shape.rings) {
-        for (let i = 0; i + 1 < ring.length; i += 2) pts.push(project(ring[i]!, ring[i + 1]!));
-      }
-    }
-    return fitBounds(pts, width, height, PADDING);
-  }, [geo, width, height]);
+  const view = useMemo(() => campusViewport(geo, width, height), [geo, width, height]);
 
   const toPx = useMemo(() => (p: Point) => toScreen(p, view), [view]);
 
@@ -75,7 +72,10 @@ export function CampusMapCanvas({ geo, pins, width, height, selectedKey, onSelec
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      role="img"
+      // Not role="img": the markers inside are the only route to the detail panel, and
+      // a role="img" subtree is presentational to assistive tech — the buttons would be
+      // announced as nothing at all.
+      role="group"
       aria-label="UCSD campus map of this term's class locations"
       onClick={() => onSelect(null)}
     >
@@ -101,7 +101,19 @@ export function CampusMapCanvas({ geo, pins, width, height, selectedKey, onSelec
               className={`campusmap__marker${booked ? ' campusmap__marker--booked' : ''}${
                 selectedKey === group.key ? ' campusmap__marker--open' : ''
               }`}
+              // A marker is the only way into the detail panel, so it has to be
+              // reachable without a mouse.
+              role="button"
+              tabIndex={0}
+              aria-label={markerLabel(group)}
+              aria-pressed={selectedKey === group.key}
               onClick={(e) => {
+                e.stopPropagation();
+                onSelect(selectedKey === group.key ? null : group.key);
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault(); // Space would scroll the overlay
                 e.stopPropagation();
                 onSelect(selectedKey === group.key ? null : group.key);
               }}
@@ -138,6 +150,12 @@ export function CampusMapCanvas({ geo, pins, width, height, selectedKey, onSelec
       </g>
     </svg>
   );
+}
+
+/** Spoken form of a marker: the chip is an abbreviation, this is the whole truth. */
+function markerLabel(g: PinGroup): string {
+  const what = g.pins.map((p) => `${p.courseCode} ${p.label}`).join(', ');
+  return g.building ? `${g.building}: ${what}` : what;
 }
 
 /** "CSE-8A LEC" for one class here, "CSE-8A +2" when several share the building. */
