@@ -40,7 +40,10 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
 
-  useEscapeKey(onClose);
+  // BuildingPopover registers its own Escape handler while `mapLoc` is set; without this
+  // guard both fire on one keypress and the user is bounced out of the whole map when all
+  // they meant was "close this popover".
+  useEscapeKey(mapLoc ? () => {} : onClose);
 
   useEffect(() => {
     let live = true;
@@ -72,6 +75,11 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
   const unlocated = useMemo(() => unlocatedPins(shown), [shown]);
   const groups = useMemo(() => groupPins(shown), [shown]);
   const open = groups.find((g) => g.key === openKey) ?? null;
+
+  // The generic "nothing to place" copy is false when the plan HAS courses and the
+  // booked-only toggle is the thing hiding them — say so, and name the way out.
+  const bookedOnlyHidesEverything =
+    showBookedToggle && bookedOnly && groups.length === 0 && allPins.length > 0;
 
   return (
     <div className="campusmap" role="dialog" aria-modal="true" aria-label="Campus map">
@@ -127,6 +135,11 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
       <div className="campusmap__stage">
         {geo === null ? (
           <div className="campusmap__loading">Loading campus…</div>
+        ) : bookedOnlyHidesEverything ? (
+          <div className="campusmap__empty">
+            Booked only is on and nothing here is booked yet. Turn it off to see every course
+            in your plan.
+          </div>
         ) : groups.length === 0 ? (
           <div className="campusmap__empty">
             No class locations to place yet. Add courses with scheduled meetings, and they’ll
