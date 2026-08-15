@@ -148,12 +148,16 @@ function courseWithLegacyFinal(): CourseOffering {
 
 describe('finalPins', () => {
   it('emits one dated pin per final, labelled Final', () => {
-    const pins = finalPins(planWith(courseWithModernFinal()));
+    const plan = planWith(courseWithModernFinal());
+    const pins = finalPins(plan);
     expect(pins).toHaveLength(1);
     expect(pins[0]!.kind).toBe('final');
     expect(pins[0]!.label).toBe('Final');
     expect(pins[0]!.when).toEqual({ date: '2026-12-09', start: '11:30', end: '14:29' });
     expect(pins[0]!.when.weekday).toBeUndefined();
+    expect(pins[0]!.booked).toBe(false);
+    const booked = finalPins(plan, new Set(['CSE-8A|2026|2']));
+    expect(booked[0]!.booked).toBe(true);
   });
 
   it('recovers the location from a legacy modality tail', () => {
@@ -176,12 +180,16 @@ describe('midtermPins', () => {
     c.options[0]!.components[0]!.rawSched =
       'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109\n' +
       'Midterm Examination 11/14/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109';
-    const pins = midtermPins(planWith(c));
+    const plan = planWith(c);
+    const pins = midtermPins(plan);
     expect(pins).toHaveLength(2);
     expect(pins.map((p) => p.label)).toEqual(['Midterm 1', 'Midterm 2']);
     expect(pins.every((p) => p.kind === 'midterm')).toBe(true);
     expect(pins[0]!.when.date).toBe('2026-10-31');
     expect(pins[0]!.building).toBe('Center Hall');
+    expect(pins.every((p) => p.booked === false)).toBe(true);
+    const booked = midtermPins(plan, new Set(['CSE-8A|2026|2']));
+    expect(booked.every((p) => p.booked === true)).toBe(true);
   });
 
   it('emits nothing when TSS has announced no midterm', () => {
