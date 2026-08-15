@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PlanState } from '@triton/shared';
 import { loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
 import { defaultSliceId, meetingPins, slicesFor } from '../lib/map-pins';
-import { groupPins, unlocatedPins } from '../lib/map-labels';
+import { groupPins, splitByViewport, unplacedPins } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
-import { todayWeekday } from '../lib/format';
+import { pluralize, todayWeekday } from '../lib/format';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { CampusMapCanvas } from './CampusMapCanvas';
 import { BuildingPopover } from './BuildingPopover';
 import { X } from './icons';
@@ -22,8 +23,18 @@ interface Props {
   onClose: () => void;
 }
 
-const CANVAS_W = 1100;
-const CANVAS_H = 760;
+/**
+ * Canvas size in SVG units. It is also the rendered CSS size on desktop, and
+ * the phone canvas is sized to render 1:1 there too: at 1100 px wide the SVG
+ * had to shrink to ~0.33× inside a 390 px viewport, which put the 10 px chip
+ * text at ~3 CSS px. Portrait also suits the core, which is ~2.4 km tall and
+ * ~1.4 km wide.
+ */
+const CANVAS = { w: 1100, h: 760 };
+const MOBILE_CANVAS = { w: 360, h: 560 };
+
+/** Nobody's booked set applies to someone else's plan — see §5.4. */
+const NO_BOOKED: ReadonlySet<string> = new Set();
 
 /**
  * Full-page campus map, toggled by state rather than a route: the address bar
@@ -34,6 +45,8 @@ const CANVAS_H = 760;
  */
 export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Props) {
   const [geo, setGeo] = useState<CampusGeo | null>(null);
+  const isMobile = useIsMobile();
+  const canvas = isMobile ? MOBILE_CANVAS : CANVAS;
   const [bookedOnly, setBookedOnly] = useState<boolean>(
     () => loadMapBookedOnly() ?? (hasBookedData && !readOnly),
   );
@@ -55,26 +68,44 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
     };
   }, []);
 
+  // Both read-only defences, side by side. §5.4 hides the toggle because the plan on
+  // screen is someone else's; the same reasoning kills the solid/hollow booked dots,
+  // which would otherwise paint YOUR enrolment over THEIR plan with nothing to explain it.
   const showBookedToggle = !readOnly && hasBookedData;
   const effectiveBookedOnly = showBookedToggle && bookedOnly;
+  const effectiveBooked = readOnly ? NO_BOOKED : booked;
 
-  const allPins = useMemo(() => meetingPins(plan, booked), [plan, booked]);
+  const allPins = useMemo(() => meetingPins(plan, effectiveBooked), [plan, effectiveBooked]);
   const scoped = useMemo(
     () => (effectiveBookedOnly ? allPins.filter((p) => p.booked) : allPins),
     [allPins, effectiveBookedOnly],
   );
 
   const { slices, predicate } = useMemo(() => slicesFor(scoped), [scoped]);
-  const [sliceId, setSliceId] = useState<string>(() => defaultSliceId(slices, todayWeekday()));
+  const [sliceId, setSliceId] = useState<string>(() =>
+    defaultSliceId(slices, scoped, todayWeekday()),
+  );
   useEffect(() => {
     // The available columns change with scope; keep the selection valid.
-    if (!slices.some((s) => s.id === sliceId)) setSliceId(defaultSliceId(slices, todayWeekday()));
-  }, [slices, sliceId]);
+    if (!slices.some((s) => s.id === sliceId)) {
+      setSliceId(defaultSliceId(slices, scoped, todayWeekday()));
+    }
+  }, [slices, scoped, sliceId]);
 
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
-  const unlocated = useMemo(() => unlocatedPins(shown), [shown]);
-  const groups = useMemo(() => groupPins(shown), [shown]);
-  const open = groups.find((g) => g.key === openKey) ?? null;
+
+  // Split against the SAME viewport the canvas draws through: a marker outside it is
+  // invisible, so it must not be counted as a building on the map, and it belongs in
+  // the list below with its own explanation rather than disappearing.
+  const { onCanvas, offCanvas } = useMemo(
+    () =>
+      geo
+        ? splitByViewport(groupPins(shown), geo, canvas.w, canvas.h)
+        : { onCanvas: [], offCanvas: [] },
+    [shown, geo, canvas.w, canvas.h],
+  );
+  const unplaced = useMemo(() => unplacedPins(shown, offCanvas), [shown, offCanvas]);
+  const open = onCanvas.find((g) => g.key === openKey) ?? null;
 
   // The generic "nothing to place" copy is false only when a LOCATABLE class exists that
   // booked-only is hiding — an unbooked pin with no coords was never going on the map
@@ -82,7 +113,7 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
   const bookedOnlyHidesEverything =
     showBookedToggle &&
     bookedOnly &&
-    groups.length === 0 &&
+    onCanvas.length === 0 &&
     allPins.some((p) => p.coords !== null && !p.booked);
 
   return (
@@ -91,7 +122,9 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
         <div className="campusmap__title">
           Campus map
           <span className="campusmap__count">
-            {groups.length === 0 ? 'nothing to show' : `${groups.length} buildings`}
+            {onCanvas.length === 0
+              ? 'nothing to show'
+              : `${onCanvas.length} ${pluralize(onCanvas.length, 'building')}`}
           </span>
         </div>
 
@@ -144,7 +177,12 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
             Booked only is on and nothing here is booked yet. Turn it off to see every course
             in your plan.
           </div>
-        ) : groups.length === 0 ? (
+        ) : onCanvas.length === 0 && unplaced.length > 0 ? (
+          <div className="campusmap__empty">
+            Nothing here lands on the mapped part of campus — the list below has where these
+            classes actually meet.
+          </div>
+        ) : onCanvas.length === 0 ? (
           <div className="campusmap__empty">
             No class locations to place yet. Add courses with scheduled meetings, and they’ll
             appear here.
@@ -153,8 +191,8 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
           <CampusMapCanvas
             geo={geo}
             pins={shown}
-            width={CANVAS_W}
-            height={CANVAS_H}
+            width={canvas.w}
+            height={canvas.h}
             selectedKey={openKey}
             onSelect={setOpenKey}
           />
@@ -185,14 +223,13 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
         </div>
       )}
 
-      {unlocated.length > 0 && (
+      {unplaced.length > 0 && (
         <div className="campusmap__unlocated">
-          <div className="eyebrow">Couldn’t place</div>
+          <div className="eyebrow">Not on the map</div>
           <ul>
-            {unlocated.map((p, i) => (
-              <li key={`${p.courseId}-${i}`}>
-                <b>{p.courseCode}</b> {p.label} —{' '}
-                {p.rawLocation ?? p.building ?? 'no location listed in TSS'}
+            {unplaced.map((u, i) => (
+              <li key={`${u.pin.courseId}-${u.reason}-${i}`}>
+                <b>{u.pin.courseCode}</b> {u.pin.label} — {u.detail}
               </li>
             ))}
           </ul>

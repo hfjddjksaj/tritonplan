@@ -76,6 +76,38 @@ function planWithUnlocatableMeeting(): PlanState {
   };
 }
 
+/**
+ * A course meeting at UCSD Health's Hillcrest campus — a real, matchable building
+ * in the shipped point data that projects far outside the framed academic core.
+ */
+function planOffTheMap(): PlanState {
+  const course = courseWithMeeting();
+  const meeting = course.options[0]!.components[0]!.meetings[0]!;
+  meeting.building = '304 Arbor Drive';
+  meeting.room = '1';
+  meeting.location = '304 Arbor Drive 1';
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
+/** A fully online lecture: no building, and none was ever expected. */
+function planOnline(): PlanState {
+  const course = courseWithMeeting();
+  const meeting = course.options[0]!.components[0]!.meetings[0]!;
+  meeting.modality = 'Live Online';
+  meeting.building = undefined;
+  meeting.room = undefined;
+  meeting.location = undefined;
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Let the dynamic geo import and its promise settle. */
@@ -199,6 +231,43 @@ describe('CampusMap', () => {
       'Booked only is on and nothing here is booked yet. Turn it off to see every course in your plan.',
     );
     expect(container.textContent).not.toContain('No class locations to place yet');
+  });
+
+  it('never marks a pin booked on someone else’s plan, even in a course you take', async () => {
+    const mine = new Set(['CSE-8A|2026|2']);
+    // Control: on YOUR plan the solid dot is exactly the point.
+    render({ plan: planWithMeeting(), hasBookedData: true, booked: mine });
+    await settle();
+    expect(container.querySelectorAll('.campusmap__marker--booked')).toHaveLength(1);
+
+    // Read-only: same course, same booked set, but the plan is someone else's — so
+    // your enrolment says nothing about it and must not be painted onto it (§5.4).
+    render({ plan: planWithMeeting(), hasBookedData: true, booked: mine, readOnly: true });
+    await settle();
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    expect(container.querySelectorAll('.campusmap__marker--booked')).toHaveLength(0);
+  });
+
+  it('counts buildings in English', async () => {
+    render({ plan: planWithMeeting(), hasBookedData: false });
+    await settle();
+    expect(container.querySelector('.campusmap__count')!.textContent).toBe('1 building');
+  });
+
+  it('lists a class outside the mapped area instead of counting it as drawn', async () => {
+    render({ plan: planOffTheMap(), hasBookedData: false });
+    await settle();
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
+    expect(container.querySelector('.campusmap__count')!.textContent).toBe('nothing to show');
+    expect(container.textContent).toContain('304 Arbor Drive — outside the mapped area');
+    expect(container.textContent).not.toContain('No class locations to place yet');
+  });
+
+  it('says an online class is online rather than calling it unplaceable', async () => {
+    render({ plan: planOnline(), hasBookedData: false });
+    await settle();
+    expect(container.textContent).toContain('Live Online');
+    expect(container.textContent).not.toContain('no location listed in TSS');
   });
 
   it('does not blame booked-only when the only class was never locatable to begin with', async () => {
