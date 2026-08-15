@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { CourseOffering, PlanState } from '@triton/shared';
-import { meetingPins } from './map-pins';
+import { meetingPins, midtermPins, finalPins } from './map-pins';
 import { entryHue } from './plan';
 
 /** A course whose lecture meets in a real, matchable UCSD building. */
@@ -111,5 +111,80 @@ describe('meetingPins', () => {
     course.options[0]!.components[0]!.type = 'ZZ';
     course.options[0]!.components[0]!.typeText = 'Colloquium';
     expect(meetingPins(planWith(course))[0]!.label).toBe('COL');
+  });
+});
+
+/** Exam whose location TSS supplied as a structured field (post-2026-08-11). */
+function courseWithModernFinal(): CourseOffering {
+  const c = courseWithMeetings();
+  c.options[0]!.final = {
+    date: '2026-12-09',
+    start: '11:30',
+    end: '14:29',
+    modality: 'In Person',
+    location: 'York Hall Room 2622',
+    building: 'York Hall',
+    room: '2622',
+  };
+  return c;
+}
+
+/**
+ * Exam captured BEFORE the parser learned to split "@ <Location>": the whole
+ * tail sits in `modality`. Every plan captured before 2026-08-11 — and every
+ * share link encoded from one — looks like this, so reading `final.building`
+ * directly would silently lose the location for all of them.
+ */
+function courseWithLegacyFinal(): CourseOffering {
+  const c = courseWithMeetings();
+  c.options[0]!.final = {
+    date: '2026-12-09',
+    start: '11:30',
+    end: '14:29',
+    modality: 'In Person @ York Hall Room 2622',
+  };
+  return c;
+}
+
+describe('finalPins', () => {
+  it('emits one dated pin per final, labelled Final', () => {
+    const pins = finalPins(planWith(courseWithModernFinal()));
+    expect(pins).toHaveLength(1);
+    expect(pins[0]!.kind).toBe('final');
+    expect(pins[0]!.label).toBe('Final');
+    expect(pins[0]!.when).toEqual({ date: '2026-12-09', start: '11:30', end: '14:29' });
+    expect(pins[0]!.when.weekday).toBeUndefined();
+  });
+
+  it('recovers the location from a legacy modality tail', () => {
+    const modern = finalPins(planWith(courseWithModernFinal()))[0]!;
+    const legacy = finalPins(planWith(courseWithLegacyFinal()))[0]!;
+    expect(legacy.building).toBe('York Hall');
+    expect(legacy.room).toBe('2622');
+    expect(legacy.coords).toEqual(modern.coords);
+    expect(legacy.coords).not.toBeNull();
+  });
+
+  it('emits nothing for a course with no final', () => {
+    expect(finalPins(planWith(courseWithMeetings()))).toEqual([]);
+  });
+});
+
+describe('midtermPins', () => {
+  it('numbers multiple midterms and skips courses with none', () => {
+    const c = courseWithMeetings();
+    c.options[0]!.components[0]!.rawSched =
+      'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109\n' +
+      'Midterm Examination 11/14/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109';
+    const pins = midtermPins(planWith(c));
+    expect(pins).toHaveLength(2);
+    expect(pins.map((p) => p.label)).toEqual(['Midterm 1', 'Midterm 2']);
+    expect(pins.every((p) => p.kind === 'midterm')).toBe(true);
+    expect(pins[0]!.when.date).toBe('2026-10-31');
+    expect(pins[0]!.building).toBe('Center Hall');
+  });
+
+  it('emits nothing when TSS has announced no midterm', () => {
+    expect(midtermPins(planWith(courseWithMeetings()))).toEqual([]);
   });
 });

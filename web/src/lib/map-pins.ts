@@ -9,9 +9,10 @@
  * `booked` is computed at RENDER time from the term workspace and is never
  * written into PlanState: booked status must not reach a share link.
  */
-import type { PlanState, Weekday } from '@triton/shared';
+import type { PlanState, Weekday, FinalExam } from '@triton/shared';
+import { examDisplay } from '@triton/shared';
 import { matchBuilding } from './buildings';
-import { meetingInstances, typeTag } from './plan';
+import { finalsSorted, meetingInstances, midtermsSorted, typeTag } from './plan';
 
 export type PinKind = 'meeting' | 'midterm' | 'final';
 
@@ -61,4 +62,46 @@ export function meetingPins(plan: PlanState, booked?: ReadonlySet<string>): MapP
     coords: coordsFor(m.building),
     booked: booked?.has(m.courseId) ?? false,
   }));
+}
+
+/**
+ * Shared shape for the two exam sources. The location MUST come from
+ * examDisplay(): pre-2026-08-11 captures keep the whole "@ <Location>" tail
+ * inside `modality`, and reading `exam.building` directly loses it.
+ */
+function examPin(
+  kind: 'midterm' | 'final',
+  item: { courseId: string; courseCode: string; hue: number },
+  exam: FinalExam,
+  label: string,
+  booked?: ReadonlySet<string>,
+): MapPin {
+  const place = examDisplay(exam);
+  return {
+    courseId: item.courseId,
+    courseCode: item.courseCode,
+    hue: item.hue,
+    kind,
+    label,
+    when: { date: exam.date, start: exam.start, end: exam.end },
+    building: place.building,
+    room: place.room,
+    rawLocation: place.location,
+    coords: coordsFor(place.building),
+    booked: booked?.has(item.courseId) ?? false,
+  };
+}
+
+/** Final exam locations. Courses without a final contribute nothing. */
+export function finalPins(plan: PlanState, booked?: ReadonlySet<string>): MapPin[] {
+  return finalsSorted(plan).map((item) =>
+    examPin('final', item, item.final, 'Final', booked),
+  );
+}
+
+/** Midterm locations. Courses TSS hasn't announced a midterm for contribute nothing. */
+export function midtermPins(plan: PlanState, booked?: ReadonlySet<string>): MapPin[] {
+  return midtermsSorted(plan).dated.map((item) =>
+    examPin('midterm', item, item.midterm, item.label ?? 'Midterm', booked),
+  );
 }
