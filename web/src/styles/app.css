@@ -2468,3 +2468,160 @@ button.termsw__cell:hover {
     min-width: 0;
   }
 }
+
+/* =============================== campus map (full-page overlay) */
+.campusmap {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px 18px;
+  overflow: auto;
+  background: var(--surface);
+}
+.campusmap__bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.campusmap__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.campusmap__count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.campusmap__slices {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.campusmap__chipbtn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.campusmap__chipbtn.is-on {
+  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.campusmap__bookedtoggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.campusmap__close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.campusmap__hint,
+.campusmap__empty,
+.campusmap__loading {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.campusmap__stage {
+  display: flex;
+  justify-content: center;
+}
+.campusmap__svg {
+  max-width: 100%;
+  height: auto;
+}
+.campusmap__district {
+  fill: var(--surface-2);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.campusmap__footprint {
+  fill: #d6dce6;
+  stroke: #a8b3c4;
+  stroke-width: 0.6;
+}
+.campusmap__marker {
+  cursor: pointer;
+}
+.campusmap__chiptext {
+  font-size: 10px;
+  font-weight: 700;
+}
+.campusmap__detail,
+.campusmap__unlocated {
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.campusmap__detail-name {
+  font-weight: 800;
+  color: var(--ink);
+}
+.campusmap__detail-list,
+.campusmap__unlocated ul {
+  margin: 4px 0 8px;
+  padding-left: 16px;
+}
+
+@media (max-width: 760px) {
+  .campusmap {
+    padding: 10px 12px 14px;
+  }
+  .campusmap__bar {
+    gap: 8px;
+  }
+}
+
+/* CampusMapCanvas emits three plain SVG <g> group wrappers (__districts /
+   __footprints / __markers) with no rule of their own — a <g> paints nothing
+   itself, so a class rule on it has nothing to do; all visual weight already
+   lives on the styled children above.
+   __dot / __chip get their fill/stroke per course from colorsForHue() as SVG
+   presentation attributes (props, not the `style` attr — a plain class rule
+   still wins over those), so only the transition and the "selected" affordance
+   belong here. __marker--booked needs no rule of its own: booked vs. not is
+   already the dot's solid-vs-hollow fill, set inline for the same reason. */
+.campusmap__dot,
+.campusmap__chip {
+  transition: fill 0.12s ease, stroke 0.12s ease;
+}
+.campusmap__marker--open .campusmap__dot {
+  stroke-width: 3;
+}
+
+/* .campusmap__stage is a row flex container, and a flex item's automatic
+   min-width defaults to its intrinsic content size — without this the
+   1100px-wide SVG refuses to shrink below that on phones, despite its own
+   max-width: 100%, and overflows .campusmap horizontally. */
+.campusmap__svg {
+  min-width: 0;
+}

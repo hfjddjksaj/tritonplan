@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { PlanState } from '@triton/shared';
 import { PRODUCT_NAME } from '../lib/brand';
 import { ShareMenu } from './ShareMenu';
-import { Trident, Trash } from './icons';
+import { Trident, Trash, MapPinIcon } from './icons';
 
 interface Props {
   /** The term chip / switcher, rendered after the plan switcher. */
@@ -18,6 +18,7 @@ interface Props {
   sharePlan: PlanState;
   onFlash: (msg: string) => void;
   onReset: () => void;
+  onOpenMap: () => void;
 }
 
 export function Topbar({
@@ -29,6 +30,7 @@ export function Topbar({
   sharePlan,
   onFlash,
   onReset,
+  onOpenMap,
 }: Props) {
   return (
     <header className="topbar">
@@ -62,6 +64,15 @@ export function Topbar({
             <Trash size={15} /> Clear
           </button>
         )}
+
+        <button
+          type="button"
+          className="btn btn--sm"
+          onClick={onOpenMap}
+          title="See where this term's classes meet on a campus map"
+        >
+          <MapPinIcon size={15} /> Map
+        </button>
 
         <ShareMenu plan={sharePlan} onFlash={onFlash} />
       </div>

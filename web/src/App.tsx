@@ -13,6 +13,7 @@ import { MidtermsView } from './components/MidtermsView';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
+import { CampusMap } from './components/CampusMap';
 import { PlanPickerModal } from './components/PlanPickerModal';
 import { TermSwitcher } from './components/TermSwitcher';
 import { BlockSheet } from './components/BlockSheet';
@@ -40,6 +41,7 @@ export default function App() {
   const view: MobileTab = !isMobile && tab === 'courses' ? 'calendar' : tab;
   const [toast, setToast] = useState<string | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
+  const [campusOpen, setCampusOpen] = useState(false);
   const [sheetBlock, setSheetBlock] = useState<PositionedBlock | null>(null);
   // Clicking a calendar block reveals that course's card in the rail. The nonce
   // makes a second click on the same course re-trigger the scroll/expand.
@@ -172,6 +174,7 @@ export default function App() {
         sharePlan={ctl.viewPlan}
         onFlash={flash}
         onReset={handleReset}
+        onOpenMap={() => setCampusOpen(true)}
       />
       {ctl.received && (
         <ReceivedBanner
@@ -322,6 +325,16 @@ export default function App() {
           plans={ctl.pendingAddPlans}
           onPick={ctl.confirmPendingAdd}
           onCancel={ctl.cancelPendingAdd}
+        />
+      )}
+
+      {campusOpen && (
+        <CampusMap
+          plan={ctl.viewPlan}
+          booked={ctl.bookedIds}
+          hasBookedData={ctl.hasBookedData}
+          readOnly={ctl.readOnly}
+          onClose={() => setCampusOpen(false)}
         />
       )}
     </div>
