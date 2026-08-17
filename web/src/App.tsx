@@ -19,7 +19,7 @@ import { TermSwitcher } from './components/TermSwitcher';
 import { BlockSheet } from './components/BlockSheet';
 import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
 import { Check } from './components/icons';
-import { ViewTabs } from './components/ViewTabs';
+import { ViewTabs, type PlannerView } from './components/ViewTabs';
 import { countConflictPairs } from './lib/plan';
 import { displayTermLabel } from './lib/terms';
 import { pluralize } from './lib/format';
@@ -39,6 +39,7 @@ export default function App() {
   }, []);
   // Desktop has no Courses tab — the rail is always visible there.
   const view: MobileTab = !isMobile && tab === 'courses' ? 'calendar' : tab;
+  const plannerView: PlannerView = view === 'courses' ? 'calendar' : view;
   const [toast, setToast] = useState<string | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   const [campusOpen, setCampusOpen] = useState(false);
@@ -197,7 +198,7 @@ export default function App() {
                 <CalViewToggle value={calView} onChange={handleCalView} />
               )}
               <ViewTabs
-                value={view === 'courses' ? 'calendar' : view}
+                value={plannerView}
                 onChange={setTab}
                 finalsBadge={ctl.finalConflicts.length}
               />
@@ -306,6 +307,7 @@ export default function App() {
           plan={ctl.viewPlan}
           booked={ctl.bookedIds}
           readOnly={ctl.readOnly}
+          initialView={plannerView}
           onClose={() => setCampusOpen(false)}
         />
       )}
