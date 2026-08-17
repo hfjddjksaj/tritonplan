@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSources, polygonAnchor, ringArea, DEFAULT_HEIGHT_M } from './map-data';
+import { buildSources, polygonAnchor, ringArea, shapeGeometry, DEFAULT_HEIGHT_M } from './map-data';
 import { loadCampusGeo, loadCampusMap } from './campus-geo';
 
 const sq = [-117.24, 32.88, -117.23, 32.88, -117.23, 32.89, -117.24, 32.89];
@@ -38,5 +38,52 @@ describe('buildSources', () => {
   it('drops street-address footprints from the building names', async () => {
     const s = buildSources(await loadCampusGeo(), await loadCampusMap());
     expect(s.labels.features.some((f) => f.properties.kind === 'building' && /^\d/.test(f.properties.label))).toBe(false);
+  });
+});
+
+describe('shapeGeometry ring assembly', () => {
+  it('nests a fully-contained inner ring as a hole in one Polygon', () => {
+    const outer = [0, 0, 10, 0, 10, 10, 0, 10];
+    const inner = [3, 3, 7, 3, 7, 7, 3, 7];
+    const g = shapeGeometry([outer, inner]);
+    expect(g.type).toBe('Polygon');
+    expect(g.coordinates).toHaveLength(2);
+    expect(g.coordinates[1]![0]).toEqual([3, 3]);
+  });
+
+  it('keeps two disjoint rings as two single-ring polygons', () => {
+    const a = [0, 0, 10, 0, 10, 10, 0, 10];
+    const b = [20, 20, 30, 20, 30, 30, 20, 30];
+    const g = shapeGeometry([a, b]);
+    expect(g.type).toBe('MultiPolygon');
+    expect(g.coordinates).toHaveLength(2);
+    expect(g.coordinates[0]).toHaveLength(1);
+    expect(g.coordinates[1]).toHaveLength(1);
+  });
+
+  it('groups a hole with its own outer while a disjoint third ring stays separate', () => {
+    const outer = [0, 0, 10, 0, 10, 10, 0, 10];
+    const hole = [3, 3, 7, 3, 7, 7, 3, 7];
+    const third = [20, 20, 30, 20, 30, 30, 20, 30];
+    const g = shapeGeometry([outer, hole, third]);
+    expect(g.type).toBe('MultiPolygon');
+    expect(g.coordinates).toHaveLength(2);
+    const withHole = g.coordinates.find((p) => p.length === 2)!;
+    const withoutHole = g.coordinates.find((p) => p.length === 1)!;
+    expect(withHole).toBeDefined();
+    expect(withoutHole).toBeDefined();
+  });
+
+  it('produces at least one multi-ring building and one multi-ring ground polygon from the bundled data', async () => {
+    const s = buildSources(await loadCampusGeo(), await loadCampusMap());
+    const hasHole = (geom: { type: string; coordinates: unknown[] }) =>
+      geom.type === 'Polygon'
+        ? geom.coordinates.length > 1
+        : geom.type === 'MultiPolygon'
+          ? (geom.coordinates as unknown[][]).some((p) => p.length > 1)
+          : false;
+
+    expect(s.buildings.features.some((f) => hasHole(f.geometry))).toBe(true);
+    expect(s.ground.features.some((f) => hasHole(f.geometry))).toBe(true);
   });
 });

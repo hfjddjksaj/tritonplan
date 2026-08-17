@@ -15,7 +15,11 @@ import type { CampusGeo, CampusLine, CampusMapData, CampusShape } from './campus
 import { LANDMARKS, buildingShortName, districtLabel, districtPriority, roadLabelText } from './map-names';
 
 export interface MapSources {
-  ground: FeatureCollection<Polygon, { type: string; rank: number }>;
+  // Widened from the brief's literal `Polygon` to `Polygon | MultiPolygon`
+  // (Ruling 6): a ground shape's rings can be genuinely disjoint pieces, not
+  // just holes, and MapLibre fills/extrudes/places symbols on both the same
+  // way, so this costs Task 5's style nothing.
+  ground: FeatureCollection<Polygon | MultiPolygon, { type: string; rank: number }>;
   buildings: FeatureCollection<Polygon | MultiPolygon, { name: string; height: number }>;
   trees: FeatureCollection<Point, { cls: number }>;
   roads: FeatureCollection<LineString, { name: string; label: string; kind: 'hwy' | 'major' | 'minor' | 'walk' }>;
@@ -180,12 +184,41 @@ function pairsToCoords(pts: number[]): number[][] {
   return coords;
 }
 
-/** A shape's rings as a Polygon (one ring, or several as holes-or-not doesn't
- * matter for a single piece) or, for the rarer multi-piece footprint, a
- * MultiPolygon with each ring its own piece. */
-function shapeGeometry(rings: number[][]): Polygon | MultiPolygon {
-  if (rings.length <= 1) return { type: 'Polygon', coordinates: rings.map(ringToCoords) };
-  return { type: 'MultiPolygon', coordinates: rings.map((r) => [ringToCoords(r)]) };
+/**
+ * Group a shape's rings into outer pieces with their holes, by containment
+ * rather than by position in the array: largest ring first, then each
+ * smaller ring either nests inside an already-placed outer ring (a hole) or
+ * starts a new outer piece of its own (a disjoint piece — e.g. two wings of
+ * one footprint that only share a `name`). A ring's first vertex is enough to
+ * test, since footprint/ground rings never partially overlap in this data.
+ * Reuses `pointInRing` rather than a second copy.
+ */
+function assembleRings(rings: number[][]): number[][][] {
+  const byArea = rings
+    .map((ring) => ({ ring, area: Math.abs(ringArea(ring)) }))
+    .sort((a, b) => b.area - a.area);
+
+  const pieces: number[][][] = []; // each entry: [outerRing, ...holeRings]
+  for (const { ring } of byArea) {
+    const outerIndex = pieces.findIndex((piece) => pointInRing(ring[0]!, ring[1]!, piece[0]!));
+    if (outerIndex >= 0) pieces[outerIndex]!.push(ring);
+    else pieces.push([ring]);
+  }
+  return pieces;
+}
+
+/**
+ * A shape's rings as a `Polygon` (one outer piece — its holes, if any, as its
+ * later rings) or a `MultiPolygon` (several disjoint outer pieces, each with
+ * its own holes). Used for both building footprints and ground-surface
+ * shapes: both bundled sources mix genuine holes (an atrium, a courtyard)
+ * with genuinely disjoint pieces sharing one name/type, and only containment
+ * — not just "how many rings" — tells them apart (Ruling 6).
+ */
+export function shapeGeometry(rings: number[][]): Polygon | MultiPolygon {
+  const pieces = assembleRings(rings);
+  if (pieces.length <= 1) return { type: 'Polygon', coordinates: (pieces[0] ?? []).map(ringToCoords) };
+  return { type: 'MultiPolygon', coordinates: pieces.map((piece) => piece.map(ringToCoords)) };
 }
 
 /**
@@ -299,12 +332,12 @@ function buildingLabels(geo: CampusGeo): Feature<Point, { kind: 'building'; labe
  * awaits `loadCampusGeo`/`loadCampusMap` first.
  */
 export function buildSources(geo: CampusGeo, map: CampusMapData): MapSources {
-  const ground: FeatureCollection<Polygon, { type: string; rank: number }> = {
+  const ground: FeatureCollection<Polygon | MultiPolygon, { type: string; rank: number }> = {
     type: 'FeatureCollection',
     features: map.ground.map((g) => ({
       type: 'Feature',
       properties: { type: g.type, rank: groundRank(g.type) },
-      geometry: { type: 'Polygon', coordinates: g.rings.map(ringToCoords) },
+      geometry: shapeGeometry(g.rings),
     })),
   };
 
