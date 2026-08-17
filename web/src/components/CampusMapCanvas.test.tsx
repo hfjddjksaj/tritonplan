@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { CampusGeo } from '../lib/campus-geo';
+import { campusViewport, type CampusGeo } from '../lib/campus-geo';
 import type { MapPin } from '../lib/map-pins';
+import type { Viewport } from '../lib/map-projection';
 import { CampusMapCanvas } from './CampusMapCanvas';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -12,7 +13,12 @@ import { CampusMapCanvas } from './CampusMapCanvas';
 const geo: CampusGeo = {
   footprints: [{ name: 'York Hall', rings: [[-117.2410, 32.8740, -117.2400, 32.8740, -117.2400, 32.8750]] }],
   districts: [{ name: 'Revelle', rings: [[-117.2450, 32.8700, -117.2350, 32.8700, -117.2350, 32.8800]] }],
+  lines: [
+    { name: 'Gilman Drive', kind: 'major', pts: [-117.2450, 32.8760, -117.2350, 32.8760] },
+    { name: '', kind: 'coast', pts: [-117.2500, 32.8800, -117.2500, 32.8700] },
+  ],
 };
+const HOME = campusViewport(geo, 800, 600);
 
 function pin(over: Partial<MapPin>): MapPin {
   return {
@@ -43,12 +49,17 @@ describe('CampusMapCanvas', () => {
     container.remove();
   });
 
-  function render(pins: MapPin[], onSelect = vi.fn()) {
+  function render(
+    pins: MapPin[],
+    onSelect = vi.fn(),
+    opts: { view?: Viewport; onViewChange?: (v: Viewport) => void; selectedKey?: string | null } = {},
+  ) {
     act(() => {
       root.render(
         <CampusMapCanvas
           geo={geo} pins={pins} width={800} height={600}
-          selectedKey={null} onSelect={onSelect}
+          view={opts.view ?? HOME} homeView={HOME} onViewChange={opts.onViewChange ?? vi.fn()}
+          selectedKey={opts.selectedKey ?? null} onSelect={onSelect}
         />,
       );
     });
@@ -59,6 +70,92 @@ describe('CampusMapCanvas', () => {
     render([pin({})]);
     expect(container.querySelectorAll('.campusmap__district')).toHaveLength(1);
     expect(container.querySelectorAll('.campusmap__footprint')).toHaveLength(1);
+    expect(container.querySelector('.campusmap__ocean')).not.toBeNull();
+    expect(container.querySelector('.campusmap__road--major')!.getAttribute('d')).toMatch(/^M/);
+    expect(container.querySelector('.campusmap__compass')).not.toBeNull();
+    expect(container.querySelector('.campusmap__scale-text')!.textContent).toMatch(/^\d+ (m|km)$/);
+    expect(container.querySelector('.campusmap__attrib')!.textContent).toContain('OpenStreetMap');
+  });
+
+  it('names the district and the road, and colours the building that hosts a class', () => {
+    render([pin({})]);
+    const names = [...container.querySelectorAll('.campusmap__districtname')].map((n) => n.textContent);
+    expect(names).toEqual(['Revelle']);
+    const road = container.querySelector('.campusmap__roadname textPath');
+    expect(road?.textContent).toBe('Gilman Dr');
+    // York Hall has a footprint in this fixture and a class in it → a host path.
+    expect(container.querySelectorAll('.campusmap__host')).toHaveLength(1);
+    render([pin({ building: 'Center Hall', coords: { lat: 32.8779, lng: -117.2415 } })]);
+    expect(container.querySelectorAll('.campusmap__host')).toHaveLength(0);
+  });
+
+  it('draws only the markers the current view can show', () => {
+    // Zoomed 8× onto the far corner of the canvas: York Hall scrolls off.
+    const far: Viewport = { scale: HOME.scale * 8, offsetX: HOME.offsetX * 8 + 5000, offsetY: HOME.offsetY * 8 - 5000 };
+    render([pin({})], vi.fn(), { view: far });
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
+  });
+
+  it('zooms around the wheel position and pans on drag, without deselecting', () => {
+    const onViewChange = vi.fn();
+    const onSelect = render([pin({})], vi.fn(), { onViewChange, selectedKey: '32.87450,-117.24050' });
+    const svg = container.querySelector('svg')!;
+    // jsdom has no layout: give the svg a real box so pointer→svg maths works.
+    svg.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
+
+    act(() => {
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 400, clientY: 300, bubbles: true, cancelable: true }));
+    });
+    expect(onViewChange).toHaveBeenCalledTimes(1);
+    const zoomed = onViewChange.mock.calls[0]![0] as Viewport;
+    expect(zoomed.scale).toBeGreaterThan(HOME.scale);
+
+    // jsdom has neither PointerEvent nor pointer capture.
+    class PE extends MouseEvent {
+      pointerId: number;
+      constructor(type: string, init: MouseEventInit & { pointerId?: number }) {
+        super(type, init);
+        this.pointerId = init.pointerId ?? 0;
+      }
+    }
+    (globalThis as unknown as { PointerEvent: typeof PE }).PointerEvent = PE;
+    svg.setPointerCapture = () => {};
+    const pd = (x: number, y: number) =>
+      new PointerEvent('pointerdown', { pointerId: 1, clientX: x, clientY: y, button: 0, bubbles: true });
+    const pm = (x: number, y: number) =>
+      new PointerEvent('pointermove', { pointerId: 1, clientX: x, clientY: y, bubbles: true });
+    const pu = (x: number, y: number) =>
+      new PointerEvent('pointerup', { pointerId: 1, clientX: x, clientY: y, bubbles: true });
+    act(() => {
+      svg.dispatchEvent(pd(100, 100));
+      svg.dispatchEvent(pm(130, 110));
+      svg.dispatchEvent(pu(130, 110));
+      svg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    // The drag compounds on the zoomed view (the canvas tracks its last commit,
+    // not just the prop, so ticks in one frame don't overwrite each other).
+    const panned = onViewChange.mock.calls.at(-1)![0] as Viewport;
+    expect(panned.scale).toBe(zoomed.scale);
+    expect(panned.offsetX).toBeCloseTo(zoomed.offsetX + 30);
+    expect(panned.offsetY).toBeCloseTo(zoomed.offsetY + 10);
+    // The click the browser fires after a drag must not close the open marker…
+    expect(onSelect).not.toHaveBeenCalled();
+    // …but a plain click on the background still does.
+    act(() => {
+      svg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelect).toHaveBeenCalledWith(null);
+  });
+
+  it('a wheel event on the map is consumed rather than scrolling the overlay', () => {
+    render([pin({})]);
+    const svg = container.querySelector('svg')!;
+    const e = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true });
+    act(() => {
+      svg.dispatchEvent(e);
+    });
+    expect(e.defaultPrevented).toBe(true);
   });
 
   it('draws one marker for two classes in the same building', () => {

@@ -5,9 +5,11 @@ import {
   campusViewport,
   coreDistricts,
   decodeRing,
+  decodeLines,
   decodeShapes,
   loadCampusGeo,
   type CampusGeo,
+  type WireLine,
   type WireShape,
 } from './campus-geo';
 import { project, toScreen } from './map-projection';
@@ -118,6 +120,7 @@ describe('academic-core framing', () => {
     const renamed: CampusGeo = {
       footprints: [],
       districts: [{ name: 'Some Future Name', rings: [[-117.24, 32.87, -117.23, 32.88]] }],
+      lines: [],
     };
     expect(coreDistricts(renamed).map((d) => d.name)).toEqual(['Some Future Name']);
   });
@@ -150,5 +153,58 @@ describe('academic-core framing', () => {
     const v = campusViewport(geo, 1100, 760);
     const hillcrest = toScreen(project(-117.166, 32.755), v);
     expect(hillcrest.x > 1100 || hillcrest.y > 760).toBe(true);
+  });
+});
+
+describe('decodeLines', () => {
+  it('keeps name and kind and decodes the delta-encoded points', () => {
+    const wire: WireLine[] = [
+      ['Gilman Drive', 'major', [-11723700, 3288100, 10, -5, 10, -5]],
+      ['', 'coast', [-11725500, 3287000, 0, -100]],
+    ];
+    const out = decodeLines(wire);
+    expect(out[0]).toEqual({
+      name: 'Gilman Drive',
+      kind: 'major',
+      pts: [-117.237, 32.881, -117.2369, 32.88095, -117.2368, 32.8809],
+    });
+    expect(out[1]!.kind).toBe('coast');
+    expect(out[1]!.pts).toEqual([-117.255, 32.87, -117.255, 32.869]);
+  });
+});
+
+describe('bundled orientation lines', () => {
+  it('carries the roads and walkways students steer by, and one coastline', async () => {
+    const geo = await loadCampusGeo();
+    const names = new Set(geo.lines.map((l) => l.name));
+    for (const must of [
+      'North Torrey Pines Road',
+      'Gilman Drive',
+      'La Jolla Village Drive',
+      'Voigt Drive',
+      'Ridge Walk',
+      'Library Walk',
+    ]) {
+      expect(names.has(must), must).toBe(true);
+    }
+    const coast = geo.lines.filter((l) => l.kind === 'coast');
+    expect(coast).toHaveLength(1);
+    // The chain has to outspan the framed core north–south, or the ocean fill
+    // would stop short of the canvas edge.
+    const lats = coast[0]!.pts.filter((_, i) => i % 2 === 1);
+    expect(Math.min(...lats)).toBeLessThan(32.87);
+    expect(Math.max(...lats)).toBeGreaterThan(32.892);
+    // Every kind the renderer styles is present, and nothing it doesn't know.
+    const kinds = new Set(geo.lines.map((l) => l.kind));
+    expect([...kinds].sort()).toEqual(['coast', 'hwy', 'major', 'minor', 'walk']);
+    for (const l of geo.lines) {
+      expect(l.pts.length).toBeGreaterThanOrEqual(4);
+      for (let i = 0; i + 1 < l.pts.length; i += 2) {
+        expect(l.pts[i]).toBeGreaterThan(-117.30);
+        expect(l.pts[i]).toBeLessThan(-117.20);
+        expect(l.pts[i + 1]).toBeGreaterThan(32.84);
+        expect(l.pts[i + 1]).toBeLessThan(32.92);
+      }
+    }
   });
 });

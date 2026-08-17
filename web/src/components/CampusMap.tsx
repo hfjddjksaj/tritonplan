@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { PlanState } from '@triton/shared';
-import { loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
+import { campusViewport, loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
+import { zoomLevel, zoomView, type Viewport } from '../lib/map-projection';
 import { defaultSliceId, meetingPins, slicesFor } from '../lib/map-pins';
 import { groupPins, splitByViewport, unplacedPins } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
 import { pluralize, todayWeekday } from '../lib/format';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { CampusMapCanvas } from './CampusMapCanvas';
+import { CampusMapCanvas, MAX_ZOOM, MIN_ZOOM } from './CampusMapCanvas';
 import { BuildingPopover } from './BuildingPopover';
-import { X } from './icons';
+import { Minus, Plus, X } from './icons';
 
 interface Props {
   /** The plan on screen — yours, or a received one. */
@@ -52,6 +53,26 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
   );
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
+
+  // The fitted frame is the anchor for zoom limits and the ⟲ button; `view` is
+  // what the canvas actually draws through and what wheel/drag/pinch move.
+  const homeView = useMemo(
+    () => (geo ? campusViewport(geo, canvas.w, canvas.h) : null),
+    [geo, canvas.w, canvas.h],
+  );
+  const [view, setView] = useState<Viewport | null>(null);
+  const shownView = view ?? homeView;
+  // A canvas-size change (rotating a phone, resizing past the breakpoint) refits.
+  useEffect(() => {
+    setView(null);
+  }, [canvas.w, canvas.h]);
+  const zoomBy = (factor: number) => {
+    if (!shownView || !homeView) return;
+    const level = zoomLevel(shownView, homeView);
+    const f = Math.max(MIN_ZOOM / level, Math.min(MAX_ZOOM / level, factor));
+    setView(zoomView(shownView, f, { x: canvas.w / 2, y: canvas.h / 2 }));
+  };
+  const atHome = view === null;
 
   // BuildingPopover registers its own Escape handler while `mapLoc` is set; without this
   // guard both fire on one keypress and the user is bounced out of the whole map when all
@@ -170,32 +191,58 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
       )}
 
       <div className="campusmap__stage">
-        {geo === null ? (
+        {geo === null || !shownView || !homeView ? (
           <div className="campusmap__loading">Loading campus…</div>
-        ) : bookedOnlyHidesEverything ? (
-          <div className="campusmap__empty">
-            Booked only is on and nothing here is booked yet. Turn it off to see every course
-            in your plan.
-          </div>
-        ) : onCanvas.length === 0 && unplaced.length > 0 ? (
-          <div className="campusmap__empty">
-            Nothing here lands on the mapped part of campus — the list below has where these
-            classes actually meet.
-          </div>
-        ) : onCanvas.length === 0 ? (
-          <div className="campusmap__empty">
-            No class locations to place yet. Add courses with scheduled meetings, and they’ll
-            appear here.
-          </div>
         ) : (
-          <CampusMapCanvas
-            geo={geo}
-            pins={shown}
-            width={canvas.w}
-            height={canvas.h}
-            selectedKey={openKey}
-            onSelect={setOpenKey}
-          />
+          <div className="campusmap__frame" style={{ maxWidth: canvas.w }}>
+            <CampusMapCanvas
+              geo={geo}
+              pins={shown}
+              width={canvas.w}
+              height={canvas.h}
+              view={shownView}
+              homeView={homeView}
+              onViewChange={setView}
+              selectedKey={openKey}
+              onSelect={setOpenKey}
+            />
+            <div className="campusmap__zoom" role="group" aria-label="Zoom">
+              <button type="button" className="campusmap__zoombtn" onClick={() => zoomBy(1.6)} aria-label="Zoom in">
+                <Plus size={14} />
+              </button>
+              <button type="button" className="campusmap__zoombtn" onClick={() => zoomBy(1 / 1.6)} aria-label="Zoom out">
+                <Minus size={14} />
+              </button>
+              <button
+                type="button"
+                className="campusmap__zoombtn campusmap__zoombtn--home"
+                onClick={() => setView(null)}
+                disabled={atHome}
+                aria-label="Reset view"
+                title="Reset view"
+              >
+                ⟲
+              </button>
+            </div>
+            {/* The empty-state copy floats over the basemap: a map with no pins is
+                still a map, and a blank panel taught nothing about where campus is. */}
+            {bookedOnlyHidesEverything ? (
+              <div className="campusmap__empty">
+                Booked only is on and nothing here is booked yet. Turn it off to see every course
+                in your plan.
+              </div>
+            ) : onCanvas.length === 0 && unplaced.length > 0 ? (
+              <div className="campusmap__empty">
+                Nothing here lands on the mapped part of campus — the list below has where these
+                classes actually meet.
+              </div>
+            ) : onCanvas.length === 0 ? (
+              <div className="campusmap__empty">
+                No class locations to place yet. Add courses with scheduled meetings, and they’ll
+                appear here.
+              </div>
+            ) : null}
+          </div>
         )}
       </div>
 

@@ -63,3 +63,43 @@ export function fitBounds(pts: Point[], w: number, h: number, padding: number): 
 export function toScreen(p: Point, v: Viewport): Point {
   return { x: p.x * v.scale + v.offsetX, y: v.offsetY - p.y * v.scale };
 }
+
+/* ------------------------------------------------------------- pan & zoom */
+
+/** Screen → world; the inverse of toScreen. */
+export function fromScreen(p: Point, v: Viewport): Point {
+  return { x: (p.x - v.offsetX) / v.scale, y: (v.offsetY - p.y) / v.scale };
+}
+
+/** Slide the view by a screen-space delta (drag right ⇒ map moves right). */
+export function panView(v: Viewport, dx: number, dy: number): Viewport {
+  return { scale: v.scale, offsetX: v.offsetX + dx, offsetY: v.offsetY + dy };
+}
+
+/**
+ * Multiply the scale by `factor`, keeping the world point under `anchor`
+ * (screen px — the cursor, or the pinch midpoint) exactly where it is.
+ */
+export function zoomView(v: Viewport, factor: number, anchor: Point): Viewport {
+  const scale = v.scale * factor;
+  return {
+    scale,
+    offsetX: anchor.x - (anchor.x - v.offsetX) * factor,
+    offsetY: anchor.y - (anchor.y - v.offsetY) * factor,
+  };
+}
+
+/** How far `v` is zoomed relative to `home` (1 = the fitted frame). */
+export function zoomLevel(v: Viewport, home: Viewport): number {
+  return v.scale / home.scale;
+}
+
+/**
+ * Metres per screen pixel at latitude `lat`, for the scale bar. World x is
+ * longitude in radians, so one world unit spans R·cos(lat) metres on the
+ * ground; the viewport puts `scale` pixels on one world unit.
+ */
+export function metresPerPixel(v: Viewport, lat: number): number {
+  const R = 6378137;
+  return (R * Math.cos((lat * Math.PI) / 180)) / v.scale;
+}

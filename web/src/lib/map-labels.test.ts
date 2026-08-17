@@ -69,6 +69,7 @@ const geo: CampusGeo = {
   districts: [
     { name: 'Revelle', rings: [[-117.243, 32.872, -117.238, 32.872, -117.238, 32.877]] },
   ],
+  lines: [],
 };
 
 /** UCSD Health's Hillcrest campus — real, in the point data, 13 km off this map. */
@@ -153,5 +154,18 @@ describe('placeLabels', () => {
       { key: 'e', x: 18, y: 14, w: 40, h: 16 },
     ]);
     expect(placed.map((p) => p.key)).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+});
+
+describe('placeLabels near the canvas edge', () => {
+  it('puts the chip on the side that stays on the canvas', () => {
+    // A marker 5 px from the left edge: 'left' would start at x < 0.
+    const [p] = placeLabels([{ key: 'a', x: 5, y: 100, w: 60, h: 16 }], { w: 400, h: 300 });
+    expect(p!.side).toBe('right');
+    // A marker 5 px from the right edge: 'right' overflows, so 'left' wins.
+    const [q] = placeLabels([{ key: 'b', x: 395, y: 100, w: 60, h: 16 }], { w: 400, h: 300 });
+    expect(q!.side).toBe('left');
+    // Without bounds, the old behaviour: right first, always.
+    expect(placeLabels([{ key: 'b', x: 395, y: 100, w: 60, h: 16 }])[0]!.side).toBe('right');
   });
 });

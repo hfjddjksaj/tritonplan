@@ -2552,22 +2552,59 @@ button.termsw__cell:hover {
   display: flex;
   justify-content: center;
 }
+/* The frame is the positioning context for the zoom buttons and the floating
+   empty-state card; it never grows past the canvas's intrinsic width. */
+.campusmap__frame {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
 /* min-width: 0 lets the SVG shrink inside the flex stage, which would otherwise
-   hold it at its intrinsic width and ignore max-width. */
+   hold it at its intrinsic width and ignore max-width. touch-action: none hands
+   every touch to the map (drag pans, pinch zooms) instead of the page. */
 .campusmap__svg {
+  display: block;
   max-width: 100%;
   height: auto;
   min-width: 0;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.campusmap__district {
-  fill: var(--surface-2);
-  stroke: var(--line);
+.campusmap__svg:active {
+  cursor: grabbing;
+}
+
+/* --- basemap palette: cool paper, so the coloured chips carry the eye ------ */
+.campusmap__land {
+  fill: #f3f5f8;
+}
+.campusmap__ocean {
+  fill: #cfe1f1;
+  stroke: #a9c3dc;
   stroke-width: 1;
 }
+/* fill comes per-district from districtTint() as a presentation attribute */
+.campusmap__district {
+  stroke: #ffffff;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
 .campusmap__footprint {
-  fill: #d6dce6;
-  stroke: #a8b3c4;
+  fill: #d8dee8;
+  stroke: #b3bdcd;
   stroke-width: 0.6;
+  stroke-linejoin: round;
+}
+/* a building with a class in it: fill/stroke are the course's colours (attrs) */
+.campusmap__host {
+  stroke-width: 1;
+  stroke-linejoin: round;
 }
 .campusmap__marker {
   cursor: pointer;
@@ -2575,6 +2612,137 @@ button.termsw__cell:hover {
 .campusmap__chiptext {
   font-size: 10px;
   font-weight: 700;
+}
+.campusmap__chip-shadow {
+  fill: rgba(11, 31, 58, 0.14);
+}
+
+/* --- names on the basemap: haloed so they survive any background ---------- */
+.campusmap__roadname,
+.campusmap__districtname,
+.campusmap__landmark,
+.campusmap__bldgname,
+.campusmap__compass-label,
+.campusmap__scale-text,
+.campusmap__attrib {
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.campusmap__roadname {
+  font-size: 9.5px;
+  font-weight: 500;
+  fill: #5a6b83;
+  letter-spacing: 0.02em;
+}
+.campusmap__roadname--hwy {
+  font-weight: 700;
+  fill: #7a5300;
+}
+.campusmap__roadname--major {
+  font-weight: 600;
+  fill: #46556c;
+}
+.campusmap__roadname--walk {
+  font-style: italic;
+  fill: #6b7a90;
+}
+.campusmap__districtname {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  fill: #7b889b;
+  stroke-width: 3.5px;
+}
+.campusmap__landmark {
+  font-size: 9.5px;
+  font-weight: 600;
+  fill: #3f4c61;
+}
+.campusmap__bldgname {
+  font-size: 8.5px;
+  font-weight: 500;
+  fill: #55627a;
+  stroke-width: 2.5px;
+}
+.campusmap__compass-disc {
+  fill: #ffffff;
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.campusmap__compass-n {
+  fill: var(--ink);
+}
+.campusmap__compass-n2 {
+  fill: #8f9bb0;
+}
+.campusmap__compass-label {
+  font-size: 9px;
+  font-weight: 800;
+  fill: var(--ink);
+}
+.campusmap__scale-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.campusmap__scale-text {
+  font-size: 9px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+.campusmap__attrib {
+  font-size: 8px;
+  fill: var(--text-faint);
+}
+
+/* --- zoom controls + floating empty state --------------------------------- */
+.campusmap__zoom {
+  position: absolute;
+  right: 10px;
+  bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.campusmap__zoombtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink);
+  background: #ffffff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+.campusmap__zoombtn:hover {
+  background: var(--surface-2);
+}
+.campusmap__zoombtn:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+.campusmap__frame .campusmap__empty {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  max-width: min(420px, calc(100% - 24px));
+  padding: 8px 12px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
 }
 .campusmap__detail,
 .campusmap__unlocated {

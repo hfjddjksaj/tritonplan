@@ -169,16 +169,21 @@ const SIDES: LabelSide[] = ['right', 'left', 'above', 'below'];
 /**
  * Greedy placement in input order: try right, then left, above, below; if every
  * side collides, keep 'right' — an overlapping label still beats a missing one.
+ * With `bounds` (canvas width/height), a side that would push the chip off the
+ * canvas counts as a collision too, so a marker hugging the left edge gets its
+ * chip on the right rather than half-clipped.
  */
-export function placeLabels(anchors: LabelAnchor[]): PlacedLabel[] {
+export function placeLabels(anchors: LabelAnchor[], bounds?: { w: number; h: number }): PlacedLabel[] {
   const taken: { x: number; y: number; w: number; h: number }[] = [];
   const out: PlacedLabel[] = [];
+  const offCanvas = (b: { x: number; y: number; w: number; h: number }) =>
+    bounds !== undefined && (b.x < 0 || b.y < 0 || b.x + b.w > bounds.w || b.y + b.h > bounds.h);
   for (const a of anchors) {
     let chosen: PlacedLabel | null = null;
     for (const side of SIDES) {
       const pos = boxFor(a, side);
       const box = { ...pos, w: a.w, h: a.h };
-      if (taken.some((t) => overlaps(box, t))) continue;
+      if (offCanvas(box) || taken.some((t) => overlaps(box, t))) continue;
       taken.push(box);
       chosen = { key: a.key, ...pos, side };
       break;

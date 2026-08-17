@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { project, fitBounds, toScreen } from './map-projection';
+import {
+  fitBounds,
+  fromScreen,
+  metresPerPixel,
+  panView,
+  project,
+  toScreen,
+  zoomLevel,
+  zoomView,
+  type Viewport,
+} from './map-projection';
 
 describe('project', () => {
   it('maps longitude linearly and puts the equator at y = 0', () => {
@@ -60,5 +70,46 @@ describe('fitBounds + toScreen', () => {
   it('centres rather than crashing on no points at all', () => {
     const v = fitBounds([], 800, 600, 20);
     expect(Number.isFinite(v.scale)).toBe(true);
+  });
+});
+
+describe('pan & zoom', () => {
+  const home: Viewport = { scale: 1000, offsetX: 400, offsetY: 300 };
+
+  it('fromScreen inverts toScreen', () => {
+    const w = { x: 0.1234, y: 0.5678 };
+    const back = fromScreen(toScreen(w, home), home);
+    expect(back.x).toBeCloseTo(w.x, 9);
+    expect(back.y).toBeCloseTo(w.y, 9);
+  });
+
+  it('panView moves every point by the screen delta', () => {
+    const w = { x: 0.1, y: 0.2 };
+    const before = toScreen(w, home);
+    const after = toScreen(w, panView(home, 25, -10));
+    expect(after.x - before.x).toBeCloseTo(25);
+    expect(after.y - before.y).toBeCloseTo(-10);
+  });
+
+  it('zoomView keeps the anchor point fixed on screen', () => {
+    const anchor = { x: 123, y: 456 };
+    const under = fromScreen(anchor, home);
+    const zoomed = zoomView(home, 2.5, anchor);
+    const p = toScreen(under, zoomed);
+    expect(p.x).toBeCloseTo(anchor.x, 6);
+    expect(p.y).toBeCloseTo(anchor.y, 6);
+    expect(zoomLevel(zoomed, home)).toBeCloseTo(2.5);
+  });
+
+  it('zoomView by 1 is the identity', () => {
+    expect(zoomView(home, 1, { x: 9, y: 9 })).toEqual(home);
+  });
+
+  it('metresPerPixel shrinks as the map zooms in', () => {
+    const near = metresPerPixel(zoomView(home, 2, { x: 0, y: 0 }), 32.88);
+    expect(near).toBeCloseTo(metresPerPixel(home, 32.88) / 2);
+    // Sanity: 1000 px per radian of longitude at 32.88°N ≈ 5.36 km per pixel.
+    expect(metresPerPixel(home, 32.88)).toBeGreaterThan(5000);
+    expect(metresPerPixel(home, 32.88)).toBeLessThan(5500);
   });
 });

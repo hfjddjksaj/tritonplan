@@ -1,10 +1,11 @@
 /**
- * Bundled UCSD campus geometry — building footprints and named districts, used
- * as the basemap under the campus map's pins.
+ * Bundled UCSD campus geometry — building footprints and named districts from
+ * UCSD's public ArcGIS layers, plus roads, named walkways and the coastline
+ * from OpenStreetMap — used as the basemap under the campus map's pins.
  *
- * Generated at dev time by `npm run fetch:buildings -w @triton/web` from UCSD's
- * public ArcGIS layers. The page NEVER fetches this at runtime; it is bundled
- * and pulled in by a dynamic import so it stays out of the first-paint chunk.
+ * Generated at dev time by `npm run fetch:buildings -w @triton/web`. The page
+ * NEVER fetches this at runtime; it is bundled and pulled in by a dynamic
+ * import so it stays out of the first-paint chunk.
  *
  * Wire format keeps the file small enough to bundle: coordinates are integers
  * at 1e5 scale (~1.1 m, well under a pixel at display scale) and delta-encoded
@@ -19,13 +20,32 @@ export interface CampusShape {
   rings: number[][];
 }
 
+/**
+ * How a line is drawn. `coast` is the Pacific shoreline (one chain, closed
+ * westward into the ocean fill); the rest are OpenStreetMap highway classes
+ * collapsed to the four weights the renderer distinguishes.
+ */
+export type LineKind = 'coast' | 'hwy' | 'major' | 'minor' | 'walk';
+
+/** One drawable polyline: a road, a named walkway, or the coastline. */
+export interface CampusLine {
+  /** OSM name; empty for unnamed motorway pieces and the coast. */
+  name: string;
+  kind: LineKind;
+  /** Flat [lon, lat, lon, lat, …] degree pairs. */
+  pts: number[];
+}
+
 export interface CampusGeo {
   footprints: CampusShape[];
   districts: CampusShape[];
+  lines: CampusLine[];
 }
 
 /** `[name, [ring, …]]`; ring = `[x0, y0, dx, dy, …]` integers at SCALE. */
 export type WireShape = [string, number[][]];
+/** `[name, kind, [x0, y0, dx, dy, …]]` — same integer/delta scheme as a ring. */
+export type WireLine = [string, LineKind, number[]];
 
 const SCALE = 1e5;
 
@@ -46,9 +66,15 @@ export function decodeShapes(wire: WireShape[]): CampusShape[] {
   return wire.map(([name, rings]) => ({ name, rings: rings.map(decodeRing) }));
 }
 
+export function decodeLines(wire: WireLine[]): CampusLine[] {
+  return wire.map(([name, kind, pts]) => ({ name, kind, pts: decodeRing(pts) }));
+}
+
 interface RawCampusGeo {
   footprints: WireShape[];
   districts: WireShape[];
+  /** Absent in the pre-roads data file; decoded as an empty layer. */
+  lines?: WireLine[];
 }
 
 let cached: Promise<CampusGeo> | null = null;
@@ -66,6 +92,7 @@ export function loadCampusGeo(): Promise<CampusGeo> {
     return {
       footprints: decodeShapes(raw.footprints),
       districts: decodeShapes(raw.districts),
+      lines: decodeLines(raw.lines ?? []),
     };
   });
   return cached;
