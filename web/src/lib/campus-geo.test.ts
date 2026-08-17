@@ -3,11 +3,15 @@ import {
   ACADEMIC_CORE_DISTRICTS,
   campusPadding,
   campusViewport,
+  coreBounds,
   coreDistricts,
+  decodeGround,
   decodeRing,
   decodeLines,
   decodeShapes,
+  decodeTrees,
   loadCampusGeo,
+  loadCampusMap,
   type CampusGeo,
   type WireLine,
   type WireShape,
@@ -206,5 +210,62 @@ describe('bundled orientation lines', () => {
         expect(l.pts[i + 1]).toBeLessThan(32.92);
       }
     }
+  });
+});
+
+describe('decodeShapes with heights', () => {
+  it('carries an optional third element as height in metres', () => {
+    const shapes = decodeShapes([['A', [[0, 0, 100, 0]], 27], ['B', [[0, 0, 100, 0]]]]);
+    expect(shapes[0]!.height).toBe(27);
+    expect(shapes[1]!.height).toBeUndefined();
+  });
+});
+
+describe('decodeGround / decodeTrees', () => {
+  it('maps a type index back to its name and decodes rings', () => {
+    const g = decodeGround(['Grass', 'Sidewalk'], [[1, [[-11723000, 3288000, 10, 0, 0, 10]]]]);
+    expect(g).toEqual([{ type: 'Sidewalk', rings: [[-117.23, 32.88, -117.2299, 32.88, -117.2299, 32.8801]] }]);
+  });
+  it('decodes delta-encoded tree triples, keeping the class raw', () => {
+    const t = decodeTrees([-11723000, 3288000, 2, 100, -50, 4]);
+    expect(t).toEqual([{ lon: -117.23, lat: 32.88, cls: 2 }, { lon: -117.229, lat: 32.8795, cls: 4 }]);
+  });
+});
+
+describe('bundled campus map data', () => {
+  it('has the official ground types, thousands of surfaces, trees, one boundary and land use', async () => {
+    const m = await loadCampusMap();
+    const types = new Set(m.ground.map((g) => g.type));
+    for (const t of ['Grass', 'Sidewalk', 'Walking Path', 'Planter', 'Parking Lot', 'Street', 'Building']) expect(types.has(t)).toBe(true);
+    expect(types.has('Curb')).toBe(false);
+    expect(m.ground.length).toBeGreaterThan(5000);
+    expect(m.trees.length).toBeGreaterThan(1500);
+    expect(m.trees.every((t) => t.cls >= 0 && t.cls <= 4)).toBe(true);
+    expect(m.boundary.length).toBeGreaterThanOrEqual(1);
+    expect(m.landuse.length).toBeGreaterThan(0);
+    // Everything sits on the La Jolla campus.
+    for (const g of m.ground.slice(0, 200)) for (const r of g.rings) for (let i = 0; i + 1 < r.length; i += 2) {
+      expect(r[i]).toBeGreaterThan(-117.27); expect(r[i]).toBeLessThan(-117.19);
+      expect(r[i + 1]).toBeGreaterThan(32.86); expect(r[i + 1]).toBeLessThan(32.90);
+    }
+  });
+  it('gives the landmark buildings real heights', async () => {
+    const geo = await loadCampusGeo();
+    const h = (n: string) => geo.footprints.find((f) => f.name === n)?.height;
+    expect(h('Geisel Library')).toBeGreaterThanOrEqual(25);
+    expect(h('Geisel Library')).toBeLessThanOrEqual(45);
+    expect(h('Tioga Hall')).toBeGreaterThanOrEqual(30);
+    expect(geo.footprints.filter((f) => f.height !== undefined).length).toBeGreaterThan(350);
+  });
+  it('memoizes', async () => { expect(await loadCampusMap()).toBe(await loadCampusMap()); });
+});
+
+describe('coreBounds', () => {
+  it('is the bbox of the academic core, west-south to east-north', async () => {
+    const geo = await loadCampusGeo();
+    const [[w, s], [e, n]] = coreBounds(geo);
+    expect(w).toBeLessThan(e); expect(s).toBeLessThan(n);
+    expect(w).toBeGreaterThan(-117.25); expect(e).toBeLessThan(-117.22);
+    expect(s).toBeGreaterThan(32.87); expect(n).toBeLessThan(32.895);
   });
 });
