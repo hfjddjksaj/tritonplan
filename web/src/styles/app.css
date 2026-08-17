@@ -2471,21 +2471,31 @@ button.termsw__cell:hover {
 
 /* =============================== campus map (full-page overlay) */
 .campusmap {
+  /* The map IS the page: the stage fills this box edge to edge and every
+     control floats over it. --map-inset is the measured header height, set
+     inline by CampusMap, so the floating pieces can start below the header. */
+  --map-inset: 52px;
   position: fixed;
   inset: 0;
   z-index: 95;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 18px 18px;
-  overflow: auto;
+  overflow: hidden;
   background: var(--surface);
 }
 .campusmap__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
+  padding: 9px 14px;
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
 }
 .campusmap__title {
   display: flex;
@@ -2548,29 +2558,56 @@ button.termsw__cell:hover {
   line-height: 1.6;
   color: var(--text-muted);
 }
-.campusmap__stage {
+.campusmap__hint {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--map-inset) + 10px);
+  left: 12px;
   display: flex;
-  justify-content: center;
-}
-/* The frame is the positioning context for the zoom buttons and the floating
-   empty-state card; it never grows past the canvas's intrinsic width. */
-.campusmap__frame {
-  position: relative;
-  width: 100%;
-  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  /* Leaves the compass (top-right, under the header) uncovered on a phone. */
+  max-width: min(520px, calc(100% - 68px));
+  padding: 6px 6px 6px 10px;
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  overflow: hidden;
+  border-radius: var(--r-sm);
   box-shadow: var(--shadow-sm);
 }
-/* min-width: 0 lets the SVG shrink inside the flex stage, which would otherwise
-   hold it at its intrinsic width and ignore max-width. touch-action: none hands
-   every touch to the map (drag pans, pinch zooms) instead of the page. */
+.campusmap__hint-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.campusmap__hint-close:hover {
+  background: var(--surface-2);
+}
+/* The stage is the positioning context for everything that floats over the map. */
+.campusmap__stage {
+  position: absolute;
+  inset: 0;
+}
+.campusmap__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+/* touch-action: none hands every touch to the map (drag pans, pinch zooms)
+   instead of the page. The svg's width/height attributes equal the stage's box,
+   so it renders at exactly 1:1. */
 .campusmap__svg {
   display: block;
-  max-width: 100%;
-  height: auto;
-  min-width: 0;
+  width: 100%;
+  height: 100%;
   touch-action: none;
   cursor: grab;
   user-select: none;
@@ -2730,11 +2767,12 @@ button.termsw__cell:hover {
   color: var(--text-faint);
   cursor: default;
 }
-.campusmap__frame .campusmap__empty {
+.campusmap__empty {
   position: absolute;
+  z-index: 2;
   left: 50%;
-  top: 14px;
-  transform: translateX(-50%);
+  top: calc(var(--map-inset) + (100% - var(--map-inset)) / 2);
+  transform: translate(-50%, -50%);
   max-width: min(420px, calc(100% - 24px));
   padding: 8px 12px;
   color: var(--ink);
@@ -2744,31 +2782,122 @@ button.termsw__cell:hover {
   box-shadow: var(--shadow-sm);
   text-align: center;
 }
-.campusmap__detail,
+/* --- "not on the map": a pill bottom-left that opens upward into the list --- */
 .campusmap__unlocated {
-  padding: 10px 12px;
+  position: absolute;
+  z-index: 2;
+  left: 10px;
+  bottom: 34px;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: min(440px, calc(100% - 20px));
+}
+.campusmap__unlocated-toggle {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+.campusmap__unlocated-toggle:hover {
+  background: var(--surface-2);
+}
+.campusmap__unlocated-list {
+  margin: 0;
+  padding: 8px 12px 8px 26px;
+  max-height: 40vh;
+  overflow: auto;
   font-size: 12px;
   line-height: 1.7;
-  background: var(--surface-2);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
+  box-shadow: var(--shadow-md);
 }
-.campusmap__detail-name {
+
+/* --- marker card: the open marker's chip, grown into a card --------------- */
+.campusmap__card {
+  position: absolute;
+  z-index: 4;
+  min-width: 150px;
+  max-width: 300px;
+  padding: 8px 12px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.97);
+  border: 1.5px solid;
+  border-radius: var(--r-md);
+  box-shadow: 0 6px 20px rgba(11, 31, 58, 0.18);
+}
+.campusmap__card-section + .campusmap__card-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.campusmap__card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+.campusmap__card-code {
+  font-size: 13px;
   font-weight: 800;
+  white-space: nowrap;
+}
+.campusmap__card-dir {
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.campusmap__card-dir:hover {
   color: var(--ink);
 }
-.campusmap__detail-list,
-.campusmap__unlocated ul {
-  margin: 4px 0 8px;
-  padding-left: 16px;
+.campusmap__card-rows {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.campusmap__card-rows li {
+  padding: 1px 0;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text);
 }
 
 @media (max-width: 760px) {
-  .campusmap {
-    padding: 10px 12px 14px;
-  }
   .campusmap__bar {
     gap: 8px;
+    padding: 8px 10px;
+  }
+  /* Two rows: title / toggle / ✕ first, then the day tabs scrolling sideways. */
+  .campusmap__slices {
+    order: 10;
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .campusmap__slices::-webkit-scrollbar {
+    display: none;
+  }
+  .campusmap__card {
+    max-width: calc(100vw - 24px);
   }
 }
 

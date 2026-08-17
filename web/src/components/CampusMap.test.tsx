@@ -191,7 +191,7 @@ describe('CampusMap', () => {
     expect(container.querySelector('.campusmap__empty')).not.toBeNull();
   });
 
-  it('a nested popover eats the first Escape; the map only closes on the second', async () => {
+  it('Escape peels one layer at a time: popover, then the marker card, then the map', async () => {
     // hasBookedData: false so the booked-only toggle can't hide the marker we need to click.
     const onClose = render({ plan: planWithMeeting(), hasBookedData: false });
     await settle();
@@ -201,6 +201,7 @@ describe('CampusMap', () => {
     act(() => {
       marker!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
 
     const directions = [...container.querySelectorAll('button')].find(
       (b) => b.textContent === 'Directions',
@@ -213,6 +214,13 @@ describe('CampusMap', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     expect(container.querySelector('.mappop')).toBeNull(); // popover closed
+    expect(container.querySelector('.campusmap__card')).not.toBeNull(); // card still open
+    expect(onClose).not.toHaveBeenCalled();
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(container.querySelector('.campusmap__card')).toBeNull(); // card closed
     expect(container.querySelector('.campusmap')).not.toBeNull(); // map still mounted
     expect(onClose).not.toHaveBeenCalled();
 
@@ -220,6 +228,70 @@ describe('CampusMap', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('grows the clicked marker into a card on the map, not a box under it', async () => {
+    const plan = planWithMeeting();
+    // A second component of the same course in the same building, and a second
+    // course there too: one card, two same-size headings, rooms only, no times.
+    const opt = plan.entries[0]!.course.options[0]!;
+    opt.components.push({
+      ...opt.components[0]!,
+      id: 'E-2',
+      type: 'DI',
+      typeText: 'Discussion',
+      sectionCode: 'A01',
+      meetings: [{ ...opt.components[0]!.meetings[0]!, days: ['Wed'], room: '212', location: 'Center Hall 212' }],
+    });
+    const other = courseWithMeeting();
+    other.id = 'MATH-20C|2026|2';
+    other.courseCode = 'MATH-20C';
+    other.options[0]!.components[0]!.meetings[0]!.room = '105';
+    plan.entries.push({ course: other, selectedOptionId: other.options[0]!.id, color: '12' });
+
+    render({ plan, hasBookedData: false });
+    await settle();
+    expect(container.querySelector('.campusmap__detail')).toBeNull();
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+
+    act(() => {
+      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const card = container.querySelector('.campusmap__card')!;
+    expect(card).not.toBeNull();
+    // The card stands in for the chip.
+    expect(container.querySelector('.campusmap__chip')).toBeNull();
+    const heads = [...card.querySelectorAll('.campusmap__card-code')].map((h) => h.textContent);
+    expect(heads).toEqual(['CSE-8A', 'MATH-20C']);
+    const rows = [...card.querySelectorAll('.campusmap__card-rows li')].map((li) => li.textContent);
+    expect(rows).toEqual(['LEC · Room 109', 'DIS · Room 212', 'LEC · Room 105']);
+    expect(card.textContent).not.toContain('11:00');
+    expect(card.querySelectorAll('.campusmap__card-dir')).toHaveLength(1);
+    expect(card.querySelector('.campusmap__card-dir')!.textContent).toBe('Directions');
+    // The card is positioned in canvas px, off the marker.
+    expect((card as HTMLElement).style.left).toMatch(/px$/);
+
+    // A click on the map background closes it.
+    act(() => {
+      container.querySelector('.campusmap__svg')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+    expect(container.querySelector('.campusmap__chip')).not.toBeNull();
+  });
+
+  it('floats the header over the map and lets the hint be dismissed', async () => {
+    render({ hasBookedData: false });
+    await settle();
+    // Header and stage are siblings; the header comes first for tab order.
+    const root = container.querySelector('.campusmap')!;
+    expect(root.children[0]!.classList.contains('campusmap__bar')).toBe(true);
+    expect(root.querySelector('.campusmap__stage')).not.toBeNull();
+    expect(root.querySelector('.campusmap__frame')).toBeNull();
+    const hint = container.querySelector('.campusmap__hint')!;
+    expect(hint.textContent).toContain('Booked Courses');
+    act(() => (hint.querySelector('.campusmap__hint-close') as HTMLButtonElement).click());
+    expect(container.querySelector('.campusmap__hint')).toBeNull();
   });
 
   it('explains a booked-only-hidden plan instead of claiming there is nothing to place', async () => {
@@ -259,15 +331,29 @@ describe('CampusMap', () => {
     await settle();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
     expect(container.querySelector('.campusmap__count')!.textContent).toBe('nothing to show');
+    // Collapsed to a pill over the map until asked for.
+    const pill = container.querySelector('.campusmap__unlocated-toggle') as HTMLButtonElement;
+    expect(pill.textContent).toContain('1 not on the map');
+    expect(container.querySelector('.campusmap__unlocated-list')).toBeNull();
+    act(() => pill.click());
     expect(container.textContent).toContain('304 Arbor Drive — outside the mapped area');
     expect(container.textContent).not.toContain('No class locations to place yet');
+    act(() => pill.click());
+    expect(container.querySelector('.campusmap__unlocated-list')).toBeNull();
   });
 
   it('says an online class is online rather than calling it unplaceable', async () => {
     render({ plan: planOnline(), hasBookedData: false });
     await settle();
+    act(() => (container.querySelector('.campusmap__unlocated-toggle') as HTMLButtonElement).click());
     expect(container.textContent).toContain('Live Online');
     expect(container.textContent).not.toContain('no location listed in TSS');
+  });
+
+  it('shows no pill at all when everything is on the map', async () => {
+    render({ plan: planWithMeeting(), hasBookedData: false });
+    await settle();
+    expect(container.querySelector('.campusmap__unlocated')).toBeNull();
   });
 
   it('does not blame booked-only when the only class was never locatable to begin with', async () => {

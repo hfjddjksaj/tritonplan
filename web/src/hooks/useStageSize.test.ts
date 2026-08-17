@@ -1,15 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { stageHeightFor } from './useStageSize';
+import { MIN_STAGE_H, MIN_STAGE_W, stageSizeFor } from './useStageSize';
 
-describe('stageHeightFor', () => {
-  it('gives a phone a portrait canvas that still fits the window', () => {
-    expect(stageHeightFor(358, 844)).toBe(555); // 358 × 1.55, under the 654 px of room
-    expect(stageHeightFor(358, 600)).toBe(420); // tiny window: floor wins
+describe('stageSizeFor', () => {
+  it('is the container box, edge to edge — the map is the page', () => {
+    expect(stageSizeFor(1440, 900)).toEqual({ w: 1440, h: 900 });
+    expect(stageSizeFor(390, 844)).toEqual({ w: 390, h: 844 });
   });
 
-  it('gives a desktop window as much height as it has, within the band', () => {
-    expect(stageHeightFor(1300, 900)).toBe(710);
-    expect(stageHeightFor(1300, 1400)).toBe(900); // capped
-    expect(stageHeightFor(1300, 500)).toBe(480); // floored
+  it('never goes below the smallest canvas the map can lay out', () => {
+    expect(stageSizeFor(200, 200)).toEqual({ w: MIN_STAGE_W, h: MIN_STAGE_H });
+  });
+
+  it('rounds fractional CSS pixels so the SVG renders at 1:1', () => {
+    expect(stageSizeFor(1023.6, 767.4)).toEqual({ w: 1024, h: 767 });
   });
 });

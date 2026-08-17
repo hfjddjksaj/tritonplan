@@ -102,7 +102,20 @@ describe('meetingPins', () => {
   it('keeps an unmatched building as a pin with null coords, never a guess', () => {
     const lab = meetingPins(planWith(courseWithMeetings()))[2]!;
     expect(lab.coords).toBeNull();
+    expect(lab.place).toBeUndefined();
     expect(lab.building).toBe('A Building That Does Not Exist');
+  });
+
+  it('carries the official building name next to the raw TSS text', () => {
+    // TSS caps the building field at 40 chars; the footprint layer and the
+    // popover key on the repaired name, not the truncated one.
+    const course = courseWithMeetings();
+    const m = course.options[0]!.components[0]!.meetings[0]!;
+    m.building = 'Computer Science and Engineering Buildin';
+    const lec = meetingPins(planWith(course))[0]!;
+    expect(lec.building).toBe('Computer Science and Engineering Buildin');
+    expect(lec.place).toBe('Computer Science and Engineering Building');
+    expect(lec.coords).not.toBeNull();
   });
 
   it('marks pins booked only for course ids in the booked set', () => {

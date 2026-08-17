@@ -98,7 +98,10 @@ coastline from OpenStreetMap (Overpass API; ODbL — the map draws the "© OpenS
 contributors" credit). All of it is fetched at dev time, simplified and delta-encoded, and
 bundled; the published page still issues no network requests. Rerun the script and commit
 when campus geometry changes. The map's naming/tinting rules (district → college names, which
-roads get labels, landmark list) live in `web/src/lib/map-basemap.ts`.
+roads get labels, landmark list) live in `web/src/lib/map-basemap.ts`; the marker card's content
+and placement in `web/src/lib/map-card.ts`. The map fills the viewport — header, hint, empty
+state, "not on the map" list, zoom buttons and the marker card all float over the SVG
+(`CampusMap.tsx`), and `useStageSize` / `useElementHeight` size the canvas around the header.
 
 ## Reference material
 

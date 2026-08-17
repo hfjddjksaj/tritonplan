@@ -6,16 +6,18 @@
  *
  * Pure geometry — no React, no DOM — so the fiddly part is unit-testable.
  */
-import { campusViewport, type CampusGeo } from './campus-geo';
 import { isOnlineModality, type MapPin } from './map-pins';
-import { project, toScreen } from './map-projection';
+import { project, toScreen, type Viewport } from './map-projection';
 
 export interface PinGroup {
   /** Stable identity: the rounded coordinate pair. */
   key: string;
   lat: number;
   lng: number;
+  /** Raw TSS building text of the first pin here. */
   building?: string;
+  /** Its matched official name — what footprints and the popover key on. */
+  place?: string;
   pins: MapPin[];
 }
 
@@ -35,6 +37,7 @@ export function groupPins(pins: MapPin[]): PinGroup[] {
       lat: p.coords.lat,
       lng: p.coords.lng,
       building: p.building,
+      place: p.place,
       pins: [p],
     });
   }
@@ -56,19 +59,18 @@ function inside(x: number, y: number, w: number, h: number): boolean {
 }
 
 /**
- * Split groups by whether the viewport can show them. The map frames the
- * academic core, so a class at Hillcrest, Scripps or the Preuss School projects
- * outside the canvas: drawing it there is the same as not drawing it, except
- * that it silently inflates the "N buildings" count. Callers draw `onCanvas`
- * and list `offCanvas`.
+ * Split groups by whether the given viewport can show them. The home frame is
+ * the academic core, so a class at Hillcrest, Scripps or the Preuss School
+ * projects outside the canvas: drawing it there is the same as not drawing it,
+ * except that it silently inflates the "N buildings" count. Callers draw
+ * `onCanvas` and list `offCanvas`.
  */
 export function splitByViewport(
   groups: PinGroup[],
-  geo: CampusGeo,
+  view: Viewport,
   w: number,
   h: number,
 ): { onCanvas: PinGroup[]; offCanvas: PinGroup[] } {
-  const view = campusViewport(geo, w, h);
   const onCanvas: PinGroup[] = [];
   const offCanvas: PinGroup[] = [];
   for (const g of groups) {
@@ -76,11 +78,6 @@ export function splitByViewport(
     (inside(p.x, p.y, w, h) ? onCanvas : offCanvas).push(g);
   }
   return { onCanvas, offCanvas };
-}
-
-/** Just the drawable half of splitByViewport, for the renderer. */
-export function onCanvasGroups(groups: PinGroup[], geo: CampusGeo, w: number, h: number): PinGroup[] {
-  return splitByViewport(groups, geo, w, h).onCanvas;
 }
 
 /** Why a class isn't a dot on the map. */

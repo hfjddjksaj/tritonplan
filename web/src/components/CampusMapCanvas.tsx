@@ -40,9 +40,13 @@ interface Props {
   /** The fitted "home" frame; zoom limits are relative to it. */
   homeView: Viewport;
   onViewChange: (v: Viewport) => void;
-  /** Group key of the expanded marker, or null. */
+  /** Group key of the expanded marker, or null. Its chip is not drawn — the card is. */
   selectedKey: string | null;
   onSelect: (key: string | null) => void;
+  /** Height of the floating header over the top of the canvas; furniture and names keep clear. */
+  insetTop?: number;
+  /** Extra boxes (the open marker card) that basemap names must not draw under. */
+  reserved?: readonly Box[];
 }
 
 /** Rough chip width per character — good enough for collision avoidance. */
@@ -79,6 +83,7 @@ const ROAD_STYLE: Record<
   walk: { width: 2.0, casing: 3.2, fill: '#fbfcfe', edge: '#d6dce7' },
 };
 const ROAD_ORDER: Exclude<LineKind, 'coast'>[] = ['walk', 'minor', 'major', 'hwy'];
+const EMPTY_BOXES: readonly Box[] = [];
 
 function ringPath(ring: number[], toPx: (p: Point) => Point, close: boolean): string {
   let d = '';
@@ -120,6 +125,8 @@ export function CampusMapCanvas({
   onViewChange,
   selectedKey,
   onSelect,
+  insetTop = 0,
+  reserved = EMPTY_BOXES,
 }: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const toPx = useMemo(() => (p: Point) => toScreen(p, view), [view]);
@@ -222,15 +229,19 @@ export function CampusMapCanvas({
       const l = labels.get(group.key);
       if (l) obstacles.push({ x: l.x, y: l.y, w: chipText(group.pins).length * CHAR_W + 10, h: CHIP_H });
     }
-    // Compass (top-right), scale bar (bottom-left), zoom buttons + attribution (bottom-right).
-    obstacles.push({ x: width - 60, y: 0, w: 60, h: 60 });
+    // The floating header, the open card, then the furniture: compass (top-right,
+    // under the header), scale bar (bottom-left), zoom buttons + attribution (bottom-right).
+    if (insetTop > 0) obstacles.push({ x: 0, y: 0, w: width, h: insetTop });
+    obstacles.push(...reserved);
+    obstacles.push({ x: width - 60, y: insetTop, w: 60, h: 60 });
     obstacles.push({ x: 0, y: height - 40, w: 180, h: 40 });
     obstacles.push({ x: width - 60, y: height - 130, w: 60, h: 130 });
     const roads = roadLabels(geo.lines, view, width, height, obstacles);
     for (const r of roads) obstacles.push(rotatedBox(r.x, r.y, r.w, r.h, r.angle));
     // A name has to fit on the canvas whole: "Y PINES" peeking in from the edge
     // is noise, and the district is still there when the user pans.
-    const fits = (p: Point, w: number) => p.x - w / 2 >= 4 && p.x + w / 2 <= width - 4 && p.y > 8 && p.y < height - 8;
+    const fits = (p: Point, w: number) =>
+      p.x - w / 2 >= 4 && p.x + w / 2 <= width - 4 && p.y > insetTop + 8 && p.y < height - 8;
     const districts = placeTexts(
       districtAnchors.flatMap((a) => {
         const p = toPx(project(a.lon, a.lat));
@@ -272,7 +283,7 @@ export function CampusMapCanvas({
       buildings = placeTexts(cands, obstacles, 1);
     }
     return { roads, districts, landmarks: landmarksPlaced, buildings };
-  }, [markers, labels, geo, view, districtAnchors, landmarks, buildingCands, level, toPx, width, height]);
+  }, [markers, labels, geo, view, districtAnchors, landmarks, buildingCands, level, toPx, width, height, insetTop, reserved]);
 
   /* ------------------------------------------------- wheel / drag / pinch */
 
@@ -407,7 +418,7 @@ export function CampusMapCanvas({
   const bar = scaleBar(metresPerPixel(view, centreLat));
   const compact = width < 500;
   const compassR = compact ? 13 : 16;
-  const compassC = { x: width - compassR - 12, y: compassR + 18 };
+  const compassC = { x: width - compassR - 12, y: insetTop + compassR + 18 };
 
   return (
     <svg
@@ -467,7 +478,8 @@ export function CampusMapCanvas({
       {/* Buildings that host a class take that class's colour, so the pin has a body. */}
       <g className="campusmap__hosts">
         {markers.map(({ group }) => {
-          const ds = group.building ? footprintsByName.get(group.building) : undefined;
+          const home = group.place ?? group.building;
+          const ds = home ? footprintsByName.get(home) : undefined;
           if (!ds) return null;
           const c = colorsForHue(group.pins[0]!.hue);
           return ds.map((d, i) => (
@@ -513,7 +525,8 @@ export function CampusMapCanvas({
         {markers.map(({ group, pt }) => {
           const c = colorsForHue(group.pins[0]!.hue);
           const booked = group.pins.some((p) => p.booked);
-          const label = labels.get(group.key);
+          // The open marker's chip is replaced by the card the shell draws over the svg.
+          const label = selectedKey === group.key ? undefined : labels.get(group.key);
           const text = chipText(group.pins);
           const chipW = text.length * CHAR_W + 10;
           return (
@@ -622,7 +635,8 @@ export function CampusMapCanvas({
 /** Spoken form of a marker: the chip is an abbreviation, this is the whole truth. */
 function markerLabel(g: PinGroup): string {
   const what = g.pins.map((p) => `${p.courseCode} ${p.label}`).join(', ');
-  return g.building ? `${g.building}: ${what}` : what;
+  const where = g.place ?? g.building;
+  return where ? `${where}: ${what}` : what;
 }
 
 /** "CSE-8A LEC" for one class here, "CSE-8A +2" when several share the building. */

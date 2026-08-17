@@ -40,6 +40,12 @@ export interface MapPin {
   when: PinWhen;
   /** Raw TSS building text, kept so the UI can show it when unmatched. */
   building?: string;
+  /**
+   * The matched building's official name (ArcGIS FacilityLongName), when
+   * `building` resolved — TSS truncates at 40 chars ("…Engineering Buildin"),
+   * so this, not `building`, is what footprints and popovers key on.
+   */
+  place?: string;
   room?: string;
   rawLocation?: string;
   /** null = no confident building match; shown in a list, never guessed onto the map. */
@@ -60,9 +66,9 @@ export function isOnlineModality(modality: string | undefined): boolean {
   return /online/i.test(modality ?? '');
 }
 
-function coordsFor(building: string | undefined): { lat: number; lng: number } | null {
+function located(building: string | undefined): Pick<MapPin, 'place' | 'coords'> {
   const hit = matchBuilding(building);
-  return hit ? { lat: hit.lat, lng: hit.lng } : null;
+  return hit ? { place: hit.name, coords: { lat: hit.lat, lng: hit.lng } } : { coords: null };
 }
 
 /** Weekly class meetings of every selected section. */
@@ -78,7 +84,7 @@ export function meetingPins(plan: PlanState, booked?: ReadonlySet<string>): MapP
     building: m.building,
     room: m.room,
     rawLocation: m.location,
-    coords: coordsFor(m.building),
+    ...located(m.building),
     booked: booked?.has(m.courseId) ?? false,
   }));
 }
@@ -107,7 +113,7 @@ function examPin(
     building: place.building,
     room: place.room,
     rawLocation: place.location,
-    coords: coordsFor(place.building),
+    ...located(place.building),
     booked: booked?.has(item.courseId) ?? false,
   };
 }

@@ -36,6 +36,11 @@ function pin(over: Partial<MapPin>): MapPin {
   };
 }
 
+function compassY(container: HTMLElement): number {
+  const t = container.querySelector('.campusmap__compass')!.getAttribute('transform')!;
+  return Number(/translate\([^,]+,([^)]+)\)/.exec(t)![1]);
+}
+
 describe('CampusMapCanvas', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -52,7 +57,13 @@ describe('CampusMapCanvas', () => {
   function render(
     pins: MapPin[],
     onSelect = vi.fn(),
-    opts: { view?: Viewport; onViewChange?: (v: Viewport) => void; selectedKey?: string | null } = {},
+    opts: {
+      view?: Viewport;
+      onViewChange?: (v: Viewport) => void;
+      selectedKey?: string | null;
+      insetTop?: number;
+      reserved?: { x: number; y: number; w: number; h: number }[];
+    } = {},
   ) {
     act(() => {
       root.render(
@@ -60,6 +71,7 @@ describe('CampusMapCanvas', () => {
           geo={geo} pins={pins} width={800} height={600}
           view={opts.view ?? HOME} homeView={HOME} onViewChange={opts.onViewChange ?? vi.fn()}
           selectedKey={opts.selectedKey ?? null} onSelect={onSelect}
+          insetTop={opts.insetTop} reserved={opts.reserved}
         />,
       );
     });
@@ -90,6 +102,50 @@ describe('CampusMapCanvas', () => {
     expect(container.querySelectorAll('.campusmap__host')).toHaveLength(1);
     render([pin({ building: 'Center Hall', coords: { lat: 32.8779, lng: -117.2415 } })]);
     expect(container.querySelectorAll('.campusmap__host')).toHaveLength(0);
+  });
+
+  it('colours the host by its matched name, so a TSS-truncated building still lights up', () => {
+    // TSS caps the field at 40 chars; matchBuilding() repairs it into `place`.
+    render([pin({ building: 'York Hal', place: 'York Hall' })]);
+    expect(container.querySelectorAll('.campusmap__host')).toHaveLength(1);
+    // And the spoken label uses the repaired name.
+    expect(container.querySelector('.campusmap__marker')!.getAttribute('aria-label')).toBe('York Hall: CSE-8A LEC');
+  });
+
+  it('draws no chip for the open marker — the card stands in for it', () => {
+    render([pin({})]);
+    expect(container.querySelector('.campusmap__chip')).not.toBeNull();
+    render([pin({})], vi.fn(), { selectedKey: '32.87450,-117.24050' });
+    expect(container.querySelector('.campusmap__chip')).toBeNull();
+    expect(container.querySelector('.campusmap__marker--open')).not.toBeNull();
+    expect(container.querySelector('.campusmap__dot')).not.toBeNull();
+  });
+
+  it('keeps the compass and the names out from under the floating header', () => {
+    render([pin({})]);
+    const y0 = compassY(container);
+    render([pin({})], vi.fn(), { insetTop: 56 });
+    expect(compassY(container)).toBe(y0 + 56);
+    // The header strip is an obstacle: a district name that sat there is pushed or dropped.
+    const namesUnderHeader = [...container.querySelectorAll('.campusmap__districtname')].filter(
+      (n) => Number(n.getAttribute('y')) < 56,
+    );
+    expect(namesUnderHeader).toHaveLength(0);
+  });
+
+  it('never draws a basemap name under a reserved box (the open card)', () => {
+    render([pin({})]);
+    const name = container.querySelector('.campusmap__districtname')!;
+    const x = Number(name.getAttribute('x'));
+    const y = Number(name.getAttribute('y'));
+    // Reserve exactly where "Revelle" landed: it has to move or go.
+    render([pin({})], vi.fn(), { reserved: [{ x: x - 60, y: y - 30, w: 120, h: 60 }] });
+    const after = container.querySelector('.campusmap__districtname');
+    if (after) {
+      const ax = Number(after.getAttribute('x'));
+      const ay = Number(after.getAttribute('y'));
+      expect(Math.abs(ax - x) > 1 || Math.abs(ay - y) > 1).toBe(true);
+    }
   });
 
   it('draws only the markers the current view can show', () => {

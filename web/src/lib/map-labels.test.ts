@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { CampusGeo } from './campus-geo';
+import { campusViewport, type CampusGeo } from './campus-geo';
 import type { MapPin } from './map-pins';
 import {
   groupPins,
-  onCanvasGroups,
   placeLabels,
   splitByViewport,
   unlocatedPins,
@@ -27,6 +26,12 @@ function pin(over: Partial<MapPin>): MapPin {
 }
 
 describe('groupPins', () => {
+  it('carries the matched official name of the first pin', () => {
+    const [g] = groupPins([pin({ building: 'York Hal', place: 'York Hall' })]);
+    expect(g!.building).toBe('York Hal');
+    expect(g!.place).toBe('York Hall');
+  });
+
   it('merges pins that share a building into one marker', () => {
     const groups = groupPins([
       pin({ label: 'LEC' }),
@@ -81,14 +86,18 @@ describe('splitByViewport', () => {
       pin({}),
       pin({ building: 'Hillcrest Medical Offices', coords: HILLCREST }),
     ]);
-    const { onCanvas, offCanvas } = splitByViewport(groups, geo, 800, 600);
+    const home = campusViewport(geo, 800, 600);
+    const { onCanvas, offCanvas } = splitByViewport(groups, home, 800, 600);
     expect(onCanvas.map((g) => g.building)).toEqual(['York Hall']);
     expect(offCanvas.map((g) => g.building)).toEqual(['Hillcrest Medical Offices']);
   });
 
-  it('onCanvasGroups is exactly the drawable half', () => {
-    const groups = groupPins([pin({}), pin({ building: 'Far', coords: HILLCREST })]);
-    expect(onCanvasGroups(groups, geo, 800, 600).map((g) => g.building)).toEqual(['York Hall']);
+  it('judges against the viewport it is given, not always the home frame', () => {
+    const groups = groupPins([pin({})]);
+    const home = campusViewport(geo, 800, 600);
+    // Panned a full canvas width away: York Hall is off the drawn area.
+    const panned = { ...home, offsetX: home.offsetX + 800 };
+    expect(splitByViewport(groups, panned, 800, 600).offCanvas.map((g) => g.building)).toEqual(['York Hall']);
   });
 });
 
