@@ -128,6 +128,18 @@ describe('CampusMapCanvas', () => {
     expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('+1');
   });
 
+  it('a mouse press on a marker does not move focus onto it, so no focus ring outlives the click', () => {
+    // Cancelling pointerdown suppresses the compat mousedown, and with it the
+    // focus move; the click still fires. Keyboard focus (Tab / Enter) is untouched.
+    render([pin({})]);
+    const marker = container.querySelector('.campusmap__marker')!;
+    const press = new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 });
+    act(() => {
+      marker.dispatchEvent(press);
+    });
+    expect(press.defaultPrevented).toBe(true);
+  });
+
   it('draws no chip for the open marker — the card stands in for it', () => {
     render([pin({})]);
     expect(container.querySelector('.campusmap__chip')).not.toBeNull();

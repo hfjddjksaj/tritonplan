@@ -552,6 +552,12 @@ export function CampusMapCanvas({
               tabIndex={0}
               aria-label={markerLabel(group)}
               aria-pressed={selectedKey === group.key}
+              // A mouse press must not focus the <g>: the browser would then paint a
+              // focus ring around the dot for as long as the card is open (Chrome even
+              // keeps :focus-visible on after any earlier keyboard use). Cancelling
+              // pointerdown drops the compat mousedown — and the focus move with it —
+              // while the click still fires; Tab / Enter focus is unaffected.
+              onPointerDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.stopPropagation();
                 if (suppressClick.current) {
