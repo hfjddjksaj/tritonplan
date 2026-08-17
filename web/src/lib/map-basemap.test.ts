@@ -2,37 +2,19 @@ import { describe, it, expect } from 'vitest';
 import { loadCampusGeo, type CampusLine } from './campus-geo';
 import { fitBounds, project } from './map-projection';
 import {
-  DISTRICT_LABELS,
   TINT_GREEN,
   TINT_NEUTRAL,
-  buildingShortName,
-  districtLabel,
-  districtPriority,
   footprintLabelCandidates,
   districtTint,
   labelAnchor,
   landmarkAnchors,
   oceanRing,
   placeTexts,
-  roadLabelText,
   roadLabels,
   scaleBar,
-  wantsRoadLabel,
 } from './map-basemap';
 
-describe('districtLabel / districtTint', () => {
-  it('names districts the way students do', () => {
-    expect(districtLabel('Ridge Walk North')).toBe('Marshall');
-    expect(districtLabel('Roosevelt')).toBe('ERC');
-    expect(districtLabel('North Torrey Pines')).toBe('Sixth');
-    expect(districtLabel('Theatre District')).toBe('Eighth');
-    expect(districtLabel('Revelle')).toBe('Revelle');
-  });
-
-  it('skips the slivers nobody needs named', () => {
-    expect(districtLabel('Beach Properties')).toBeNull();
-  });
-
+describe('districtTint', () => {
   it('tints colleges distinctly, canyons green, everything else neutral', () => {
     const colleges = ['Revelle', 'Muir', 'Ridge Walk North', 'Warren', 'Roosevelt', 'North Torrey Pines', 'North Campus', 'Theatre District'];
     const tints = colleges.map(districtTint);
@@ -40,12 +22,6 @@ describe('districtLabel / districtTint', () => {
     for (const t of tints) expect(t).not.toBe(TINT_NEUTRAL);
     expect(districtTint('North Canyon')).toBe(TINT_GREEN);
     expect(districtTint('Health Sciences')).toBe(TINT_NEUTRAL);
-  });
-
-  it('only maps district names that exist in the bundled data', async () => {
-    const geo = await loadCampusGeo();
-    const names = new Set(geo.districts.map((d) => d.name));
-    for (const key of Object.keys(DISTRICT_LABELS)) expect(names.has(key), key).toBe(true);
   });
 });
 
@@ -94,25 +70,6 @@ describe('landmarkAnchors', () => {
       expect(a.lat).toBeGreaterThan(32.87);
       expect(a.lat).toBeLessThan(32.892);
     }
-  });
-});
-
-describe('roadLabelText / wantsRoadLabel', () => {
-  it('abbreviates the way street signs do', () => {
-    expect(roadLabelText('North Torrey Pines Road')).toBe('N Torrey Pines Rd');
-    expect(roadLabelText('La Jolla Village Drive')).toBe('La Jolla Village Dr');
-    expect(roadLabelText('Scholars Drive North')).toBe('Scholars Dr N');
-    expect(roadLabelText('Ridge Walk')).toBe('Ridge Walk');
-    expect(roadLabelText('San Diego Freeway')).toBe('I-5');
-  });
-
-  it('labels every named highway and major road, but only listed minor ones', () => {
-    const line = (name: string, kind: CampusLine['kind']): CampusLine => ({ name, kind, pts: [] });
-    expect(wantsRoadLabel(line('Genesee Avenue', 'major'))).toBe(true);
-    expect(wantsRoadLabel(line('', 'hwy'))).toBe(false);
-    expect(wantsRoadLabel(line('Voigt Drive', 'minor'))).toBe(true);
-    expect(wantsRoadLabel(line('Caminito Fresco', 'minor'))).toBe(false);
-    expect(wantsRoadLabel(line('Library Walk', 'walk'))).toBe(true);
   });
 });
 
@@ -209,15 +166,7 @@ describe('roadLabels on a partly visible loop road', () => {
   });
 });
 
-describe('buildingShortName / footprintLabelCandidates', () => {
-  it('shortens stock words and refuses addresses and very long names', () => {
-    expect(buildingShortName('Cognitive Science Building')).toBe('Cognitive Science Bldg');
-    expect(buildingShortName('Applied Physics and Mathematics')).toBe('Applied Physics & Mathematics');
-    expect(buildingShortName('9500 Gilman Drive')).toBeNull();
-    expect(buildingShortName('Sanders Hall')).toBe('Sanders Hall'); // "and" inside a word survives
-    expect(buildingShortName('Joan and Irwin Jacobs Center for La Jolla Playhouse')).toBeNull();
-  });
-
+describe('footprintLabelCandidates', () => {
   it('lists each footprint once, biggest first, skipping the landmarks', async () => {
     const geo = await loadCampusGeo();
     const cands = footprintLabelCandidates(geo.footprints, new Set(['Geisel Library']));
@@ -230,11 +179,6 @@ describe('buildingShortName / footprintLabelCandidates', () => {
       expect(c.lon).toBeGreaterThanOrEqual(c.minLon);
       expect(c.lon).toBeLessThanOrEqual(c.maxLon);
     }
-  });
-
-  it('ranks the colleges ahead of the outlying districts', () => {
-    expect(districtPriority('Warren')).toBeLessThan(districtPriority('Mesa Housing'));
-    expect(districtPriority('University Center')).toBe(0);
   });
 });
 

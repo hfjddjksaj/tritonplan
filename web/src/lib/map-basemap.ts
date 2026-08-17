@@ -1,42 +1,37 @@
 /**
- * What the basemap says about itself: which district is which college and how
- * it is tinted, where a district's name sits, which roads deserve a name along
- * them, how the coastline closes into an ocean, and how long the scale bar is.
+ * What the basemap says about itself: how a district is tinted, which roads
+ * deserve a name along them, how the coastline closes into an ocean, and how
+ * long the scale bar is. Naming rules (district labels, road label text,
+ * building short names) live in `map-names.ts`; the label-anchor and area
+ * geometry helpers live in `map-data.ts` — both re-exported below for the
+ * (legacy) SVG renderer's remaining callers.
  *
  * Pure functions over the bundled geometry — CampusMapCanvas only draws what
- * comes out of here, so the judgement calls (naming, tinting, which roads to
- * label) live in one testable place.
+ * comes out of here, so the judgement calls (tinting, which roads to label)
+ * live in one testable place.
  */
 import type { CampusGeo, CampusLine, CampusShape, LineKind } from './campus-geo';
 import { project, toScreen, type Point, type Viewport } from './map-projection';
+import { LANDMARKS, buildingShortName, roadLabelText, wantsRoadLabel } from './map-names';
+import { polygonAnchor as labelAnchor, ringArea } from './map-data';
+
+export {
+  DISTRICT_LABELS,
+  UNLABELLED_DISTRICTS,
+  districtLabel,
+  districtPriority,
+  LANDMARKS,
+  ABBREVIATIONS,
+  FREEWAYS,
+  roadLabelText,
+  LABELLED_MINOR,
+  wantsRoadLabel,
+  abbreviateBuildingWords,
+  buildingShortName,
+} from './map-names';
+export { ringArea, oceanRing, polygonAnchor as labelAnchor } from './map-data';
 
 /* ------------------------------------------------------------ districts */
-
-/**
- * ArcGIS "Campus Districts" name → what a student calls the place. Verified by
- * point-in-polygon against the bundled data (2026-08-16): Peterson/Solis fall
- * in "Ridge Walk North", the Seventh College subdistricts in "North Campus",
- * Sixth's NTPLLN buildings (Mosaic, Catalyst) in "North Torrey Pines", Eighth's
- * residences in "Theatre District", ERC's in "Roosevelt". Districts not listed
- * are labelled by their own name.
- */
-export const DISTRICT_LABELS: Readonly<Record<string, string>> = {
-  'Ridge Walk North': 'Marshall',
-  Roosevelt: 'ERC',
-  'North Torrey Pines': 'Sixth',
-  'North Campus': 'Seventh',
-  'Theatre District': 'Eighth',
-  'Scripps Institution': 'Scripps',
-  'Health Sciences East': 'Health Sciences East',
-  'La Jolla del Sol': 'La Jolla del Sol',
-};
-
-/** Districts too small or too far off to earn a label. */
-const UNLABELLED_DISTRICTS: ReadonlySet<string> = new Set([
-  'Audrey Geisel University House',
-  'Beach Properties',
-  'Biology Field Station',
-]);
 
 /** Undergraduate colleges get their own tint; the rest are neutral or green. */
 const COLLEGE_TINTS: Readonly<Record<string, string>> = {
@@ -67,136 +62,7 @@ export function districtTint(name: string): string {
   return COLLEGE_TINTS[name] ?? (GREEN_DISTRICTS.has(name) ? TINT_GREEN : TINT_NEUTRAL);
 }
 
-/**
- * Who wins a crowded spot: the colleges and University Center (where classes
- * are) before the outlying districts. Lower is more important.
- */
-export function districtPriority(name: string): number {
-  return name in COLLEGE_TINTS || name === 'University Center' ? 0 : 1;
-}
-
-/** The label to draw for a district, or null if it should stay unlabelled. */
-export function districtLabel(name: string): string | null {
-  if (UNLABELLED_DISTRICTS.has(name)) return null;
-  return DISTRICT_LABELS[name] ?? name;
-}
-
-/* --------------------------------------------------------- label anchors */
-
-/** Signed area (shoelace) of a flat [lon, lat, …] ring, in degrees². */
-export function ringArea(ring: number[]): number {
-  let a = 0;
-  for (let i = 0, n = ring.length / 2; i < n; i++) {
-    const j = (i + 1) % n;
-    a += ring[2 * i]! * ring[2 * j + 1]! - ring[2 * j]! * ring[2 * i + 1]!;
-  }
-  return a / 2;
-}
-
-function pointInRing(x: number, y: number, ring: number[]): boolean {
-  let inside = false;
-  const n = ring.length / 2;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = ring[2 * i]!;
-    const yi = ring[2 * i + 1]!;
-    const xj = ring[2 * j]!;
-    const yj = ring[2 * j + 1]!;
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-}
-
-/** Distance from (x, y) to the nearest edge of the ring, in the ring's units. */
-function edgeDistance(x: number, y: number, ring: number[]): number {
-  let best = Infinity;
-  const n = ring.length / 2;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const ax = ring[2 * j]!;
-    const ay = ring[2 * j + 1]!;
-    const bx = ring[2 * i]!;
-    const by = ring[2 * i + 1]!;
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len2 = dx * dx + dy * dy;
-    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
-    const d = Math.hypot(x - (ax + t * dx), y - (ay + t * dy));
-    if (d < best) best = d;
-  }
-  return best;
-}
-
-/**
- * Where to put a polygon's name: the interior point farthest from any edge
- * (a coarse pole of inaccessibility). A plain centroid lands outside crescent
- * and L-shaped districts — Warren and Revelle both are — and a name floating in
- * the neighbouring college is worse than no name.
- *
- * Longitude is stretched by cos(lat) first so "farthest" is measured in metres,
- * not degrees. Returns lon/lat degrees.
- */
-export function labelAnchor(rings: number[][]): { lon: number; lat: number } | null {
-  let ring: number[] | null = null;
-  let best = 0;
-  for (const r of rings) {
-    const a = Math.abs(ringArea(r));
-    if (a > best) {
-      best = a;
-      ring = r;
-    }
-  }
-  if (!ring || ring.length < 6) return null;
-
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (let i = 0; i + 1 < ring.length; i += 2) {
-    const x = ring[i]!;
-    const y = ring[i + 1]!;
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  const kx = Math.cos(((minY + maxY) / 2) * (Math.PI / 180));
-  // Work in a stretched frame so distances are isotropic.
-  const stretched: number[] = [];
-  for (let i = 0; i + 1 < ring.length; i += 2) stretched.push(ring[i]! * kx, ring[i + 1]!);
-
-  const N = 24;
-  let bestD = -1;
-  let bestX = (minX + maxX) / 2;
-  let bestY = (minY + maxY) / 2;
-  for (let i = 1; i < N; i++) {
-    for (let j = 1; j < N; j++) {
-      const x = minX + ((maxX - minX) * i) / N;
-      const y = minY + ((maxY - minY) * j) / N;
-      if (!pointInRing(x, y, ring)) continue;
-      const d = edgeDistance(x * kx, y, stretched);
-      if (d > bestD) {
-        bestD = d;
-        bestX = x;
-        bestY = y;
-      }
-    }
-  }
-  if (bestD < 0) return null; // degenerate sliver: no grid point landed inside
-  return { lon: bestX, lat: bestY };
-}
-
 /* ------------------------------------------------------------- landmarks */
-
-/**
- * A handful of buildings everyone knows, named on the basemap so a student can
- * anchor themselves before reading the pins. Names are exact footprint names.
- */
-export const LANDMARKS: readonly { footprint: string; label: string }[] = [
-  { footprint: 'Geisel Library', label: 'Geisel Library' },
-  { footprint: 'Price Center West', label: 'Price Center' },
-  { footprint: 'RIMAC', label: 'RIMAC' },
-  { footprint: 'Center Hall', label: 'Center Hall' },
-  { footprint: 'Student Services Center', label: 'Student Services' },
-];
 
 export interface LandmarkAnchor {
   label: string;
@@ -219,77 +85,6 @@ export function landmarkAnchors(geo: CampusGeo): LandmarkAnchor[] {
 }
 
 /* ----------------------------------------------------------------- roads */
-
-const ABBREVIATIONS: readonly [RegExp, string][] = [
-  [/\bNorth\b/g, 'N'],
-  [/\bSouth\b/g, 'S'],
-  [/\bEast\b/g, 'E'],
-  [/\bWest\b/g, 'W'],
-  [/\bRoad\b/g, 'Rd'],
-  [/\bDrive\b/g, 'Dr'],
-  [/\bAvenue\b/g, 'Ave'],
-  [/\bBoulevard\b/g, 'Blvd'],
-  [/\bStreet\b/g, 'St'],
-  [/\bLane\b/g, 'Ln'],
-  [/\bCourt\b/g, 'Ct'],
-  [/\bParkway\b/g, 'Pkwy'],
-  [/\bPlace\b/g, 'Pl'],
-];
-
-/** OSM freeway names → the numbers on the signs. */
-const FREEWAYS: Readonly<Record<string, string>> = {
-  'San Diego Freeway': 'I-5',
-  'Jacob Dekema Freeway': 'I-805',
-};
-
-/** "North Torrey Pines Road" → "N Torrey Pines Rd"; freeways by number. */
-export function roadLabelText(name: string): string {
-  if (FREEWAYS[name]) return FREEWAYS[name]!;
-  let out = name;
-  for (const [re, abbr] of ABBREVIATIONS) out = out.replace(re, abbr);
-  return out;
-}
-
-/**
- * Minor roads and walkways worth naming: the campus ring roads and the named
- * pedestrian spines. Every highway and major road with a name is labelled
- * regardless; residential streets off campus are not.
- */
-export const LABELLED_MINOR: ReadonlySet<string> = new Set([
-  'Voigt Drive',
-  'Hopkins Drive',
-  'John Jay Hopkins Drive',
-  'Scholars Drive North',
-  'Scholars Drive South',
-  'Russell Lane',
-  'Campus Point Drive',
-  'Pepper Canyon Drive',
-  'Muir Lane',
-  'Lyman Lane',
-  'Justice Lane',
-  'Matthews Lane',
-  'Mandeville Lane',
-  'Thurgood Marshall Lane',
-  'Rupertus Lane',
-  'Ridge Walk',
-  'Library Walk',
-  'Warren Mall',
-  'Revelle Plaza',
-  'Price Center Plaza',
-  'Snake Path',
-  'Osler Lane',
-  'Health Sciences Drive',
-  'Medical Center Drive',
-  'Expedition Way',
-  'Regents Road',
-  'Miramar Street',
-]);
-
-export function wantsRoadLabel(line: CampusLine): boolean {
-  if (!line.name) return false;
-  if (line.kind === 'hwy' || line.kind === 'major') return true;
-  return LABELLED_MINOR.has(line.name);
-}
 
 export interface RoadLabel {
   name: string;
@@ -457,29 +252,6 @@ function pointAlong(pts: Point[], dist: number): Point {
 
 /* ------------------------------------------------------- building names */
 
-/** The stock words of a building name, shortened the way campus signage does. */
-export function abbreviateBuildingWords(name: string): string {
-  return name
-    .replace(/\bBuilding\b/g, 'Bldg')
-    .replace(/\bLaboratory\b/g, 'Lab')
-    .replace(/\bLaboratories\b/g, 'Labs')
-    .replace(/\bEngineering\b/g, 'Eng')
-    .replace(/\bCenter\b/g, 'Ctr')
-    .replace(/\bResidence Halls?\b/g, 'Res Hall')
-    .replace(/\bApartments\b/g, 'Apts')
-    .replace(/\bParking Structure\b/g, 'Parking')
-    .replace(/\band\b/g, '&')
-    .replace(/^The\s+/, '');
-}
-
-/** Footprint names too generic or too long to help; shortened where a stock word allows. */
-export function buildingShortName(name: string): string | null {
-  if (!name || /^\d/.test(name)) return null; // street addresses, e.g. "9500 Gilman Drive"
-  const out = abbreviateBuildingWords(name);
-  if (out.length > 30) return null;
-  return out;
-}
-
 export interface FootprintLabelCandidate {
   key: string;
   text: string;
@@ -525,35 +297,6 @@ export function footprintLabelCandidates(footprints: readonly CampusShape[], ski
     out.push({ key: f.name, text, lon: a.lon, lat: a.lat, minLon, minLat, maxLon, maxLat, area });
   }
   return out.sort((x, y) => y.area - x.area);
-}
-
-/* ----------------------------------------------------------------- ocean */
-
-/**
- * Turn the coastline chain into a closed ring covering the sea: the chain
- * itself, extended past both ends so a zoomed-out canvas is still covered,
- * then closed far to the west. OSM coastlines run with land on the left, and
- * this stretch runs north→south with the Pacific on the right (west) — the
- * closure side is fixed by that, not inferred.
- */
-export function oceanRing(coast: CampusLine): number[] {
-  const p = coast.pts;
-  if (p.length < 4) return [];
-  const [x0, y0] = [p[0]!, p[1]!];
-  const [x1, y1] = [p[p.length - 2]!, p[p.length - 1]!];
-  const north = y0 >= y1;
-  const REACH = 0.5; // degrees — well past any canvas the map can show
-  const WEST = Math.min(x0, x1) - REACH;
-  const top = north ? [x0, y0 + REACH] : [x1, y1 + REACH];
-  const bottom = north ? [x1, y1 - REACH] : [x0, y0 - REACH];
-  const chain = north ? p : reversePairs(p);
-  return [...top, ...chain, ...bottom, WEST, bottom[1]!, WEST, top[1]!];
-}
-
-function reversePairs(flat: number[]): number[] {
-  const out: number[] = [];
-  for (let i = flat.length - 2; i >= 0; i -= 2) out.push(flat[i]!, flat[i + 1]!);
-  return out;
 }
 
 /* ------------------------------------------------------------- scale bar */

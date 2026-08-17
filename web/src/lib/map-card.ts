@@ -11,7 +11,7 @@
  * calendar owns the times). Pure functions; the React shell renders them.
  */
 import type { Point } from './map-projection';
-import { abbreviateBuildingWords } from './map-basemap';
+import { abbreviateBuildingWords } from './map-names';
 import type { MapPin } from './map-pins';
 
 export interface CardRow {
