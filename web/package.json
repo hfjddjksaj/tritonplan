@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "fetch:buildings": "node scripts/fetch-buildings.mjs"
+    "fetch:buildings": "node scripts/fetch-buildings.mjs",
+    "fetch:campus-map": "node scripts/fetch-campus-map.mjs"
   },
   "dependencies": {
     "@triton/shared": "*",

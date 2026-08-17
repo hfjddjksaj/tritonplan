@@ -92,16 +92,21 @@ The normalized model shared by both halves is `shared/src/types.ts`
 Hand overrides for TSS-only names live in `web/src/lib/building-aliases.ts` — extend it when an
 unmatched name shows up in the popover.
 
-The same script writes `web/src/data/ucsd-campus-geo.json`, the campus map's basemap: building
-footprints and named districts from UCSD's ArcGIS layers, plus roads, named walkways and the
-coastline from OpenStreetMap (Overpass API; ODbL — the map draws the "© OpenStreetMap
-contributors" credit). All of it is fetched at dev time, simplified and delta-encoded, and
-bundled; the published page still issues no network requests. Rerun the script and commit
-when campus geometry changes. The map's naming/tinting rules (district → college names, which
-roads get labels, landmark list) live in `web/src/lib/map-basemap.ts`; the marker card's content
-and placement in `web/src/lib/map-card.ts`. The map fills the viewport — header, hint, empty
-state, "not on the map" list, zoom buttons and the marker card all float over the SVG
-(`CampusMap.tsx`), and `useStageSize` / `useElementHeight` size the canvas around the header.
+`npm run fetch:campus-map -w @triton/web` writes the other two campus-map bundles: building
+footprints (with heights joined from UCSD's 3D building layer) and named districts from UCSD's
+ArcGIS layers, plus roads, named walkways and the coastline from OpenStreetMap (Overpass API;
+ODbL — the map draws the "© OpenStreetMap contributors" credit), into
+`web/src/data/ucsd-campus-geo.json`; and UCSD's ground surfaces, trees, campus boundary and OSM
+park/wood/beach land use into `web/src/data/ucsd-campus-map.json`. Both scripts share their
+Ramer–Douglas–Peucker simplification and integer/delta wire encoding via
+`web/scripts/geo-encode.mjs`. All of it is fetched at dev time, simplified and delta-encoded,
+and bundled; the published page still issues no network requests. Rerun the relevant script and
+commit when campus geometry, ground surfaces, trees or building heights change. The map's
+naming/tinting rules (district → college names, which roads get labels, landmark list) live in
+`web/src/lib/map-basemap.ts`; the marker card's content and placement in
+`web/src/lib/map-card.ts`. The map fills the viewport — header, hint, empty state, "not on the
+map" list, zoom buttons and the marker card all float over the SVG (`CampusMap.tsx`), and
+`useStageSize` / `useElementHeight` size the canvas around the header.
 
 ## Reference material
 
