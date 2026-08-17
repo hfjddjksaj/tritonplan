@@ -167,13 +167,16 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
 
   const sliced = useMemo(() => slicesFor(scoped, by), [scoped, by]);
   const { slices, predicate } = sliced;
-  const [sliceId, setSliceId] = useState<string>(() => defaultSliceId(sliced, scoped, todayKey(by)));
-  useEffect(() => {
-    // The available slices change with scope and view; keep the selection valid.
-    if (!slices.some((s) => s.id === sliceId)) {
-      setSliceId(defaultSliceId(sliced, scoped, todayKey(by)));
-    }
-  }, [sliced, slices, scoped, sliceId, by]);
+  // The student's pick, remembered with the view it was made in. A pick from
+  // another view, or one whose slice is no longer offered (Booked only can
+  // remove it), yields to the default rule: today's slice if it has something,
+  // else All — so switching to Finals on exam day lands on today, and coming
+  // back to Classes re-asks the same question of that view.
+  const [picked, setPicked] = useState<{ view: PlannerView; id: string } | null>(null);
+  const sliceId =
+    picked && picked.view === mapView && slices.some((s) => s.id === picked.id)
+      ? picked.id
+      : defaultSliceId(sliced, scoped, todayKey(by));
   const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
 
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
@@ -283,7 +286,18 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
           </div>
         ) : (
           <>
-            <ViewTabs value={mapView} onChange={setMapView} calendarLabel="Classes" ariaLabel="Map views" />
+            <ViewTabs
+              value={mapView}
+              onChange={(v) => {
+                setMapView(v);
+                // A same-valued view tag alone can't tell "still here" from "left and
+                // came back" — the id repeats either way — so the switch itself is
+                // what forgets the old pick and lets the today rule run again.
+                setPicked(null);
+              }}
+              calendarLabel="Classes"
+              ariaLabel="Map views"
+            />
             <div className="calseg campusmap__slices" role="radiogroup" aria-label={sliceAria}>
               {slices.map((s) => (
                 <button
@@ -292,7 +306,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
                   role="radio"
                   aria-checked={s.id === sliceId}
                   className={`calseg__btn${s.id === sliceId ? ' calseg__btn--on' : ''}`}
-                  onClick={() => setSliceId(s.id)}
+                  onClick={() => setPicked({ view: mapView, id: s.id })}
                 >
                   {s.label}
                 </button>

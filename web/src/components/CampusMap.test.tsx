@@ -590,4 +590,31 @@ describe('CampusMap', () => {
     expect(card.querySelector('.campusmap__card-date')!.textContent).toBe('Wed Dec 09');
     expect([...card.querySelectorAll('.campusmap__card-rows li')].map((li) => li.textContent)).toEqual(['Final · Room 2622']);
   });
+
+  it('re-runs the today rule when the tab changes: All on Classes, today’s date on Finals', async () => {
+    vi.setSystemTime(new Date(2026, 11, 9, 9)); // Wed Dec 09, the final's day; the Monday lecture isn't today
+    render({ plan: planWithFinal() });
+    await settle();
+    expect(sliceOn()).toBe('All');
+    act(() => tabNamed('Finals').click());
+    expect(sliceOn()).toBe('Dec 09');
+    // …and back: Classes has nothing today, so it opens on All again.
+    act(() => tabNamed('Classes').click());
+    expect(sliceOn()).toBe('All');
+  });
+
+  it('Midterms opens on this week’s bucket when it has a sitting, whatever was picked before', async () => {
+    vi.setSystemTime(new Date(2026, 9, 28, 9)); // Wed Oct 28: the week of the Oct 31 midterm
+    render({ plan: planWithMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    expect(sliceOn()).toBe('Oct 26–Nov 01');
+    // A pick sticks within the view…
+    act(() => sliceButtons()[2]!.click());
+    expect(sliceOn()).toBe('Nov 09–15');
+    // …but leaving and coming back re-runs the rule.
+    act(() => tabNamed('Finals').click());
+    act(() => tabNamed('Midterms').click());
+    expect(sliceOn()).toBe('Oct 26–Nov 01');
+  });
 });
