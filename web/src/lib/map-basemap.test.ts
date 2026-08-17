@@ -125,29 +125,31 @@ describe('roadLabels', () => {
   };
   const view = fitBounds([project(-117.25, 32.88), project(-117.23, 32.88), project(-117.24, 32.885)], 1000, 600, 20);
 
-  it('labels a road that is long enough on screen, reading left to right', () => {
+  it('labels a straight road at its middle, unrotated', () => {
     const [l] = roadLabels([road], view, 1000, 600);
     expect(l).toBeDefined();
     expect(l!.text).toBe('Gilman Dr');
-    expect(l!.pts[0]!.x).toBeLessThan(l!.pts[l!.pts.length - 1]!.x);
-    // The midpoint sits half-way along the road, on the canvas.
-    expect(l!.mid.x).toBeCloseTo(500, 0);
-    expect(l!.mid.y).toBeGreaterThan(0);
-    expect(l!.mid.y).toBeLessThan(600);
+    expect(l!.x).toBeCloseTo(500, 0);
+    expect(l!.angle).toBeCloseTo(0, 5);
   });
 
-  it('flips a road digitised east→west so its text is not upside down', () => {
+  it('keeps the angle upright whichever way the road was digitised', () => {
     const backwards: CampusLine = { ...road, pts: [-117.23, 32.88, -117.25, 32.88] };
     const [l] = roadLabels([backwards], view, 1000, 600);
-    expect(l!.pts[0]!.x).toBeLessThan(l!.pts[1]!.x);
+    expect(Math.abs(l!.angle)).toBeLessThan(90.0001);
+    expect(l!.angle).toBeCloseTo(0, 5);
+    // A north–south road reads bottom-to-top (rotated −90… well, +90 → normalised to 90).
+    const ns: CampusLine = { ...road, name: 'Voigt Drive', kind: 'minor', pts: [-117.24, 32.878, -117.24, 32.882] };
+    const [v] = roadLabels([ns], view, 1000, 600);
+    expect(v).toBeDefined();
+    expect(Math.abs(v!.angle)).toBeCloseTo(90, 3);
   });
 
-  it('keeps one label per name — the piece with the most on-screen length', () => {
+  it('keeps one label per name — from the piece with the longest visible run', () => {
     const stub: CampusLine = { ...road, pts: [-117.24, 32.879, -117.238, 32.879] };
     const out = roadLabels([stub, road], view, 1000, 600);
     expect(out).toHaveLength(1);
-    expect(out[0]!.pts).toHaveLength(2);
-    expect(out[0]!.pts[0]!.x).toBeLessThan(100); // the long one starts at the left edge
+    expect(out[0]!.y).toBeCloseTo(roadLabels([road], view, 1000, 600)[0]!.y, 5);
   });
 
   it('drops a road that is off the canvas or too short to carry its name', () => {
@@ -155,13 +157,44 @@ describe('roadLabels', () => {
     const tiny: CampusLine = { ...road, pts: [-117.24, 32.88, -117.2399, 32.88] };
     expect(roadLabels([far, tiny], view, 1000, 600)).toHaveLength(0);
   });
+
+  it('never bends: a road that curves everywhere under the text goes unlabelled', () => {
+    // A tight zigzag — no ~50 px stretch is straight to within the bow limit.
+    const pts: number[] = [];
+    for (let i = 0; i <= 40; i++) pts.push(-117.25 + i * 0.0005, 32.88 + (i % 2 ? 0.0004 : -0.0004));
+    const zig: CampusLine = { ...road, pts };
+    expect(roadLabels([zig], view, 1000, 600)).toHaveLength(0);
+  });
+
+  it('slides along the road to a straight stretch when the middle is a bend', () => {
+    // Straight west half, then a sharp corner and a straight leg south-east.
+    const bent: CampusLine = {
+      ...road,
+      pts: [-117.25, 32.88, -117.24, 32.88, -117.24, 32.878, -117.235, 32.878],
+    };
+    const [l] = roadLabels([bent], view, 1000, 600);
+    expect(l).toBeDefined();
+    // Not at the corner (x≈500): on one of the straight legs.
+    expect(Math.abs(l!.x - 500)).toBeGreaterThan(40);
+  });
+
+  it('dodges obstacles and earlier labels, highways first', () => {
+    const first = roadLabels([road], view, 1000, 600)[0]!;
+    const chip = [{ x: first.x - 30, y: first.y - 10, w: 60, h: 20 }]; // right on the road's middle
+    const [l] = roadLabels([road], view, 1000, 600, chip);
+    expect(l).toBeDefined();
+    expect(Math.abs(l!.x - 500)).toBeGreaterThan(40); // slid off the chip
+    // Two roads on the same line: the highway wins the middle, the other slides.
+    const hwy: CampusLine = { ...road, name: 'San Diego Freeway', kind: 'hwy' };
+    const both = roadLabels([road, hwy], view, 1000, 600);
+    expect(both.map((r) => r.text)).toEqual(['I-5', 'Gilman Dr']);
+    expect(both[0]!.x).toBeCloseTo(500, 0);
+    expect(Math.abs(both[1]!.x - 500)).toBeGreaterThan(40);
+  });
 });
 
 describe('roadLabels on a partly visible loop road', () => {
-  it('labels the visible run, upright, even when the road as a whole runs the other way', () => {
-    // A U-shaped road: comes in from the far east (off canvas), runs west along
-    // the bottom of the canvas, and leaves again to the east. Its endpoints say
-    // "runs east", but the visible stretch is drawn west→east only after reversal.
+  it('labels only the visible run, not the off-canvas tail', () => {
     const canvasView = fitBounds([project(-117.25, 32.88), project(-117.23, 32.90)], 1000, 1000, 0);
     const u: CampusLine = {
       name: 'Gilman Drive',
@@ -170,9 +203,9 @@ describe('roadLabels on a partly visible loop road', () => {
     };
     const [l] = roadLabels([u], canvasView, 1000, 1000);
     expect(l).toBeDefined();
-    // Every point of the label path is on the canvas (± margin), not the far-east tail.
-    for (const p of l!.pts) expect(p.x).toBeLessThan(1000 + 25);
-    expect(l!.pts[0]!.x).toBeLessThan(l!.pts[l!.pts.length - 1]!.x);
+    expect(l!.x).toBeGreaterThan(0);
+    expect(l!.x).toBeLessThan(1000);
+    expect(l!.angle).toBeCloseTo(0, 3); // on the horizontal leg
   });
 });
 

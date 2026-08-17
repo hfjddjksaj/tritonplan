@@ -81,8 +81,11 @@ describe('CampusMapCanvas', () => {
     render([pin({})]);
     const names = [...container.querySelectorAll('.campusmap__districtname')].map((n) => n.textContent);
     expect(names).toEqual(['Revelle']);
-    const road = container.querySelector('.campusmap__roadname textPath');
+    const road = container.querySelector('.campusmap__roadname');
     expect(road?.textContent).toBe('Gilman Dr');
+    // Straight text, rotated to the road: never a textPath.
+    expect(container.querySelector('textPath')).toBeNull();
+    expect(road?.getAttribute('transform')?.startsWith('rotate(')).toBe(true);
     // York Hall has a footprint in this fixture and a class in it → a host path.
     expect(container.querySelectorAll('.campusmap__host')).toHaveLength(1);
     render([pin({ building: 'Center Hall', coords: { lat: 32.8779, lng: -117.2415 } })]);

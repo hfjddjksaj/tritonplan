@@ -92,6 +92,14 @@ The normalized model shared by both halves is `shared/src/types.ts`
 Hand overrides for TSS-only names live in `web/src/lib/building-aliases.ts` — extend it when an
 unmatched name shows up in the popover.
 
+The same script writes `web/src/data/ucsd-campus-geo.json`, the campus map's basemap: building
+footprints and named districts from UCSD's ArcGIS layers, plus roads, named walkways and the
+coastline from OpenStreetMap (Overpass API; ODbL — the map draws the "© OpenStreetMap
+contributors" credit). All of it is fetched at dev time, simplified and delta-encoded, and
+bundled; the published page still issues no network requests. Rerun the script and commit
+when campus geometry changes. The map's naming/tinting rules (district → college names, which
+roads get labels, landmark list) live in `web/src/lib/map-basemap.ts`.
+
 ## Reference material
 
 - [`docs/tss-recon/tss-api-notes.md`](./tss-recon/tss-api-notes.md) — TSS/SAP OData

@@ -14,6 +14,7 @@ import {
   placeTexts,
   ringArea,
   roadLabels,
+  rotatedBox,
   scaleBar,
   type Box,
 } from '../lib/map-basemap';
@@ -92,10 +93,6 @@ function shapePath(s: CampusShape, toPx: (p: Point) => Point): string {
   return s.rings.map((r) => ringPath(r, toPx, true)).join(' ');
 }
 
-function pointsPath(pts: Point[]): string {
-  return pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('');
-}
-
 function inside(p: Point, w: number, h: number, margin = 0): boolean {
   return p.x >= -margin && p.x <= w + margin && p.y >= -margin && p.y <= h + margin;
 }
@@ -154,8 +151,6 @@ export function CampusMapCanvas({
     }
     return byKind;
   }, [geo, toPx]);
-
-  const roadNames = useMemo(() => roadLabels(geo.lines, view, width, height), [geo, view, width, height]);
 
   // District names sit at each polygon's pole of inaccessibility — computed
   // once per geo, projected per view. Ordered so the colleges claim their spot
@@ -216,8 +211,10 @@ export function CampusMapCanvas({
     return new Map(placed.map((p) => [p.key, p]));
   }, [markers, width, height]);
 
-  // Basemap names dodge the pins (chips + dots), the map furniture, and each
-  // other. Districts go first — a college name matters more than a landmark.
+  // Everything with a name on the basemap dodges the pins (chips + dots), the
+  // map furniture, and each other. Road names go first (they are tied to a
+  // line and have the fewest places to go), then district names, landmarks,
+  // and — zoomed in — building names.
   const placedNames = useMemo(() => {
     const obstacles: Box[] = [];
     for (const { group, pt } of markers) {
@@ -225,15 +222,12 @@ export function CampusMapCanvas({
       const l = labels.get(group.key);
       if (l) obstacles.push({ x: l.x, y: l.y, w: chipText(group.pins).length * CHAR_W + 10, h: CHIP_H });
     }
-    // Road names: a box around each label's midpoint (the path may curve, so this is approximate).
-    for (const r of roadNames) {
-      const w = r.text.length * 5.4 + 8;
-      obstacles.push({ x: r.mid.x - w / 2, y: r.mid.y - 8, w, h: 16 });
-    }
     // Compass (top-right), scale bar (bottom-left), zoom buttons + attribution (bottom-right).
     obstacles.push({ x: width - 60, y: 0, w: 60, h: 60 });
     obstacles.push({ x: 0, y: height - 40, w: 180, h: 40 });
     obstacles.push({ x: width - 60, y: height - 130, w: 60, h: 130 });
+    const roads = roadLabels(geo.lines, view, width, height, obstacles);
+    for (const r of roads) obstacles.push(rotatedBox(r.x, r.y, r.w, r.h, r.angle));
     // A name has to fit on the canvas whole: "Y PINES" peeking in from the edge
     // is noise, and the district is still there when the user pans.
     const fits = (p: Point, w: number) => p.x - w / 2 >= 4 && p.x + w / 2 <= width - 4 && p.y > 8 && p.y < height - 8;
@@ -277,8 +271,8 @@ export function CampusMapCanvas({
       }
       buildings = placeTexts(cands, obstacles, 1);
     }
-    return { districts, landmarks: landmarksPlaced, buildings };
-  }, [markers, labels, roadNames, districtAnchors, landmarks, buildingCands, level, toPx, width, height]);
+    return { roads, districts, landmarks: landmarksPlaced, buildings };
+  }, [markers, labels, geo, view, districtAnchors, landmarks, buildingCands, level, toPx, width, height]);
 
   /* ------------------------------------------------- wheel / drag / pinch */
 
@@ -483,15 +477,17 @@ export function CampusMapCanvas({
       </g>
 
       <g className="campusmap__roadnames" aria-hidden="true">
-        {roadNames.map((r) => (
-          <g key={r.name}>
-            <path id={`rl-${slug(r.name)}`} d={pointsPath(r.pts)} fill="none" stroke="none" />
-            <text className={`campusmap__roadname campusmap__roadname--${r.kind}`} dy={r.kind === 'walk' ? -3 : 3}>
-              <textPath href={`#rl-${slug(r.name)}`} startOffset="50%" textAnchor="middle">
-                {r.text}
-              </textPath>
-            </text>
-          </g>
+        {placedNames.roads.map((r) => (
+          <text
+            key={r.name}
+            className={`campusmap__roadname campusmap__roadname--${r.kind}`}
+            x={r.x}
+            y={r.y + 3.5}
+            textAnchor="middle"
+            transform={`rotate(${r.angle.toFixed(1)} ${r.x.toFixed(1)} ${r.y.toFixed(1)})`}
+          >
+            {r.text}
+          </text>
         ))}
       </g>
 
@@ -633,9 +629,4 @@ function markerLabel(g: PinGroup): string {
 function chipText(pins: MapPin[]): string {
   const first = pins[0]!;
   return pins.length === 1 ? `${first.courseCode} ${first.label}` : `${first.courseCode} +${pins.length - 1}`;
-}
-
-/** A DOM-id-safe form of a road name for the textPath link. */
-function slug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }

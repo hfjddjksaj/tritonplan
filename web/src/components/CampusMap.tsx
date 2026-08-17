@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PlanState } from '@triton/shared';
 import { campusViewport, loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
 import { zoomLevel, zoomView, type Viewport } from '../lib/map-projection';
@@ -7,7 +7,7 @@ import { groupPins, splitByViewport, unplacedPins } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
 import { pluralize, todayWeekday } from '../lib/format';
 import { useEscapeKey } from '../hooks/useEscapeKey';
-import { useIsMobile } from '../hooks/useIsMobile';
+import { useStageSize } from '../hooks/useStageSize';
 import { CampusMapCanvas, MAX_ZOOM, MIN_ZOOM } from './CampusMapCanvas';
 import { BuildingPopover } from './BuildingPopover';
 import { Minus, Plus, X } from './icons';
@@ -24,16 +24,6 @@ interface Props {
   onClose: () => void;
 }
 
-/**
- * Canvas size in SVG units. It is also the rendered CSS size on desktop, and
- * the phone canvas is sized to render 1:1 there too: at 1100 px wide the SVG
- * had to shrink to ~0.33× inside a 390 px viewport, which put the 10 px chip
- * text at ~3 CSS px. Portrait also suits the core, which is ~2.4 km tall and
- * ~1.4 km wide.
- */
-const CANVAS = { w: 1100, h: 760 };
-const MOBILE_CANVAS = { w: 360, h: 560 };
-
 /** Nobody's booked set applies to someone else's plan — see §5.4. */
 const NO_BOOKED: ReadonlySet<string> = new Set();
 
@@ -46,8 +36,11 @@ const NO_BOOKED: ReadonlySet<string> = new Set();
  */
 export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Props) {
   const [geo, setGeo] = useState<CampusGeo | null>(null);
-  const isMobile = useIsMobile();
-  const canvas = isMobile ? MOBILE_CANVAS : CANVAS;
+  // The canvas is sized to the stage it sits in (SVG units == CSS px, so chip
+  // text is never scaled): a phone gets a portrait canvas at 1:1, a wide window
+  // a wide one, and both refit on resize/rotation.
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const canvas = useStageSize(stageRef);
   const [bookedOnly, setBookedOnly] = useState<boolean>(
     () => loadMapBookedOnly() ?? (hasBookedData && !readOnly),
   );
@@ -190,7 +183,7 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
         </p>
       )}
 
-      <div className="campusmap__stage">
+      <div className="campusmap__stage" ref={stageRef}>
         {geo === null || !shownView || !homeView ? (
           <div className="campusmap__loading">Loading campus…</div>
         ) : (

@@ -295,26 +295,54 @@ export interface RoadLabel {
   name: string;
   text: string;
   kind: LineKind;
-  /** Screen-space points, ordered so the text reads left to right. */
-  pts: Point[];
-  /** Where the text's middle lands (half-way along `pts`), so other names can keep clear. */
-  mid: Point;
+  /** Centre of the (straight, rotated) text, screen px. */
+  x: number;
+  y: number;
+  /** Rotation in degrees, always within (−90, 90] so the text reads upright. */
+  angle: number;
+  /** Text box before rotation. */
+  w: number;
+  h: number;
 }
 
 /** Rough on-screen text width at the road-label font size. */
 const ROAD_CHAR_W = 5.4;
+const ROAD_H = 12;
+/** How far the road may bow away from the label's chord before that spot is too curvy. */
+const MAX_BOW_PX = 2.5;
+/** Where along the visible run to try to sit the label: middle first. */
+const TRY_AT = [0.5, 0.38, 0.62, 0.26, 0.74, 0.15, 0.85] as const;
+const KIND_PRIORITY: Record<LineKind, number> = { hwy: 0, major: 1, walk: 2, minor: 3, coast: 9 };
+
+/** Axis-aligned bounds of a w×h box rotated by `angle` degrees about (x, y). */
+export function rotatedBox(x: number, y: number, w: number, h: number, angle: number): Box {
+  const r = (angle * Math.PI) / 180;
+  const bw = Math.abs(Math.cos(r)) * w + Math.abs(Math.sin(r)) * h;
+  const bh = Math.abs(Math.sin(r)) * w + Math.abs(Math.cos(r)) * h;
+  return { x: x - bw / 2, y: y - bh / 2, w: bw, h: bh };
+}
 
 /**
- * Pick which named lines get text along them at this view: one polyline per
- * name (the one with the longest run on the canvas), trimmed to that visible
- * run so the label's midpoint is on screen, and only if the run is long enough
- * to carry the name with room to spare. Points are ordered so the text reads
- * left to right where it sits — a loop road like Gilman Dr runs both ways, so
- * the direction is judged at the label's own midpoint, not at the road's ends.
+ * Pick which named lines get text at this view, and where. Labels are straight
+ * — rotated to the road's local direction, never bent along it: bent text
+ * twists as the map zooms and reads badly on any curve. A label goes only where
+ * the road is straight enough under it (bow ≤ MAX_BOW_PX over the text's own
+ * length), trying the middle of the visible run first and then either side; a
+ * road with no straight-enough stretch on screen goes unlabelled. Highways are
+ * placed first, then major roads, walkways, minor roads; each label must clear
+ * `obstacles` (the pins) and every label placed before it, or it is dropped.
+ * One label per name.
  */
-export function roadLabels(lines: readonly CampusLine[], view: Viewport, w: number, h: number): RoadLabel[] {
-  const best = new Map<string, { len: number; label: RoadLabel }>();
+export function roadLabels(
+  lines: readonly CampusLine[],
+  view: Viewport,
+  w: number,
+  h: number,
+  obstacles: readonly Box[] = [],
+): RoadLabel[] {
   const MARGIN = 24;
+  // Gather candidates with their visible run, then place in priority order.
+  const cands: { line: CampusLine; text: string; run: { pts: Point[]; len: number } }[] = [];
   for (const line of lines) {
     if (!wantsRoadLabel(line)) continue;
     const pts: Point[] = [];
@@ -324,16 +352,65 @@ export function roadLabels(lines: readonly CampusLine[], view: Viewport, w: numb
     const run = longestVisibleRun(pts, w, h, MARGIN);
     if (!run) continue;
     const text = roadLabelText(line.name);
-    if (run.len < text.length * ROAD_CHAR_W + 40) continue;
-    const prev = best.get(line.name);
-    if (prev && prev.len >= run.len) continue;
-    const ordered = readsLeftToRight(run.pts) ? run.pts : [...run.pts].reverse();
-    best.set(line.name, {
-      len: run.len,
-      label: { name: line.name, text, kind: line.kind, pts: ordered, mid: pointAlong(ordered, run.len / 2) },
-    });
+    if (run.len < text.length * ROAD_CHAR_W + 30) continue;
+    cands.push({ line, text, run });
   }
-  return [...best.values()].map((b) => b.label);
+  cands.sort(
+    (p, q) => KIND_PRIORITY[p.line.kind] - KIND_PRIORITY[q.line.kind] || q.run.len - p.run.len,
+  );
+
+  const taken: Box[] = [...obstacles];
+  const done = new Set<string>();
+  const out: RoadLabel[] = [];
+  for (const { line, text, run } of cands) {
+    if (done.has(line.name)) continue;
+    const tw = text.length * ROAD_CHAR_W;
+    for (const frac of TRY_AT) {
+      const centre = run.len * frac;
+      if (centre - tw / 2 < 0 || centre + tw / 2 > run.len) continue;
+      const spot = straightSpot(run.pts, centre, tw);
+      if (!spot) continue;
+      const box = rotatedBox(spot.x, spot.y, tw, ROAD_H, spot.angle);
+      if (box.x < 2 || box.y < 2 || box.x + box.w > w - 2 || box.y + box.h > h - 2) continue;
+      if (taken.some((t) => boxesOverlap(box, t))) continue;
+      taken.push(box);
+      done.add(line.name);
+      out.push({ name: line.name, text, kind: line.kind, x: spot.x, y: spot.y, angle: spot.angle, w: tw, h: ROAD_H });
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * The centre and upright angle of a label of length `tw` centred `centre` px
+ * along the polyline — or null if the polyline bows more than MAX_BOW_PX away
+ * from the chord under the label.
+ */
+function straightSpot(pts: Point[], centre: number, tw: number): { x: number; y: number; angle: number } | null {
+  const a = pointAlong(pts, centre - tw / 2);
+  const b = pointAlong(pts, centre + tw / 2);
+  const chord = Math.hypot(b.x - a.x, b.y - a.y);
+  if (chord < tw * 0.9) return null; // the road doubles back under the label
+  // Bow: max distance of the vertices between a and b from the chord.
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i - 1]!;
+    const q = pts[i]!;
+    const seg = Math.hypot(q.x - p.x, q.y - p.y);
+    const at = acc + seg;
+    if (at > centre - tw / 2 && at < centre + tw / 2) {
+      const d = Math.abs((b.x - a.x) * (a.y - q.y) - (a.x - q.x) * (b.y - a.y)) / Math.max(1e-6, chord);
+      if (d > MAX_BOW_PX) return null;
+    }
+    acc = at;
+    if (acc > centre + tw / 2) break;
+  }
+  let angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+  if (angle > 90) angle -= 180;
+  if (angle <= -90) angle += 180;
+  const m = pointAlong(pts, centre);
+  return { x: m.x, y: m.y, angle };
 }
 
 /** The longest stretch of consecutive points inside the canvas (± margin), with its length. */
@@ -370,25 +447,12 @@ function pointAlong(pts: Point[], dist: number): Point {
     const b = pts[i]!;
     const seg = Math.hypot(b.x - a.x, b.y - a.y);
     if (acc + seg >= dist) {
-      const t = seg === 0 ? 0 : (dist - acc) / seg;
+      const t = seg === 0 ? 0 : Math.max(0, (dist - acc) / seg);
       return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
     }
     acc += seg;
   }
   return pts[pts.length - 1]!;
-}
-
-/** Whether the segment under the run's midpoint heads rightwards (so text is upright). */
-function readsLeftToRight(pts: Point[]): boolean {
-  let total = 0;
-  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y);
-  let acc = 0;
-  for (let i = 1; i < pts.length; i++) {
-    const seg = Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y);
-    if (acc + seg >= total / 2) return pts[i]!.x >= pts[i - 1]!.x;
-    acc += seg;
-  }
-  return pts[pts.length - 1]!.x >= pts[0]!.x;
 }
 
 /* ------------------------------------------------------- building names */
