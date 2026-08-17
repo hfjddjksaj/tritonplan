@@ -20,14 +20,16 @@ interface Props {
 
 /**
  * What a clicked marker expands into: the chip's place on the map, grown into
- * a card — course code top-left, Directions top-right, then one row per
- * component ("LEC · Room 2622"). Several courses in one building each get a
- * heading of the same size. HTML over the SVG (real text, a real button),
- * positioned from the marker's screen coordinates on every view change.
+ * a card — the building's name as an eyebrow with Directions beside it, then
+ * one section per course: code heading, one row per component ("LEC · Room
+ * 2622"). Several courses in one building each get a heading of the same
+ * size. HTML over the SVG (real text, a real button), positioned from the
+ * marker's screen coordinates on every view change.
  */
 export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBox }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const sections = useMemo(() => cardSections(group.pins), [group]);
+  const where = group.place ?? group.building ?? 'This building';
   const [measured, setMeasured] = useState<Size | null>(null);
   // Measure before paint so the first frame is already flipped the right way.
   useLayoutEffect(() => {
@@ -37,7 +39,7 @@ export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBo
     const h = el.offsetHeight;
     if (w > 0 && h > 0) setMeasured((m) => (m && m.w === w && m.h === h ? m : { w, h }));
   }, [sections]);
-  const size = measured ?? estimateCardSize(sections);
+  const size = measured ?? estimateCardSize(sections, where);
   const { left, top } = cardPlacement(anchor, size, canvas, insetTop);
   const onBoxRef = useRef(onBox);
   onBoxRef.current = onBox;
@@ -45,33 +47,44 @@ export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBo
     onBoxRef.current({ x: left, y: top, w: size.w, h: size.h });
   }, [left, top, size.w, size.h]);
 
-  const c = colorsForHue(group.pins[0]!.hue);
-  const where = group.place ?? group.building ?? 'this building';
   return (
     <div
       ref={ref}
       className="campusmap__card"
-      style={{ left, top, borderColor: c.spine }}
+      style={{ left, top }}
       role="group"
       aria-label={`${where}: classes here`}
     >
-      {sections.map((s, i) => {
+      <div className="campusmap__card-head">
+        <span className="eyebrow campusmap__card-place">{where}</span>
+        {onDirections && (
+          <button
+            type="button"
+            className="btn btn--sm btn--primary campusmap__card-dir"
+            onClick={onDirections}
+          >
+            Directions
+          </button>
+        )}
+      </div>
+      {sections.map((s) => {
         const sc = colorsForHue(s.hue);
         return (
           <section key={s.courseId} className="campusmap__card-section">
-            <div className="campusmap__card-head">
-              <span className="campusmap__card-code" style={{ color: sc.text }}>
-                {s.courseCode}
-              </span>
-              {i === 0 && onDirections && (
-                <button type="button" className="campusmap__card-dir" onClick={onDirections}>
-                  Directions
-                </button>
-              )}
+            <div className="campusmap__card-code" style={{ color: sc.text }}>
+              {s.courseCode}
             </div>
             <ul className="campusmap__card-rows">
               {s.rows.map((r) => (
-                <li key={`${r.label}|${r.room ?? ''}`}>{rowText(r)}</li>
+                <li key={`${r.label}|${r.room ?? ''}`} aria-label={rowText(r)}>
+                  {r.room ? (
+                    <>
+                      {r.label} · <span className="mono">Room {r.room}</span>
+                    </>
+                  ) : (
+                    r.label
+                  )}
+                </li>
               ))}
             </ul>
           </section>

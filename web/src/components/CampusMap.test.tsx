@@ -123,6 +123,10 @@ describe('CampusMap', () => {
   let root: Root;
   beforeEach(() => {
     localStorage.clear();
+    // The map opens on today's weekday when it has classes; pin "today" to a
+    // Sunday so every test starts on "All" whatever day it actually runs.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 7, 16, 12));
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -130,6 +134,7 @@ describe('CampusMap', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.useRealTimers();
   });
 
   function render(over: Partial<Parameters<typeof CampusMap>[0]> = {}) {
@@ -267,8 +272,12 @@ describe('CampusMap', () => {
     const rows = [...card.querySelectorAll('.campusmap__card-rows li')].map((li) => li.textContent);
     expect(rows).toEqual(['LEC · Room 109', 'DIS · Room 212', 'LEC · Room 105']);
     expect(card.textContent).not.toContain('11:00');
+    // The building's name heads the card, with Directions as the one primary action.
+    expect(card.querySelector('.campusmap__card-place')!.textContent).toBe('Center Hall');
     expect(card.querySelectorAll('.campusmap__card-dir')).toHaveLength(1);
-    expect(card.querySelector('.campusmap__card-dir')!.textContent).toBe('Directions');
+    const dir = card.querySelector('.campusmap__card-dir')!;
+    expect(dir.textContent).toBe('Directions');
+    expect(dir.classList.contains('btn--primary')).toBe(true);
     // The card is positioned in canvas px, off the marker.
     expect((card as HTMLElement).style.left).toMatch(/px$/);
 

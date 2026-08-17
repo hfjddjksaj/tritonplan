@@ -115,4 +115,14 @@ describe('estimateCardSize', () => {
     expect(two.w).toBe(one.w);
     expect(wide.w).toBeGreaterThan(one.w);
   });
+
+  it('reserves the top row for the building name beside the Directions button', () => {
+    const sections = cardSections([pin({})]);
+    const short = estimateCardSize(sections, 'York Hall');
+    const long = estimateCardSize(sections, 'Computer Science and Engineering Building');
+    expect(long.w).toBeGreaterThan(short.w);
+    // The name row sits above the first course heading, so even a one-row
+    // card is taller than heading + row + padding alone.
+    expect(short.h).toBeGreaterThan(22 + 20 + 20);
+  });
 });

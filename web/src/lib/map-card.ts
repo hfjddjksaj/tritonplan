@@ -63,18 +63,21 @@ export interface Size {
 const PAD_X = 12;
 const HEAD_CHAR_W = 8.2; // 13 px bold code
 const ROW_CHAR_W = 6.6; // 12 px rows
-const DIRECTIONS_W = 74; // "Directions" button incl. its gap
+const PLACE_CHAR_W = 6.8; // 10 px uppercase eyebrow, tracked
+const DIRECTIONS_W = 90; // "Directions" button (btn--sm) incl. its gap
+const PLACE_H = 30; // the name row, button-height, plus its gap
 const HEAD_H = 22;
 const ROW_H = 20;
 const SECTION_GAP = 8;
 const PAD_Y = 10;
 
 /** A first-paint guess at the card's size, replaced by a DOM measurement. */
-export function estimateCardSize(sections: readonly CardSection[]): Size {
-  let w = 0;
-  let h = PAD_Y * 2;
+export function estimateCardSize(sections: readonly CardSection[], place = ''): Size {
+  // Top row: the building name (eyebrow) with the Directions button at its right.
+  let w = place.length * PLACE_CHAR_W + DIRECTIONS_W;
+  let h = PAD_Y * 2 + PLACE_H;
   sections.forEach((s, i) => {
-    w = Math.max(w, s.courseCode.length * HEAD_CHAR_W + (i === 0 ? DIRECTIONS_W : 0));
+    w = Math.max(w, s.courseCode.length * HEAD_CHAR_W);
     for (const r of s.rows) w = Math.max(w, rowText(r).length * ROW_CHAR_W);
     h += HEAD_H + s.rows.length * ROW_H + (i > 0 ? SECTION_GAP : 0);
   });
