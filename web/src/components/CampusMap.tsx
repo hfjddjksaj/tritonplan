@@ -128,7 +128,7 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
     [allPins, effectiveBookedOnly],
   );
 
-  const { slices, predicate } = useMemo(() => slicesFor(scoped), [scoped]);
+  const { slices, predicate } = useMemo(() => slicesFor(scoped, 'weekday'), [scoped]);
   const [sliceId, setSliceId] = useState<string>(() =>
     defaultSliceId(slices, scoped, todayWeekday()),
   );

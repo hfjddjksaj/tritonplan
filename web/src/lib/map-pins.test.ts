@@ -7,6 +7,9 @@ import {
   slicesFor,
   defaultSliceId,
   isOnlineModality,
+  weekStartIso,
+  weekLabel,
+  type MapPin,
 } from './map-pins';
 import { entryHue } from './plan';
 
@@ -73,6 +76,24 @@ function planWith(course: CourseOffering): PlanState {
     version: 1,
     term: { year: '2026', period: '2', label: 'Fall 2026' },
     entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
+/** A located exam pin on `date` — for slice tests that only care about when, not where. */
+function examPinAt(date: string, over: Partial<MapPin> = {}): MapPin {
+  return {
+    courseId: 'CSE-8A|2026|2',
+    courseCode: 'CSE-8A',
+    hue: 231,
+    kind: 'midterm',
+    label: 'Midterm',
+    when: { date, start: '10:00', end: '11:50' },
+    building: 'Center Hall',
+    place: 'Center Hall',
+    room: '109',
+    coords: { lat: 32.8779, lng: -117.2415 },
+    booked: false,
+    ...over,
   };
 }
 
@@ -250,7 +271,7 @@ describe('isOnlineModality', () => {
 
 describe('slicesFor', () => {
   it('offers All plus the calendar weekday set for weekly meetings', () => {
-    const { slices, predicate } = slicesFor(meetingPins(planWith(courseWithMeetings())));
+    const { slices, predicate } = slicesFor(meetingPins(planWith(courseWithMeetings())), 'weekday');
     expect(slices.map((s) => s.id)).toEqual(['all', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
     expect(slices[1]!.label).toBe('Mon');
 
@@ -263,12 +284,12 @@ describe('slicesFor', () => {
   it('appends a weekend column only when something actually meets then', () => {
     const c = courseWithMeetings();
     c.options[0]!.components[1]!.meetings[0]!.days = ['Sat'];
-    const { slices } = slicesFor(meetingPins(planWith(c)));
+    const { slices } = slicesFor(meetingPins(planWith(c)), 'weekday');
     expect(slices.map((s) => s.id)).toEqual(['all', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
   });
 
   it('offers All plus real exam dates for dated pins', () => {
-    const { slices, predicate } = slicesFor(finalPins(planWith(courseWithModernFinal())));
+    const { slices, predicate } = slicesFor(finalPins(planWith(courseWithModernFinal())), 'date');
     expect(slices.map((s) => s.id)).toEqual(['all', '2026-12-09']);
     expect(slices[1]!.label).toBe('Dec 09');
     const pins = finalPins(planWith(courseWithModernFinal()));
@@ -277,22 +298,22 @@ describe('slicesFor', () => {
   });
 
   it('offers only All when there are no pins', () => {
-    expect(slicesFor([]).slices.map((s) => s.id)).toEqual(['all']);
+    expect(slicesFor([], 'weekday').slices.map((s) => s.id)).toEqual(['all']);
   });
 });
 
 describe('defaultSliceId', () => {
   it("opens on today's column when today is on the map", () => {
     const pins = meetingPins(planWith(courseWithMeetings()));
-    const { slices } = slicesFor(pins);
+    const { slices } = slicesFor(pins, 'weekday');
     expect(defaultSliceId(slices, pins, 'Wed')).toBe('Wed');
   });
 
   it('falls back to All when today has no column', () => {
     const pins = meetingPins(planWith(courseWithMeetings()));
-    const { slices } = slicesFor(pins);
+    const { slices } = slicesFor(pins, 'weekday');
     expect(defaultSliceId(slices, pins, 'Sun')).toBe('all');
-    expect(defaultSliceId(slicesFor([]).slices, [], 'Wed')).toBe('all');
+    expect(defaultSliceId(slicesFor([], 'weekday').slices, [], 'Wed')).toBe('all');
   });
 
   it('falls back to All on a weekday column that carries no class', () => {
@@ -300,9 +321,51 @@ describe('defaultSliceId', () => {
     // EXISTS for this MWF course — opening on it would show an empty map above
     // "no class locations to place yet", which is a lie about a located plan.
     const pins = meetingPins(planWith(courseWithMeetings()));
-    const { slices } = slicesFor(pins);
+    const { slices } = slicesFor(pins, 'weekday');
     expect(slices.map((s) => s.id)).toContain('Tue');
     expect(pins.some((p) => p.when.weekday === 'Tue')).toBe(false);
     expect(defaultSliceId(slices, pins, 'Tue')).toBe('all');
+  });
+});
+
+describe('weekStartIso', () => {
+  it('returns the Monday of the week containing the date', () => {
+    expect(weekStartIso('2026-10-21')).toBe('2026-10-19'); // Wed → Mon
+    expect(weekStartIso('2026-10-19')).toBe('2026-10-19'); // a Monday stays
+    expect(weekStartIso('2026-10-25')).toBe('2026-10-19'); // Sunday closes the week that began Oct 19
+    expect(weekStartIso('2026-11-01')).toBe('2026-10-26'); // across a month boundary
+  });
+});
+
+describe('weekLabel', () => {
+  it('prints Monday–Sunday with the month once when the week stays inside it', () => {
+    expect(weekLabel('2026-10-19')).toBe('Oct 19–25');
+    expect(weekLabel('2026-10-05')).toBe('Oct 05–11'); // two-digit days, like the Dec 09 date chips
+  });
+
+  it('names both months when the week crosses one', () => {
+    expect(weekLabel('2026-10-26')).toBe('Oct 26–Nov 01');
+  });
+});
+
+describe('slicesFor by week', () => {
+  it('buckets dated pins into Monday–Sunday weeks that actually carry an exam', () => {
+    const pins = [examPinAt('2026-10-21'), examPinAt('2026-10-25'), examPinAt('2026-11-01')];
+    const { slices, predicate } = slicesFor(pins, 'week');
+    expect(slices.map((s) => s.id)).toEqual(['all', '2026-10-19', '2026-10-26']);
+    expect(slices.map((s) => s.label)).toEqual(['All', 'Oct 19–25', 'Oct 26–Nov 01']);
+    expect(pins.filter(predicate('2026-10-19')).map((p) => p.when.date)).toEqual(['2026-10-21', '2026-10-25']);
+    expect(pins.filter(predicate('2026-10-26')).map((p) => p.when.date)).toEqual(['2026-11-01']);
+    expect(pins.filter(predicate('all'))).toHaveLength(3);
+  });
+
+  it('orders weeks by time whatever order the pins arrive in', () => {
+    const { slices } = slicesFor([examPinAt('2026-11-14'), examPinAt('2026-10-31')], 'week');
+    expect(slices.map((s) => s.id)).toEqual(['all', '2026-10-26', '2026-11-09']);
+  });
+
+  it('is only All for pins that carry no date', () => {
+    const { slices } = slicesFor(meetingPins(planWith(courseWithMeetings())), 'week');
+    expect(slices.map((s) => s.id)).toEqual(['all']);
   });
 });

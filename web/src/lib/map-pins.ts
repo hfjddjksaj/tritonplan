@@ -14,7 +14,7 @@ import { examDisplay } from '@triton/shared';
 import { matchBuilding } from './buildings';
 import { finalsSorted, meetingInstances, midtermsSorted, typeTag } from './plan';
 import { visibleDays } from './layout';
-import { dateParts } from './format';
+import { dateParts, isoDate } from './format';
 
 export type PinKind = 'meeting' | 'midterm' | 'final';
 
@@ -146,19 +146,49 @@ export interface PinSlices {
 const ALL: PinSlice = { id: 'all', label: 'All' };
 
 /**
- * Available time slices for a pin set, plus the matching filter.
- *
- * Recurring pins slice by weekday (reusing the calendar's own visibleDays
- * rule: Mon–Fri always, weekends only when something meets then); dated pins
- * slice by the dates that actually have an exam. The caller gets a list of
- * ids and a predicate and never has to know which kind it is holding.
+ * How a view slices its pins — one level below the view's span: Classes span a
+ * week → by weekday; Finals span finals week → by date; Midterms span the term
+ * → by week. A design decision per view, not something inferred from the pins.
  */
-export function slicesFor(pins: MapPin[]): PinSlices {
-  const dates = [...new Set(pins.map((p) => p.when.date).filter((d): d is string => !!d))].sort();
-  if (dates.length > 0) {
+export type SliceBy = 'weekday' | 'date' | 'week';
+
+/** ISO date of the Monday that starts the week containing `iso` (weeks run Mon–Sun). */
+export function weekStartIso(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7)); // Mon=0 … Sun=6 days back
+  return isoDate(dt);
+}
+
+/** "Oct 19–25", or "Oct 26–Nov 01" when the week crosses a month. */
+export function weekLabel(mondayIso: string): string {
+  const [y, m, d] = mondayIso.split('-').map(Number);
+  const sunday = isoDate(new Date(y ?? 1970, (m ?? 1) - 1, (d ?? 1) + 6));
+  const a = dateParts(mondayIso);
+  const b = dateParts(sunday);
+  return a.month === b.month ? `${a.month} ${a.day}–${b.day}` : `${a.month} ${a.day}–${b.month} ${b.day}`;
+}
+
+/**
+ * Available time slices for a pin set at the given granularity, plus the
+ * matching filter. Only slices that actually carry a pin are offered (the
+ * weekday branch keeps the calendar's own visibleDays rule: Mon–Fri always,
+ * weekends only when something meets then); All is always first.
+ */
+export function slicesFor(pins: MapPin[], by: SliceBy): PinSlices {
+  if (by === 'weekday') {
+    const used = new Set(pins.map((p) => p.when.weekday).filter((d): d is Weekday => !!d));
+    const slices = used.size === 0 ? [ALL] : [ALL, ...visibleDays(used).map((d) => ({ id: d, label: d }))];
+    return {
+      slices,
+      predicate: (id) => (id === ALL.id ? () => true : (pin) => pin.when.weekday === id),
+    };
+  }
+  const dates = pins.map((p) => p.when.date).filter((d): d is string => !!d);
+  if (by === 'date') {
     const slices = [
       ALL,
-      ...dates.map((d) => {
+      ...[...new Set(dates)].sort().map((d) => {
         const { month, day } = dateParts(d);
         return { id: d, label: `${month} ${day}` };
       }),
@@ -168,12 +198,11 @@ export function slicesFor(pins: MapPin[]): PinSlices {
       predicate: (id) => (id === ALL.id ? () => true : (pin) => pin.when.date === id),
     };
   }
-
-  const used = new Set(pins.map((p) => p.when.weekday).filter((d): d is Weekday => !!d));
-  const slices = used.size === 0 ? [ALL] : [ALL, ...visibleDays(used).map((d) => ({ id: d, label: d }))];
+  const weeks = [...new Set(dates.map(weekStartIso))].sort();
   return {
-    slices,
-    predicate: (id) => (id === ALL.id ? () => true : (pin) => pin.when.weekday === id),
+    slices: [ALL, ...weeks.map((w) => ({ id: w, label: weekLabel(w) }))],
+    predicate: (id) =>
+      id === ALL.id ? () => true : (pin) => pin.when.date !== undefined && weekStartIso(pin.when.date) === id,
   };
 }
 
