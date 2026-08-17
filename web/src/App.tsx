@@ -18,7 +18,8 @@ import { PlanPickerModal } from './components/PlanPickerModal';
 import { TermSwitcher } from './components/TermSwitcher';
 import { BlockSheet } from './components/BlockSheet';
 import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
-import { Calendar, Cap, Check, PenLine } from './components/icons';
+import { Check } from './components/icons';
+import { ViewTabs } from './components/ViewTabs';
 import { countConflictPairs } from './lib/plan';
 import { displayTermLabel } from './lib/terms';
 import { pluralize } from './lib/format';
@@ -195,38 +196,11 @@ export default function App() {
               {isMobile && view !== 'courses' && (
                 <CalViewToggle value={calView} onChange={handleCalView} />
               )}
-              <div className="tabs" role="tablist" aria-label="Planner views">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={view === 'calendar'}
-                  className={`tab${view === 'calendar' ? ' tab--active' : ''}`}
-                  onClick={() => setTab('calendar')}
-                >
-                  <Calendar size={15} /> Calendar
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={view === 'midterms'}
-                  className={`tab${view === 'midterms' ? ' tab--active' : ''}`}
-                  onClick={() => setTab('midterms')}
-                >
-                  <PenLine size={15} /> Midterms
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={view === 'finals'}
-                  className={`tab${view === 'finals' ? ' tab--active' : ''}`}
-                  onClick={() => setTab('finals')}
-                >
-                  <Cap size={15} /> Finals
-                  {ctl.finalConflicts.length > 0 && (
-                    <span className="tab__badge">{ctl.finalConflicts.length}</span>
-                  )}
-                </button>
-              </div>
+              <ViewTabs
+                value={view === 'courses' ? 'calendar' : view}
+                onChange={setTab}
+                finalsBadge={ctl.finalConflicts.length}
+              />
               <div className="toolbar__spacer" />
               <span className="toolbar__hint">{hintText()}</span>
             </div>
