@@ -3,10 +3,10 @@ import type { PlanState } from '@triton/shared';
 import { campusViewport, loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
 import type { Box } from '../lib/map-basemap';
 import { panView, project, toScreen, zoomLevel, zoomView, type Viewport } from '../lib/map-projection';
-import { defaultSliceId, meetingPins, slicesFor } from '../lib/map-pins';
+import { defaultSliceId, meetingPins, slicesFor, todayKey } from '../lib/map-pins';
 import { groupPins, splitByViewport, unplacedPins } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
-import { pluralize, todayWeekday } from '../lib/format';
+import { pluralize } from '../lib/format';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useElementHeight, useStageSize } from '../hooks/useStageSize';
@@ -128,14 +128,15 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
     [allPins, effectiveBookedOnly],
   );
 
-  const { slices, predicate } = useMemo(() => slicesFor(scoped, 'weekday'), [scoped]);
+  const sliced = useMemo(() => slicesFor(scoped, 'weekday'), [scoped]);
+  const { slices, predicate } = sliced;
   const [sliceId, setSliceId] = useState<string>(() =>
-    defaultSliceId(slices, scoped, todayWeekday()),
+    defaultSliceId(sliced, scoped, todayKey('weekday')),
   );
   useEffect(() => {
     // The available columns change with scope; keep the selection valid.
     if (!slices.some((s) => s.id === sliceId)) {
-      setSliceId(defaultSliceId(slices, scoped, todayWeekday()));
+      setSliceId(defaultSliceId(sliced, scoped, todayKey('weekday')));
     }
   }, [slices, scoped, sliceId]);
   const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';

@@ -6,6 +6,7 @@ import {
   finalPins,
   slicesFor,
   defaultSliceId,
+  todayKey,
   isOnlineModality,
   weekStartIso,
   weekLabel,
@@ -302,18 +303,25 @@ describe('slicesFor', () => {
   });
 });
 
+describe('todayKey', () => {
+  it('names today at each granularity: weekday, ISO date, Monday of the week', () => {
+    const wed = new Date(2026, 9, 21, 9); // Wed Oct 21 2026
+    expect(todayKey('weekday', wed)).toBe('Wed');
+    expect(todayKey('date', wed)).toBe('2026-10-21');
+    expect(todayKey('week', wed)).toBe('2026-10-19');
+  });
+});
+
 describe('defaultSliceId', () => {
   it("opens on today's column when today is on the map", () => {
     const pins = meetingPins(planWith(courseWithMeetings()));
-    const { slices } = slicesFor(pins, 'weekday');
-    expect(defaultSliceId(slices, pins, 'Wed')).toBe('Wed');
+    expect(defaultSliceId(slicesFor(pins, 'weekday'), pins, 'Wed')).toBe('Wed');
   });
 
   it('falls back to All when today has no column', () => {
     const pins = meetingPins(planWith(courseWithMeetings()));
-    const { slices } = slicesFor(pins, 'weekday');
-    expect(defaultSliceId(slices, pins, 'Sun')).toBe('all');
-    expect(defaultSliceId(slicesFor([], 'weekday').slices, [], 'Wed')).toBe('all');
+    expect(defaultSliceId(slicesFor(pins, 'weekday'), pins, 'Sun')).toBe('all');
+    expect(defaultSliceId(slicesFor([], 'weekday'), [], 'Wed')).toBe('all');
   });
 
   it('falls back to All on a weekday column that carries no class', () => {
@@ -321,10 +329,24 @@ describe('defaultSliceId', () => {
     // EXISTS for this MWF course — opening on it would show an empty map above
     // "no class locations to place yet", which is a lie about a located plan.
     const pins = meetingPins(planWith(courseWithMeetings()));
-    const { slices } = slicesFor(pins, 'weekday');
-    expect(slices.map((s) => s.id)).toContain('Tue');
+    const sliced = slicesFor(pins, 'weekday');
+    expect(sliced.slices.map((s) => s.id)).toContain('Tue');
     expect(pins.some((p) => p.when.weekday === 'Tue')).toBe(false);
-    expect(defaultSliceId(slices, pins, 'Tue')).toBe('all');
+    expect(defaultSliceId(sliced, pins, 'Tue')).toBe('all');
+  });
+
+  it("opens on today's date when a final falls on it, else All", () => {
+    const pins = finalPins(planWith(courseWithModernFinal()));
+    const sliced = slicesFor(pins, 'date');
+    expect(defaultSliceId(sliced, pins, '2026-12-09')).toBe('2026-12-09');
+    expect(defaultSliceId(sliced, pins, '2026-12-10')).toBe('all');
+  });
+
+  it("opens on this week's bucket when a midterm falls in it, else All", () => {
+    const pins = [examPinAt('2026-10-21'), examPinAt('2026-11-14')];
+    const sliced = slicesFor(pins, 'week');
+    expect(defaultSliceId(sliced, pins, '2026-10-19')).toBe('2026-10-19');
+    expect(defaultSliceId(sliced, pins, '2026-10-26')).toBe('all'); // a week with no exam
   });
 });
 

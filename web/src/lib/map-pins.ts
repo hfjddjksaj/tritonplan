@@ -14,7 +14,7 @@ import { examDisplay } from '@triton/shared';
 import { matchBuilding } from './buildings';
 import { finalsSorted, meetingInstances, midtermsSorted, typeTag } from './plan';
 import { visibleDays } from './layout';
-import { dateParts, isoDate } from './format';
+import { dateParts, isoDate, todayIso, todayWeekday } from './format';
 
 export type PinKind = 'meeting' | 'midterm' | 'final';
 
@@ -206,17 +206,24 @@ export function slicesFor(pins: MapPin[], by: SliceBy): PinSlices {
   };
 }
 
+/** The slice id "today" would have at a granularity: 'Wed' / '2026-10-21' / '2026-10-19'. */
+export function todayKey(by: SliceBy, now = new Date()): string {
+  if (by === 'weekday') return todayWeekday(now);
+  const iso = todayIso(now);
+  return by === 'date' ? iso : weekStartIso(iso);
+}
+
 /**
- * Open on today's column — but only when today actually carries a class.
+ * Open on today's slice — but only when today actually carries a pin.
  *
  * The weekday slices come from visibleDays(), which renders Mon–Fri
- * unconditionally. That is right for a calendar grid, where an empty Tuesday
- * column is visibly empty inside a visible week; here it would open a MWF
- * student's map on a blank Tuesday above copy claiming there is nothing to
- * place. Falling back to All shows the week they do have.
+ * unconditionally; an exam-week bucket or exam date is only offered when it
+ * has an exam, but the same rule keeps all three granularities honest: a slice
+ * that exists yet is empty for this scope would open the map on nothing above
+ * copy claiming there is nothing to place. Falling back to All shows what
+ * they do have.
  */
-export function defaultSliceId(slices: PinSlice[], pins: MapPin[], today?: Weekday): string {
-  const hit = slices.find((s) => s.id === today);
-  if (!hit) return ALL.id;
-  return pins.some((p) => p.when.weekday === today) ? hit.id : ALL.id;
+export function defaultSliceId(sliced: PinSlices, pins: MapPin[], todayKey: string): string {
+  if (!sliced.slices.some((s) => s.id === todayKey)) return ALL.id;
+  return pins.some(sliced.predicate(todayKey)) ? todayKey : ALL.id;
 }
