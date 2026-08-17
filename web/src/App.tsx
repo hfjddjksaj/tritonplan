@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePlan } from './hooks/usePlan';
 import { useIsMobile } from './hooks/useIsMobile';
 import { useApptTimes } from './hooks/useApptTimes';
@@ -13,7 +13,7 @@ import { MidtermsView } from './components/MidtermsView';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
-import { CampusMap } from './components/CampusMap';
+const CampusMap = lazy(() => import('./components/CampusMap').then((m) => ({ default: m.CampusMap })));
 import { PlanPickerModal } from './components/PlanPickerModal';
 import { TermSwitcher } from './components/TermSwitcher';
 import { BlockSheet } from './components/BlockSheet';
@@ -302,12 +302,20 @@ export default function App() {
       )}
 
       {campusOpen && (
-        <CampusMap
-          plan={ctl.viewPlan}
-          booked={ctl.bookedIds}
-          readOnly={ctl.readOnly}
-          onClose={() => setCampusOpen(false)}
-        />
+        <Suspense
+          fallback={
+            <div className="campusmap campusmap--pending" role="dialog" aria-modal="true" aria-label="Campus map">
+              <div className="campusmap__loading">Loading campus…</div>
+            </div>
+          }
+        >
+          <CampusMap
+            plan={ctl.viewPlan}
+            booked={ctl.bookedIds}
+            readOnly={ctl.readOnly}
+            onClose={() => setCampusOpen(false)}
+          />
+        </Suspense>
       )}
     </div>
   );
