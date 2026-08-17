@@ -45,6 +45,18 @@ export function todayWeekday(now = new Date()): Weekday {
   return WEEKDAY_BY_DOW[now.getDay()] ?? 'Mon';
 }
 
+/** A local Date as ISO "YYYY-MM-DD" — the inverse of what dateParts() reads. */
+export function isoDate(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** Today's ISO date in the browser's local time. */
+export function todayIso(now = new Date()): string {
+  return isoDate(now);
+}
+
 /** "8a" / "12p" / "9p" — compact hour label for the narrow mobile calendar gutter. */
 export function shortHour(h: number): string {
   return `${((h + 11) % 12) + 1}${h < 12 ? 'a' : 'p'}`;

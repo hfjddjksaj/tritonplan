@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { relativeTime } from './format';
+import { relativeTime, isoDate, todayIso } from './format';
 
 const NOW = new Date('2026-07-24T12:00:00Z');
 
@@ -17,5 +17,16 @@ describe('relativeTime', () => {
 
   it('returns an empty string for garbage input', () => {
     expect(relativeTime('not-a-date', NOW)).toBe('');
+  });
+});
+
+describe('isoDate / todayIso', () => {
+  it('formats a local date as zero-padded ISO YYYY-MM-DD', () => {
+    expect(isoDate(new Date(2026, 9, 5, 23, 30))).toBe('2026-10-05');
+    expect(isoDate(new Date(2026, 11, 9))).toBe('2026-12-09');
+  });
+
+  it('todayIso is isoDate of now', () => {
+    expect(todayIso(new Date(2026, 7, 16, 12))).toBe('2026-08-16');
   });
 });
