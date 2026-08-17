@@ -1,11 +1,16 @@
 /**
  * The marker card: what a clicked marker expands into, and where it goes.
  *
- * Content is one headed section per course in the building —
+ * Content is one headed section per course in the building (or per exam date) —
  *
  *   CSE-030                Directions
  *   LEC · Room 2622
  *   DIS · Room 2154
+ *
+ * — or for exams, one section per course + date:
+ *
+ *   CSE-030   Wed Dec 09
+ *   Final · Room 2622
  *
  * — rooms only, no times (the day tabs already scope the slice and the
  * calendar owns the times). Pure functions; the React shell renders them.
@@ -13,6 +18,7 @@
 import type { Point } from './map-projection';
 import { abbreviateBuildingWords } from './map-basemap';
 import type { MapPin } from './map-pins';
+import { dateParts } from './format';
 
 export interface CardRow {
   /** 'LEC' | 'DIS' | 'LAB' | 'Final' … */
@@ -24,22 +30,28 @@ export interface CardSection {
   courseId: string;
   courseCode: string;
   hue: number;
+  /** ISO date of the exam this section is about; absent for class meetings. */
+  date?: string;
   rows: CardRow[];
 }
 
 /**
- * Group a marker's pins by course (first appearance order) and collapse them to
- * distinct (component, room) rows — a Tue/Thu lecture is two pins under "All"
- * but one line on the card.
+ * Group a marker's pins into card sections — one per course for class
+ * meetings, one per exam (course + date) for exams, first appearance order —
+ * and collapse each to distinct (component, room) rows: a Tue/Thu lecture is
+ * two pins under "All" but one line on the card; a course's two midterms in
+ * this building are two dated sections.
  */
 export function cardSections(pins: readonly MapPin[]): CardSection[] {
   const sections: CardSection[] = [];
-  const byCourse = new Map<string, CardSection>();
+  const byKey = new Map<string, CardSection>();
   for (const p of pins) {
-    let s = byCourse.get(p.courseId);
+    const key = p.when.date ? `${p.courseId}|${p.when.date}` : p.courseId;
+    let s = byKey.get(key);
     if (!s) {
       s = { courseId: p.courseId, courseCode: p.courseCode, hue: p.hue, rows: [] };
-      byCourse.set(p.courseId, s);
+      if (p.when.date) s.date = p.when.date;
+      byKey.set(key, s);
       sections.push(s);
     }
     if (!s.rows.some((r) => r.label === p.label && r.room === p.room)) {
@@ -52,6 +64,12 @@ export function cardSections(pins: readonly MapPin[]): CardSection[] {
 /** The text of one row, as the card prints it. */
 export function rowText(row: CardRow): string {
   return row.room ? `${row.label} · Room ${row.room}` : row.label;
+}
+
+/** The exam date as the card's heading row prints it: "Wed Dec 09". */
+export function cardDate(iso: string): string {
+  const { dow, month, day } = dateParts(iso);
+  return `${dow} ${month} ${day}`;
 }
 
 /** Names longer than this get their stock words shortened; shorter ones stay verbatim. */
@@ -85,6 +103,8 @@ const HEAD_H = 24;
 const ROW_H = 22;
 const SECTION_GAP = 8;
 const PAD_Y = 10;
+const DATE_CHAR_W = 6.6; // 12 px muted date at the heading's right
+const DATE_GAP = 12;
 
 /** A first-paint guess at the card's size, replaced by a DOM measurement. */
 export function estimateCardSize(sections: readonly CardSection[], place = ''): Size {
@@ -92,7 +112,8 @@ export function estimateCardSize(sections: readonly CardSection[], place = ''): 
   let w = place.length * PLACE_CHAR_W + DIRECTIONS_W;
   let h = PAD_Y * 2 + PLACE_H;
   sections.forEach((s, i) => {
-    w = Math.max(w, s.courseCode.length * HEAD_CHAR_W);
+    const head = s.courseCode.length * HEAD_CHAR_W + (s.date ? DATE_GAP + cardDate(s.date).length * DATE_CHAR_W : 0);
+    w = Math.max(w, head);
     for (const r of s.rows) w = Math.max(w, rowText(r).length * ROW_CHAR_W);
     h += HEAD_H + s.rows.length * ROW_H + (i > 0 ? SECTION_GAP : 0);
   });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { MapPin } from './map-pins';
-import { cardPlaceName, cardPlacement, cardSections, estimateCardSize } from './map-card';
+import { cardDate, cardPlaceName, cardPlacement, cardSections, estimateCardSize } from './map-card';
 
 function pin(over: Partial<MapPin>): MapPin {
   return {
@@ -63,6 +63,28 @@ describe('cardSections', () => {
     const [s] = cardSections([pin({ room: undefined })]);
     expect(s!.rows).toEqual([{ label: 'LEC', room: undefined }]);
   });
+
+  it('gives each exam of one course its own dated section, not one section per course', () => {
+    const sections = cardSections([
+      pin({ kind: 'midterm', label: 'Midterm 1', when: { date: '2026-10-31', start: '10:00', end: '11:50' } }),
+      pin({ kind: 'midterm', label: 'Midterm 2', when: { date: '2026-11-14', start: '10:00', end: '11:50' } }),
+    ]);
+    expect(sections.map((s) => [s.courseCode, s.date, s.rows])).toEqual([
+      ['CSE-030', '2026-10-31', [{ label: 'Midterm 1', room: '2622' }]],
+      ['CSE-030', '2026-11-14', [{ label: 'Midterm 2', room: '2622' }]],
+    ]);
+  });
+
+  it('leaves class sections undated', () => {
+    expect(cardSections([pin({})])[0]!.date).toBeUndefined();
+  });
+});
+
+describe('cardDate', () => {
+  it('prints weekday, month, two-digit day', () => {
+    expect(cardDate('2026-10-31')).toBe('Sat Oct 31');
+    expect(cardDate('2026-12-09')).toBe('Wed Dec 09');
+  });
 });
 
 describe('cardPlacement', () => {
@@ -124,6 +146,15 @@ describe('estimateCardSize', () => {
     // The name row sits above the first course heading, so even a one-row
     // card is taller than heading + row + padding alone.
     expect(short.h).toBeGreaterThan(22 + 20 + 20);
+  });
+
+  it('widens the heading row for a dated section', () => {
+    const plain = estimateCardSize(cardSections([pin({})]));
+    const dated = estimateCardSize(
+      cardSections([pin({ kind: 'final', label: 'Final', when: { date: '2026-12-09', start: '11:30', end: '14:29' } })]),
+    );
+    expect(dated.w).toBeGreaterThan(plain.w);
+    expect(dated.h).toBe(plain.h);
   });
 });
 
