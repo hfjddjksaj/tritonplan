@@ -340,14 +340,14 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
       type: 'fill',
       source: LAYER.buildings,
       filter: hostFilter([]),
-      paint: { 'fill-color': hostFill([]) as ExpressionSpecification },
+      paint: { 'fill-color': hostFill([]) },
     },
     {
       id: LAYER.hostsLine,
       type: 'line',
       source: LAYER.buildings,
       filter: hostFilter([]),
-      paint: { 'line-color': hostLine([]) as ExpressionSpecification, 'line-width': 1.2 },
+      paint: { 'line-color': hostLine([]), 'line-width': 1.2 },
     },
     // 10. buildings-3d, hosts-3d
     {
@@ -369,7 +369,7 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
       filter: hostFilter([]),
       layout: { visibility: 'none' },
       paint: {
-        'fill-extrusion-color': hostFill([]) as ExpressionSpecification,
+        'fill-extrusion-color': hostFill([]),
         'fill-extrusion-height': ['get', 'height'] as ExpressionSpecification,
         'fill-extrusion-base': 0,
         'fill-extrusion-vertical-gradient': true,
