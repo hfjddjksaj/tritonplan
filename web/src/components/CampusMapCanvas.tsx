@@ -51,7 +51,16 @@ interface Props {
 
 /** Rough chip width per character — good enough for collision avoidance. */
 const CHAR_W = 6.2;
-const CHIP_H = 16;
+const CHIP_H = 18;
+/** The pill's inner geometry: dot at the left, then the text, with end padding. */
+const CHIP_PAD_L = 7;
+const CHIP_DOT_R = 3.5;
+const CHIP_DOT_GAP = 5;
+const CHIP_PAD_R = 8;
+const CHIP_TEXT_X = CHIP_PAD_L + CHIP_DOT_R * 2 + CHIP_DOT_GAP;
+function chipWidth(pins: MapPin[]): number {
+  return CHIP_TEXT_X + chipText(pins).length * CHAR_W + CHIP_PAD_R;
+}
 /** Basemap name metrics (uppercase, letter-spaced districts; small landmarks). */
 const DISTRICT_CHAR_W = 9.6;
 const DISTRICT_H = 13;
@@ -210,7 +219,7 @@ export function CampusMapCanvas({
         key: group.key,
         x: pt.x,
         y: pt.y,
-        w: chipText(group.pins).length * CHAR_W + 10,
+        w: chipWidth(group.pins),
         h: CHIP_H,
       })),
       { w: width, h: height },
@@ -227,13 +236,12 @@ export function CampusMapCanvas({
     for (const { group, pt } of markers) {
       obstacles.push({ x: pt.x - 9, y: pt.y - 9, w: 18, h: 18 });
       const l = labels.get(group.key);
-      if (l) obstacles.push({ x: l.x, y: l.y, w: chipText(group.pins).length * CHAR_W + 10, h: CHIP_H });
+      if (l) obstacles.push({ x: l.x, y: l.y, w: chipWidth(group.pins), h: CHIP_H });
     }
-    // The floating header, the open card, then the furniture: compass (top-right,
-    // under the header), scale bar (bottom-left), zoom buttons + attribution (bottom-right).
+    // The floating controls' strip, the open card, then the furniture: scale bar
+    // (bottom-left), zoom buttons + attribution (bottom-right).
     if (insetTop > 0) obstacles.push({ x: 0, y: 0, w: width, h: insetTop });
     obstacles.push(...reserved);
-    obstacles.push({ x: width - 60, y: insetTop, w: 60, h: 60 });
     obstacles.push({ x: 0, y: height - 40, w: 180, h: 40 });
     obstacles.push({ x: width - 60, y: height - 130, w: 60, h: 130 });
     const roads = roadLabels(geo.lines, view, width, height, obstacles);
@@ -417,8 +425,6 @@ export function CampusMapCanvas({
   }, [view, height]);
   const bar = scaleBar(metresPerPixel(view, centreLat));
   const compact = width < 500;
-  const compassR = compact ? 13 : 16;
-  const compassC = { x: width - compassR - 12, y: insetTop + compassR + 18 };
 
   return (
     <svg
@@ -527,8 +533,9 @@ export function CampusMapCanvas({
           const booked = group.pins.some((p) => p.booked);
           // The open marker's chip is replaced by the card the shell draws over the svg.
           const label = selectedKey === group.key ? undefined : labels.get(group.key);
-          const text = chipText(group.pins);
-          const chipW = text.length * CHAR_W + 10;
+          const chipW = chipWidth(group.pins);
+          const first = group.pins[0]!;
+          const chipLabel = group.pins.length === 1 ? first.label : `+${group.pins.length - 1}`;
           return (
             <g
               key={group.key}
@@ -568,13 +575,15 @@ export function CampusMapCanvas({
               />
               {label && (
                 <>
+                  {/* A pill in the app's chip language: white, hairline, a course-coloured
+                      dot, then the code in ink and the component label muted. */}
                   <rect
                     className="campusmap__chip-shadow"
                     x={label.x}
                     y={label.y + 1}
                     width={chipW}
                     height={CHIP_H}
-                    rx={4}
+                    rx={CHIP_H / 2}
                   />
                   <rect
                     className="campusmap__chip"
@@ -582,34 +591,26 @@ export function CampusMapCanvas({
                     y={label.y}
                     width={chipW}
                     height={CHIP_H}
-                    rx={4}
-                    fill={c.fill}
-                    stroke={c.border}
+                    rx={CHIP_H / 2}
                   />
-                  <text className="campusmap__chiptext" x={label.x + 5} y={label.y + 11.5} fill={c.text}>
-                    {text}
+                  <circle
+                    className="campusmap__chip-dot"
+                    cx={label.x + CHIP_PAD_L + CHIP_DOT_R}
+                    cy={label.y + CHIP_H / 2}
+                    r={CHIP_DOT_R}
+                    fill={c.spine}
+                  />
+                  <text className="campusmap__chiptext" x={label.x + CHIP_TEXT_X} y={label.y + 12.5}>
+                    <tspan className="campusmap__chipcode">{first.courseCode}</tspan>
+                    <tspan className="campusmap__chiplabel" dx={4}>
+                      {chipLabel}
+                    </tspan>
                   </text>
                 </>
               )}
             </g>
           );
         })}
-      </g>
-
-      {/* Compass: north is up, but a map with no arrow makes people doubt it. */}
-      <g className="campusmap__compass" aria-hidden="true" transform={`translate(${compassC.x},${compassC.y})`}>
-        <circle r={compassR} className="campusmap__compass-disc" />
-        <path
-          d={`M0,${-compassR + 3} L${compassR * 0.32},${compassR * 0.35} L0,${compassR * 0.15} Z`}
-          className="campusmap__compass-n"
-        />
-        <path
-          d={`M0,${-compassR + 3} L${-compassR * 0.32},${compassR * 0.35} L0,${compassR * 0.15} Z`}
-          className="campusmap__compass-n2"
-        />
-        <text y={-compassR - 4} textAnchor="middle" className="campusmap__compass-label">
-          N
-        </text>
       </g>
 
       <g className="campusmap__scalebar" aria-hidden="true" transform={`translate(${compact ? 10 : 16},${height - (compact ? 12 : 16)})`}>

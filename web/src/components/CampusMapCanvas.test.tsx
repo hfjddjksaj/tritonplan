@@ -36,11 +36,6 @@ function pin(over: Partial<MapPin>): MapPin {
   };
 }
 
-function compassY(container: HTMLElement): number {
-  const t = container.querySelector('.campusmap__compass')!.getAttribute('transform')!;
-  return Number(/translate\([^,]+,([^)]+)\)/.exec(t)![1]);
-}
-
 describe('CampusMapCanvas', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -84,7 +79,8 @@ describe('CampusMapCanvas', () => {
     expect(container.querySelectorAll('.campusmap__footprint')).toHaveLength(1);
     expect(container.querySelector('.campusmap__ocean')).not.toBeNull();
     expect(container.querySelector('.campusmap__road--major')!.getAttribute('d')).toMatch(/^M/);
-    expect(container.querySelector('.campusmap__compass')).not.toBeNull();
+    // The compass lives in the shell's control cluster now, not on the canvas.
+    expect(container.querySelector('.campusmap__compass')).toBeNull();
     expect(container.querySelector('.campusmap__scale-text')!.textContent).toMatch(/^\d+ (m|km)$/);
     expect(container.querySelector('.campusmap__attrib')!.textContent).toContain('OpenStreetMap');
   });
@@ -112,6 +108,23 @@ describe('CampusMapCanvas', () => {
     expect(container.querySelector('.campusmap__marker')!.getAttribute('aria-label')).toBe('York Hall: CSE-8A LEC');
   });
 
+  it('draws the chip as a pill: a course-coloured dot, then the code, then the muted label', () => {
+    render([pin({})]);
+    const chip = container.querySelector('.campusmap__chip')!;
+    // A pill, not a rounded box: corner radius is half the height.
+    expect(Number(chip.getAttribute('rx'))).toBe(Number(chip.getAttribute('height')) / 2);
+    const dot = container.querySelector('.campusmap__chip-dot')!;
+    expect(dot).not.toBeNull();
+    // The dot carries the course colour; the text is ink, not colour.
+    expect(dot.getAttribute('fill')).toBe(container.querySelector('.campusmap__dot')!.getAttribute('stroke'));
+    expect(container.querySelector('.campusmap__chipcode')!.textContent).toBe('CSE-8A');
+    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('LEC');
+    // Two classes in one building: the label becomes the overflow count.
+    render([pin({}), pin({ courseId: 'MATH-20C|2026|2', courseCode: 'MATH-20C', hue: 12 })]);
+    expect(container.querySelector('.campusmap__chipcode')!.textContent).toBe('CSE-8A');
+    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('+1');
+  });
+
   it('draws no chip for the open marker — the card stands in for it', () => {
     render([pin({})]);
     expect(container.querySelector('.campusmap__chip')).not.toBeNull();
@@ -121,11 +134,8 @@ describe('CampusMapCanvas', () => {
     expect(container.querySelector('.campusmap__dot')).not.toBeNull();
   });
 
-  it('keeps the compass and the names out from under the floating header', () => {
-    render([pin({})]);
-    const y0 = compassY(container);
+  it('keeps the names out from under the floating header', () => {
     render([pin({})], vi.fn(), { insetTop: 56 });
-    expect(compassY(container)).toBe(y0 + 56);
     // The header strip is an obstacle: a district name that sat there is pushed or dropped.
     const namesUnderHeader = [...container.querySelectorAll('.campusmap__districtname')].filter(
       (n) => Number(n.getAttribute('y')) < 56,
