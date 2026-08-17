@@ -2949,8 +2949,14 @@ button.termsw__cell:hover {
 .campusmap__marker--open .campusmap__dot {
   stroke-width: 3;
 }
-/* Keyboard focus has to be visible on an SVG group too — the browser default
-   outline lands on the <g>'s bounding box, which is exactly the dot + chip. */
+/* A mouse click focuses the <g> and Chrome then paints its own `outline: auto`
+   ring on the marker's bounding box — a black frame that stays on the dot for
+   as long as the card is open. Suppress that, and keep a ring only for keyboard
+   focus (Tab / Enter), which the browser default would also draw wrong: on the
+   <g>'s bounding box, which is exactly the dot + chip. */
+.campusmap__marker:focus {
+  outline: none;
+}
 .campusmap__marker:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
