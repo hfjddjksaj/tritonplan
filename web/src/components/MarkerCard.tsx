@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { colorsForHue } from '../lib/colors';
 import type { Box } from '../lib/map-basemap';
-import { cardPlacement, cardSections, estimateCardSize, rowText, type Size } from '../lib/map-card';
+import { cardPlaceName, cardPlacement, cardSections, estimateCardSize, rowText, type Size } from '../lib/map-card';
 import type { PinGroup } from '../lib/map-labels';
 import type { Point } from '../lib/map-projection';
 
@@ -30,6 +30,7 @@ export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBo
   const ref = useRef<HTMLDivElement | null>(null);
   const sections = useMemo(() => cardSections(group.pins), [group]);
   const where = group.place ?? group.building ?? 'This building';
+  const shownWhere = cardPlaceName(where);
   const [measured, setMeasured] = useState<Size | null>(null);
   // Measure before paint so the first frame is already flipped the right way.
   useLayoutEffect(() => {
@@ -39,7 +40,7 @@ export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBo
     const h = el.offsetHeight;
     if (w > 0 && h > 0) setMeasured((m) => (m && m.w === w && m.h === h ? m : { w, h }));
   }, [sections]);
-  const size = measured ?? estimateCardSize(sections, where);
+  const size = measured ?? estimateCardSize(sections, shownWhere);
   const { left, top } = cardPlacement(anchor, size, canvas, insetTop);
   const onBoxRef = useRef(onBox);
   onBoxRef.current = onBox;
@@ -56,7 +57,9 @@ export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBo
       aria-label={`${where}: classes here`}
     >
       <div className="campusmap__card-head">
-        <span className="eyebrow campusmap__card-place">{where}</span>
+        <span className="eyebrow campusmap__card-place" title={where}>
+          {shownWhere}
+        </span>
         {onDirections && (
           <button
             type="button"
@@ -79,7 +82,7 @@ export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBo
                 <li key={`${r.label}|${r.room ?? ''}`} aria-label={rowText(r)}>
                   {r.room ? (
                     <>
-                      {r.label} · <span className="mono">Room {r.room}</span>
+                      {r.label} · <span className="campusmap__card-room">Room {r.room}</span>
                     </>
                   ) : (
                     r.label

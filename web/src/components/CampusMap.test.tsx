@@ -110,12 +110,15 @@ function planOnline(): PlanState {
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** Let the dynamic geo import and its promise settle. */
+/** Let the dynamic geo import and its promise settle (a cold import can take a few ticks). */
 async function settle() {
-  await act(async () => {
-    await Promise.resolve();
-    await new Promise((r) => setTimeout(r, 0));
-  });
+  for (let i = 0; i < 40; i++) {
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    if (!document.querySelector('.campusmap__loading')) return;
+  }
 }
 
 describe('CampusMap', () => {
@@ -397,6 +400,19 @@ describe('CampusMap', () => {
     await settle();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
     expect(container.querySelectorAll('.campusmap__marker--booked')).toHaveLength(0);
+  });
+
+  it('abbreviates a long building name on the card instead of cutting it off', async () => {
+    const plan = planWithMeeting();
+    const meeting = plan.entries[0]!.course.options[0]!.components[0]!.meetings[0]!;
+    meeting.building = 'Computer Science and Engineering Building';
+    meeting.location = 'Computer Science and Engineering Building 1202';
+    render({ plan });
+    await settle();
+    act(() => {
+      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.campusmap__card-place')!.textContent).toBe('Computer Science & Eng Bldg');
   });
 
   it('counts buildings in English', async () => {

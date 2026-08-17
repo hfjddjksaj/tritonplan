@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { MapPin } from './map-pins';
-import { cardPlacement, cardSections, estimateCardSize } from './map-card';
+import { cardPlaceName, cardPlacement, cardSections, estimateCardSize } from './map-card';
 
 function pin(over: Partial<MapPin>): MapPin {
   return {
@@ -124,5 +124,21 @@ describe('estimateCardSize', () => {
     // The name row sits above the first course heading, so even a one-row
     // card is taller than heading + row + padding alone.
     expect(short.h).toBeGreaterThan(22 + 20 + 20);
+  });
+});
+
+describe('cardPlaceName', () => {
+  it('leaves a short name alone, even when a stock word could be shortened', () => {
+    expect(cardPlaceName('Center Hall')).toBe('Center Hall');
+    expect(cardPlaceName('Galbraith Hall')).toBe('Galbraith Hall');
+  });
+
+  it('shortens the stock words of a name that would not fit on the card', () => {
+    expect(cardPlaceName('Computer Science and Engineering Building')).toBe('Computer Science & Eng Bldg');
+    expect(cardPlaceName('Student Services Center')).toBe('Student Services Center');
+  });
+
+  it('never invents a name: an address stays an address', () => {
+    expect(cardPlaceName('9500 Gilman Drive Building 3')).toBe('9500 Gilman Drive Building 3');
   });
 });

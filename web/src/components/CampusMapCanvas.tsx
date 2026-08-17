@@ -50,13 +50,17 @@ interface Props {
 }
 
 /** Rough chip width per character — good enough for collision avoidance. */
-const CHAR_W = 6.2;
-const CHIP_H = 18;
+const CHAR_W = 7.1; // 12 px bold, tracked tight
+const CHIP_H = 22;
 /** The pill's inner geometry: dot at the left, then the text, with end padding. */
-const CHIP_PAD_L = 7;
-const CHIP_DOT_R = 3.5;
-const CHIP_DOT_GAP = 5;
-const CHIP_PAD_R = 8;
+const CHIP_PAD_L = 8;
+const CHIP_DOT_R = 4.5;
+const CHIP_DOT_GAP = 6;
+const CHIP_PAD_R = 10;
+/** The marker dot: radius, its white halo, and the obstacle box names keep out of. */
+const DOT_R = 7.5;
+const DOT_HALO_R = 9.5;
+const DOT_BOX = 11;
 const CHIP_TEXT_X = CHIP_PAD_L + CHIP_DOT_R * 2 + CHIP_DOT_GAP;
 function chipWidth(pins: MapPin[]): number {
   return CHIP_TEXT_X + chipText(pins).length * CHAR_W + CHIP_PAD_R;
@@ -234,7 +238,7 @@ export function CampusMapCanvas({
   const placedNames = useMemo(() => {
     const obstacles: Box[] = [];
     for (const { group, pt } of markers) {
-      obstacles.push({ x: pt.x - 9, y: pt.y - 9, w: 18, h: 18 });
+      obstacles.push({ x: pt.x - DOT_BOX, y: pt.y - DOT_BOX, w: DOT_BOX * 2, h: DOT_BOX * 2 });
       const l = labels.get(group.key);
       if (l) obstacles.push({ x: l.x, y: l.y, w: chipWidth(group.pins), h: CHIP_H });
     }
@@ -563,15 +567,15 @@ export function CampusMapCanvas({
                 onSelect(selectedKey === group.key ? null : group.key);
               }}
             >
-              <circle className="campusmap__dot-halo" cx={pt.x} cy={pt.y} r={8} fill="#fff" />
+              <circle className="campusmap__dot-halo" cx={pt.x} cy={pt.y} r={DOT_HALO_R} fill="#fff" />
               <circle
                 className="campusmap__dot"
                 cx={pt.x}
                 cy={pt.y}
-                r={6}
+                r={DOT_R}
                 fill={booked ? c.spine : '#fff'}
                 stroke={c.spine}
-                strokeWidth={2}
+                strokeWidth={2.5}
               />
               {label && (
                 <>
@@ -600,7 +604,7 @@ export function CampusMapCanvas({
                     r={CHIP_DOT_R}
                     fill={c.spine}
                   />
-                  <text className="campusmap__chiptext" x={label.x + CHIP_TEXT_X} y={label.y + 12.5}>
+                  <text className="campusmap__chiptext" x={label.x + CHIP_TEXT_X} y={label.y + 15.5}>
                     <tspan className="campusmap__chipcode">{first.courseCode}</tspan>
                     <tspan className="campusmap__chiplabel" dx={4}>
                       {chipLabel}

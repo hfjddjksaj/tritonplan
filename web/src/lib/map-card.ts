@@ -11,6 +11,7 @@
  * calendar owns the times). Pure functions; the React shell renders them.
  */
 import type { Point } from './map-projection';
+import { abbreviateBuildingWords } from './map-basemap';
 import type { MapPin } from './map-pins';
 
 export interface CardRow {
@@ -53,6 +54,20 @@ export function rowText(row: CardRow): string {
   return row.room ? `${row.label} · Room ${row.room}` : row.label;
 }
 
+/** Names longer than this get their stock words shortened; shorter ones stay verbatim. */
+const PLACE_VERBATIM_MAX = 24;
+
+/**
+ * The building name as the card's eyebrow prints it: verbatim when it fits on
+ * a line, otherwise with its stock words abbreviated ("Computer Science &
+ * Eng Bldg"). Street addresses are left alone — an abbreviated address is not
+ * a name anyone recognises.
+ */
+export function cardPlaceName(name: string): string {
+  if (name.length <= PLACE_VERBATIM_MAX || /^\d/.test(name)) return name;
+  return abbreviateBuildingWords(name);
+}
+
 export interface Size {
   w: number;
   h: number;
@@ -61,13 +76,13 @@ export interface Size {
 /* Layout metrics mirrored from the CSS (.campusmap__card): only used before the
    card has been measured, and for the label-collision obstacle in tests. */
 const PAD_X = 12;
-const HEAD_CHAR_W = 8.2; // 13 px bold code
-const ROW_CHAR_W = 6.6; // 12 px rows
-const PLACE_CHAR_W = 6.8; // 10 px uppercase eyebrow, tracked
-const DIRECTIONS_W = 90; // "Directions" button (btn--sm) incl. its gap
-const PLACE_H = 30; // the name row, button-height, plus its gap
-const HEAD_H = 22;
-const ROW_H = 20;
+const HEAD_CHAR_W = 9; // 14.5 px bold code
+const ROW_CHAR_W = 7.2; // 13 px rows
+const PLACE_CHAR_W = 7.6; // 11.5 px uppercase eyebrow, tracked
+const DIRECTIONS_W = 96; // "Directions" button (btn--sm) incl. its gap
+const PLACE_H = 32; // the name row, button-height, plus its gap
+const HEAD_H = 24;
+const ROW_H = 22;
 const SECTION_GAP = 8;
 const PAD_Y = 10;
 

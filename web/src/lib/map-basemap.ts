@@ -457,10 +457,9 @@ function pointAlong(pts: Point[], dist: number): Point {
 
 /* ------------------------------------------------------- building names */
 
-/** Footprint names too generic or too long to help; shortened where a stock word allows. */
-export function buildingShortName(name: string): string | null {
-  if (!name || /^\d/.test(name)) return null; // street addresses, e.g. "9500 Gilman Drive"
-  let out = name
+/** The stock words of a building name, shortened the way campus signage does. */
+export function abbreviateBuildingWords(name: string): string {
+  return name
     .replace(/\bBuilding\b/g, 'Bldg')
     .replace(/\bLaboratory\b/g, 'Lab')
     .replace(/\bLaboratories\b/g, 'Labs')
@@ -471,6 +470,12 @@ export function buildingShortName(name: string): string | null {
     .replace(/\bParking Structure\b/g, 'Parking')
     .replace(/\band\b/g, '&')
     .replace(/^The\s+/, '');
+}
+
+/** Footprint names too generic or too long to help; shortened where a stock word allows. */
+export function buildingShortName(name: string): string | null {
+  if (!name || /^\d/.test(name)) return null; // street addresses, e.g. "9500 Gilman Drive"
+  const out = abbreviateBuildingWords(name);
   if (out.length > 30) return null;
   return out;
 }

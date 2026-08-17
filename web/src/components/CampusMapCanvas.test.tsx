@@ -119,6 +119,9 @@ describe('CampusMapCanvas', () => {
     expect(dot.getAttribute('fill')).toBe(container.querySelector('.campusmap__dot')!.getAttribute('stroke'));
     expect(container.querySelector('.campusmap__chipcode')!.textContent).toBe('CSE-8A');
     expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('LEC');
+    // Big enough to read and to hit: the dot is 7.5 px, the pill 22 px tall.
+    expect(Number(container.querySelector('.campusmap__dot')!.getAttribute('r'))).toBe(7.5);
+    expect(Number(chip.getAttribute('height'))).toBe(22);
     // Two classes in one building: the label becomes the overflow count.
     render([pin({}), pin({ courseId: 'MATH-20C|2026|2', courseCode: 'MATH-20C', hue: 12 })]);
     expect(container.querySelector('.campusmap__chipcode')!.textContent).toBe('CSE-8A');

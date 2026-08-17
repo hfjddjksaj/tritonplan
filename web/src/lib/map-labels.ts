@@ -139,7 +139,7 @@ export interface PlacedLabel {
   side: LabelSide;
 }
 
-const DOT_GAP = 9;
+const DOT_GAP = 12;
 
 function boxFor(a: LabelAnchor, side: LabelSide): { x: number; y: number } {
   switch (side) {
