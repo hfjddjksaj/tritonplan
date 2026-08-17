@@ -617,4 +617,15 @@ describe('CampusMap', () => {
     act(() => tabNamed('Midterms').click());
     expect(sliceOn()).toBe('Oct 26–Nov 01');
   });
+
+  it('keeps the pick when the active tab is clicked again', async () => {
+    vi.setSystemTime(new Date(2026, 9, 28, 9)); // Wed Oct 28: the week of the Oct 31 midterm
+    render({ plan: planWithMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    act(() => sliceButtons()[2]!.click());
+    expect(sliceOn()).toBe('Nov 09–15');
+    act(() => tabNamed('Midterms').click()); // still in the view: nothing to re-run
+    expect(sliceOn()).toBe('Nov 09–15');
+  });
 });

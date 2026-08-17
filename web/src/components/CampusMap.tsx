@@ -167,15 +167,14 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
 
   const sliced = useMemo(() => slicesFor(scoped, by), [scoped, by]);
   const { slices, predicate } = sliced;
-  // The student's pick, remembered with the view it was made in. A pick from
-  // another view, or one whose slice is no longer offered (Booked only can
-  // remove it), yields to the default rule: today's slice if it has something,
-  // else All — so switching to Finals on exam day lands on today, and coming
-  // back to Classes re-asks the same question of that view.
-  const [picked, setPicked] = useState<{ view: PlannerView; id: string } | null>(null);
+  // The student's pick. It sticks while they stay on this view — reselecting the
+  // same tab is a no-op, not a reset — but the view-switch handler below clears it
+  // the moment the view actually changes, so the today rule gets to run again; it
+  // also yields early if Booked only has removed its slice from what's offered.
+  const [picked, setPicked] = useState<string | null>(null);
   const sliceId =
-    picked && picked.view === mapView && slices.some((s) => s.id === picked.id)
-      ? picked.id
+    picked !== null && slices.some((s) => s.id === picked)
+      ? picked
       : defaultSliceId(sliced, scoped, todayKey(by));
   const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
 
@@ -289,11 +288,10 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
             <ViewTabs
               value={mapView}
               onChange={(v) => {
+                // ViewTabs fires onChange on every click of an enabled tab, including
+                // the one already active — only an actual view change forgets the pick.
+                if (v !== mapView) setPicked(null);
                 setMapView(v);
-                // A same-valued view tag alone can't tell "still here" from "left and
-                // came back" — the id repeats either way — so the switch itself is
-                // what forgets the old pick and lets the today rule run again.
-                setPicked(null);
               }}
               calendarLabel="Classes"
               ariaLabel="Map views"
@@ -306,7 +304,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
                   role="radio"
                   aria-checked={s.id === sliceId}
                   className={`calseg__btn${s.id === sliceId ? ' calseg__btn--on' : ''}`}
-                  onClick={() => setPicked({ view: mapView, id: s.id })}
+                  onClick={() => setPicked(s.id)}
                 >
                   {s.label}
                 </button>
