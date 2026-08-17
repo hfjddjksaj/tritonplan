@@ -108,6 +108,38 @@ function planOnline(): PlanState {
   };
 }
 
+/** A final in York Hall (a real, matchable building) on Wed Dec 09, structured fields. */
+function planWithFinal(): PlanState {
+  const course = courseWithMeeting();
+  course.options[0]!.final = {
+    date: '2026-12-09',
+    start: '11:30',
+    end: '14:29',
+    modality: 'In Person',
+    location: 'York Hall Room 2622',
+    building: 'York Hall',
+    room: '2622',
+  };
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
+/** Two dated midterms in Center Hall: Sat Oct 31 (week of Oct 26) and Sat Nov 14 (week of Nov 09). */
+function planWithMidterms(): PlanState {
+  const course = courseWithMeeting();
+  course.options[0]!.components[0]!.rawSched =
+    'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109\n' +
+    'Midterm Examination 11/14/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109';
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Let the dynamic geo import and its promise settle (a cold import can take a few ticks). */
@@ -119,6 +151,18 @@ async function settle() {
     });
     if (!document.querySelector('.campusmap__loading')) return;
   }
+}
+
+function tabNamed(name: string): HTMLButtonElement {
+  return [...document.querySelectorAll('.campusmap__island [role="tab"]')].find(
+    (t) => t.textContent === name,
+  ) as HTMLButtonElement;
+}
+function sliceButtons(): HTMLButtonElement[] {
+  return [...document.querySelectorAll('.campusmap__slices .calseg__btn')] as HTMLButtonElement[];
+}
+function sliceOn(): string {
+  return sliceButtons().find((b) => b.classList.contains('calseg__btn--on'))!.textContent ?? '';
 }
 
 describe('CampusMap', () => {
@@ -317,11 +361,11 @@ describe('CampusMap', () => {
     expect(root.querySelector('.campusmap__hint')).toBeNull();
     expect(island.querySelector('.campusmap__title')!.textContent).toBe('Campus map');
     // The same segmented control as the planner toolbar, reading Classes here;
-    // Midterms / Finals are drawn in place but not wired up yet.
+    // Midterms / Finals switch what the map shows.
     const tabs = [...island.querySelectorAll('[role="tab"]')] as HTMLButtonElement[];
     expect(tabs.map((t) => t.textContent)).toEqual(['Classes', 'Midterms', 'Finals']);
     expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
-    expect(tabs.map((t) => t.disabled)).toEqual([false, true, true]);
+    expect(tabs.map((t) => t.disabled)).toEqual([false, false, false]);
     // The day filter is the small segmented control (calseg), All first.
     const days = [...island.querySelectorAll('.campusmap__slices .calseg__btn')] as HTMLButtonElement[];
     expect(days.map((d) => d.textContent)).toEqual(['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
@@ -462,5 +506,88 @@ describe('CampusMap', () => {
       'Booked only is on and nothing here is booked yet',
     );
     expect(container.textContent).toContain('No class locations to place yet');
+  });
+
+  it('opens on the view it was given', async () => {
+    // (The default — Classes — is already asserted by 'floats a control island…' above.
+    // Do NOT re-render the same root with a different initialView: it is initial state,
+    // a prop change after mount is deliberately ignored.)
+    render({ plan: planWithFinal(), initialView: 'finals' });
+    await settle();
+    expect(tabNamed('Finals').getAttribute('aria-selected')).toBe('true');
+    expect(tabNamed('Classes').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('Finals: exam chips, date slices, "Filter by date", and the folded summary names the view', async () => {
+    render({ plan: planWithFinal() });
+    await settle();
+    // Classes view: the Monday lecture is on the map, the final is not.
+    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('LEC');
+    act(() => tabNamed('Finals').click());
+    expect(tabNamed('Finals').getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('Final');
+    expect(container.querySelector('.campusmap__chipcode')!.textContent).toBe('CSE-8A');
+    expect(sliceButtons().map((b) => b.textContent)).toEqual(['All', 'Dec 09']);
+    expect(container.querySelector('.campusmap__slices')!.getAttribute('aria-label')).toBe('Filter by date');
+    act(() => sliceButtons()[1]!.click());
+    act(() => (container.querySelector('.campusmap__collapse') as HTMLButtonElement).click());
+    expect(container.querySelector('.campusmap__summary')!.textContent).toBe('Finals · Dec 09');
+  });
+
+  it('Midterms: one slice per Mon–Sun week that has an exam, "Filter by week"', async () => {
+    render({ plan: planWithMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    expect(sliceButtons().map((b) => b.textContent)).toEqual(['All', 'Oct 26–Nov 01', 'Nov 09–15']);
+    expect(container.querySelector('.campusmap__slices')!.getAttribute('aria-label')).toBe('Filter by week');
+    // Both sittings are in Center Hall: one marker, its chip counts them.
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    act(() => sliceButtons()[2]!.click());
+    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('Midterm 2');
+    act(() => tabNamed('Classes').click());
+    expect(container.querySelector('.campusmap__slices')!.getAttribute('aria-label')).toBe('Filter by day');
+  });
+
+  it('opens on today’s exam date when the map opens on Finals on that day', async () => {
+    vi.setSystemTime(new Date(2026, 11, 9, 9)); // Wed Dec 09 — the day of the final
+    render({ plan: planWithFinal(), initialView: 'finals' });
+    await settle();
+    expect(sliceOn()).toBe('Dec 09');
+  });
+
+  it('says why an exam view is empty, per view', async () => {
+    render({ plan: planWithMeeting() }); // classes only: no midterm, no final
+    await settle();
+    expect(container.querySelector('.campusmap__empty')).toBeNull();
+    act(() => tabNamed('Midterms').click());
+    expect(container.querySelector('.campusmap__empty')!.textContent).toBe(
+      'No midterm locations yet — TSS hasn’t announced a dated midterm for these courses.',
+    );
+    act(() => tabNamed('Finals').click());
+    expect(container.querySelector('.campusmap__empty')!.textContent).toBe(
+      'No final exam locations yet. Pick sections that carry a final and they’ll appear here.',
+    );
+  });
+
+  it('Booked only filters exam views too', async () => {
+    render({ plan: planWithFinal(), booked: new Set(['MATH-20C|2026|2']) });
+    await settle();
+    act(() => tabNamed('Finals').click());
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
+    expect(container.textContent).toContain('Booked only is on and nothing here is booked yet');
+  });
+
+  it('the marker card in an exam view is dated on the code row', async () => {
+    render({ plan: planWithFinal(), initialView: 'finals' });
+    await settle();
+    act(() => {
+      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const card = container.querySelector('.campusmap__card')!;
+    expect(card.querySelector('.campusmap__card-place')!.textContent).toBe('York Hall');
+    expect(card.querySelector('.campusmap__card-date')!.textContent).toBe('Wed Dec 09');
+    expect([...card.querySelectorAll('.campusmap__card-rows li')].map((li) => li.textContent)).toEqual(['Final · Room 2622']);
   });
 });

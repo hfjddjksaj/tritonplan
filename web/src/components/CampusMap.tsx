@@ -3,7 +3,7 @@ import type { PlanState } from '@triton/shared';
 import { campusViewport, loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
 import type { Box } from '../lib/map-basemap';
 import { panView, project, toScreen, zoomLevel, zoomView, type Viewport } from '../lib/map-projection';
-import { defaultSliceId, meetingPins, slicesFor, todayKey } from '../lib/map-pins';
+import { defaultSliceId, finalPins, meetingPins, midtermPins, slicesFor, todayKey, type MapPin, type SliceBy } from '../lib/map-pins';
 import { groupPins, splitByViewport, unplacedPins } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
 import { pluralize } from '../lib/format';
@@ -13,7 +13,7 @@ import { useElementHeight, useStageSize } from '../hooks/useStageSize';
 import { CampusMapCanvas, MAX_ZOOM, MIN_ZOOM } from './CampusMapCanvas';
 import { MarkerCard } from './MarkerCard';
 import { BuildingPopover } from './BuildingPopover';
-import { ViewTabs } from './ViewTabs';
+import { ViewTabs, type PlannerView } from './ViewTabs';
 import { Check, ChevronDown, Compass, MapPinIcon, Minus, Plus, X } from './icons';
 
 interface Props {
@@ -23,6 +23,8 @@ interface Props {
   booked: ReadonlySet<string>;
   /** Viewing someone else's plan — the booked toggle is meaningless then. */
   readOnly: boolean;
+  /** The tab the map opens on — the planner's current view. One-way: switching tabs here never changes the planner. */
+  initialView?: PlannerView;
   onClose: () => void;
 }
 
@@ -35,8 +37,40 @@ const ISLAND_FALLBACK_H = 118;
 const ISLAND_TOP = 10;
 const ISLAND_GAP = 8;
 
-/** What the map shows this round: class meetings. Midterms / Finals tabs are drawn, not wired. */
-const MAP_VIEW_LABEL = 'Classes';
+interface MapViewDef {
+  /** Tab / summary label. The first tab reads "Classes" here, not "Calendar": the map shows where classes are, not a calendar. */
+  label: string;
+  /** Slice granularity — one level below the view's span (see slicesFor). */
+  by: SliceBy;
+  sliceAria: string;
+  pins: (plan: PlanState, booked: ReadonlySet<string>) => MapPin[];
+  /** Shown over the basemap when nothing in this view can be placed. */
+  empty: string;
+}
+
+const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
+  calendar: {
+    label: 'Classes',
+    by: 'weekday',
+    sliceAria: 'Filter by day',
+    pins: meetingPins,
+    empty: 'No class locations to place yet. Add courses with scheduled meetings, and they’ll appear here.',
+  },
+  midterms: {
+    label: 'Midterms',
+    by: 'week',
+    sliceAria: 'Filter by week',
+    pins: midtermPins,
+    empty: 'No midterm locations yet — TSS hasn’t announced a dated midterm for these courses.',
+  },
+  finals: {
+    label: 'Finals',
+    by: 'date',
+    sliceAria: 'Filter by date',
+    pins: finalPins,
+    empty: 'No final exam locations yet. Pick sections that carry a final and they’ll appear here.',
+  },
+};
 
 const NO_BOXES: readonly Box[] = [];
 
@@ -49,11 +83,12 @@ const NO_BOXES: readonly Box[] = [];
  *
  * The map IS the page: the SVG fills the viewport edge to edge, and everything
  * else floats over it as islands in the app's own chrome language — a control
- * island top-left (title, view tabs, day filter; foldable to its title row),
- * a control cluster top-right (Booked only · compass · close), the marker card,
- * the "not on the map" island bottom-left, the zoom buttons bottom-right.
+ * island top-left (title, Classes / Midterms / Finals tabs, each with its own
+ * time filter; foldable to its title row), a control cluster top-right
+ * (Booked only · compass · close), the marker card, the "not on the map"
+ * island bottom-left, the zoom buttons bottom-right.
  */
-export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
+export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', onClose }: Props) {
   const [geo, setGeo] = useState<CampusGeo | null>(null);
   const isMobile = useIsMobile();
   // The canvas is the stage's own box (SVG units == CSS px, so chip text is
@@ -72,6 +107,8 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
   const [cardBox, setCardBox] = useState<Box | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   const [unplacedOpen, setUnplacedOpen] = useState(false);
+  const [mapView, setMapView] = useState<PlannerView>(initialView);
+  const { label: viewLabel, by, sliceAria, empty: emptyViewCopy } = MAP_VIEWS[mapView];
 
   // The fitted frame is the anchor for zoom limits and the ⟲ button; `view` is
   // what the canvas actually draws through and what wheel/drag/pinch move.
@@ -122,23 +159,21 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
   const showBookedToggle = !readOnly && booked.size > 0;
   const effectiveBookedOnly = showBookedToggle && bookedOnly;
 
-  const allPins = useMemo(() => meetingPins(plan, effectiveBooked), [plan, effectiveBooked]);
+  const allPins = useMemo(() => MAP_VIEWS[mapView].pins(plan, effectiveBooked), [mapView, plan, effectiveBooked]);
   const scoped = useMemo(
     () => (effectiveBookedOnly ? allPins.filter((p) => p.booked) : allPins),
     [allPins, effectiveBookedOnly],
   );
 
-  const sliced = useMemo(() => slicesFor(scoped, 'weekday'), [scoped]);
+  const sliced = useMemo(() => slicesFor(scoped, by), [scoped, by]);
   const { slices, predicate } = sliced;
-  const [sliceId, setSliceId] = useState<string>(() =>
-    defaultSliceId(sliced, scoped, todayKey('weekday')),
-  );
+  const [sliceId, setSliceId] = useState<string>(() => defaultSliceId(sliced, scoped, todayKey(by)));
   useEffect(() => {
-    // The available columns change with scope; keep the selection valid.
+    // The available slices change with scope and view; keep the selection valid.
     if (!slices.some((s) => s.id === sliceId)) {
-      setSliceId(defaultSliceId(sliced, scoped, todayKey('weekday')));
+      setSliceId(defaultSliceId(sliced, scoped, todayKey(by)));
     }
-  }, [slices, scoped, sliceId]);
+  }, [sliced, slices, scoped, sliceId, by]);
   const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
 
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
@@ -172,7 +207,7 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
     : onCanvas.length === 0 && unplaced.length > 0
       ? 'Nothing here lands on the mapped part of campus — the list at the bottom-left has where these classes actually meet.'
       : onCanvas.length === 0
-        ? 'No class locations to place yet. Add courses with scheduled meetings, and they’ll appear here.'
+        ? emptyViewCopy
         : null;
 
   const cluster = (
@@ -244,18 +279,12 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
 
         {collapsed ? (
           <div className="campusmap__summary">
-            {MAP_VIEW_LABEL} · {sliceLabel}
+            {viewLabel} · {sliceLabel}
           </div>
         ) : (
           <>
-            <ViewTabs
-              value="calendar"
-              onChange={() => {}}
-              calendarLabel={MAP_VIEW_LABEL}
-              disabled={['midterms', 'finals']}
-              ariaLabel="Map views"
-            />
-            <div className="calseg campusmap__slices" role="radiogroup" aria-label="Filter by day">
+            <ViewTabs value={mapView} onChange={setMapView} calendarLabel="Classes" ariaLabel="Map views" />
+            <div className="calseg campusmap__slices" role="radiogroup" aria-label={sliceAria}>
               {slices.map((s) => (
                 <button
                   key={s.id}

@@ -2491,6 +2491,7 @@ button.termsw__cell:hover {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
+  width: 340px; /* fixed: switching tabs must not make the island jump; the slice row scrolls instead */
   max-width: calc(100% - 20px);
   padding: 8px 10px 10px;
   background: var(--surface);
@@ -2925,6 +2926,7 @@ button.termsw__cell:hover {
     left: 8px;
     right: 8px;
     top: 8px;
+    width: auto;
     max-width: none;
     padding: 6px 8px 8px;
   }
