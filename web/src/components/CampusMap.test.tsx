@@ -143,7 +143,7 @@ describe('CampusMap', () => {
     act(() => {
       root.render(
         <CampusMap
-          plan={plan} booked={new Set()} hasBookedData={true}
+          plan={plan} booked={new Set()}
           readOnly={false} onClose={onClose} {...over}
         />,
       );
@@ -170,23 +170,37 @@ describe('CampusMap', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the booked-only toggle for your own plan', async () => {
-    render();
+  it('shows the booked-only toggle once anything is booked, however it got booked', async () => {
+    // Manual "mark booked" in the rail counts — the extension feed is not required.
+    render({ booked: new Set(['CSE-8A|2026|2']) });
     await settle();
     expect(container.querySelector('.campusmap__bookedtoggle')).not.toBeNull();
   });
 
   it('HIDES the booked-only toggle on someone else’s plan', async () => {
-    render({ readOnly: true });
+    render({ readOnly: true, booked: new Set(['CSE-8A|2026|2']) });
     await settle();
     expect(container.querySelector('.campusmap__bookedtoggle')).toBeNull();
   });
 
-  it('hides the toggle when no booked data has ever been captured', async () => {
-    render({ hasBookedData: false });
+  it('hides the toggle when nothing is booked, even if the feed was captured', async () => {
+    render({ booked: new Set() });
     await settle();
     expect(container.querySelector('.campusmap__bookedtoggle')).toBeNull();
-    expect(container.textContent).toContain('Booked Courses');
+    // And there is no nudge to go and "open" anything — the feed loads by itself.
+    expect(container.textContent).not.toContain('Booked Courses');
+  });
+
+  it('draws every course in the plan by default — booked-only starts off', async () => {
+    // Something IS booked (so the toggle shows), just not the class on this plan.
+    render({ plan: planWithMeeting(), booked: new Set(['MATH-20C|2026|2']) });
+    await settle();
+    const toggle = container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement;
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    act(() => toggle.click());
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
   });
 
   it('shows an empty state for a plan with no locatable classes', async () => {
@@ -197,8 +211,8 @@ describe('CampusMap', () => {
   });
 
   it('Escape peels one layer at a time: popover, then the marker card, then the map', async () => {
-    // hasBookedData: false so the booked-only toggle can't hide the marker we need to click.
-    const onClose = render({ plan: planWithMeeting(), hasBookedData: false });
+    // Nothing booked ⇒ no booked-only toggle can hide the marker we need to click.
+    const onClose = render({ plan: planWithMeeting() });
     await settle();
 
     const marker = container.querySelector('.campusmap__marker') as SVGGElement | null;
@@ -254,7 +268,7 @@ describe('CampusMap', () => {
     other.options[0]!.components[0]!.meetings[0]!.room = '105';
     plan.entries.push({ course: other, selectedOptionId: other.options[0]!.id, color: '12' });
 
-    render({ plan, hasBookedData: false });
+    render({ plan });
     await settle();
     expect(container.querySelector('.campusmap__detail')).toBeNull();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
@@ -289,25 +303,81 @@ describe('CampusMap', () => {
     expect(container.querySelector('.campusmap__chip')).not.toBeNull();
   });
 
-  it('floats the header over the map and lets the hint be dismissed', async () => {
-    render({ hasBookedData: false });
+  it('floats a control island over the map: title, the view tabs, the day filter', async () => {
+    render({ plan: planWithMeeting() });
     await settle();
-    // Header and stage are siblings; the header comes first for tab order.
+    // Island and stage are siblings; the island comes first for tab order.
     const root = container.querySelector('.campusmap')!;
-    expect(root.children[0]!.classList.contains('campusmap__bar')).toBe(true);
-    expect(root.querySelector('.campusmap__stage')).not.toBeNull();
-    expect(root.querySelector('.campusmap__frame')).toBeNull();
-    const hint = container.querySelector('.campusmap__hint')!;
-    expect(hint.textContent).toContain('Booked Courses');
-    act(() => (hint.querySelector('.campusmap__hint-close') as HTMLButtonElement).click());
-    expect(container.querySelector('.campusmap__hint')).toBeNull();
+    const island = root.children[0]!;
+    expect(island.classList.contains('campusmap__island')).toBe(true);
+    expect(root.querySelector('.campusmap__bar')).toBeNull();
+    expect(root.querySelector('.campusmap__hint')).toBeNull();
+    expect(island.querySelector('.campusmap__title')!.textContent).toBe('Campus map');
+    // The same segmented control as the planner toolbar, reading Classes here;
+    // Midterms / Finals are drawn in place but not wired up yet.
+    const tabs = [...island.querySelectorAll('[role="tab"]')] as HTMLButtonElement[];
+    expect(tabs.map((t) => t.textContent)).toEqual(['Classes', 'Midterms', 'Finals']);
+    expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
+    expect(tabs.map((t) => t.disabled)).toEqual([false, true, true]);
+    // The day filter is the small segmented control (calseg), All first.
+    const days = [...island.querySelectorAll('.campusmap__slices .calseg__btn')] as HTMLButtonElement[];
+    expect(days.map((d) => d.textContent)).toEqual(['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+    expect(days[0]!.classList.contains('calseg__btn--on')).toBe(true);
+    act(() => days[1]!.click());
+    expect(days[1]!.classList.contains('calseg__btn--on')).toBe(true);
+    expect(days[0]!.classList.contains('calseg__btn--on')).toBe(false);
+  });
+
+  it('collapses the island to its title row plus a one-line summary of the view', async () => {
+    render({ plan: planWithMeeting() });
+    await settle();
+    const island = container.querySelector('.campusmap__island')!;
+    const fold = island.querySelector('.campusmap__collapse') as HTMLButtonElement;
+    expect(fold.getAttribute('aria-expanded')).toBe('true');
+    expect(island.querySelector('.campusmap__summary')).toBeNull();
+    // Pick a day first: the summary should say what the map is filtered to.
+    const mon = [...island.querySelectorAll('.calseg__btn')].find((b) => b.textContent === 'Mon') as HTMLButtonElement;
+    act(() => mon.click());
+    act(() => fold.click());
+    expect(fold.getAttribute('aria-expanded')).toBe('false');
+    expect(island.querySelector('[role="tablist"]')).toBeNull();
+    expect(island.querySelector('.campusmap__slices')).toBeNull();
+    expect(island.querySelector('.campusmap__summary')!.textContent).toBe('Classes · Mon');
+    // Title row survives, with the count.
+    expect(island.querySelector('.campusmap__title')!.textContent).toBe('Campus map');
+    expect(island.querySelector('.campusmap__count')).not.toBeNull();
+    act(() => fold.click());
+    expect(fold.getAttribute('aria-expanded')).toBe('true');
+    expect(island.querySelector('.campusmap__summary')).toBeNull();
+    // Still on Mon after unfolding.
+    const monAgain = [...island.querySelectorAll('.calseg__btn')].find((b) => b.textContent === 'Mon')!;
+    expect(monAgain.classList.contains('calseg__btn--on')).toBe(true);
+  });
+
+  it('puts the compass between Booked only and the close button in the top-right cluster', async () => {
+    render({ plan: planWithMeeting(), booked: new Set(['CSE-8A|2026|2']) });
+    await settle();
+    const cluster = container.querySelector('.campusmap__cluster')!;
+    const kinds = [...cluster.children].map((el) =>
+      el.classList.contains('campusmap__bookedtoggle')
+        ? 'booked'
+        : el.classList.contains('campusmap__compass')
+          ? 'compass'
+          : el.classList.contains('campusmap__close')
+            ? 'close'
+            : el.className,
+    );
+    expect(kinds).toEqual(['booked', 'compass', 'close']);
+    // No compass left on the canvas.
+    expect(container.querySelector('svg .campusmap__compass')).toBeNull();
   });
 
   it('explains a booked-only-hidden plan instead of claiming there is nothing to place', async () => {
-    render({ plan: planWithMeeting(), hasBookedData: true, booked: new Set() });
+    render({ plan: planWithMeeting(), booked: new Set(['MATH-20C|2026|2']) });
     await settle();
-    // hasBookedData: true + no prior choice ⇒ booked-only defaults on; the plan's one
-    // class isn't booked, so it's filtered out — but it DOES exist, unlike makePlan().
+    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
+    // Booked-only on; the plan's one class isn't booked, so it's filtered out — but it
+    // DOES exist, unlike makePlan().
     expect(container.textContent).toContain(
       'Booked only is on and nothing here is booked yet. Turn it off to see every course in your plan.',
     );
@@ -317,26 +387,26 @@ describe('CampusMap', () => {
   it('never marks a pin booked on someone else’s plan, even in a course you take', async () => {
     const mine = new Set(['CSE-8A|2026|2']);
     // Control: on YOUR plan the solid dot is exactly the point.
-    render({ plan: planWithMeeting(), hasBookedData: true, booked: mine });
+    render({ plan: planWithMeeting(), booked: mine });
     await settle();
     expect(container.querySelectorAll('.campusmap__marker--booked')).toHaveLength(1);
 
     // Read-only: same course, same booked set, but the plan is someone else's — so
     // your enrolment says nothing about it and must not be painted onto it (§5.4).
-    render({ plan: planWithMeeting(), hasBookedData: true, booked: mine, readOnly: true });
+    render({ plan: planWithMeeting(), booked: mine, readOnly: true });
     await settle();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
     expect(container.querySelectorAll('.campusmap__marker--booked')).toHaveLength(0);
   });
 
   it('counts buildings in English', async () => {
-    render({ plan: planWithMeeting(), hasBookedData: false });
+    render({ plan: planWithMeeting() });
     await settle();
     expect(container.querySelector('.campusmap__count')!.textContent).toBe('1 building');
   });
 
   it('lists a class outside the mapped area instead of counting it as drawn', async () => {
-    render({ plan: planOffTheMap(), hasBookedData: false });
+    render({ plan: planOffTheMap() });
     await settle();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
     expect(container.querySelector('.campusmap__count')!.textContent).toBe('nothing to show');
@@ -352,7 +422,7 @@ describe('CampusMap', () => {
   });
 
   it('says an online class is online rather than calling it unplaceable', async () => {
-    render({ plan: planOnline(), hasBookedData: false });
+    render({ plan: planOnline() });
     await settle();
     act(() => (container.querySelector('.campusmap__unlocated-toggle') as HTMLButtonElement).click());
     expect(container.textContent).toContain('Live Online');
@@ -360,17 +430,18 @@ describe('CampusMap', () => {
   });
 
   it('shows no pill at all when everything is on the map', async () => {
-    render({ plan: planWithMeeting(), hasBookedData: false });
+    render({ plan: planWithMeeting() });
     await settle();
     expect(container.querySelector('.campusmap__unlocated')).toBeNull();
   });
 
   it('does not blame booked-only when the only class was never locatable to begin with', async () => {
-    // Unbooked + hasBookedData true ⇒ booked-only defaults on here too, but the course's
-    // building can't be matched — turning the toggle off would NOT put it on the map, so
-    // the booked-only explanation would be a lie. The generic empty state is the honest one.
-    render({ plan: planWithUnlocatableMeeting(), hasBookedData: true, booked: new Set() });
+    // Booked-only on, but the course's building can't be matched — turning the toggle
+    // off would NOT put it on the map, so the booked-only explanation would be a lie.
+    // The generic empty state is the honest one.
+    render({ plan: planWithUnlocatableMeeting(), booked: new Set(['MATH-20C|2026|2']) });
     await settle();
+    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
     expect(container.textContent).not.toContain(
       'Booked only is on and nothing here is booked yet',
     );

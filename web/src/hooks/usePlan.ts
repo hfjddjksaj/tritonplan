@@ -521,16 +521,6 @@ export function usePlan() {
     return ws ? bookedSet(ws) : new Set<string>();
   }, [termsState, viewPlan.term]);
 
-  /**
-   * Whether the extension has ever pushed the booked feed for the viewed term.
-   * `bookedAuto === undefined` means "never captured" — distinct from `[]`,
-   * which means "captured, and currently enrolled in nothing".
-   */
-  const hasBookedData = useMemo<boolean>(() => {
-    const ws = termsState.terms[termKey(viewPlan.term)];
-    return ws?.bookedAuto !== undefined;
-  }, [termsState, viewPlan.term]);
-
   const selectedCourses = useMemo(() => buildSelectedCourses(viewPlan), [viewPlan]);
   const weeklyConflicts = useMemo(() => findWeeklyConflicts(selectedCourses), [selectedCourses]);
   const finalConflicts = useMemo(() => findFinalConflicts(selectedCourses), [selectedCourses]);
@@ -580,7 +570,6 @@ export function usePlan() {
     removeFromPool,
     clearBrowsed,
     bookedIds,
-    hasBookedData,
     toggleBooked,
     openCourseInTss,
     openBookingInTss,

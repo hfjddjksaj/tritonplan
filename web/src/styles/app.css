@@ -2472,124 +2472,139 @@ button.termsw__cell:hover {
 /* =============================== campus map (full-page overlay) */
 .campusmap {
   /* The map IS the page: the stage fills this box edge to edge and every
-     control floats over it. --map-inset is the measured header height, set
-     inline by CampusMap, so the floating pieces can start below the header. */
-  --map-inset: 52px;
+     control floats over it. --map-inset is the measured island bottom, set
+     inline by CampusMap, so the floating pieces can start below it. */
+  --map-inset: 136px;
   position: fixed;
   inset: 0;
   z-index: 95;
   overflow: hidden;
   background: var(--surface);
 }
-.campusmap__bar {
+/* --- the control island (top-left): title row, view tabs, day filter ------ */
+.campusmap__island {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 10px;
+  left: 10px;
   z-index: 3;
   display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 9px 14px;
-  background: rgba(255, 255, 255, 0.86);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
-}
-.campusmap__title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--ink);
-}
-.campusmap__count {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.campusmap__slices {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.campusmap__chipbtn {
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  cursor: pointer;
-}
-.campusmap__chipbtn.is-on {
-  color: #fff;
-  background: var(--ink);
-  border-color: var(--ink);
-}
-.campusmap__bookedtoggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-.campusmap__close {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.campusmap__hint,
-.campusmap__empty,
-.campusmap__loading {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-muted);
-}
-.campusmap__hint {
-  position: absolute;
-  z-index: 2;
-  top: calc(var(--map-inset) + 10px);
-  left: 12px;
-  display: flex;
+  flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  /* Leaves the compass (top-right, under the header) uncovered on a phone. */
-  max-width: min(520px, calc(100% - 68px));
-  padding: 6px 6px 6px 10px;
-  background: rgba(255, 255, 255, 0.94);
+  max-width: calc(100% - 20px);
+  padding: 8px 10px 10px;
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
 }
-.campusmap__hint-close {
-  flex: none;
-  display: inline-flex;
+.campusmap__island--folded {
+  padding-bottom: 9px;
+  gap: 4px;
+}
+.campusmap__titlerow {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: var(--text-muted);
+  gap: 8px;
+  align-self: stretch;
+  min-height: 26px;
+}
+.campusmap__titleicon {
+  flex: none;
+  color: var(--gold);
+}
+.campusmap__title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.campusmap__count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.campusmap__count::before {
+  content: '· ';
+}
+.campusmap__collapse {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text-faint);
   background: transparent;
   border: 0;
   border-radius: var(--r-sm);
   cursor: pointer;
 }
-.campusmap__hint-close:hover {
+.campusmap__collapse:hover {
+  color: var(--ink);
   background: var(--surface-2);
 }
+/* Chevron points up while the island is open (click to fold), down when folded. */
+.campusmap__collapse svg {
+  transform: rotate(180deg);
+  transition: transform 0.16s ease;
+}
+.campusmap__island--folded .campusmap__collapse svg {
+  transform: none;
+}
+/* Folded: one line under the title saying what the map is filtered to. */
+.campusmap__summary {
+  padding-left: 24px; /* under the title text: icon 16 + gap 8 */
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.campusmap__island .tabs {
+  box-shadow: none;
+}
+.campusmap__slices {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.campusmap__slices::-webkit-scrollbar {
+  display: none;
+}
+.campusmap__slices .calseg__btn {
+  white-space: nowrap;
+}
+
+/* --- the control cluster (top-right): Booked only · compass · close --------- */
+.campusmap__cluster {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.campusmap__cluster .btn {
+  box-shadow: var(--shadow-sm);
+}
+.campusmap__bookedtoggle.is-on {
+  color: var(--ink);
+  background: var(--surface-2);
+  border-color: var(--text-faint);
+}
+.campusmap__compass {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+}
+
 /* The stage is the positioning context for everything that floats over the map. */
 .campusmap__stage {
   position: absolute;
@@ -2646,12 +2661,30 @@ button.termsw__cell:hover {
 .campusmap__marker {
   cursor: pointer;
 }
-.campusmap__chiptext {
-  font-size: 10px;
-  font-weight: 700;
+/* The chip is a pill in the app's chip language: white, hairline, a dot in the
+   course colour (a presentation attribute), then the code in ink and the
+   component label muted. */
+.campusmap__chip {
+  fill: #ffffff;
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.campusmap__marker:hover .campusmap__chip {
+  stroke: var(--text-faint);
 }
 .campusmap__chip-shadow {
   fill: rgba(11, 31, 58, 0.14);
+}
+.campusmap__chiptext {
+  font-size: 10.5px;
+}
+.campusmap__chipcode {
+  font-weight: 700;
+  fill: var(--ink);
+}
+.campusmap__chiplabel {
+  font-weight: 600;
+  fill: var(--text-muted);
 }
 
 /* --- names on the basemap: haloed so they survive any background ---------- */
@@ -2705,22 +2738,6 @@ button.termsw__cell:hover {
   fill: #55627a;
   stroke-width: 2.5px;
 }
-.campusmap__compass-disc {
-  fill: #ffffff;
-  stroke: var(--line-strong);
-  stroke-width: 1;
-}
-.campusmap__compass-n {
-  fill: var(--ink);
-}
-.campusmap__compass-n2 {
-  fill: #8f9bb0;
-}
-.campusmap__compass-label {
-  font-size: 9px;
-  font-weight: 800;
-  fill: var(--ink);
-}
 .campusmap__scale-line {
   fill: none;
   stroke: var(--ink);
@@ -2746,26 +2763,27 @@ button.termsw__cell:hover {
   gap: 4px;
 }
 .campusmap__zoombtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 28px;
-  height: 28px;
   font-size: 15px;
   line-height: 1;
   color: var(--ink);
-  background: #ffffff;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
   box-shadow: var(--shadow-sm);
-  cursor: pointer;
-}
-.campusmap__zoombtn:hover {
-  background: var(--surface-2);
 }
 .campusmap__zoombtn:disabled {
   color: var(--text-faint);
   cursor: default;
+}
+.campusmap__zoombtn:disabled:hover {
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+.campusmap__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 .campusmap__empty {
   position: absolute;
@@ -2774,15 +2792,17 @@ button.termsw__cell:hover {
   top: calc(var(--map-inset) + (100% - var(--map-inset)) / 2);
   transform: translate(-50%, -50%);
   max-width: min(420px, calc(100% - 24px));
-  padding: 8px 12px;
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-sm);
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
   text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
 }
-/* --- "not on the map": a pill bottom-left that opens upward into the list --- */
+/* --- "not on the map": an island bottom-left that opens upward into the list --- */
 .campusmap__unlocated {
   position: absolute;
   z-index: 2;
@@ -2795,18 +2815,10 @@ button.termsw__cell:hover {
   max-width: min(440px, calc(100% - 20px));
 }
 .campusmap__unlocated-toggle {
-  padding: 5px 10px;
-  font-size: 11px;
-  font-weight: 700;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-}
-.campusmap__unlocated-toggle:hover {
-  background: var(--surface-2);
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: var(--shadow-md);
 }
 .campusmap__unlocated-list {
   margin: 0;
@@ -2816,9 +2828,9 @@ button.termsw__cell:hover {
   font-size: 12px;
   line-height: 1.7;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   box-shadow: var(--shadow-md);
 }
 
@@ -2826,50 +2838,47 @@ button.termsw__cell:hover {
 .campusmap__card {
   position: absolute;
   z-index: 4;
-  min-width: 150px;
+  min-width: 170px;
   max-width: 300px;
-  padding: 8px 12px 10px;
+  padding: 8px 10px 10px 12px;
   font-size: 12px;
   line-height: 1.5;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.97);
-  border: 1.5px solid;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
-  box-shadow: 0 6px 20px rgba(11, 31, 58, 0.18);
+  box-shadow: var(--shadow-lg);
+}
+.campusmap__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+.campusmap__card-place {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.campusmap__card-dir {
+  flex: none;
+  height: 24px;
 }
 .campusmap__card-section + .campusmap__card-section {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
-.campusmap__card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 18px;
-}
 .campusmap__card-code {
   font-size: 13px;
   font-weight: 800;
+  letter-spacing: -0.01em;
   white-space: nowrap;
-}
-.campusmap__card-dir {
-  padding: 0;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-.campusmap__card-dir:hover {
-  color: var(--ink);
 }
 .campusmap__card-rows {
   list-style: none;
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   padding: 0;
 }
 .campusmap__card-rows li {
@@ -2878,22 +2887,28 @@ button.termsw__cell:hover {
   white-space: nowrap;
   color: var(--text);
 }
+.campusmap__card-rows .mono {
+  font-size: 11.5px;
+}
 
 @media (max-width: 760px) {
-  .campusmap__bar {
-    gap: 8px;
-    padding: 8px 10px;
+  /* The island spans the screen; the control cluster joins its title row. */
+  .campusmap__island {
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    max-width: none;
+    padding: 6px 8px 8px;
   }
-  /* Two rows: title / toggle / ✕ first, then the day tabs scrolling sideways. */
-  .campusmap__slices {
-    order: 10;
-    flex-basis: 100%;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
+  .campusmap__titlerow .campusmap__cluster {
+    position: static;
+    margin-left: auto;
+    gap: 6px;
   }
-  .campusmap__slices::-webkit-scrollbar {
+  .campusmap__titlerow .campusmap__collapse {
+    margin-left: 0;
+  }
+  .campusmap__count {
     display: none;
   }
   .campusmap__card {
@@ -2905,11 +2920,12 @@ button.termsw__cell:hover {
    __footprints / __markers) with no rule of their own — a <g> paints nothing
    itself, so a class rule on it has nothing to do; all visual weight already
    lives on the styled children above.
-   __dot / __chip get their fill/stroke per course from colorsForHue() as SVG
-   presentation attributes (props, not the `style` attr — a plain class rule
-   still wins over those), so only the transition and the "selected" affordance
-   belong here. __marker--booked needs no rule of its own: booked vs. not is
-   already the dot's solid-vs-hollow fill, set inline for the same reason. */
+   __dot (and the chip's dot) get their fill/stroke per course from
+   colorsForHue() as SVG presentation attributes (props, not the `style` attr —
+   a plain class rule still wins over those), so only the transition and the
+   "selected" affordance belong here. __marker--booked needs no rule of its own:
+   booked vs. not is already the dot's solid-vs-hollow fill, set inline for the
+   same reason. */
 .campusmap__dot,
 .campusmap__chip {
   transition: fill 0.12s ease, stroke 0.12s ease;

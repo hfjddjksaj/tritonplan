@@ -305,7 +305,6 @@ export default function App() {
         <CampusMap
           plan={ctl.viewPlan}
           booked={ctl.bookedIds}
-          hasBookedData={ctl.hasBookedData}
           readOnly={ctl.readOnly}
           onClose={() => setCampusOpen(false)}
         />

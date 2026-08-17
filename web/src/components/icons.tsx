@@ -170,3 +170,10 @@ export const MapPinIcon = (p: P) => (
     <circle cx="12" cy="10" r="2.5" />
   </svg>
 );
+/** A north needle — the map's compass, drawn as a control, not on the canvas. */
+export const Compass = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 2.5 16.5 12h-9L12 2.5Z" fill="currentColor" stroke="none" />
+    <path d="M7.5 12h9L12 21.5 7.5 12Z" fill="none" strokeWidth="1.6" />
+  </svg>
+);

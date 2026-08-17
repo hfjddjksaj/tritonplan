@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { PlanState } from '@triton/shared';
 import { campusViewport, loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
 import type { Box } from '../lib/map-basemap';
@@ -8,19 +8,19 @@ import { groupPins, splitByViewport, unplacedPins } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
 import { pluralize, todayWeekday } from '../lib/format';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { useElementHeight, useStageSize } from '../hooks/useStageSize';
 import { CampusMapCanvas, MAX_ZOOM, MIN_ZOOM } from './CampusMapCanvas';
 import { MarkerCard } from './MarkerCard';
 import { BuildingPopover } from './BuildingPopover';
-import { Minus, Plus, X } from './icons';
+import { ViewTabs } from './ViewTabs';
+import { Check, ChevronDown, Compass, MapPinIcon, Minus, Plus, X } from './icons';
 
 interface Props {
   /** The plan on screen — yours, or a received one. */
   plan: PlanState;
   /** Course ids the student is enrolled in. RENDER-TIME ONLY; never persisted here. */
   booked: ReadonlySet<string>;
-  /** Whether the extension has ever captured the booked feed for this term. */
-  hasBookedData: boolean;
   /** Viewing someone else's plan — the booked toggle is meaningless then. */
   readOnly: boolean;
   onClose: () => void;
@@ -29,8 +29,14 @@ interface Props {
 /** Nobody's booked set applies to someone else's plan — see §5.4. */
 const NO_BOOKED: ReadonlySet<string> = new Set();
 
-/** The floating header's height until it has been measured (and under jsdom). */
-const HEADER_FALLBACK_H = 52;
+/** The island's height until it has been measured (and under jsdom): three rows. */
+const ISLAND_FALLBACK_H = 118;
+/** Gap between the island's bottom edge and where the fitted map may begin. */
+const ISLAND_TOP = 10;
+const ISLAND_GAP = 8;
+
+/** What the map shows this round: class meetings. Midterms / Finals tabs are drawn, not wired. */
+const MAP_VIEW_LABEL = 'Classes';
 
 const NO_BOXES: readonly Box[] = [];
 
@@ -42,41 +48,29 @@ const NO_BOXES: readonly Box[] = [];
  * rather than through a portal.
  *
  * The map IS the page: the SVG fills the viewport edge to edge, and everything
- * else (header, hint, empty-state copy, the "not on the map" list, the marker
- * card, zoom buttons) floats over it.
+ * else floats over it as islands in the app's own chrome language — a control
+ * island top-left (title, view tabs, day filter; foldable to its title row),
+ * a control cluster top-right (Booked only · compass · close), the marker card,
+ * the "not on the map" island bottom-left, the zoom buttons bottom-right.
  */
-export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Props) {
+export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
   const [geo, setGeo] = useState<CampusGeo | null>(null);
+  const isMobile = useIsMobile();
   // The canvas is the stage's own box (SVG units == CSS px, so chip text is
-  // never scaled); it refits on resize/rotation. The header floats over its top
-  // edge, so the map is fitted to what shows below the header.
+  // never scaled); it refits on resize/rotation. The island floats over its top
+  // edge, so the map is fitted to what shows below the island.
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvas = useStageSize(stageRef);
-  const barRef = useRef<HTMLElement | null>(null);
-  const insetTop = useElementHeight(barRef, HEADER_FALLBACK_H);
-  const [bookedOnly, setBookedOnly] = useState<boolean>(
-    () => loadMapBookedOnly() ?? (hasBookedData && !readOnly),
-  );
+  const islandRef = useRef<HTMLElement | null>(null);
+  const islandH = useElementHeight(islandRef, ISLAND_FALLBACK_H);
+  const insetTop = ISLAND_TOP + islandH + ISLAND_GAP;
+  const [collapsed, setCollapsed] = useState(false);
+  // Off unless the student switched it on before: the map is for planning first,
+  // and "everything in the plan" is the honest default.
+  const [bookedOnly, setBookedOnly] = useState<boolean>(() => loadMapBookedOnly() ?? false);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [cardBox, setCardBox] = useState<Box | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
-  const [hintHidden, setHintHidden] = useState(false);
-  const showHint = !readOnly && !hasBookedData && !hintHidden;
-  // The hint floats over the map's top-left; basemap names keep out from under it.
-  const hintRef = useRef<HTMLDivElement | null>(null);
-  const [hintBox, setHintBox] = useState<Box | null>(null);
-  useLayoutEffect(() => {
-    const el = hintRef.current;
-    const stage = stageRef.current;
-    if (!el || !stage) {
-      setHintBox(null);
-      return;
-    }
-    const r = el.getBoundingClientRect();
-    const st = stage.getBoundingClientRect();
-    if (r.width <= 0) return;
-    setHintBox({ x: r.left - st.left, y: r.top - st.top, w: r.width, h: r.height });
-  }, [showHint, insetTop, canvas.w]);
   const [unplacedOpen, setUnplacedOpen] = useState(false);
 
   // The fitted frame is the anchor for zoom limits and the ⟲ button; `view` is
@@ -88,9 +82,12 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
   const [view, setView] = useState<Viewport | null>(null);
   const shownView = view ?? homeView;
   // A canvas-size change (rotating a phone, resizing past the breakpoint) refits.
+  // Folding the island does not: at home the fit follows the island by itself
+  // (homeView depends on insetTop), and a zoomed-in view is the student's — the
+  // island moving must not throw it away.
   useEffect(() => {
     setView(null);
-  }, [canvas.w, canvas.h, insetTop]);
+  }, [canvas.w, canvas.h]);
   const visibleCentre = { x: canvas.w / 2, y: insetTop + (canvas.h - insetTop) / 2 };
   const zoomBy = (factor: number) => {
     if (!shownView || !homeView) return;
@@ -118,9 +115,12 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
   // Both read-only defences, side by side. §5.4 hides the toggle because the plan on
   // screen is someone else's; the same reasoning kills the solid/hollow booked dots,
   // which would otherwise paint YOUR enrolment over THEIR plan with nothing to explain it.
-  const showBookedToggle = !readOnly && hasBookedData;
-  const effectiveBookedOnly = showBookedToggle && bookedOnly;
+  // On your own plan the toggle appears as soon as anything is booked — by the extension's
+  // feed or by a manual "mark booked" in the rail — because only then is there a subset
+  // to show. (Gating on the feed alone would hide it from a student who marked by hand.)
   const effectiveBooked = readOnly ? NO_BOOKED : booked;
+  const showBookedToggle = !readOnly && booked.size > 0;
+  const effectiveBookedOnly = showBookedToggle && bookedOnly;
 
   const allPins = useMemo(() => meetingPins(plan, effectiveBooked), [plan, effectiveBooked]);
   const scoped = useMemo(
@@ -138,6 +138,7 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
       setSliceId(defaultSliceId(slices, scoped, todayWeekday()));
     }
   }, [slices, scoped, sliceId]);
+  const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
 
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
 
@@ -155,19 +156,13 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
   const open = onCanvas.find((g) => g.key === openKey) ?? null;
   const openAnchor = open && shownView ? toScreen(project(open.lng, open.lat), shownView) : null;
   const openPlace = open ? (open.place ?? open.building) : undefined;
-  const reserved = useMemo(() => {
-    const boxes: Box[] = [];
-    if (open && cardBox) boxes.push(cardBox);
-    if (hintBox) boxes.push(hintBox);
-    return boxes.length ? boxes : NO_BOXES;
-  }, [open, cardBox, hintBox]);
+  const reserved = useMemo(() => (open && cardBox ? [cardBox] : NO_BOXES), [open, cardBox]);
 
   // The generic "nothing to place" copy is false only when a LOCATABLE class exists that
   // booked-only is hiding — an unbooked pin with no coords was never going on the map
   // either way, and turning the toggle off wouldn't change that.
   const bookedOnlyHidesEverything =
-    showBookedToggle &&
-    bookedOnly &&
+    effectiveBookedOnly &&
     onCanvas.length === 0 &&
     allPins.some((p) => p.coords !== null && !p.booked);
 
@@ -179,6 +174,39 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
         ? 'No class locations to place yet. Add courses with scheduled meetings, and they’ll appear here.'
         : null;
 
+  const cluster = (
+    <div className="campusmap__cluster">
+      {showBookedToggle && (
+        <button
+          type="button"
+          className={`btn btn--sm campusmap__bookedtoggle${bookedOnly ? ' is-on' : ''}`}
+          aria-pressed={bookedOnly}
+          title="Show only the classes you are booked into"
+          onClick={() => {
+            const next = !bookedOnly;
+            setBookedOnly(next);
+            saveMapBookedOnly(next);
+          }}
+        >
+          {bookedOnly && <Check size={13} />}
+          <span className="campusmap__bookedtoggle-label">Booked only</span>
+        </button>
+      )}
+      {/* North is up, but a map with no needle makes people doubt it. */}
+      <span className="campusmap__compass" role="img" aria-label="North is up" title="North is up">
+        <Compass size={18} />
+      </span>
+      <button
+        type="button"
+        className="btn btn--sm btn--icon campusmap__close"
+        onClick={onClose}
+        aria-label="Close map"
+      >
+        <X size={15} />
+      </button>
+    </div>
+  );
+
   return (
     <div
       className="campusmap"
@@ -187,66 +215,64 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
       aria-label="Campus map"
       style={{ '--map-inset': `${insetTop}px` } as CSSProperties}
     >
-      <header className="campusmap__bar" ref={barRef}>
-        <div className="campusmap__title">
-          Campus map
+      <section
+        className={`campusmap__island${collapsed ? ' campusmap__island--folded' : ''}`}
+        ref={islandRef}
+        aria-label="Map controls"
+      >
+        <div className="campusmap__titlerow">
+          <MapPinIcon size={16} className="campusmap__titleicon" />
+          <span className="campusmap__title">Campus map</span>
           <span className="campusmap__count">
             {onCanvas.length === 0
               ? 'nothing to show'
               : `${onCanvas.length} ${pluralize(onCanvas.length, 'building')}`}
           </span>
-        </div>
-
-        <div className="campusmap__slices" role="tablist" aria-label="Filter by day">
-          {slices.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              role="tab"
-              aria-selected={s.id === sliceId}
-              className={`campusmap__chipbtn${s.id === sliceId ? ' is-on' : ''}`}
-              onClick={() => setSliceId(s.id)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        {showBookedToggle && (
-          <label className="campusmap__bookedtoggle">
-            <input
-              type="checkbox"
-              checked={bookedOnly}
-              onChange={(e) => {
-                setBookedOnly(e.target.checked);
-                saveMapBookedOnly(e.target.checked);
-              }}
-            />
-            Booked only
-          </label>
-        )}
-
-        <button type="button" className="campusmap__close" onClick={onClose} aria-label="Close map">
-          <X size={16} />
-        </button>
-      </header>
-
-      {showHint && (
-        <div className="campusmap__hint" role="note" ref={hintRef}>
-          <span>
-            Open “Booked Courses” on the TSS homepage once and TritonPlan can tell which of these
-            you’re actually enrolled in.
-          </span>
+          {/* On a phone the island spans the screen, so the control cluster joins its title row. */}
+          {isMobile && cluster}
           <button
             type="button"
-            className="campusmap__hint-close"
-            onClick={() => setHintHidden(true)}
-            aria-label="Dismiss"
+            className="campusmap__collapse"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? 'Show map controls' : 'Hide map controls'}
+            onClick={() => setCollapsed((v) => !v)}
           >
-            <X size={12} />
+            <ChevronDown size={16} />
           </button>
         </div>
-      )}
+
+        {collapsed ? (
+          <div className="campusmap__summary">
+            {MAP_VIEW_LABEL} · {sliceLabel}
+          </div>
+        ) : (
+          <>
+            <ViewTabs
+              value="calendar"
+              onChange={() => {}}
+              calendarLabel={MAP_VIEW_LABEL}
+              disabled={['midterms', 'finals']}
+              ariaLabel="Map views"
+            />
+            <div className="calseg campusmap__slices" role="radiogroup" aria-label="Filter by day">
+              {slices.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={s.id === sliceId}
+                  className={`calseg__btn${s.id === sliceId ? ' calseg__btn--on' : ''}`}
+                  onClick={() => setSliceId(s.id)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
+      {!isMobile && cluster}
 
       <div className="campusmap__stage" ref={stageRef}>
         {geo === null || !shownView || !homeView ? (
@@ -283,15 +309,15 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
               />
             )}
             <div className="campusmap__zoom" role="group" aria-label="Zoom">
-              <button type="button" className="campusmap__zoombtn" onClick={() => zoomBy(1.6)} aria-label="Zoom in">
+              <button type="button" className="btn btn--sm btn--icon campusmap__zoombtn" onClick={() => zoomBy(1.6)} aria-label="Zoom in">
                 <Plus size={14} />
               </button>
-              <button type="button" className="campusmap__zoombtn" onClick={() => zoomBy(1 / 1.6)} aria-label="Zoom out">
+              <button type="button" className="btn btn--sm btn--icon campusmap__zoombtn" onClick={() => zoomBy(1 / 1.6)} aria-label="Zoom out">
                 <Minus size={14} />
               </button>
               <button
                 type="button"
-                className="campusmap__zoombtn campusmap__zoombtn--home"
+                className="btn btn--sm btn--icon campusmap__zoombtn campusmap__zoombtn--home"
                 onClick={() => setView(null)}
                 disabled={atHome}
                 aria-label="Reset view"
@@ -310,7 +336,7 @@ export function CampusMap({ plan, booked, hasBookedData, readOnly, onClose }: Pr
           <div className="campusmap__unlocated">
             <button
               type="button"
-              className="campusmap__unlocated-toggle"
+              className="btn btn--sm btn--ghost campusmap__unlocated-toggle"
               aria-expanded={unplacedOpen}
               onClick={() => setUnplacedOpen((v) => !v)}
             >
