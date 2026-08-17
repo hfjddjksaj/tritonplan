@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { colorsForHue } from '../lib/colors';
 import type { Box } from '../lib/map-basemap';
-import { cardPlaceName, cardPlacement, cardSections, estimateCardSize, rowText, type Size } from '../lib/map-card';
+import { cardDate, cardPlaceName, cardPlacement, cardSections, estimateCardSize, rowText, type Size } from '../lib/map-card';
 import type { PinGroup } from '../lib/map-labels';
 import type { Point } from '../lib/map-projection';
 
@@ -21,10 +21,11 @@ interface Props {
 /**
  * What a clicked marker expands into: the chip's place on the map, grown into
  * a card — the building's name as an eyebrow with Directions beside it, then
- * one section per course: code heading, one row per component ("LEC · Room
- * 2622"). Several courses in one building each get a heading of the same
- * size. HTML over the SVG (real text, a real button), positioned from the
- * marker's screen coordinates on every view change.
+ * one section per course (or per exam, dated at the right of the code):
+ * code heading, one row per component ("LEC · Room 2622"). Several courses
+ * in one building each get a heading of the same size. HTML over the SVG
+ * (real text, a real button), positioned from the marker's screen
+ * coordinates on every view change.
  */
 export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBox }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -73,9 +74,10 @@ export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBo
       {sections.map((s) => {
         const sc = colorsForHue(s.hue);
         return (
-          <section key={s.courseId} className="campusmap__card-section">
+          <section key={`${s.courseId}|${s.date ?? ''}`} className="campusmap__card-section">
             <div className="campusmap__card-code" style={{ color: sc.text }}>
-              {s.courseCode}
+              <span>{s.courseCode}</span>
+              {s.date && <span className="campusmap__card-date">{cardDate(s.date)}</span>}
             </div>
             <ul className="campusmap__card-rows">
               {s.rows.map((r) => (

@@ -2884,10 +2884,22 @@ button.termsw__cell:hover {
   border-top: 1px solid var(--line);
 }
 .campusmap__card-code {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 14.5px;
   font-weight: 800;
   letter-spacing: -0.01em;
   white-space: nowrap;
+}
+/* An exam's date, muted at the heading's right: the row is "which sitting", the rooms below are "where". */
+.campusmap__card-date {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .campusmap__card-rows {
   list-style: none;
