@@ -2560,10 +2560,18 @@ button.termsw__cell:hover {
   font-weight: 600;
   color: var(--text-muted);
 }
+/* The two control rows share one width: whichever is wider sets the island,
+   the other stretches to meet it, its segments sharing the width evenly. */
 .campusmap__island .tabs {
+  align-self: stretch;
   box-shadow: none;
 }
+.campusmap__island .tab {
+  flex: 1;
+  justify-content: center;
+}
 .campusmap__slices {
+  align-self: stretch;
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
@@ -2572,6 +2580,8 @@ button.termsw__cell:hover {
   display: none;
 }
 .campusmap__slices .calseg__btn {
+  flex: 1;
+  justify-content: center;
   white-space: nowrap;
 }
 
@@ -2676,7 +2686,8 @@ button.termsw__cell:hover {
   fill: rgba(11, 31, 58, 0.14);
 }
 .campusmap__chiptext {
-  font-size: 10.5px;
+  font-size: 12px;
+  letter-spacing: -0.01em;
 }
 .campusmap__chipcode {
   font-weight: 700;
@@ -2838,10 +2849,10 @@ button.termsw__cell:hover {
 .campusmap__card {
   position: absolute;
   z-index: 4;
-  min-width: 170px;
-  max-width: 300px;
-  padding: 8px 10px 10px 12px;
-  font-size: 12px;
+  min-width: 190px;
+  max-width: 340px;
+  padding: 9px 10px 11px 13px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--ink);
   background: var(--surface);
@@ -2856,14 +2867,16 @@ button.termsw__cell:hover {
   gap: 14px;
   margin-bottom: 6px;
 }
+/* The name may wrap to a second line rather than be cut; long names are
+   abbreviated in code first (cardPlaceName). */
 .campusmap__card-place {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.35;
 }
 .campusmap__card-dir {
   flex: none;
-  height: 24px;
+  height: 26px;
 }
 .campusmap__card-section + .campusmap__card-section {
   margin-top: 8px;
@@ -2871,7 +2884,7 @@ button.termsw__cell:hover {
   border-top: 1px solid var(--line);
 }
 .campusmap__card-code {
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 800;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -2887,8 +2900,11 @@ button.termsw__cell:hover {
   white-space: nowrap;
   color: var(--text);
 }
-.campusmap__card-rows .mono {
-  font-size: 11.5px;
+/* Rooms in the text face with lining, tabular figures — the mono face read too round here. */
+.campusmap__card-room {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.01em;
 }
 
 @media (max-width: 760px) {
