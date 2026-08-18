@@ -2798,11 +2798,18 @@ button.termsw__cell:hover {
 }
 
 /* --- attribution + the no-WebGL fallback ---------------------------------- */
+/* Three credits now (UCSD GIS, OSM, the terrain tiles), which is one line on a
+   laptop and three on a phone — so it is bounded and right-aligned rather than
+   left to run across the bottom edge and through the scale bar. 150 px is the
+   scale control's own room at its widest. */
 .campusmap__attrib {
   position: absolute;
   right: 8px;
   bottom: 6px;
+  max-width: calc(100% - 150px);
+  text-align: right;
   font-size: 10px;
+  line-height: 1.35;
   color: var(--text-muted);
   text-shadow: 0 0 2px #fff;
   pointer-events: none;
