@@ -130,4 +130,9 @@ export const fakeMapLibreModule = {
   Map: FakeMap,
   LngLatBounds: FakeLngLatBounds,
   ScaleControl: FakeScaleControl,
+  /** Recorded, not applied — `map-worker.ts` calls this before every map is built. */
+  setWorkerUrl: (url: string) => { workerUrls.push(url); },
 };
+
+/** Every URL `setWorkerUrl` was handed, in order. */
+export const workerUrls: string[] = [];

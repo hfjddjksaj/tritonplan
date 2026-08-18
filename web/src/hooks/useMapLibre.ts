@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { Map as MapLibreMap, ScaleControl } from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
 import type { LngLatBox } from '../lib/campus-geo';
+import { configureMapWorker } from '../lib/map-worker';
 
 /** The campus-core box the map homes to, plus the padding to fit it with. */
 export interface HomeSpec {
@@ -137,6 +138,9 @@ export function useMapLibre(
     if (!node || !style || !home || createdRef.current) return;
     createdRef.current = true;
     let active = true;
+    // Before the constructor, never after: MapLibre reads the worker URL when it
+    // spins up its worker pool, which happens inside `new Map()`.
+    configureMapWorker();
 
     const m = new MapLibreMap({
       container: node,

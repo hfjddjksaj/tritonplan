@@ -2638,8 +2638,19 @@ button.termsw__cell:hover {
 /* --- the MapLibre GL canvas ----------------------------------------------
    The map itself. MapLibre binds its own drag/zoom/rotate handlers to this
    node, so it must stay a SIBLING of the marker overlay: markers inside it
-   would start a map drag on mousedown. */
-.campusmap__gl {
+   would start a map drag on mousedown.
+
+   CASCADE DISCIPLINE for everything below, and for any .maplibregl-* override
+   this app adds later: WRITE IT WITH AT LEAST TWO CLASSES.
+   `maplibre-gl.css` is imported inside the lazy map chunk (CampusMap.tsx), so
+   the browser always applies it AFTER this stylesheet. A one-class rule here
+   ties with a one-class rule there — and on a tie the later sheet wins, so the
+   app's intent silently loses. That is exactly how `.campusmap__gl { inset: 0 }`
+   (0,1,0) lost to `.maplibregl-map { position: relative }` (0,1,0) and collapsed
+   the map container to 1440x0 with no error anywhere (QA C2). Scoping the
+   selector under .campusmap makes it (0,2,0) and settles it on specificity
+   rather than on import order. */
+.campusmap .campusmap__gl {
   position: absolute;
   inset: 0;
 }
