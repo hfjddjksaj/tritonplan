@@ -89,4 +89,17 @@ describe('buildingShortName', () => {
       'Applied Physics & Mathematics Bldg',
     );
   });
+
+  it('does not abbreviate a direction word that is not a street address (regression)', () => {
+    // Real UCSD footprint names: reusing the road ABBREVIATIONS table wholesale
+    // used to turn these into "Middle E Hall", "N America Hall", "W Wing" — a
+    // building name is not a street address just because it contains a
+    // compass word. Street-type words (Court -> Ct) still apply.
+    expect(buildingShortName('Middle East Hall')).toBe('Middle East Hall');
+    expect(buildingShortName('North America Hall')).toBe('North America Hall');
+    expect(buildingShortName('West Wing')).toBe('West Wing');
+    // A genuine address keeps its street-type abbreviation; the cap (46) does
+    // the size-limiting work the direction abbreviation used to, unnecessarily.
+    expect(buildingShortName('3333 North Torrey Pines Court')).toBe('3333 North Torrey Pines Ct');
+  });
 });

@@ -79,11 +79,20 @@ export const LANDMARKS: readonly { footprint: string; label: string }[] = [
 
 /* ----------------------------------------------------------------- roads */
 
-export const ABBREVIATIONS: readonly [RegExp, string][] = [
+/** Compass words → their sign abbreviation. Road-label-only — see {@link STREET_TYPE_ABBREVIATIONS}. */
+const DIRECTION_ABBREVIATIONS: readonly [RegExp, string][] = [
   [/\bNorth\b/g, 'N'],
   [/\bSouth\b/g, 'S'],
   [/\bEast\b/g, 'E'],
   [/\bWest\b/g, 'W'],
+];
+
+/**
+ * Street-type words → their sign abbreviation. Safe on a building name too —
+ * unlike {@link DIRECTION_ABBREVIATIONS}, no real building name is *just* a
+ * compass word away from meaning something else.
+ */
+const STREET_TYPE_ABBREVIATIONS: readonly [RegExp, string][] = [
   [/\bRoad\b/g, 'Rd'],
   [/\bDrive\b/g, 'Dr'],
   [/\bAvenue\b/g, 'Ave'],
@@ -93,6 +102,12 @@ export const ABBREVIATIONS: readonly [RegExp, string][] = [
   [/\bCourt\b/g, 'Ct'],
   [/\bParkway\b/g, 'Pkwy'],
   [/\bPlace\b/g, 'Pl'],
+];
+
+/** Road labels get both directions and street types: "North Torrey Pines Road" -> "N Torrey Pines Rd". */
+export const ABBREVIATIONS: readonly [RegExp, string][] = [
+  ...DIRECTION_ABBREVIATIONS,
+  ...STREET_TYPE_ABBREVIATIONS,
 ];
 
 /** OSM freeway names → the numbers on the signs. */
@@ -154,10 +169,14 @@ export function wantsRoadLabel(line: CampusLine): boolean {
 
 /**
  * The stock words of a building name, shortened the way campus signage does.
- * Also runs the road {@link ABBREVIATIONS} (Drive→Dr, Street→St, North→N, …):
- * a building whose official name is a street address (e.g. "9500 Gilman
+ * Also runs {@link STREET_TYPE_ABBREVIATIONS} (Drive→Dr, Street→St, …): a
+ * building whose official name is a street address (e.g. "9500 Gilman
  * Drive", "134 Dickinson") needs the same shortening a road label gets, or it
- * never fits the map at any zoom.
+ * never fits the map at any zoom. Deliberately does NOT run the direction
+ * abbreviations ({@link ABBREVIATIONS}'s North/South/East/West → N/S/E/W):
+ * those are fine on a road label but wrong on a building name — "Middle East
+ * Hall", "North America Hall" and "West Wing" are not addresses, and
+ * abbreviating their direction word reads as a typo, not a shortening.
  */
 export function abbreviateBuildingWords(name: string): string {
   let out = name
@@ -171,7 +190,7 @@ export function abbreviateBuildingWords(name: string): string {
     .replace(/\bParking Structure\b/g, 'Parking')
     .replace(/\band\b/g, '&')
     .replace(/^The\s+/, '');
-  for (const [re, abbr] of ABBREVIATIONS) out = out.replace(re, abbr);
+  for (const [re, abbr] of STREET_TYPE_ABBREVIATIONS) out = out.replace(re, abbr);
   return out;
 }
 

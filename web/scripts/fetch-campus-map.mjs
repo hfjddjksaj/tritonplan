@@ -86,13 +86,20 @@ const isDuplicateGroundBuilding = (f) => {
   if (!ring || ring.length < 3) return false;
   return centroidInsideAny(ring, rawFootprints);
 };
-const groundDupes = groundFeats.filter(isDuplicateGroundBuilding);
-const dedupedGroundFeats = groundFeats.filter((f) => !isDuplicateGroundBuilding(f));
+// Evaluated once per feature (not once per filter) — the predicate does a
+// point-in-polygon scan over every footprint, not free to run twice.
+const groundIsDup = groundFeats.map(isDuplicateGroundBuilding);
+const groundDupesCount = groundIsDup.filter(Boolean).length;
+const dedupedGroundFeats = groundFeats.filter((_, i) => !groundIsDup[i]);
 const survivingGroundBuildings = dedupedGroundFeats.filter((f) => (f.attributes.Type ?? '').trim() === 'Building').length;
 
+// encodeRing drops a ring that quantised down to fewer than 3 distinct
+// vertices (`[]`); filter those out ring-by-ring, then drop any ground
+// polygon whose rings all degenerated (nothing left to draw).
 const ground = dedupedGroundFeats
   .filter((f) => f.geometry?.rings?.length && groundTypes.includes((f.attributes.Type ?? '').trim()))
-  .map((f) => [groundTypes.indexOf(f.attributes.Type.trim()), f.geometry.rings.map((r) => encodeRing(r, 0))]);
+  .map((f) => [groundTypes.indexOf(f.attributes.Type.trim()), f.geometry.rings.map((r) => encodeRing(r, 0)).filter((r) => r.length > 0)])
+  .filter(([, rings]) => rings.length > 0);
 
 const treeFeats = await queryAll(TREES, { ...envelope, outFields: 'height', returnGeometry: 'true', geometryPrecision: '6' });
 // Official height buckets (feet): 4–15, 15–27, 27–38, 38–60, 60–132.
@@ -145,6 +152,14 @@ if (footprints.length < 550 || footprints.length > 700)
   throw new Error(`footprint count out of band: ${footprints.length} (expected ~609)`);
 if (districts.length < 20 || districts.length > 40)
   throw new Error(`district count out of band: ${districts.length} (expected ~25)`);
+// encodeShape drops a ring that quantised to fewer than 3 distinct vertices;
+// a real building/district is always far bigger than the 0.11m grid, so a
+// shape ending up with zero rings would mean something upstream broke, not
+// an expected sliver — fail loudly rather than ship an invisible building.
+const emptyFootprint = footprints.find((f) => f[1].length === 0);
+if (emptyFootprint) throw new Error(`footprint "${emptyFootprint[0]}" has no rings left after encoding`);
+const emptyDistrict = districts.find((d) => d[1].length === 0);
+if (emptyDistrict) throw new Error(`district "${emptyDistrict[0]}" has no rings left after encoding`);
 // Unsimplified (RDP eps 0), so this jumped from ~10800 to ~27647 — measured
 // against the raw ArcGIS footprint layer, ±30% band per the drift-guard
 // doctrine above.
@@ -169,7 +184,7 @@ if (trees.length / 3 < 2000 || trees.length / 3 > 4000) throw new Error(`tree co
 // 1-2 m) — measured 33 orphans with no matching footprint, ±30% band.
 if (survivingGroundBuildings < 23 || survivingGroundBuildings > 43)
   throw new Error(`ground-Building survivor count out of band: ${survivingGroundBuildings} (expected ~33, i.e. real structures the footprint layer is missing)`);
-console.log(`Ground-Building dedup: dropped ${groundDupes.length} duplicates of a footprint, kept ${survivingGroundBuildings} orphans (of ${groundFeats.filter((f) => (f.attributes.Type ?? '').trim() === 'Building').length} raw ground Building polygons).`);
+console.log(`Ground-Building dedup: dropped ${groundDupesCount} duplicates of a footprint, kept ${survivingGroundBuildings} orphans (of ${groundFeats.filter((f) => (f.attributes.Type ?? '').trim() === 'Building').length} raw ground Building polygons).`);
 
 footprints.sort((a, b) => a[0].localeCompare(b[0]));
 districts.sort((a, b) => a[0].localeCompare(b[0]));
@@ -275,7 +290,8 @@ const isClosedRing = (pts) =>
   pts.length > 3 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1];
 const landuse = allWays
   .filter((w) => landuseKind(w.tags) && isClosedRing(w.pts))
-  .map((w) => [landuseKind(w.tags), [encodeRing(w.pts, 0)]]);
+  .map((w) => [landuseKind(w.tags), [encodeRing(w.pts, 0)]])
+  .filter(([, rings]) => rings[0].length > 0); // encodeRing() returns [] for a ring that quantised away
 const ways = allWays.filter((w) => w.kind !== null);
 
 // A walkway that carries a road's name is that road's sidewalk — drop it.
@@ -417,7 +433,12 @@ console.log(
  * size — it is no longer a pass/fail budget.
  * ------------------------------------------------------------------------- */
 
-const mapOut = { source: `${CAMPUS_MAP} (layers 21, 24, 15) + ${BUILDINGS_3D} + OpenStreetMap (© OpenStreetMap contributors, ODbL)`, fetched: today, groundTypes, ground, trees, boundary: [encodeRing(mainRing, 0)], landuse };
+const encodedBoundary = encodeRing(mainRing, 0);
+// The whole La Jolla campus outline degenerating to `[]` (encodeRing's
+// too-few-distinct-vertices signal) would mean the boundary query returned
+// garbage — fail loudly rather than ship a map with no campus outline.
+if (encodedBoundary.length === 0) throw new Error('campus boundary ring collapsed to nothing after encoding');
+const mapOut = { source: `${CAMPUS_MAP} (layers 21, 24, 15) + ${BUILDINGS_3D} + OpenStreetMap (© OpenStreetMap contributors, ODbL)`, fetched: today, groundTypes, ground, trees, boundary: [encodedBoundary], landuse };
 const mapDest = fileURLToPath(new URL('../src/data/ucsd-campus-map.json', import.meta.url));
 const mapJson = JSON.stringify(mapOut);
 await writeFile(mapDest, mapJson);

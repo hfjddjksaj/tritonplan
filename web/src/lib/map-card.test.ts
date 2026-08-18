@@ -172,4 +172,12 @@ describe('cardPlaceName', () => {
   it('never invents a name: an address stays an address', () => {
     expect(cardPlaceName('9500 Gilman Drive Building 3')).toBe('9500 Gilman Drive Building 3');
   });
+
+  it('does not abbreviate a direction word when shortening a long name (regression, shares abbreviateBuildingWords with map-names.ts)', () => {
+    // Real UCSD footprint name, 37 chars — over PLACE_VERBATIM_MAX, so this
+    // goes through abbreviateBuildingWords. It used to come back "Cellular &
+    // Molecular Medicine E"; "East" here is part of the name, not a street
+    // direction, so it must survive untouched.
+    expect(cardPlaceName('Cellular and Molecular Medicine East')).toBe('Cellular & Molecular Medicine East');
+  });
 });
