@@ -9,9 +9,11 @@
  * NEVER fetches either file at runtime; both are bundled and pulled in with a
  * dynamic `?raw` import so they stay out of the first-paint chunk.
  *
- * Wire format keeps the files small enough to bundle: coordinates are integers
- * at 1e5 scale (~1.1 m, well under a pixel at display scale) and delta-encoded
- * within each ring, so most values are one or two digits.
+ * Wire format keeps the files bundle-able without discarding precision: the
+ * map draws up to z19, where one screen pixel is ≈ 0.25 m at UCSD's latitude,
+ * so the source geometry is carried unsimplified (no RDP) and only quantised
+ * onto a 1e6 integer grid (~0.11 m — below a pixel), delta-encoded within each
+ * ring so most values are one or two digits.
  */
 
 /** One drawable outline: a building footprint or a district boundary. */
@@ -83,7 +85,7 @@ export interface CampusMapData {
   landuse: LanduseShape[];
 }
 
-const SCALE = 1e5;
+const SCALE = 1e6;
 
 /** Expand one delta-encoded ring into flat lon/lat degrees. */
 export function decodeRing(wire: number[]): number[] {

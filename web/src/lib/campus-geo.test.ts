@@ -15,11 +15,31 @@ import {
   type WireLine,
   type WireShape,
 } from './campus-geo';
+// Encoder lives in the fetch scripts; decoder lives here. The two GEO_SCALE /
+// SCALE constants are declared independently on each side of that boundary —
+// a mismatch between them multiplies every coordinate by 10, so this test
+// round-trips through the real encoder, not a re-implementation of it.
+import { encodeRing, GEO_SCALE } from '../../scripts/geo-encode.mjs';
+
+describe('encodeRing / decodeRing scale round-trip', () => {
+  it('agrees with the fetch-script encoder on GEO_SCALE (1e6)', () => {
+    expect(GEO_SCALE).toBe(1e6);
+    const ring = [
+      [-117.23393, 32.87909],
+      [-117.2338, 32.879],
+      [-117.23375, 32.87895],
+    ];
+    const wire = encodeRing(ring, 0);
+    expect(decodeRing(wire)).toEqual([
+      -117.23393, 32.87909, -117.2338, 32.879, -117.23375, 32.87895,
+    ]);
+  });
+});
 
 describe('decodeRing', () => {
   it('expands an integer delta ring back into lon/lat degrees', () => {
-    // First pair is absolute (scaled by 1e5), the rest are deltas.
-    const wire = [-11725333, 3286645, -1, -3, 5, 2];
+    // First pair is absolute (scaled by 1e6), the rest are deltas.
+    const wire = [-117253330, 32866450, -10, -30, 50, 20];
     expect(decodeRing(wire)).toEqual([
       -117.25333, 32.86645,
       -117.25334, 32.86642,
@@ -32,15 +52,15 @@ describe('decodeRing', () => {
   });
 
   it('ignores a trailing unpaired value rather than emitting NaN', () => {
-    expect(decodeRing([-11725333, 3286645, 7])).toEqual([-117.25333, 32.86645]);
+    expect(decodeRing([-117253330, 32866450, 7])).toEqual([-117.25333, 32.86645]);
   });
 });
 
 describe('decodeShapes', () => {
   it('keeps names and decodes every ring of every shape', () => {
     const wire: WireShape[] = [
-      ['Geisel Library', [[-11723700, 3288100, 10, 0], [-11723600, 3288000, -5, 5]]],
-      ['Center Hall', [[-11724100, 3287800]]],
+      ['Geisel Library', [[-117237000, 32881000, 100, 0], [-117236000, 32880000, -50, 50]]],
+      ['Center Hall', [[-117241000, 32878000]]],
     ];
     const out = decodeShapes(wire);
     expect(out.map((s) => s.name)).toEqual(['Geisel Library', 'Center Hall']);
@@ -65,8 +85,10 @@ describe('bundled campus geometry', () => {
       (n, s) => n + s.rings.reduce((m, r) => m + r.length / 2, 0),
       0,
     );
-    expect(verts).toBeGreaterThan(8000);
-    expect(verts).toBeLessThan(16000);
+    // Unsimplified (RDP eps 0) since the geometry-precision fix — measured
+    // ~27647, up from ~10800 when the fetch script still ran RDP at 1 m.
+    expect(verts).toBeGreaterThan(19000);
+    expect(verts).toBeLessThan(36000);
 
     // Every coordinate must land in greater UCSD, not in the ocean or at 0,0
     // (the classic sign of a projection or scaling mistake). The footprints
@@ -136,8 +158,8 @@ describe('academic-core framing', () => {
 describe('decodeLines', () => {
   it('keeps name and kind and decodes the delta-encoded points', () => {
     const wire: WireLine[] = [
-      ['Gilman Drive', 'major', [-11723700, 3288100, 10, -5, 10, -5]],
-      ['', 'coast', [-11725500, 3287000, 0, -100]],
+      ['Gilman Drive', 'major', [-117237000, 32881000, 100, -50, 100, -50]],
+      ['', 'coast', [-117255000, 32870000, 0, -1000]],
     ];
     const out = decodeLines(wire);
     expect(out[0]).toEqual({
@@ -196,11 +218,11 @@ describe('decodeShapes with heights', () => {
 
 describe('decodeGround / decodeTrees', () => {
   it('maps a type index back to its name and decodes rings', () => {
-    const g = decodeGround(['Grass', 'Sidewalk'], [[1, [[-11723000, 3288000, 10, 0, 0, 10]]]]);
+    const g = decodeGround(['Grass', 'Sidewalk'], [[1, [[-117230000, 32880000, 100, 0, 0, 100]]]]);
     expect(g).toEqual([{ type: 'Sidewalk', rings: [[-117.23, 32.88, -117.2299, 32.88, -117.2299, 32.8801]] }]);
   });
   it('decodes delta-encoded tree triples, keeping the class raw', () => {
-    const t = decodeTrees([-11723000, 3288000, 2, 100, -50, 4]);
+    const t = decodeTrees([-117230000, 32880000, 2, 1000, -500, 4]);
     expect(t).toEqual([{ lon: -117.23, lat: 32.88, cls: 2 }, { lon: -117.229, lat: 32.8795, cls: 4 }]);
   });
 });
@@ -211,11 +233,20 @@ describe('bundled campus map data', () => {
     const types = new Set(m.ground.map((g) => g.type));
     for (const t of ['Grass', 'Sidewalk', 'Walking Path', 'Planter', 'Parking Lot', 'Street', 'Building']) expect(types.has(t)).toBe(true);
     expect(types.has('Curb')).toBe(false);
-    expect(m.ground.length).toBeGreaterThan(5000);
+    // Dropping `maxAllowableOffset` raised the raw feature count; the
+    // ground-Building dedup (Fix 2) then removes the ~310 that duplicate a
+    // footprint. Net measured ~4756, comfortably in the thousands either way.
+    expect(m.ground.length).toBeGreaterThan(3000);
     expect(m.trees.length).toBeGreaterThan(1500);
     expect(m.trees.every((t) => t.cls >= 0 && t.cls <= 4)).toBe(true);
     expect(m.boundary.length).toBeGreaterThanOrEqual(1);
     expect(m.landuse.length).toBeGreaterThan(0);
+    // The ground layer's own `Building` polygons should be almost all gone
+    // (deduped against the 609 footprints in Fix 2) — only the ~33 orphans
+    // the footprint layer is missing survive, not the full ~343.
+    const groundBuildings = m.ground.filter((g) => g.type === 'Building').length;
+    expect(groundBuildings).toBeGreaterThan(0);
+    expect(groundBuildings).toBeLessThan(100);
     // Everything sits on the La Jolla campus.
     for (const g of m.ground.slice(0, 200)) for (const r of g.rings) for (let i = 0; i + 1 < r.length; i += 2) {
       expect(r[i]).toBeGreaterThan(-117.27); expect(r[i]).toBeLessThan(-117.19);
