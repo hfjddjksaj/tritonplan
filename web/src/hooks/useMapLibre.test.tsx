@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { act, useRef, useState } from 'react';
+import { act, StrictMode, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FakeMap, fakeMapLibreModule } from '../test/fake-maplibre';
 vi.mock('maplibre-gl', () => fakeMapLibreModule);
@@ -15,7 +15,12 @@ function Harness({ onHandle, home = HOME }: { onHandle: (h: MapHandle) => void; 
   onHandle(h);
   return <div ref={ref} />;
 }
-const flush = async () => { for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve(); await new Promise((r) => setTimeout(r, 0)); }); };
+// jsdom (pretendToBeVisual, the default under vitest's jsdom environment) backs
+// requestAnimationFrame with a real ~16.67ms setInterval — a 0ms setTimeout has
+// no guaranteed budget to let a scheduled rAF actually fire before flush()
+// returns. 20ms clears that floor with margin; this is a test-harness timing
+// fix, not a change to the hook's throttling (task-6 Ruling 2).
+const flush = async () => { for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve(); await new Promise((r) => setTimeout(r, 20)); }); };
 
 describe('useMapLibre', () => {
   beforeEach(() => FakeMap.reset());
@@ -115,5 +120,74 @@ describe('useMapLibre', () => {
     expect(m.getCenter().lng).toBeCloseTo(centerAfterPan.lng, 5);
 
     await act(async () => root.unmount());
+  });
+
+  // Fix round 1, Finding 1: this app renders under <StrictMode> (web/src/main.tsx),
+  // which double-invokes every effect on mount in development — run, cleanup, run
+  // again. The creation effect's once-only guard must survive that: the SECOND
+  // run has to build a fresh map, not bail out and leave `map` pointing at the
+  // first (already-removed) instance.
+  it('rebuilds a live map after a StrictMode double-invoke (mount, cleanup, mount)', async () => {
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <Harness onHandle={(h) => (handle = h)} />
+        </StrictMode>,
+      ),
+    );
+    await flush();
+    expect(handle.map).not.toBeNull();
+    expect(handle.map!.removed).toBe(false);
+    // Every OTHER instance the double-invoke created must be the one that got
+    // torn down — the hook must be holding the live map, not a removed one.
+    const others = FakeMap.instances.filter((m) => m !== handle.map);
+    expect(others.length).toBeGreaterThan(0);
+    expect(others.every((m) => m.removed)).toBe(true);
+    await act(async () => root.unmount());
+  });
+
+  // Fix round 1, Finding 2(a): the throttle's entire point is coalescing a
+  // burst of moves into one rAF — a regression that ticked synchronously on
+  // every `move` would still pass every other test in this file unchanged.
+  it('coalesces a burst of synchronous move events into exactly one tick', async () => {
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
+    await flush();
+    const m = FakeMap.instances[FakeMap.instances.length - 1]!;
+    const tickBefore = handle.tick;
+    await act(async () => {
+      m.simulateUserPan(0.001, 0);
+      m.simulateUserPan(0.001, 0);
+      m.simulateUserPan(0.001, 0);
+    });
+    await flush();
+    expect(handle.tick).toBe(tickBefore + 1);
+  });
+
+  it('zoomOut reaches the map and marks atHome false', async () => {
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
+    await flush();
+    const m = FakeMap.instances[0]!;
+    const zoomBefore = m.getZoom();
+    await act(async () => handle.zoomOut());
+    expect(m.getZoom()).toBe(zoomBefore - 1);
+    expect(handle.atHome).toBe(false);
+  });
+
+  it('easeCamera reaches the map and marks atHome false', async () => {
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
+    await flush();
+    const m = FakeMap.instances[0]!;
+    await act(async () => handle.easeCamera({ pitch: 55, bearing: -25 }));
+    expect(m.getPitch()).toBe(55);
+    expect(m.getBearing()).toBe(-25);
+    expect(handle.atHome).toBe(false);
   });
 });

@@ -101,14 +101,42 @@ export function useMapLibre(
 
   const createdRef = useRef(false);
 
-  // Create the map exactly once, as soon as the container is mounted and both
-  // `style` and `home` are ready. Camera-limit options are read once here at
-  // construction time (not a dependency) — the map is never rebuilt just
-  // because a `reduceMotion` toggle or similar gave `opts` a new identity.
+  // Create the map exactly once per mount, as soon as the container is
+  // mounted and both `style` and `home` are ready. Camera-limit options are
+  // read once here at construction time (not a dependency) — the map is
+  // never rebuilt just because a `reduceMotion` toggle or similar gave
+  // `opts` a new identity.
+  //
+  // Deliberately NOT keyed on `container.current` (despite that being the
+  // dependency this hook started with): a ref's `.current` is read fresh
+  // inside the effect body below regardless, and by the time ANY passive
+  // effect runs after a commit, a ref attached during that same commit's
+  // render is already set — so it adds nothing on the renders that matter.
+  // What it DOES add is a bug: `container.current` is `null` in the deps
+  // array captured during the render that first mounts the container div
+  // (refs attach during commit, which happens after that render computes its
+  // deps), then non-null on the very next render — which this effect's own
+  // `setMap` call triggers. React sees that as a changed dependency and
+  // tears the effect down and reruns it, EVERY mount, not just under
+  // StrictMode. `FakeMap.remove()` being a harmless flag flip masked this in
+  // the original test run; a real `maplibre-gl` `Map.remove()` genuinely
+  // tears down the WebGL context, so this was already the dev-breaks-on-
+  // every-load bug, just with a shorter fuse than the StrictMode case below.
+  //
+  // "Once per mount", not "once ever": this app renders under <StrictMode>
+  // (web/src/main.tsx), which double-invokes every effect in development —
+  // run, cleanup, run again — to flush out exactly this class of bug. The
+  // cleanup below resets `createdRef` so the second run genuinely rebuilds a
+  // live map instead of bailing out on the guard and leaving `map` pointing
+  // at the instance the cleanup just removed; the `active` flag stops the
+  // torn-down instance's still-pending async events (`load` fires on a
+  // `queueMicrotask`, so it outlives a synchronous double-invoke) from
+  // writing into state after the fact.
   useEffect(() => {
     const node = container.current;
     if (!node || !style || !home || createdRef.current) return;
     createdRef.current = true;
+    let active = true;
 
     const m = new MapLibreMap({
       container: node,
@@ -130,29 +158,43 @@ export function useMapLibre(
     // during a drag or an animated ease.
     let rafId: number | null = null;
     const scheduleTick = () => {
-      if (rafId !== null) return;
+      if (!active || rafId !== null) return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
         setTick((t) => t + 1);
       });
     };
 
-    m.on('load', () => setReady(true));
+    m.on('load', () => {
+      if (active) setReady(true);
+    });
     m.on('move', scheduleTick);
     m.on('movestart', (e) => {
-      if (e.originalEvent) setAtHome(false);
+      if (active && e.originalEvent) setAtHome(false);
     });
     m.on('error', (e) => {
-      setError(e.error?.message ?? 'Map failed to start');
+      if (active) setError(e.error?.message ?? 'Map failed to start');
     });
 
     setMap(m);
 
     return () => {
+      active = false;
       if (rafId !== null) cancelAnimationFrame(rafId);
       m.remove();
+      createdRef.current = false;
+      // A genuinely clean reconstruction: nothing about the removed map's
+      // state should linger into the next run (or, on a real final unmount,
+      // stick around unobserved). Harmless when this is the very last
+      // cleanup — nothing renders these updates afterward.
+      setMap(null);
+      setReady(false);
+      setError(null);
+      setHomeBounds(null);
+      setAtHome(true);
+      setTick(0);
     };
-  }, [container.current, style, home !== null]);
+  }, [style, home !== null]);
 
   // Fits the camera to `home`: once the map finishes loading, and again
   // whenever `home` itself changes (e.g. a viewport resize reflows the
