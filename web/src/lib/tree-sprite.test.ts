@@ -57,3 +57,43 @@ describe('treeSprite', () => {
     expect(px(img, 24, 47)[3]).toBeGreaterThan(200);
   });
 });
+
+describe('treeSprite silhouette', () => {
+  // The lollipop test, made mechanical. The first sprite was one disc on a stick
+  // and read as a lollipop at first glance — the exact failure the task was told
+  // to watch for. A lobed crown is what fixes it, so assert the crown is NOT a
+  // circle: sample its outline and require the radius to vary.
+  it('has a lobed crown rather than a perfect disc', () => {
+    const img = treeSprite(48);
+    const cx = 24;
+    const cy = 15; // roughly the crown's centre
+    const radii: number[] = [];
+    for (let deg = 0; deg < 360; deg += 15) {
+      const rad = (deg * Math.PI) / 180;
+      let last = 0;
+      for (let r = 2; r < 24; r += 0.25) {
+        const x = Math.round(cx + Math.cos(rad) * r);
+        const y = Math.round(cy - Math.sin(rad) * r);
+        if (x < 0 || y < 0 || x >= 48 || y >= 48) break;
+        if (img.data[(y * 48 + x) * 4 + 3]! > 160) last = r;
+      }
+      if (last > 0) radii.push(last);
+    }
+    const min = Math.min(...radii);
+    const max = Math.max(...radii);
+    expect(radii.length).toBeGreaterThan(12);
+    expect(max - min).toBeGreaterThan(2.5); // a circle would vary by well under a pixel
+  });
+
+  it('is shaded like a volume: the lit side is brighter than the shaded side', () => {
+    // Light comes from up and to the left, off a height field — that shading is
+    // what keeps a flat billboard from reading as a sticker next to buildings
+    // that have real depth.
+    const img = treeSprite(48);
+    const at = (x: number, y: number) => {
+      const i = (y * 48 + x) * 4;
+      return img.data[i]! + img.data[i + 1]! + img.data[i + 2]!;
+    };
+    expect(at(16, 12)).toBeGreaterThan(at(32, 22));
+  });
+});
