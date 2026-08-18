@@ -157,6 +157,15 @@ export interface StyleOptions {
  * its deepest level, so z14 samples fine all the way to the camera's z19.
  */
 export const TERRAIN_SOURCE = 'terrain';
+/**
+ * The same tiles again, under a second id, because MapLibre asks for that:
+ * "You are using the same source for a hillshade layer and for 3D terrain.
+ * Please consider using two separate sources to improve rendering quality."
+ * (console, 3D mode). It samples a DEM differently for shading than for
+ * displacement, and sharing one source makes it compromise. Two sources, one set
+ * of files: identical URLs, so the second costs a cache hit and no bytes.
+ */
+export const HILLSHADE_SOURCE = 'terrain-hillshade';
 export const TERRAIN_BOUNDS: [number, number, number, number] = [-117.3, 32.83, -117.17, 32.93];
 export const TERRAIN_MINZOOM = 13;
 export const TERRAIN_MAXZOOM = 14;
@@ -340,6 +349,20 @@ const TREE_RADIUS: ExpressionSpecification = [
 
 const ROADS_NOT_WALK: FilterSpecification = ['!=', ['get', 'kind'], 'walk'] as FilterSpecification;
 
+/** The bundled DEM as a MapLibre source, from the page's own origin. */
+function dem(base: string) {
+  return {
+    type: 'raster-dem' as const,
+    tiles: [`${base}map/terrain/{z}/{x}/{y}.png`],
+    tileSize: 256,
+    encoding: 'terrarium' as const,
+    minzoom: TERRAIN_MINZOOM,
+    maxzoom: TERRAIN_MAXZOOM,
+    bounds: TERRAIN_BOUNDS,
+    attribution: 'Terrain: Mapzen / AWS Open Data',
+  };
+}
+
 /** Build the MapLibre style for the campus map, in the exact layer order the spec defines. */
 export function buildStyle(o: StyleOptions): StyleSpecification {
   const { sources, assetBase: base } = o;
@@ -384,7 +407,7 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
           {
             id: LAYER.hillshade,
             type: 'hillshade' as const,
-            source: TERRAIN_SOURCE,
+            source: HILLSHADE_SOURCE,
             paint: {
               // Restrained on purpose: 0.35 reads as ground that is not flat,
               // where the default 0.5 turns the mesa into a relief map and fights
@@ -625,18 +648,11 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
       [LAYER.landuse]: { type: 'geojson', data: sources.landuse },
       labels: { type: 'geojson', data: sources.labels },
       // Terrarium-encoded elevation, from our own origin like every other asset.
+      // Declared twice on purpose — see HILLSHADE_SOURCE.
       ...(o.terrain
         ? {
-            [TERRAIN_SOURCE]: {
-              type: 'raster-dem' as const,
-              tiles: [`${base}map/terrain/{z}/{x}/{y}.png`],
-              tileSize: 256,
-              encoding: 'terrarium' as const,
-              minzoom: TERRAIN_MINZOOM,
-              maxzoom: TERRAIN_MAXZOOM,
-              bounds: TERRAIN_BOUNDS,
-              attribution: 'Terrain: Mapzen / AWS Open Data',
-            },
+            [HILLSHADE_SOURCE]: dem(base),
+            [TERRAIN_SOURCE]: dem(base),
           }
         : {}),
     },

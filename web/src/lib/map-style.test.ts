@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildStyle, hostFilter, hostFill, hostFill3d, hostLine, applyHosts, applyMode, GROUND_COLORS, LAYER, MAP_PALETTE, MAP_FONT_REGULAR, MAP_FONT_BOLD, assetBase, TREE_ICON, TERRAIN_SOURCE, TERRAIN_BOUNDS, TERRAIN_MINZOOM, TERRAIN_MAXZOOM, type StyleTarget } from './map-style';
+import { buildStyle, hostFilter, hostFill, hostFill3d, hostLine, applyHosts, applyMode, GROUND_COLORS, LAYER, MAP_PALETTE, MAP_FONT_REGULAR, MAP_FONT_BOLD, assetBase, TREE_ICON, TERRAIN_SOURCE, HILLSHADE_SOURCE, TERRAIN_BOUNDS, TERRAIN_MINZOOM, TERRAIN_MAXZOOM, type StyleTarget } from './map-style';
 import { buildSources } from './map-data';
 import { loadCampusGeo, loadCampusMap } from './campus-geo';
 import { colorsForHue } from './colors';
@@ -37,6 +37,12 @@ describe('buildStyle', () => {
     expect(ids.indexOf(LAYER.ocean)).toBeLessThan(ids.indexOf(LAYER.hillshade));
     expect(ids.indexOf(LAYER.hillshade)).toBeLessThan(ids.indexOf(LAYER.campus));
 
+    // Two sources, one set of files: MapLibre asks for a separate DEM source for
+    // shading and for displacement, and both must be the bundled one.
+    expect((relief.sources as Record<string, unknown>)[HILLSHADE_SOURCE]).toEqual(
+      (relief.sources as Record<string, unknown>)[TERRAIN_SOURCE],
+    );
+    expect((relief.layers.find((l) => l.id === LAYER.hillshade) as { source: string }).source).toBe(HILLSHADE_SOURCE);
     const dem = (relief.sources as Record<string, Record<string, unknown>>)[TERRAIN_SOURCE]!;
     expect(dem.type).toBe('raster-dem');
     expect(dem.encoding).toBe('terrarium'); // what the bundled tiles are; anything else decodes to spikes
