@@ -20,6 +20,7 @@ vi.mock('../lib/campus-geo', async (importOriginal) => {
   };
 });
 import { CampusMap } from './CampusMap';
+import { CAMERA } from '../lib/map-style';
 import { MAP_LOAD_TIMEOUT_MS } from '../hooks/useMapLibre';
 
 /**
@@ -513,11 +514,19 @@ describe('CampusMap', () => {
             : el.className,
     );
     expect(kinds).toEqual(['booked', 'compass', 'close']);
-    // Phase 1 wires it to "put north back up"; Phase 2 makes it spin with the bearing.
     const compass = cluster.querySelector('.campusmap__compass') as HTMLButtonElement;
     expect(compass.tagName).toBe('BUTTON');
-    // Bearing AND pitch: the compass is the only way back to a flat map (QA I3).
+    // In 2D it still resets bearing AND pitch: a two-finger pitch on a flat map
+    // has to be undoable, and this is the control that says so (QA I3). In 3D the
+    // mode owns pitch and the label changes with it — see the compass test below.
     expect(compass.getAttribute('aria-label')).toBe('Reset north and tilt');
+    const map = FakeMap.instances[0]!;
+    await act(async () => {
+      map.easeTo({ pitch: 40, bearing: 30, duration: 0 });
+    });
+    await act(async () => compass.click());
+    expect(map.getPitch()).toBe(0);
+    expect(map.getBearing()).toBe(0);
   });
 
   it('explains a booked-only-hidden plan instead of claiming there is nothing to place', async () => {
@@ -940,6 +949,64 @@ describe('CampusMap', () => {
     await act(async () => reset.click());
     await settle();
     expect(reset.disabled).toBe(true);
+  });
+
+  it('has a 3D toggle that extrudes the buildings and tilts the camera, and comes back flat', async () => {
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const btn = container.querySelector('button[aria-label="3D view"]') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => btn.click());
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    // The extruded layers take over from the flat ones — one switch, both ways.
+    expect(map.calls).toContainEqual({ method: 'setLayoutProperty', args: ['buildings-3d', 'visibility', 'visible'] });
+    expect(map.calls).toContainEqual({ method: 'setLayoutProperty', args: ['buildings', 'visibility', 'none'] });
+    // …and the camera stands up: the mode owns pitch and bearing.
+    expect(map.getPitch()).toBe(CAMERA.mode3d.pitch);
+    expect(map.getBearing()).toBe(CAMERA.mode3d.bearing);
+
+    await act(async () => btn.click());
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    expect(map.getPitch()).toBe(0);
+    expect(map.getBearing()).toBe(0);
+    expect(map.calls).toContainEqual({ method: 'setLayoutProperty', args: ['buildings', 'visibility', 'visible'] });
+  });
+
+  it('the compass follows the bearing, and in 3D resets north WITHOUT flattening the map', async () => {
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    await act(async () => (container.querySelector('button[aria-label="3D view"]') as HTMLButtonElement).click());
+    const compass = container.querySelector('button.campusmap__compass') as HTMLButtonElement;
+    // Mode 3D's bearing is -25, so the needle turns +25 to keep pointing north.
+    expect((compass.querySelector('svg') as unknown as SVGElement).style.transform).toContain('rotate(25deg)');
+    expect(compass.getAttribute('aria-label')).toBe('Reset north');
+
+    await act(async () => compass.click());
+    expect(map.getBearing()).toBe(0);
+    // Pitch untouched: the 3D button is what stands the camera up, so a compass
+    // that flattened it would leave a pressed 3D toggle over a flat map.
+    expect(map.getPitch()).toBe(CAMERA.mode3d.pitch);
+    // The needle catches up on the next camera tick (rAF-throttled, so one pump).
+    await pump();
+    expect((compass.querySelector('svg') as unknown as SVGElement).style.transform).toContain('rotate(0deg)');
+  });
+
+  it('remembers no 3D between mounts — session-only, default 2D', async () => {
+    render({ plan: planWithMeeting() });
+    await settle();
+    await act(async () => (container.querySelector('button[aria-label="3D view"]') as HTMLButtonElement).click());
+    expect(container.querySelector('button[aria-label="3D view"]')!.getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    render({ plan: planWithMeeting() });
+    await settle();
+    expect(container.querySelector('button[aria-label="3D view"]')!.getAttribute('aria-pressed')).toBe('false');
+    // Nothing about the map's camera may be persisted — the plan is; the view is not.
+    expect(Object.keys(localStorage).some((k) => /3d|mode|pitch|bearing/i.test(k))).toBe(false);
   });
 
   it('opens on the view it was given', async () => {

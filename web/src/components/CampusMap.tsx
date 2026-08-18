@@ -219,7 +219,14 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     maxPitch: CAMERA.maxPitch,
     reduceMotion,
   });
-  const [mode] = useState<MapMode>('2d'); // Phase 2 adds the setter and the button
+  // Flat or standing up. Session-only, and deliberately not persisted: 3D is a
+  // way of LOOKING at the plan, not part of it, and a student who tilted the map
+  // once should not find it tilted a week later with no memory of asking.
+  const [mode, setMode] = useState<MapMode>('2d');
+  // The camera's own bearing, re-read on every tick — what the compass needle
+  // points with, and the only thing on screen that reports a drag-rotate.
+  const bearing = gl.map?.getBearing() ?? 0;
+  const compassLabel = mode === '3d' ? 'Reset north' : 'Reset north and tilt';
 
   // Both read-only defences, side by side. §5.4 hides the toggle because the plan on
   // screen is someone else's; the same reasoning kills the solid/hollow booked dots,
@@ -499,22 +506,23 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
         </button>
       )}
       {/* The GL camera can be rotated AND tilted (drag with the right button / two
-          fingers), so the needle is the button that puts the map back: north up and
-          flat. Pitch has to be in there — `cameraForBounds` behind "Reset view"
-          returns centre/zoom/bearing only, so without this a student who
-          two-finger-pitched by accident had no way back to a flat map at all
-          (QA I3). The gestures themselves stay enabled: pitch renders correctly
-          and the chips stay anchored through it, and Phase 2's 3D control wants
-          them. Phase 2 spins the needle with the bearing; in Phase 1 it is simply
-          the way back. */}
+          fingers), so the needle both REPORTS north and is the button that puts it
+          back. The needle turns against the bearing, re-read on every `gl.tick`, so
+          a drag-rotate spins it live.
+          What it resets depends on who owns pitch. In 2D nobody does, so a
+          two-finger pitch has to be undoable here: bearing AND pitch, which is the
+          affordance QA I3 asked for ("Reset view" alone left a tilted map tilted
+          until `goHome` was taught to flatten it too). In 3D the MODE owns pitch —
+          flattening the camera from here would leave a pressed 3D toggle over a
+          flat map — so the compass resets north only, and says so in its label. */}
       <button
         type="button"
         className="btn btn--sm btn--icon campusmap__compass"
-        aria-label="Reset north and tilt"
-        title="Reset north and tilt"
-        onClick={() => gl.easeCamera({ bearing: 0, pitch: 0 })}
+        aria-label={compassLabel}
+        title={compassLabel}
+        onClick={() => gl.easeCamera(mode === '3d' ? { bearing: 0 } : { bearing: 0, pitch: 0 })}
       >
-        <Compass size={18} />
+        <Compass size={18} style={{ transform: `rotate(${-bearing}deg)` }} />
       </button>
       <button
         type="button"
@@ -659,7 +667,28 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
                 )
               }
             />
-            <div className="campusmap__zoom" role="group" aria-label="Zoom">
+            <div className="campusmap__zoom" role="group" aria-label="Map view">
+              {/* Flat ⇄ standing up. It heads the same 28 px column as the zoom
+                  buttons because it is the same kind of thing — a control over how
+                  the map is drawn, not over the plan — and because the corner it
+                  shares is the one the eye already goes to for the camera. The
+                  camera move and the layer swap are one gesture from here: the
+                  effect above applies `mode` to the style, this eases the pitch and
+                  bearing the mode implies. */}
+              <button
+                type="button"
+                className="btn btn--sm campusmap__zoombtn campusmap__zoombtn--3d"
+                aria-pressed={mode === '3d'}
+                aria-label="3D view"
+                title="3D view"
+                onClick={() => {
+                  const next: MapMode = mode === '3d' ? '2d' : '3d';
+                  setMode(next);
+                  gl.easeCamera(next === '3d' ? CAMERA.mode3d : CAMERA.mode2d);
+                }}
+              >
+                3D
+              </button>
               <button type="button" className="btn btn--sm btn--icon campusmap__zoombtn" onClick={gl.zoomIn} aria-label="Zoom in">
                 <Plus size={14} />
               </button>

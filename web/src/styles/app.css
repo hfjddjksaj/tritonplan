@@ -2840,6 +2840,21 @@ button.termsw__cell:hover {
   color: var(--ink);
   box-shadow: var(--shadow-sm);
 }
+/* The one control in that column that is a word rather than a glyph: smaller and
+   heavier so "3D" occupies the same optical weight as ⊕ / ⊖ / ⟲ at 28 px. */
+.campusmap__zoombtn--3d {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 0;
+}
+/* Pressed = the map is standing up. Same on/off language as "Booked only", so a
+   toggle looks like a toggle wherever it appears on the map. */
+.campusmap__zoombtn--3d[aria-pressed='true'] {
+  color: var(--ink);
+  background: var(--surface-2);
+  border-color: var(--text-faint);
+}
 .campusmap__zoombtn:disabled {
   color: var(--text-faint);
   cursor: default;
