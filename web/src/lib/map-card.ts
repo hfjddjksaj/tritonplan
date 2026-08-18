@@ -151,6 +151,29 @@ function overlaps(a: Box, b: Box): boolean {
 }
 
 /**
+ * The four ways a card can sit on its chip's box — sharing its left or right
+ * edge, and its top or bottom — ordered so the first one grows away from the dot.
+ */
+function chipAligned(
+  anchor: Point,
+  size: Size,
+  chip: { x: number; y: number; w: number; h: number },
+): { left: number; top: number }[] {
+  const onLeft = chip.x; // card's left edge on the chip's left edge
+  const onRight = chip.x + chip.w - size.w; // card's right edge on the chip's right
+  const onTop = chip.y;
+  const onBottom = chip.y + chip.h - size.h;
+  const [h1, h2] = chip.x + chip.w <= anchor.x ? [onRight, onLeft] : [onLeft, onRight];
+  const [v1, v2] = chip.y + chip.h <= anchor.y ? [onBottom, onTop] : [onTop, onBottom];
+  return [
+    { left: h1, top: v1 },
+    { left: h1, top: v2 },
+    { left: h2, top: v1 },
+    { left: h2, top: v2 },
+  ];
+}
+
+/**
  * Where to put a card of `size` for a marker at `anchor` on a `canvas` whose
  * top `insetTop` px are under the floating header.
  *
@@ -178,19 +201,16 @@ export function cardPlacement(
   const below = anchor.y + GAP;
   const above = anchor.y - GAP - size.h;
   const candidates = [
-    // Aligned to the chip on whichever axis it stands off the dot, so the card
-    // covers the chip's near edge and grows away from the dot: a chip wholly left
-    // of the dot shares the card's right edge, one wholly above shares its bottom
-    // edge, and anything else (to the right, or centred over the dot as an
-    // above/below chip is) shares its left / top edge.
-    ...(chip
-      ? [
-          {
-            left: chip.x + chip.w <= anchor.x ? chip.x + chip.w - size.w : chip.x,
-            top: chip.y + chip.h <= anchor.y ? chip.y + chip.h - size.h : chip.y,
-          },
-        ]
-      : []),
+    // Aligned to the chip, on both axes, so the card covers the chip's near edge
+    // and grows away from the dot. Four of them, in preference order: the edge the
+    // chip stands off the dot on first (a chip wholly left of the dot shares the
+    // card's right edge; one wholly above shares its bottom edge; anything else —
+    // to the right, or centred over the dot as an above/below chip is — shares its
+    // left / top edge), then the mirrors, which is what saves a chip near a canvas
+    // edge. A 190 px card cannot START at a chip 116 px above the bottom, and
+    // without the mirrors that case fell straight through to the dot-relative
+    // corners below and lost the grown-from-the-chip reading entirely.
+    ...(chip ? chipAligned(anchor, size, chip) : []),
     { left: right, top: below },
     { left: leftOf, top: below },
     { left: right, top: above },

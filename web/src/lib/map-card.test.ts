@@ -111,6 +111,19 @@ describe('cardPlacement', () => {
     expect(above).toEqual({ left: 60, top: 66 + 22 - size.h }); // shares its bottom edge
   });
 
+  it('grows UP from the chip when the canvas floor is too close for it to grow down', () => {
+    // Browser QA, Galbraith Hall: the dot sits 116 px above the bottom edge and
+    // the card is 190 px tall, so top-aligning to the chip would run it off the
+    // canvas. Bottom-aligning keeps the card on the chip — the fallback corners
+    // put it a fixed gap above the DOT instead, which is the chip-shaped hole
+    // this whole placement exists to avoid.
+    const dot = { x: 725, y: 843 };
+    const chip = { x: 737, y: 820, w: 97, h: 46 };
+    const p = cardPlacement(dot, { w: 196, h: 190 }, { w: 1920, h: 959 }, 148, chip);
+    expect(p.left).toBe(chip.x); // still the chip's left edge
+    expect(p.top).toBe(chip.y + chip.h - 190); // …and its BOTTOM edge
+  });
+
   it('falls back to the old corners when the chip-aligned box would not fit', () => {
     // A chip hard against the right edge: aligning the card to it would run the
     // card off the canvas, so the dot-relative candidates take over.
