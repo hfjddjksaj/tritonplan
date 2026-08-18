@@ -110,21 +110,35 @@ export function centroidInsideAny(ring, shapes) {
   return shapes.some((s) => s.rings.some((r) => pointInRing(cx, cy, r)));
 }
 
-/** A 4xx/ArcGIS-logical-error response — retrying the same request won't fix it. */
+/** A 4xx other than 429, or an ArcGIS logical error — retrying won't fix it. */
 class FatalFetchError extends Error {}
+
+/** A `Retry-After` header (seconds, or an HTTP-date) as a millisecond delay, or null if absent/unparseable. */
+export function retryAfterMs(headers) {
+  const v = headers.get('retry-after');
+  if (!v) return null;
+  const seconds = Number(v);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const dateMs = Date.parse(v);
+  return Number.isFinite(dateMs) ? Math.max(0, dateMs - Date.now()) : null;
+}
 
 /**
  * One page, retried a few times: a heavy query (e.g. the ground layer at full
  * `geometryPrecision` with no `maxAllowableOffset`) is slow enough for UCSD's
  * server or an intervening proxy to reset the connection mid-response
  * (`ECONNRESET`/"terminated") well before it is actually down. Same doctrine
- * as `queryOverpass`'s mirror retry below.
+ * as `queryOverpass`'s mirror retry below (that one has its own separate
+ * retry loop, mirrors and all — it never calls this function).
  *
- * Only retries what retrying can plausibly fix: network errors, 5xx, and
- * exceeded-limit-style hiccups. A 4xx (bad params) or an ArcGIS logical error
- * throws immediately — five more identical requests won't change the answer.
- * The last exhausted attempt also skips its backoff sleep before throwing —
- * there is nothing left to wait for.
+ * Retries what retrying can plausibly fix: network errors, 5xx (503 is
+ * "come back later" — what Overpass returns when its slots are full, and
+ * ArcGIS can return it under load too), and 429 (rate limiting). Honours a
+ * `Retry-After` header when the response sends one instead of guessing. A
+ * 4xx other than 429 (bad params, etc.) or an ArcGIS logical error throws
+ * immediately as fatal — five more identical requests won't change the
+ * answer. The last exhausted attempt also skips its backoff sleep before
+ * throwing — there is nothing left to wait for.
  */
 async function fetchJsonRetrying(url) {
   const maxAttempts = 5;
@@ -134,8 +148,8 @@ async function fetchJsonRetrying(url) {
       const r = await fetch(url);
       if (!r.ok) {
         const msg = `HTTP ${r.status} from ${url}`;
-        if (r.status >= 400 && r.status < 500) throw new FatalFetchError(msg);
-        throw new Error(msg);
+        if (r.status !== 429 && r.status >= 400 && r.status < 500) throw new FatalFetchError(msg);
+        throw Object.assign(new Error(msg), { retryAfterMs: retryAfterMs(r.headers) });
       }
       const j = await r.json();
       if (j.error) throw new FatalFetchError(`ArcGIS error: ${JSON.stringify(j.error)}`);
@@ -145,7 +159,7 @@ async function fetchJsonRetrying(url) {
       lastErr = e;
       if (attempt === maxAttempts - 1) break;
       console.warn(`queryAll attempt ${attempt + 1} failed (${e.message}) for ${url}; retrying…`);
-      await new Promise((res) => setTimeout(res, 4000 * (attempt + 1)));
+      await new Promise((res) => setTimeout(res, e.retryAfterMs ?? 4000 * (attempt + 1)));
     }
   }
   throw lastErr;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rdp, pointInRing, centroid, centroidInsideAny, encodeRing, GEO_SCALE } from './geo-encode.mjs';
+import { rdp, pointInRing, centroid, centroidInsideAny, encodeRing, GEO_SCALE, retryAfterMs } from './geo-encode.mjs';
 
 describe('rdp', () => {
   it('returns the input unchanged when eps <= 0 — no simplification', () => {
@@ -184,5 +184,31 @@ describe('centroidInsideAny — the ground-Building dedup predicate', () => {
       [500, 510],
     ];
     expect(centroidInsideAny(orphanRing, shapes)).toBe(false);
+  });
+});
+
+describe('retryAfterMs', () => {
+  const headers = (v) => new Headers(v ? { 'retry-after': v } : {});
+
+  it('parses a delay-seconds value into milliseconds', () => {
+    expect(retryAfterMs(headers('2'))).toBe(2000);
+    expect(retryAfterMs(headers('0'))).toBe(0);
+  });
+
+  it('parses an HTTP-date value into a millisecond delay from now', () => {
+    const future = new Date(Date.now() + 5000).toUTCString();
+    const ms = retryAfterMs(headers(future));
+    expect(ms).toBeGreaterThan(4000);
+    expect(ms).toBeLessThanOrEqual(5000);
+  });
+
+  it('never returns a negative delay for a date already in the past', () => {
+    const past = new Date(Date.now() - 5000).toUTCString();
+    expect(retryAfterMs(headers(past))).toBe(0);
+  });
+
+  it('returns null when the header is absent or unparseable', () => {
+    expect(retryAfterMs(headers())).toBeNull();
+    expect(retryAfterMs(headers('not-a-value'))).toBeNull();
   });
 });
