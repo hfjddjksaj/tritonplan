@@ -174,8 +174,13 @@ export const fakeMapLibreModule = {
   LngLatBounds: FakeLngLatBounds,
   ScaleControl: FakeScaleControl,
   /** Recorded, not applied — `map-worker.ts` calls this before every map is built. */
-  setWorkerUrl: (url: string) => { workerUrls.push(url); },
+  setWorkerUrl: (url: string) => { workerUrls.push({ url, mapsBuilt: FakeMap.instances.length }); },
 };
 
-/** Every URL `setWorkerUrl` was handed, in order. */
-export const workerUrls: string[] = [];
+/**
+ * Every URL `setWorkerUrl` was handed, in order, with how many maps already
+ * existed when it arrived. `mapsBuilt` is the half that matters: MapLibre reads
+ * the worker URL inside the `Map` constructor, so a call that lands after the
+ * first map is a call that came too late.
+ */
+export const workerUrls: { url: string; mapsBuilt: number }[] = [];

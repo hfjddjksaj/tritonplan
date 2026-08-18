@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, StrictMode, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { FakeMap, fakeMapLibreModule } from '../test/fake-maplibre';
+import { FakeMap, fakeMapLibreModule, workerUrls } from '../test/fake-maplibre';
+import { MAP_WORKER_URL } from '../lib/map-worker';
 vi.mock('maplibre-gl', () => fakeMapLibreModule);
 import { useMapLibre, MAP_LOAD_TIMEOUT_MS, type MapHandle, type HomeSpec } from './useMapLibre';
 
@@ -24,6 +25,32 @@ const flush = async () => { for (let i = 0; i < 5; i++) await act(async () => { 
 
 describe('useMapLibre', () => {
   beforeEach(() => FakeMap.reset());
+
+  // THE call-site guard. `map-worker.test.ts` proves `configureMapWorker()` does
+  // the right thing when called; this proves it is called at all — which is the
+  // line that actually keeps the map alive. Delete `configureMapWorker()` from the
+  // creation effect and everything else stays green: every other unit test passes,
+  // and `verify-build.mjs` passes too, because the module is still in the graph so
+  // the worker asset still emits and is still referenced. Production just goes back
+  // to "Loading campus…" forever — now dressed up by C3's timeout as a slow map
+  // rather than a bug. This test is the only thing standing between that line and
+  // the nine tasks it already survived.
+  //
+  // It has to run FIRST in this file: `configureMapWorker()` is idempotent, so only
+  // the first map built in this module registry records anything.
+  it('points MapLibre at our own bundled worker BEFORE it builds the map', async () => {
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () => root.render(<Harness onHandle={() => {}} />));
+    await flush();
+    expect(FakeMap.instances.length).toBeGreaterThan(0);
+    expect(workerUrls.length).toBeGreaterThan(0);
+    // The URL handed over is exactly the one the bundler emitted...
+    expect(workerUrls[0]!.url).toBe(MAP_WORKER_URL);
+    // ...and it arrived before any map existed. MapLibre reads it in the Map
+    // constructor, so "after" is the same as "never".
+    expect(workerUrls[0]!.mapsBuilt).toBe(0);
+    await act(async () => root.unmount());
+  });
 
   it('creates one map, fits home on load, exposes homeBounds and camera helpers', async () => {
     let handle!: MapHandle;
