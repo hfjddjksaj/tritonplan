@@ -3,6 +3,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { CourseOffering, PlanState } from '@triton/shared';
 import { makePlan } from '../lib/fixtures';
+import { FakeMap, fakeMapLibreModule } from '../test/fake-maplibre';
+vi.mock('maplibre-gl', () => fakeMapLibreModule);
 import { CampusMap } from './CampusMap';
 
 /**
@@ -110,14 +112,22 @@ function planOnline(): PlanState {
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** Let the dynamic geo import and its promise settle (a cold import can take a few ticks). */
+/**
+ * Let the dynamic geo/map imports, the GL map's construction and its `load`
+ * settle (a cold import can take a few ticks). The 20 ms wait is jsdom's rAF
+ * floor — `useMapLibre` throttles its camera ticks on requestAnimationFrame,
+ * which jsdom backs with a real ~16.7 ms interval, so a 0 ms timeout has no
+ * guaranteed budget to let one fire. The loading pane goes away exactly when
+ * the map's `load` has fired, so waiting on it waits on `FakeMap.instances[0]`
+ * existing and being ready.
+ */
 async function settle() {
   for (let i = 0; i < 40; i++) {
     await act(async () => {
       await Promise.resolve();
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 20));
     });
-    if (!document.querySelector('.campusmap__loading')) return;
+    if (FakeMap.instances.length > 0 && !document.querySelector('.campusmap__loading')) return;
   }
 }
 
@@ -126,6 +136,7 @@ describe('CampusMap', () => {
   let root: Root;
   beforeEach(() => {
     localStorage.clear();
+    FakeMap.reset();
     // The map opens on today's weekday when it has classes; pin "today" to a
     // Sunday so every test starts on "All" whatever day it actually runs.
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -218,7 +229,7 @@ describe('CampusMap', () => {
     const onClose = render({ plan: planWithMeeting() });
     await settle();
 
-    const marker = container.querySelector('.campusmap__marker') as SVGGElement | null;
+    const marker = container.querySelector('.campusmap__marker') as HTMLElement | null;
     expect(marker).not.toBeNull();
     act(() => {
       marker!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -276,9 +287,13 @@ describe('CampusMap', () => {
     expect(container.querySelector('.campusmap__detail')).toBeNull();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
     expect(container.querySelector('.campusmap__card')).toBeNull();
+    // The marker is a real focusable DOM button in the overlay above the GL canvas.
+    const marker = container.querySelector('.campusmap__overlay .campusmap__marker')!;
+    expect(marker.tagName).toBe('DIV');
+    expect(marker.getAttribute('role')).toBe('button');
 
     act(() => {
-      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      marker.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     const card = container.querySelector('.campusmap__card')!;
     expect(card).not.toBeNull();
@@ -298,9 +313,9 @@ describe('CampusMap', () => {
     // The card is positioned in canvas px, off the marker.
     expect((card as HTMLElement).style.left).toMatch(/px$/);
 
-    // A click on the map background closes it.
+    // A click on the map background closes it, and the chip comes back.
     act(() => {
-      container.querySelector('.campusmap__svg')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      FakeMap.instances[0]!.fire('click', {});
     });
     expect(container.querySelector('.campusmap__card')).toBeNull();
     expect(container.querySelector('.campusmap__chip')).not.toBeNull();
@@ -371,8 +386,10 @@ describe('CampusMap', () => {
             : el.className,
     );
     expect(kinds).toEqual(['booked', 'compass', 'close']);
-    // No compass left on the canvas.
-    expect(container.querySelector('svg .campusmap__compass')).toBeNull();
+    // Phase 1 wires it to "put north back up"; Phase 2 makes it spin with the bearing.
+    const compass = cluster.querySelector('.campusmap__compass') as HTMLButtonElement;
+    expect(compass.tagName).toBe('BUTTON');
+    expect(compass.getAttribute('aria-label')).toBe('Reset north');
   });
 
   it('explains a booked-only-hidden plan instead of claiming there is nothing to place', async () => {
@@ -462,5 +479,74 @@ describe('CampusMap', () => {
       'Booked only is on and nothing here is booked yet',
     );
     expect(container.textContent).toContain('No class locations to place yet');
+  });
+
+  it('applies host colours to the map once it is ready', async () => {
+    await act(async () =>
+      root.render(
+        <CampusMap plan={planWithMeeting()} booked={new Set()} readOnly={false} onClose={() => {}} />,
+      ),
+    );
+    await settle();
+    const filters = FakeMap.instances[0]!.calls.filter(
+      (c) => c.method === 'setFilter' && c.args[0] === 'hosts',
+    );
+    expect(JSON.stringify(filters.at(-1)!.args[1])).toContain('Center Hall');
+  });
+
+  it('shows the WebGL message, with the buildings as text, when the map errors', async () => {
+    await act(async () =>
+      root.render(
+        <CampusMap plan={planWithMeeting()} booked={new Set()} readOnly={false} onClose={() => {}} />,
+      ),
+    );
+    await settle();
+    await act(async () => {
+      FakeMap.instances[0]!.fire('error', { error: new Error('WebGL2 unavailable') });
+    });
+    const box = container.querySelector('.campusmap__nogl')!;
+    expect(box.textContent).toContain('The campus map needs WebGL');
+    expect(box.textContent).toContain('Center Hall');
+    expect(container.querySelector('.campusmap__marker')).toBeNull();
+  });
+
+  it('deselects the open marker on a background click', async () => {
+    await act(async () =>
+      root.render(
+        <CampusMap plan={planWithMeeting()} booked={new Set()} readOnly={false} onClose={() => {}} />,
+      ),
+    );
+    await settle();
+    await act(async () => {
+      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+    await act(async () => {
+      FakeMap.instances[0]!.fire('click', {});
+    });
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+  });
+
+  it('zoom buttons drive the map and ⟲ lights up once the student has moved it, by any control', async () => {
+    await act(async () =>
+      root.render(
+        <CampusMap plan={planWithMeeting()} booked={new Set()} readOnly={false} onClose={() => {}} />,
+      ),
+    );
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const z0 = map.getZoom();
+    await act(async () => (container.querySelector('button[aria-label="Zoom in"]') as HTMLButtonElement).click());
+    expect(map.getZoom()).toBeGreaterThan(z0);
+    const reset = container.querySelector('button[aria-label="Reset view"]') as HTMLButtonElement;
+    expect(reset.disabled).toBe(false); // ⊕ counts as moving the view
+    await act(async () => {
+      map.simulateUserPan(0.01, 0);
+    });
+    await settle();
+    expect(reset.disabled).toBe(false);
+    await act(async () => reset.click());
+    await settle();
+    expect(reset.disabled).toBe(true);
   });
 });

@@ -1,17 +1,18 @@
 /**
  * DOM overlay drawn on top of the MapLibre GL canvas: one focusable marker
  * per visible pin group, with its label chip beside it unless the marker is
- * the one currently open (the card takes over its chip's job, same as the
- * old SVG renderer). Positions come from `map.project()`, so they track the
- * GL camera exactly; the caller re-renders this on every `tick` from
- * `useMapLibre` so a pan or zoom re-projects every marker in step with the
- * map underneath it.
+ * the one currently open (the card takes over its chip's job). Positions come
+ * from `map.project()`, so they track the GL camera exactly; the caller
+ * re-renders this on every `tick` from `useMapLibre` so a pan or zoom
+ * re-projects every marker in step with the map underneath it.
  *
- * Click / keyboard / focus-ring behaviour mirrors the SVG marker it replaces
- * (see `CampusMapCanvas.tsx`): click toggles selection and stops the click
- * from reaching the map background; Enter and Space do the same from the
- * keyboard; a pointerdown is prevented so a mouse click never leaves a focus
- * ring on the dot.
+ * Click toggles selection and stops the click from reaching the map
+ * background; Enter and Space do the same from the keyboard; a pointerdown is
+ * prevented so a mouse click never leaves a focus ring on the dot. This
+ * overlay is a SIBLING of the GL container and is `pointer-events: none`
+ * except on the markers themselves, so a drag on empty map reaches MapLibre
+ * untouched and a drag released over a marker never fires that marker's
+ * click — see the layering note in `CampusMap.tsx`.
  */
 import { useMemo } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';

@@ -2481,6 +2481,14 @@ button.termsw__cell:hover {
   overflow: hidden;
   background: var(--surface);
 }
+/* The lazy chunk's Suspense fallback (App.tsx) wears this next to .campusmap.
+   It paints the basemap's own paper (MAP_PALETTE.land) rather than the app's
+   surface, so the hand-off from "Loading campus…" to the real map is not a
+   flash of white. */
+.campusmap--pending {
+  background: #eceae4;
+}
+
 /* --- the control island (top-left): title row, view tabs, day filter ------ */
 .campusmap__island {
   position: absolute;
@@ -2626,142 +2634,134 @@ button.termsw__cell:hover {
   display: grid;
   place-items: center;
 }
-/* touch-action: none hands every touch to the map (drag pans, pinch zooms)
-   instead of the page. The svg's width/height attributes equal the stage's box,
-   so it renders at exactly 1:1. */
-.campusmap__svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  touch-action: none;
-  cursor: grab;
-  user-select: none;
-  -webkit-user-select: none;
+/* --- the MapLibre GL canvas ----------------------------------------------
+   The map itself. MapLibre binds its own drag/zoom/rotate handlers to this
+   node, so it must stay a SIBLING of the marker overlay: markers inside it
+   would start a map drag on mousedown. */
+.campusmap__gl {
+  position: absolute;
+  inset: 0;
 }
-.campusmap__svg:active {
+.campusmap__gl .maplibregl-canvas {
+  outline: none;
+  cursor: grab;
+}
+.campusmap__gl .maplibregl-canvas:active {
   cursor: grabbing;
 }
+.campusmap__gl .maplibregl-ctrl-bottom-left {
+  bottom: 6px;
+  left: 12px;
+}
+.campusmap__gl .maplibregl-ctrl-scale {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+  font: 500 10.5px/1.4 var(--font-sans);
+}
 
-/* --- basemap palette: cool paper, so the coloured chips carry the eye ------ */
-.campusmap__land {
-  fill: #f3f5f8;
-}
-.campusmap__ocean {
-  fill: #cfe1f1;
-  stroke: #a9c3dc;
-  stroke-width: 1;
-}
-/* fill comes per-district from districtTint() as a presentation attribute */
-.campusmap__district {
-  stroke: #ffffff;
-  stroke-width: 1.2;
-  stroke-linejoin: round;
-}
-.campusmap__footprint {
-  fill: #d8dee8;
-  stroke: #b3bdcd;
-  stroke-width: 0.6;
-  stroke-linejoin: round;
-}
-/* a building with a class in it: fill/stroke are the course's colours (attrs) */
-.campusmap__host {
-  stroke-width: 1;
-  stroke-linejoin: round;
+/* --- the marker overlay: DOM markers projected over the GL canvas ---------
+   The overlay itself is transparent to the pointer so a press on empty map
+   reaches the canvas and pans it; only the markers take events back. That is
+   also why the old renderer's suppressClick guard is gone: a drag started on
+   the canvas fires its click on the two targets' common ancestor (the stage),
+   never on a marker released over. */
+.campusmap__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
 }
 .campusmap__marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: auto;
   cursor: pointer;
 }
+/* Dot and chip take their course colours inline; only shape lives here.
+   __marker--booked needs no rule: booked vs. not is the dot's solid-vs-hollow
+   fill, set inline for the same reason. */
+.campusmap__dot {
+  position: absolute;
+  left: -7.5px;
+  top: -7.5px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2.5px solid;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 2px #fff;
+}
+.campusmap__marker--open .campusmap__dot {
+  border-width: 3px;
+}
 /* The chip is a pill in the app's chip language: white, hairline, a dot in the
-   course colour (a presentation attribute), then the code in ink and the
-   component label muted. */
+   course colour, then the code in ink and the component label muted. */
 .campusmap__chip {
-  fill: #ffffff;
-  stroke: var(--line-strong);
-  stroke-width: 1;
-}
-.campusmap__marker:hover .campusmap__chip {
-  stroke: var(--text-faint);
-}
-.campusmap__chip-shadow {
-  fill: rgba(11, 31, 58, 0.14);
-}
-.campusmap__chiptext {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px 0 8px;
+  border-radius: 11px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 1px 2px rgba(11, 31, 58, 0.14);
+  white-space: nowrap;
   font-size: 12px;
   letter-spacing: -0.01em;
 }
+.campusmap__marker:hover .campusmap__chip {
+  border-color: var(--text-faint);
+}
+.campusmap__chip-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
 .campusmap__chipcode {
   font-weight: 700;
-  fill: var(--ink);
+  color: var(--ink);
 }
 .campusmap__chiplabel {
   font-weight: 600;
-  fill: var(--text-muted);
+  color: var(--text-muted);
+}
+/* A mouse click must not leave a ring around the dot for as long as the card is
+   open; keyboard focus (Tab / Enter) still gets one, on the dot rather than on
+   the marker's zero-size box. */
+.campusmap__marker:focus {
+  outline: none;
+}
+.campusmap__marker:focus-visible .campusmap__dot {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
-/* --- names on the basemap: haloed so they survive any background ---------- */
-.campusmap__roadname,
-.campusmap__districtname,
-.campusmap__landmark,
-.campusmap__bldgname,
-.campusmap__compass-label,
-.campusmap__scale-text,
+/* --- attribution + the no-WebGL fallback ---------------------------------- */
 .campusmap__attrib {
-  paint-order: stroke;
-  stroke: #ffffff;
-  stroke-width: 3px;
-  stroke-linejoin: round;
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-shadow: 0 0 2px #fff;
   pointer-events: none;
 }
-.campusmap__roadname {
-  font-size: 9.5px;
-  font-weight: 500;
-  fill: #5a6b83;
-  letter-spacing: 0.02em;
-}
-.campusmap__roadname--hwy {
-  font-weight: 700;
-  fill: #7a5300;
-}
-.campusmap__roadname--major {
-  font-weight: 600;
-  fill: #46556c;
-}
-.campusmap__roadname--walk {
-  font-style: italic;
-  fill: #6b7a90;
-}
-.campusmap__districtname {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  fill: #7b889b;
-  stroke-width: 3.5px;
-}
-.campusmap__landmark {
-  font-size: 9.5px;
-  font-weight: 600;
-  fill: #3f4c61;
-}
-.campusmap__bldgname {
-  font-size: 8.5px;
-  font-weight: 500;
-  fill: #55627a;
-  stroke-width: 2.5px;
-}
-.campusmap__scale-line {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.5;
-}
-.campusmap__scale-text {
-  font-size: 9px;
-  font-weight: 700;
-  fill: var(--ink);
-}
-.campusmap__attrib {
-  font-size: 8px;
-  fill: var(--text-faint);
+.campusmap__nogl {
+  position: absolute;
+  inset: var(--map-inset) 16px 16px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
 }
 
 /* --- zoom controls + floating empty state --------------------------------- */
@@ -2930,34 +2930,4 @@ button.termsw__cell:hover {
   .campusmap__card {
     max-width: calc(100vw - 24px);
   }
-}
-
-/* CampusMapCanvas emits three plain SVG <g> group wrappers (__districts /
-   __footprints / __markers) with no rule of their own — a <g> paints nothing
-   itself, so a class rule on it has nothing to do; all visual weight already
-   lives on the styled children above.
-   __dot (and the chip's dot) get their fill/stroke per course from
-   colorsForHue() as SVG presentation attributes (props, not the `style` attr —
-   a plain class rule still wins over those), so only the transition and the
-   "selected" affordance belong here. __marker--booked needs no rule of its own:
-   booked vs. not is already the dot's solid-vs-hollow fill, set inline for the
-   same reason. */
-.campusmap__dot,
-.campusmap__chip {
-  transition: fill 0.12s ease, stroke 0.12s ease;
-}
-.campusmap__marker--open .campusmap__dot {
-  stroke-width: 3;
-}
-/* A mouse click focuses the <g> and Chrome then paints its own `outline: auto`
-   ring on the marker's bounding box — a black frame that stays on the dot for
-   as long as the card is open. Suppress that, and keep a ring only for keyboard
-   focus (Tab / Enter), which the browser default would also draw wrong: on the
-   <g>'s bounding box, which is exactly the dot + chip. */
-.campusmap__marker:focus {
-  outline: none;
-}
-.campusmap__marker:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
 }

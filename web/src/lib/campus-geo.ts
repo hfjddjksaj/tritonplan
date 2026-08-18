@@ -13,7 +13,6 @@
  * at 1e5 scale (~1.1 m, well under a pixel at display scale) and delta-encoded
  * within each ring, so most values are one or two digits.
  */
-import { fitBounds, project, type Point, type Viewport } from './map-projection';
 
 /** One drawable outline: a building footprint or a district boundary. */
 export interface CampusShape {
@@ -251,23 +250,4 @@ export function coreBounds(geo: CampusGeo): LngLatBox {
  */
 export function campusPadding(w: number, h: number): number {
   return Math.max(8, Math.round(Math.min(w, h) * 0.037));
-}
-
-/**
- * The viewport the map draws through. Framed to the academic core rather than
- * to the pins, so a plan with two neighbouring classes still reads as UCSD —
- * and framed to the core rather than to all 25 districts, so the buildings
- * students actually walk between are big enough to tell apart.
- *
- * Shared by the renderer and by the shell, which needs the same numbers to know
- * which markers land off-canvas.
- */
-export function campusViewport(geo: CampusGeo, w: number, h: number): Viewport {
-  const pts: Point[] = [];
-  for (const shape of coreDistricts(geo)) {
-    for (const ring of shape.rings) {
-      for (let i = 0; i + 1 < ring.length; i += 2) pts.push(project(ring[i]!, ring[i + 1]!));
-    }
-  }
-  return fitBounds(pts, w, h, campusPadding(w, h));
 }

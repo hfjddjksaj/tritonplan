@@ -1,9 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { colorsForHue } from '../lib/colors';
-import type { Box } from '../lib/map-basemap';
-import { cardPlaceName, cardPlacement, cardSections, estimateCardSize, rowText, type Size } from '../lib/map-card';
+import { cardPlaceName, cardPlacement, cardSections, estimateCardSize, rowText, type Point, type Size } from '../lib/map-card';
 import type { PinGroup } from '../lib/map-labels';
-import type { Point } from '../lib/map-projection';
 
 interface Props {
   group: PinGroup;
@@ -14,8 +12,6 @@ interface Props {
   insetTop: number;
   /** Absent when the building has no name to look up (never the case for a matched pin). */
   onDirections?: () => void;
-  /** The box the card ended up in, so the canvas keeps basemap names out of it. */
-  onBox: (box: Box) => void;
 }
 
 /**
@@ -23,10 +19,10 @@ interface Props {
  * a card — the building's name as an eyebrow with Directions beside it, then
  * one section per course: code heading, one row per component ("LEC · Room
  * 2622"). Several courses in one building each get a heading of the same
- * size. HTML over the SVG (real text, a real button), positioned from the
- * marker's screen coordinates on every view change.
+ * size. HTML over the GL canvas (real text, a real button), positioned from
+ * the marker's projected screen coordinates on every camera change.
  */
-export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBox }: Props) {
+export function MarkerCard({ group, anchor, canvas, insetTop, onDirections }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const sections = useMemo(() => cardSections(group.pins), [group]);
   const where = group.place ?? group.building ?? 'This building';
@@ -42,11 +38,6 @@ export function MarkerCard({ group, anchor, canvas, insetTop, onDirections, onBo
   }, [sections]);
   const size = measured ?? estimateCardSize(sections, shownWhere);
   const { left, top } = cardPlacement(anchor, size, canvas, insetTop);
-  const onBoxRef = useRef(onBox);
-  onBoxRef.current = onBox;
-  useLayoutEffect(() => {
-    onBoxRef.current({ x: left, y: top, w: size.w, h: size.h });
-  }, [left, top, size.w, size.h]);
 
   return (
     <div

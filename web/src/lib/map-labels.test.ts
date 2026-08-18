@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { campusViewport, type CampusGeo } from './campus-geo';
 import type { MapPin } from './map-pins';
 import {
   chipText,
@@ -7,7 +6,6 @@ import {
   groupPins,
   placeLabels,
   splitByBounds,
-  splitByViewport,
   unlocatedPins,
   unplacedPins,
   type PinGroup,
@@ -72,38 +70,8 @@ describe('unlocatedPins', () => {
   });
 });
 
-/** A one-district campus: enough to fix a viewport around Revelle-sized ground. */
-const geo: CampusGeo = {
-  footprints: [],
-  districts: [
-    { name: 'Revelle', rings: [[-117.243, 32.872, -117.238, 32.872, -117.238, 32.877]] },
-  ],
-  lines: [],
-};
-
 /** UCSD Health's Hillcrest campus — real, in the point data, 13 km off this map. */
 const HILLCREST = { lat: 32.755, lng: -117.166 };
-
-describe('splitByViewport', () => {
-  it('separates markers the canvas can show from the ones it cannot', () => {
-    const groups = groupPins([
-      pin({}),
-      pin({ building: 'Hillcrest Medical Offices', coords: HILLCREST }),
-    ]);
-    const home = campusViewport(geo, 800, 600);
-    const { onCanvas, offCanvas } = splitByViewport(groups, home, 800, 600);
-    expect(onCanvas.map((g) => g.building)).toEqual(['York Hall']);
-    expect(offCanvas.map((g) => g.building)).toEqual(['Hillcrest Medical Offices']);
-  });
-
-  it('judges against the viewport it is given, not always the home frame', () => {
-    const groups = groupPins([pin({})]);
-    const home = campusViewport(geo, 800, 600);
-    // Panned a full canvas width away: York Hall is off the drawn area.
-    const panned = { ...home, offsetX: home.offsetX + 800 };
-    expect(splitByViewport(groups, panned, 800, 600).offCanvas.map((g) => g.building)).toEqual(['York Hall']);
-  });
-});
 
 describe('splitByBounds', () => {
   const inside = { key: 'a', lat: 32.88, lng: -117.235, pins: [] } as unknown as PinGroup;

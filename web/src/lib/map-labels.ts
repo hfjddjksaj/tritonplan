@@ -8,7 +8,6 @@
  */
 import type { LngLatBox } from './campus-geo';
 import { isOnlineModality, type MapPin } from './map-pins';
-import { project, toScreen, type Viewport } from './map-projection';
 
 export interface PinGroup {
   /** Stable identity: the rounded coordinate pair. */
@@ -90,28 +89,6 @@ export function inside(x: number, y: number, w: number, h: number): boolean {
   return x >= 0 && x <= w && y >= 0 && y <= h;
 }
 
-/**
- * Split groups by whether the given viewport can show them. The home frame is
- * the academic core, so a class at Hillcrest, Scripps or the Preuss School
- * projects outside the canvas: drawing it there is the same as not drawing it,
- * except that it silently inflates the "N buildings" count. Callers draw
- * `onCanvas` and list `offCanvas`.
- */
-export function splitByViewport(
-  groups: PinGroup[],
-  view: Viewport,
-  w: number,
-  h: number,
-): { onCanvas: PinGroup[]; offCanvas: PinGroup[] } {
-  const onCanvas: PinGroup[] = [];
-  const offCanvas: PinGroup[] = [];
-  for (const g of groups) {
-    const p = toScreen(project(g.lng, g.lat), view);
-    (inside(p.x, p.y, w, h) ? onCanvas : offCanvas).push(g);
-  }
-  return { onCanvas, offCanvas };
-}
-
 /** An axis-aligned pixel rectangle — a chip, a dot's obstacle box, a reserved area. */
 export interface Box {
   x: number;
@@ -121,10 +98,11 @@ export interface Box {
 }
 
 /**
- * Same split as {@link splitByViewport}, against a MapLibre `LngLatBox` frame
- * instead of the SVG renderer's `Viewport` + width/height. Used once the
- * MapLibre camera (not the old fitted SVG viewport) is what decides what's
- * visible.
+ * Split groups by whether the map's home frame can show them. That frame is
+ * the academic core, so a class at Hillcrest, Scripps or the Preuss School
+ * falls outside it: drawing it there is the same as not drawing it, except
+ * that it silently inflates the "N buildings" count. Callers draw `onCanvas`
+ * and list `offCanvas`.
  *
  * `box === null` means the map hasn't produced a home frame yet — nothing is
  * drawn and nothing is reported as off-map either, rather than guessing.

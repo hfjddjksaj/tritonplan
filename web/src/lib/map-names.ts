@@ -3,8 +3,8 @@
  * roads deserve a name, and how a building's footprint name gets shortened.
  *
  * Pure functions and lookup tables, independent of how the geometry is drawn
- * — `map-data.ts` uses these to build the labelled GeoJSON sources; the (now
- * legacy) SVG renderer used them the same way via `map-basemap.ts`.
+ * — `map-data.ts` uses these to build the labelled GeoJSON sources the
+ * MapLibre style renders.
  */
 import type { CampusLine } from './campus-geo';
 

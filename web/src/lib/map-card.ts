@@ -10,9 +10,14 @@
  * — rooms only, no times (the day tabs already scope the slice and the
  * calendar owns the times). Pure functions; the React shell renders them.
  */
-import type { Point } from './map-projection';
 import { abbreviateBuildingWords } from './map-names';
 import type { MapPin } from './map-pins';
+
+/** A point in canvas pixels — where a marker's dot sits, and what a card hangs off. */
+export interface Point {
+  x: number;
+  y: number;
+}
 
 export interface CardRow {
   /** 'LEC' | 'DIS' | 'LAB' | 'Final' … */

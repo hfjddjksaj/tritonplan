@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { PlanState } from '@triton/shared';
-import { campusViewport, loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
-import type { Box } from '../lib/map-basemap';
-import { panView, project, toScreen, zoomLevel, zoomView, type Viewport } from '../lib/map-projection';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import {
+  campusPadding,
+  coreBounds,
+  loadCampusGeo,
+  loadCampusMap,
+  type CampusGeo,
+  type CampusMapData,
+} from '../lib/campus-geo';
+import { buildSources } from '../lib/map-data';
+import { applyHosts, applyMode, assetBase, buildStyle, CAMERA, type MapMode } from '../lib/map-style';
 import { defaultSliceId, meetingPins, slicesFor } from '../lib/map-pins';
-import { groupPins, splitByViewport, unplacedPins } from '../lib/map-labels';
+import { groupPins, markerLabel, splitByBounds, unplacedPins } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
 import { pluralize, todayWeekday } from '../lib/format';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useMapLibre } from '../hooks/useMapLibre';
 import { useElementHeight, useStageSize } from '../hooks/useStageSize';
-import { CampusMapCanvas, MAX_ZOOM, MIN_ZOOM } from './CampusMapCanvas';
+import { MapMarkers } from './MapMarkers';
 import { MarkerCard } from './MarkerCard';
 import { BuildingPopover } from './BuildingPopover';
 import { ViewTabs } from './ViewTabs';
@@ -38,8 +47,6 @@ const ISLAND_GAP = 8;
 /** What the map shows this round: class meetings. Midterms / Finals tabs are drawn, not wired. */
 const MAP_VIEW_LABEL = 'Classes';
 
-const NO_BOXES: readonly Box[] = [];
-
 /**
  * Full-screen campus map, toggled by state rather than a route: the address bar
  * hash is already owned by share links (#p=) and the self-mirror (#m=), so a
@@ -47,18 +54,33 @@ const NO_BOXES: readonly Box[] = [];
  * regardless of DOM depth, so — like BuildingPopover — this renders inline
  * rather than through a portal.
  *
- * The map IS the page: the SVG fills the viewport edge to edge, and everything
- * else floats over it as islands in the app's own chrome language — a control
- * island top-left (title, view tabs, day filter; foldable to its title row),
- * a control cluster top-right (Booked only · compass · close), the marker card,
- * the "not on the map" island bottom-left, the zoom buttons bottom-right.
+ * The map IS the page: a MapLibre GL canvas fills the viewport edge to edge in
+ * UCSD's own official palette (ground surfaces, trees, roads and names all come
+ * from the bundled GIS data — no tile server, no CDN, no request off our own
+ * origin), and everything else floats over it as islands in the app's chrome
+ * language — a control island top-left (title, view tabs, day filter; foldable
+ * to its title row), a control cluster top-right (Booked only · compass ·
+ * close), the marker card, the "not on the map" island bottom-left, the zoom
+ * buttons bottom-right.
+ *
+ * Layering, and why no `suppressClick` guard survives from the SVG renderer:
+ * `.campusmap__gl` (the GL canvas MapLibre owns and binds its drag/zoom
+ * handlers to) and `.campusmap__overlay` (the DOM markers) are SIBLINGS, and
+ * the overlay is `pointer-events: none` with only the markers `auto`. So a
+ * press on empty map goes straight to the canvas and pans it, while a press on
+ * a marker never reaches MapLibre's container at all — it cannot start a drag
+ * to begin with. And a drag that starts on the canvas and is released over a
+ * marker fires its `click` on the two targets' nearest common ancestor (the
+ * stage), never on the marker, so the marker's handler is not even in the
+ * propagation path. The old hand-rolled pan handler needed `suppressClick`
+ * only because its markers lived INSIDE the element it dragged.
  */
 export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
-  const [geo, setGeo] = useState<CampusGeo | null>(null);
+  const [data, setData] = useState<{ geo: CampusGeo; map: CampusMapData } | null>(null);
   const isMobile = useIsMobile();
-  // The canvas is the stage's own box (SVG units == CSS px, so chip text is
-  // never scaled); it refits on resize/rotation. The island floats over its top
-  // edge, so the map is fitted to what shows below the island.
+  // The stage's own box: the size the overlay projects into and the card is
+  // placed against. The island floats over its top edge, so the map is fitted
+  // to what shows below the island.
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvas = useStageSize(stageRef);
   const islandRef = useRef<HTMLElement | null>(null);
@@ -69,48 +91,48 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
   // and "everything in the plan" is the honest default.
   const [bookedOnly, setBookedOnly] = useState<boolean>(() => loadMapBookedOnly() ?? false);
   const [openKey, setOpenKey] = useState<string | null>(null);
-  const [cardBox, setCardBox] = useState<Box | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   const [unplacedOpen, setUnplacedOpen] = useState(false);
 
-  // The fitted frame is the anchor for zoom limits and the ⟲ button; `view` is
-  // what the canvas actually draws through and what wheel/drag/pinch move.
-  const homeView = useMemo(
-    () => (geo ? panView(campusViewport(geo, canvas.w, canvas.h - insetTop), 0, insetTop) : null),
-    [geo, canvas.w, canvas.h, insetTop],
-  );
-  const [view, setView] = useState<Viewport | null>(null);
-  const shownView = view ?? homeView;
-  // A canvas-size change (rotating a phone, resizing past the breakpoint) refits.
-  // Folding the island does not: at home the fit follows the island by itself
-  // (homeView depends on insetTop), and a zoomed-in view is the student's — the
-  // island moving must not throw it away.
-  useEffect(() => {
-    setView(null);
-  }, [canvas.w, canvas.h]);
-  const visibleCentre = { x: canvas.w / 2, y: insetTop + (canvas.h - insetTop) / 2 };
-  const zoomBy = (factor: number) => {
-    if (!shownView || !homeView) return;
-    const level = zoomLevel(shownView, homeView);
-    const f = Math.max(MIN_ZOOM / level, Math.min(MAX_ZOOM / level, factor));
-    setView(zoomView(shownView, f, visibleCentre));
-  };
-  const atHome = view === null;
-
-  // Escape peels one layer at a time: the popover (which registers its own handler
-  // while `mapLoc` is set — without this guard both would fire on one keypress),
-  // then the open marker card, then the map itself.
-  useEscapeKey(mapLoc ? () => {} : openKey ? () => setOpenKey(null) : onClose);
-
+  // Both bundles are dynamic `?raw` imports, so neither the geometry nor
+  // `maplibre-gl` itself is in the first-paint chunk.
   useEffect(() => {
     let live = true;
-    loadCampusGeo().then((g) => {
-      if (live) setGeo(g);
+    Promise.all([loadCampusGeo(), loadCampusMap()]).then(([geo, map]) => {
+      if (live) setData({ geo, map });
     });
     return () => {
       live = false;
     };
   }, []);
+
+  const style = useMemo(
+    () => (data ? buildStyle({ sources: buildSources(data.geo, data.map), assetBase: assetBase() }) : null),
+    [data],
+  );
+  const pad = campusPadding(canvas.w, canvas.h);
+  const home = useMemo(
+    () =>
+      data
+        ? { bounds: coreBounds(data.geo), padding: { top: insetTop + pad, right: pad, bottom: pad, left: pad } }
+        : null,
+    [data, insetTop, pad],
+  );
+  const reduceMotion =
+    typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const glRef = useRef<HTMLDivElement | null>(null);
+  const gl = useMapLibre(glRef, style, home, {
+    minZoom: CAMERA.minZoom,
+    maxZoom: CAMERA.maxZoom,
+    maxPitch: CAMERA.maxPitch,
+    reduceMotion,
+  });
+  const [mode] = useState<MapMode>('2d'); // Phase 2 adds the setter and the button
+
+  // Escape peels one layer at a time: the popover (which registers its own handler
+  // while `mapLoc` is set — without this guard both would fire on one keypress),
+  // then the open marker card, then the map itself.
+  useEscapeKey(mapLoc ? () => {} : openKey ? () => setOpenKey(null) : onClose);
 
   // Both read-only defences, side by side. §5.4 hides the toggle because the plan on
   // screen is someone else's; the same reasoning kills the solid/hollow booked dots,
@@ -142,21 +164,48 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
 
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
 
-  // Split against the fitted frame: a marker outside it is not on the map the student
-  // opened onto, so it must not be counted as a building on the map, and it belongs
-  // in the list with its own explanation rather than disappearing.
+  // Split against the home frame the camera fitted to: a marker outside it is not on
+  // the map the student opened onto, so it must not be counted as a building on the
+  // map, and it belongs in the list with its own explanation rather than disappearing.
+  const groups = useMemo(() => groupPins(shown), [shown]);
   const { onCanvas, offCanvas } = useMemo(
-    () =>
-      homeView
-        ? splitByViewport(groupPins(shown), homeView, canvas.w, canvas.h)
-        : { onCanvas: [], offCanvas: [] },
-    [shown, homeView, canvas.w, canvas.h],
+    () => splitByBounds(groups, gl.homeBounds),
+    [groups, gl.homeBounds],
   );
   const unplaced = useMemo(() => unplacedPins(shown, offCanvas), [shown, offCanvas]);
   const open = onCanvas.find((g) => g.key === openKey) ?? null;
-  const openAnchor = open && shownView ? toScreen(project(open.lng, open.lat), shownView) : null;
+  // Re-projected on every camera tick: the card hangs off the dot and must follow it.
+  const openAnchor = useMemo(
+    () => (open && gl.map ? gl.map.project([open.lng, open.lat]) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [open, gl.map, gl.tick],
+  );
   const openPlace = open ? (open.place ?? open.building) : undefined;
-  const reserved = useMemo(() => (open && cardBox ? [cardBox] : NO_BOXES), [open, cardBox]);
+  // Without a working camera there is no home frame, so nothing is "on canvas" —
+  // the WebGL fallback still has to name every located building it would have drawn.
+  const onCanvasOrAll = onCanvas.length > 0 ? onCanvas : groups;
+
+  // The host footprints are recoloured to the plan's courses, and the flat/extruded
+  // look is a layer-visibility switch — both are style mutations on a live map, so
+  // they run as effects rather than in the style object the map was built from.
+  useEffect(() => {
+    if (gl.ready && gl.map) applyHosts(gl.map, onCanvas);
+  }, [gl.ready, gl.map, onCanvas]);
+  useEffect(() => {
+    if (gl.ready && gl.map) applyMode(gl.map, mode);
+  }, [gl.ready, gl.map, mode]);
+  // A click on the map itself (not on a marker — those stop propagation, and never
+  // reach the canvas anyway) closes the open card. MapLibre suppresses this event
+  // after a drag, so panning away from a card does not shut it.
+  useEffect(() => {
+    const m = gl.map;
+    if (!m) return;
+    const h = () => setOpenKey(null);
+    m.on('click', h);
+    return () => {
+      m.off('click', h);
+    };
+  }, [gl.map]);
 
   // The generic "nothing to place" copy is false only when a LOCATABLE class exists that
   // booked-only is hiding — an unbooked pin with no coords was never going on the map
@@ -192,10 +241,18 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
           <span className="campusmap__bookedtoggle-label">Booked only</span>
         </button>
       )}
-      {/* North is up, but a map with no needle makes people doubt it. */}
-      <span className="campusmap__compass" role="img" aria-label="North is up" title="North is up">
+      {/* The GL camera can be rotated (drag with the right button / two fingers), so
+          the needle is a button that puts north back up. Phase 2 spins it with the
+          bearing; in Phase 1 it is simply the way back. */}
+      <button
+        type="button"
+        className="btn btn--sm btn--icon campusmap__compass"
+        aria-label="Reset north"
+        title="Reset north"
+        onClick={() => gl.easeCamera({ bearing: 0 })}
+      >
         <Compass size={18} />
-      </span>
+      </button>
       <button
         type="button"
         className="btn btn--sm btn--icon campusmap__close"
@@ -275,22 +332,38 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
       {!isMobile && cluster}
 
       <div className="campusmap__stage" ref={stageRef}>
-        {geo === null || !shownView || !homeView ? (
+        {/* Rendered unconditionally: `useMapLibre` builds the map into this node the
+            moment the style and home frame are ready, so it must never be gated
+            behind the ready/error state it is what produces. */}
+        <div
+          className="campusmap__gl"
+          ref={glRef}
+          aria-label="UCSD campus map of this term's class locations"
+          role="group"
+        />
+        {gl.error ? (
+          <div className="campusmap__nogl" role="status">
+            <p>
+              The campus map needs WebGL, which this browser has turned off. Where your classes
+              meet:
+            </p>
+            <ul>
+              {onCanvasOrAll.map((g) => (
+                <li key={g.key}>{markerLabel(g)}</li>
+              ))}
+            </ul>
+          </div>
+        ) : !gl.ready ? (
           <div className="campusmap__loading">Loading campus…</div>
         ) : (
           <>
-            <CampusMapCanvas
-              geo={geo}
-              pins={shown}
-              width={canvas.w}
-              height={canvas.h}
-              view={shownView}
-              homeView={homeView}
-              onViewChange={setView}
+            <MapMarkers
+              map={gl.map}
+              tick={gl.tick}
+              groups={onCanvas}
+              bounds={{ w: canvas.w, h: canvas.h }}
               selectedKey={openKey}
               onSelect={setOpenKey}
-              insetTop={insetTop}
-              reserved={reserved}
             />
             {open && openAnchor && (
               <MarkerCard
@@ -301,25 +374,20 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
                 onDirections={
                   openPlace ? () => setMapLoc({ building: openPlace, room: open.pins[0]!.room }) : undefined
                 }
-                onBox={(b) =>
-                  setCardBox((prev) =>
-                    prev && prev.x === b.x && prev.y === b.y && prev.w === b.w && prev.h === b.h ? prev : b,
-                  )
-                }
               />
             )}
             <div className="campusmap__zoom" role="group" aria-label="Zoom">
-              <button type="button" className="btn btn--sm btn--icon campusmap__zoombtn" onClick={() => zoomBy(1.6)} aria-label="Zoom in">
+              <button type="button" className="btn btn--sm btn--icon campusmap__zoombtn" onClick={gl.zoomIn} aria-label="Zoom in">
                 <Plus size={14} />
               </button>
-              <button type="button" className="btn btn--sm btn--icon campusmap__zoombtn" onClick={() => zoomBy(1 / 1.6)} aria-label="Zoom out">
+              <button type="button" className="btn btn--sm btn--icon campusmap__zoombtn" onClick={gl.zoomOut} aria-label="Zoom out">
                 <Minus size={14} />
               </button>
               <button
                 type="button"
                 className="btn btn--sm btn--icon campusmap__zoombtn campusmap__zoombtn--home"
-                onClick={() => setView(null)}
-                disabled={atHome}
+                onClick={gl.goHome}
+                disabled={gl.atHome}
                 aria-label="Reset view"
                 title="Reset view"
               >
@@ -329,6 +397,9 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
             {/* The empty-state copy floats over the basemap: a map with no pins is
                 still a map, and a blank panel taught nothing about where campus is. */}
             {emptyCopy && <div className="campusmap__empty">{emptyCopy}</div>}
+            <div className="campusmap__attrib" aria-hidden="true">
+              UC San Diego GIS · © OpenStreetMap contributors
+            </div>
           </>
         )}
 
