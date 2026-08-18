@@ -177,9 +177,10 @@ if (withHeight < 350) throw new Error(`only ${withHeight} footprints got a heigh
 const missingHeight = footprints.filter((f) => f.length === 2).map((f) => f[0]).sort();
 // Dropping `maxAllowableOffset` (was 0.55 m of server-side generalisation)
 // raised the raw feature count well past the old 3800–6400 band; after the
-// ground-Building dedup above this landed at ~4756 — ±30% band, per the
-// drift-guard doctrine (not a spec).
-if (ground.length < 3300 || ground.length > 6200) throw new Error(`ground polygon count out of band: ${ground.length} (expected ~4756)`);
+// ground-Building dedup above and, since the F1 review round, dropping any
+// polygon whose rings all degenerated under the zero-length-segment guard,
+// this landed at ~4644 — ±30% band, per the drift-guard doctrine (not a spec).
+if (ground.length < 3250 || ground.length > 6040) throw new Error(`ground polygon count out of band: ${ground.length} (expected ~4644)`);
 if (trees.length / 3 < 2000 || trees.length / 3 > 4000) throw new Error(`tree count out of band: ${trees.length / 3}`);
 // The footprint layer has 609 buildings; the ground layer's own `Building`
 // polygons duplicate almost all of them (a second survey, disagreeing by
@@ -386,8 +387,12 @@ if (lines.length < 150 || lines.length > 900)
   throw new Error(`OSM line count out of band: ${lines.length} (expected ~240)`);
 // Unsimplified (RDP eps 0), so this jumped from ~2700 to ~6404 — ±30% band,
 // per the drift-guard doctrine (not a spec).
+// encodeLine already had its own "rounding collapsed a step" guard before
+// this review round, so F1's encodeRing fix doesn't move this figure; the
+// ~8-vertex difference from the last measurement is ordinary live-OSM-data
+// drift between fetch runs, well inside the existing band.
 if (lineVerts < 4400 || lineVerts > 8400)
-  throw new Error(`OSM vertex count out of band: ${lineVerts} (expected ~6404)`);
+  throw new Error(`OSM vertex count out of band: ${lineVerts} (expected ~6396)`);
 if (coastCount !== 1)
   throw new Error(`expected exactly one coastline chain, got ${coastCount}`);
 for (const must of [
