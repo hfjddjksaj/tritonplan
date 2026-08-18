@@ -1,6 +1,8 @@
 // @vitest-environment node
-// (jsdom's global URL mis-resolves file:// + relative "../.." on Windows —
-// this file only touches the filesystem, so run it under plain Node instead.)
+// (Under the workspace's default jsdom environment, Vite/Vitest rewrites
+// import.meta.url through the dev-server module graph, so fileURLToPath gets
+// back a non-file: URL — this file only touches the filesystem, so run it
+// under plain Node instead, where import.meta.url stays a real file:// URL.)
 import { describe, it, expect } from 'vitest';
 import { existsSync, statSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

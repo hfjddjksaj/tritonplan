@@ -14,6 +14,15 @@ two ranges (0-255, 256-511 — Latin + Latin Extended-A/part of Extended-B)
 are the only ones the style needs: every label on the map (UCSD building,
 district and road names) is ASCII.
 
+**Not the same file as the UI's Inter.** `web/src/assets/fonts/inter-latin.woff2`
+(the font the app UI itself renders in, via the `@font-face` in
+`src/styles/tokens.css`) is a *separate* redistributed copy of Inter, built
+and fetched from a different source (Google Fonts' hosted build, not the
+GitHub release TTFs rasterized here) by a different script
+(`scripts/fetch-ui-font.mjs`, not `build-map-glyphs.mjs`). Regenerating one
+does not regenerate or re-license the other — see
+`web/src/assets/fonts/README.md` for its own provenance and licence note.
+
 ## Source
 
 - Font: **Inter v4.1** — <https://github.com/rsms/inter/releases/tag/v4.1>
