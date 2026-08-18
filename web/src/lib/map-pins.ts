@@ -14,7 +14,7 @@ import { examDisplay } from '@triton/shared';
 import { matchBuilding } from './buildings';
 import { finalsSorted, meetingInstances, midtermsSorted, typeTag } from './plan';
 import { visibleDays } from './layout';
-import { dateParts } from './format';
+import { dateParts, isoDate, todayIso, todayWeekday } from './format';
 
 export type PinKind = 'meeting' | 'midterm' | 'final';
 
@@ -64,6 +64,16 @@ export interface MapPin {
  */
 export function isOnlineModality(modality: string | undefined): boolean {
   return /online/i.test(modality ?? '');
+}
+
+/**
+ * TSS gave this pin no place at all — no building, no raw location text, and it
+ * is not online. Such a pin is not "not on the map" (there is nothing to place):
+ * TSS simply hasn't listed a room yet, and the UI must say that instead of
+ * pointing at a list of "where these actually meet".
+ */
+export function hasNoLocation(pin: MapPin): boolean {
+  return pin.coords === null && !pin.building && !pin.rawLocation && !isOnlineModality(pin.modality);
 }
 
 function located(building: string | undefined): Pick<MapPin, 'place' | 'coords'> {
@@ -146,19 +156,49 @@ export interface PinSlices {
 const ALL: PinSlice = { id: 'all', label: 'All' };
 
 /**
- * Available time slices for a pin set, plus the matching filter.
- *
- * Recurring pins slice by weekday (reusing the calendar's own visibleDays
- * rule: Mon–Fri always, weekends only when something meets then); dated pins
- * slice by the dates that actually have an exam. The caller gets a list of
- * ids and a predicate and never has to know which kind it is holding.
+ * How a view slices its pins — one level below the view's span: Classes span a
+ * week → by weekday; Finals span finals week → by date; Midterms span the term
+ * → by week. A design decision per view, not something inferred from the pins.
  */
-export function slicesFor(pins: MapPin[]): PinSlices {
-  const dates = [...new Set(pins.map((p) => p.when.date).filter((d): d is string => !!d))].sort();
-  if (dates.length > 0) {
+export type SliceBy = 'weekday' | 'date' | 'week';
+
+/** ISO date of the Monday that starts the week containing `iso` (weeks run Mon–Sun). */
+export function weekStartIso(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7)); // Mon=0 … Sun=6 days back
+  return isoDate(dt);
+}
+
+/** "Oct 19–25", or "Oct 26–Nov 01" when the week crosses a month. */
+export function weekLabel(mondayIso: string): string {
+  const [y, m, d] = mondayIso.split('-').map(Number);
+  const sunday = isoDate(new Date(y ?? 1970, (m ?? 1) - 1, (d ?? 1) + 6));
+  const a = dateParts(mondayIso);
+  const b = dateParts(sunday);
+  return a.month === b.month ? `${a.month} ${a.day}–${b.day}` : `${a.month} ${a.day}–${b.month} ${b.day}`;
+}
+
+/**
+ * Available time slices for a pin set at the given granularity, plus the
+ * matching filter. Only slices that actually carry a pin are offered (the
+ * weekday branch keeps the calendar's own visibleDays rule: Mon–Fri always,
+ * weekends only when something meets then); All is always first.
+ */
+export function slicesFor(pins: MapPin[], by: SliceBy): PinSlices {
+  if (by === 'weekday') {
+    const used = new Set(pins.map((p) => p.when.weekday).filter((d): d is Weekday => !!d));
+    const slices = used.size === 0 ? [ALL] : [ALL, ...visibleDays(used).map((d) => ({ id: d, label: d }))];
+    return {
+      slices,
+      predicate: (id) => (id === ALL.id ? () => true : (pin) => pin.when.weekday === id),
+    };
+  }
+  const dates = pins.map((p) => p.when.date).filter((d): d is string => !!d);
+  if (by === 'date') {
     const slices = [
       ALL,
-      ...dates.map((d) => {
+      ...[...new Set(dates)].sort().map((d) => {
         const { month, day } = dateParts(d);
         return { id: d, label: `${month} ${day}` };
       }),
@@ -168,26 +208,32 @@ export function slicesFor(pins: MapPin[]): PinSlices {
       predicate: (id) => (id === ALL.id ? () => true : (pin) => pin.when.date === id),
     };
   }
-
-  const used = new Set(pins.map((p) => p.when.weekday).filter((d): d is Weekday => !!d));
-  const slices = used.size === 0 ? [ALL] : [ALL, ...visibleDays(used).map((d) => ({ id: d, label: d }))];
+  const weeks = [...new Set(dates.map(weekStartIso))].sort();
   return {
-    slices,
-    predicate: (id) => (id === ALL.id ? () => true : (pin) => pin.when.weekday === id),
+    slices: [ALL, ...weeks.map((w) => ({ id: w, label: weekLabel(w) }))],
+    predicate: (id) =>
+      id === ALL.id ? () => true : (pin) => pin.when.date !== undefined && weekStartIso(pin.when.date) === id,
   };
 }
 
+/** The slice id "today" would have at a granularity: 'Wed' / '2026-10-21' / '2026-10-19'. */
+export function todayKey(by: SliceBy, now = new Date()): string {
+  if (by === 'weekday') return todayWeekday(now);
+  const iso = todayIso(now);
+  return by === 'date' ? iso : weekStartIso(iso);
+}
+
 /**
- * Open on today's column — but only when today actually carries a class.
+ * Open on today's slice — but only when today actually carries a pin.
  *
  * The weekday slices come from visibleDays(), which renders Mon–Fri
- * unconditionally. That is right for a calendar grid, where an empty Tuesday
- * column is visibly empty inside a visible week; here it would open a MWF
- * student's map on a blank Tuesday above copy claiming there is nothing to
- * place. Falling back to All shows the week they do have.
+ * unconditionally; an exam-week bucket or exam date is only offered when it
+ * has an exam, but the same rule keeps all three granularities honest: a slice
+ * that exists yet is empty for this scope would open the map on nothing above
+ * copy claiming there is nothing to place. Falling back to All shows what
+ * they do have.
  */
-export function defaultSliceId(slices: PinSlice[], pins: MapPin[], today?: Weekday): string {
-  const hit = slices.find((s) => s.id === today);
-  if (!hit) return ALL.id;
-  return pins.some((p) => p.when.weekday === today) ? hit.id : ALL.id;
+export function defaultSliceId(sliced: PinSlices, pins: MapPin[], todayId: string): string {
+  if (!sliced.slices.some((s) => s.id === todayId)) return ALL.id;
+  return pins.some(sliced.predicate(todayId)) ? todayId : ALL.id;
 }

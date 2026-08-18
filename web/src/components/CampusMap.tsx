@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { PlanState } from '@triton/shared';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
@@ -11,18 +11,29 @@ import {
 } from '../lib/campus-geo';
 import { buildSources } from '../lib/map-data';
 import { applyHosts, applyMode, assetBase, buildStyle, CAMERA, type MapMode } from '../lib/map-style';
-import { defaultSliceId, meetingPins, slicesFor } from '../lib/map-pins';
+import {
+  defaultSliceId,
+  finalPins,
+  hasNoLocation,
+  meetingPins,
+  midtermPins,
+  slicesFor,
+  todayKey,
+  type MapPin,
+  type SliceBy,
+} from '../lib/map-pins';
 import { groupPins, markerLabel, splitByBounds, unplacedPins } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
-import { pluralize, todayWeekday } from '../lib/format';
+import { pluralize } from '../lib/format';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useMapLibre } from '../hooks/useMapLibre';
 import { useElementHeight, useStageSize } from '../hooks/useStageSize';
+import { useWheelToHorizontal } from '../hooks/useWheelToHorizontal';
 import { MapMarkers } from './MapMarkers';
 import { MarkerCard } from './MarkerCard';
 import { BuildingPopover } from './BuildingPopover';
-import { ViewTabs } from './ViewTabs';
+import { ViewTabs, type PlannerView } from './ViewTabs';
 import { Check, ChevronDown, Compass, MapPinIcon, Minus, Plus, X } from './icons';
 
 interface Props {
@@ -32,6 +43,8 @@ interface Props {
   booked: ReadonlySet<string>;
   /** Viewing someone else's plan — the booked toggle is meaningless then. */
   readOnly: boolean;
+  /** The tab the map opens on — the planner's current view. One-way: switching tabs here never changes the planner. */
+  initialView?: PlannerView;
   onClose: () => void;
 }
 
@@ -44,8 +57,45 @@ const ISLAND_FALLBACK_H = 118;
 const ISLAND_TOP = 10;
 const ISLAND_GAP = 8;
 
-/** What the map shows this round: class meetings. Midterms / Finals tabs are drawn, not wired. */
-const MAP_VIEW_LABEL = 'Classes';
+interface MapViewDef {
+  /** Tab / summary label. The first tab reads "Classes" here, not "Calendar": the map shows where classes are, not a calendar. */
+  label: string;
+  /** Slice granularity — one level below the view's span (see slicesFor). */
+  by: SliceBy;
+  sliceAria: string;
+  pins: (plan: PlanState, booked: ReadonlySet<string>) => MapPin[];
+  /** Shown over the basemap when nothing in this view can be placed. */
+  empty: string;
+  /** What this view's pins are called in the "TSS hasn’t listed a room" copy: "classes" / "midterms" / "finals". */
+  noun: string;
+}
+
+const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
+  calendar: {
+    label: 'Classes',
+    by: 'weekday',
+    sliceAria: 'Filter by day',
+    pins: meetingPins,
+    empty: 'No class locations to place yet. Add courses with scheduled meetings, and they’ll appear here.',
+    noun: 'classes',
+  },
+  midterms: {
+    label: 'Midterms',
+    by: 'week',
+    sliceAria: 'Filter by week',
+    pins: midtermPins,
+    empty: 'No midterm locations yet — TSS hasn’t announced a dated midterm for these courses.',
+    noun: 'midterms',
+  },
+  finals: {
+    label: 'Finals',
+    by: 'date',
+    sliceAria: 'Filter by date',
+    pins: finalPins,
+    empty: 'No final exam locations yet. Pick sections that carry a final and they’ll appear here.',
+    noun: 'finals',
+  },
+};
 
 /**
  * Full-screen campus map, toggled by state rather than a route: the address bar
@@ -58,10 +108,10 @@ const MAP_VIEW_LABEL = 'Classes';
  * UCSD's own official palette (ground surfaces, trees, roads and names all come
  * from the bundled GIS data — no tile server, no CDN, no request off our own
  * origin), and everything else floats over it as islands in the app's chrome
- * language — a control island top-left (title, view tabs, day filter; foldable
- * to its title row), a control cluster top-right (Booked only · compass ·
- * close), the marker card, the "not on the map" island bottom-left, the zoom
- * buttons bottom-right.
+ * language — a control island top-left (title, Classes / Midterms / Finals
+ * tabs, each with its own time filter; foldable to its title row), a control
+ * cluster top-right (Booked only · compass · close), the marker card, the
+ * "not on the map" island bottom-left, the zoom buttons bottom-right.
  *
  * Layering, and why no `suppressClick` guard survives from the SVG renderer:
  * `.campusmap__gl` (the GL canvas MapLibre owns and binds its drag/zoom
@@ -75,7 +125,7 @@ const MAP_VIEW_LABEL = 'Classes';
  * propagation path. The old hand-rolled pan handler needed `suppressClick`
  * only because its markers lived INSIDE the element it dragged.
  */
-export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
+export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', onClose }: Props) {
   const [data, setData] = useState<{ geo: CampusGeo; map: CampusMapData } | null>(null);
   const isMobile = useIsMobile();
   // The stage's own box: the size the overlay projects into and the card is
@@ -93,6 +143,9 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   const [unplacedOpen, setUnplacedOpen] = useState(false);
+  const [noRoomOpen, setNoRoomOpen] = useState(false);
+  const [mapView, setMapView] = useState<PlannerView>(initialView);
+  const { label: viewLabel, by, sliceAria, empty: emptyViewCopy, noun: viewNoun } = MAP_VIEWS[mapView];
 
   // Both bundles are dynamic `?raw` imports, so neither the geometry nor
   // `maplibre-gl` itself is in the first-paint chunk.
@@ -129,11 +182,6 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
   });
   const [mode] = useState<MapMode>('2d'); // Phase 2 adds the setter and the button
 
-  // Escape peels one layer at a time: the popover (which registers its own handler
-  // while `mapLoc` is set — without this guard both would fire on one keypress),
-  // then the open marker card, then the map itself.
-  useEscapeKey(mapLoc ? () => {} : openKey ? () => setOpenKey(null) : onClose);
-
   // Both read-only defences, side by side. §5.4 hides the toggle because the plan on
   // screen is someone else's; the same reasoning kills the solid/hollow booked dots,
   // which would otherwise paint YOUR enrolment over THEIR plan with nothing to explain it.
@@ -144,23 +192,44 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
   const showBookedToggle = !readOnly && booked.size > 0;
   const effectiveBookedOnly = showBookedToggle && bookedOnly;
 
-  const allPins = useMemo(() => meetingPins(plan, effectiveBooked), [plan, effectiveBooked]);
+  const allPins = useMemo(() => MAP_VIEWS[mapView].pins(plan, effectiveBooked), [mapView, plan, effectiveBooked]);
   const scoped = useMemo(
     () => (effectiveBookedOnly ? allPins.filter((p) => p.booked) : allPins),
     [allPins, effectiveBookedOnly],
   );
 
-  const { slices, predicate } = useMemo(() => slicesFor(scoped), [scoped]);
-  const [sliceId, setSliceId] = useState<string>(() =>
-    defaultSliceId(slices, scoped, todayWeekday()),
+  const sliced = useMemo(() => slicesFor(scoped, by), [scoped, by]);
+  const { slices, predicate } = sliced;
+  // The student's pick. It sticks while they stay on this view — reselecting the
+  // same tab is a no-op, not a reset — but the view-switch handler below clears it
+  // the moment the view actually changes, so the today rule gets to run again; it
+  // also yields early if Booked only has removed its slice from what's offered.
+  const [picked, setPicked] = useState<string | null>(null);
+  const today = useMemo(() => todayKey(by), [by]);
+  const sliceId =
+    picked !== null && slices.some((s) => s.id === picked)
+      ? picked
+      : defaultSliceId(sliced, scoped, today);
+  const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
+
+  // The slice row scrolls sideways when the weeks don't fit the fixed island. A
+  // mouse wheel must drive it (the scrollbar is hidden), and the checked chip must
+  // be in view whenever the selection changes under the student — the today rule
+  // can land on a week far to the right the moment the tab switches.
+  const slicesEl = useRef<HTMLDivElement | null>(null);
+  const wheelRef = useWheelToHorizontal<HTMLDivElement>();
+  const slicesRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      slicesEl.current = el;
+      wheelRef(el);
+    },
+    [wheelRef],
   );
   useEffect(() => {
-    // The available columns change with scope; keep the selection valid.
-    if (!slices.some((s) => s.id === sliceId)) {
-      setSliceId(defaultSliceId(slices, scoped, todayWeekday()));
-    }
-  }, [slices, scoped, sliceId]);
-  const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
+    slicesEl.current
+      ?.querySelector<HTMLElement>('.calseg__btn--on')
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [sliceId, collapsed]);
 
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
 
@@ -172,8 +241,26 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
     () => splitByBounds(groups, gl.homeBounds),
     [groups, gl.homeBounds],
   );
-  const unplaced = useMemo(() => unplacedPins(shown, offCanvas), [shown, offCanvas]);
+  // Two different absences. "Not on the map" is a place TSS did give that we could
+  // not put on this canvas (unmatched text, online, outside the mapped area) — the
+  // list says where it actually is. A pin TSS gave NO place for is not on any list
+  // of places: it gets its own line, and its own empty state, saying TSS hasn't
+  // listed a room yet — pointing at "where these actually meet" would be a lie.
+  const noRoom = useMemo(() => shown.filter(hasNoLocation), [shown]);
+  const unplaced = useMemo(
+    () => unplacedPins(shown, offCanvas).filter((u) => !hasNoLocation(u.pin)),
+    [shown, offCanvas],
+  );
   const open = onCanvas.find((g) => g.key === openKey) ?? null;
+
+  // Escape peels one layer at a time: the popover (which registers its own handler
+  // while `mapLoc` is set — without this guard both would fire on one keypress),
+  // then the open marker card, then the map itself. Keyed off `open` (the group
+  // actually on screen) rather than `openKey`: a tab switch can leave `openKey`
+  // pointing at a group that no longer exists in this view, and Escape must not
+  // spend itself clearing a key nobody can see.
+  useEscapeKey(mapLoc ? () => {} : open ? () => setOpenKey(null) : onClose);
+
   // Re-projected on every camera tick: the card hangs off the dot and must follow it.
   const openAnchor = useMemo(
     () => (open && gl.map ? gl.map.project([open.lng, open.lat]) : null),
@@ -240,9 +327,11 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
     ? 'Booked only is on and nothing here is booked yet. Turn it off to see every course in your plan.'
     : onCanvas.length === 0 && unplaced.length > 0
       ? 'Nothing here lands on the mapped part of campus — the list at the bottom-left has where these classes actually meet.'
-      : onCanvas.length === 0
-        ? 'No class locations to place yet. Add courses with scheduled meetings, and they’ll appear here.'
+      : onCanvas.length === 0 && noRoom.length === 0
+        ? emptyViewCopy
         : null;
+  // Nothing placed and nothing else to point at: TSS simply hasn't listed rooms yet.
+  const noRoomEmpty = !emptyCopy && onCanvas.length === 0 && noRoom.length > 0;
 
   const cluster = (
     <div className="campusmap__cluster">
@@ -321,18 +410,26 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
 
         {collapsed ? (
           <div className="campusmap__summary">
-            {MAP_VIEW_LABEL} · {sliceLabel}
+            {viewLabel} · {sliceLabel}
           </div>
         ) : (
           <>
             <ViewTabs
-              value="calendar"
-              onChange={() => {}}
-              calendarLabel={MAP_VIEW_LABEL}
-              disabled={['midterms', 'finals']}
+              value={mapView}
+              onChange={(v) => {
+                // ViewTabs fires onChange on every click of an enabled tab, including
+                // the one already active — only an actual view change forgets the pick
+                // and any card left open in the view being left.
+                if (v !== mapView) {
+                  setPicked(null);
+                  setOpenKey(null);
+                }
+                setMapView(v);
+              }}
+              calendarLabel="Classes"
               ariaLabel="Map views"
             />
-            <div className="calseg campusmap__slices" role="radiogroup" aria-label="Filter by day">
+            <div ref={slicesRef} className="calseg campusmap__slices" role="radiogroup" aria-label={sliceAria}>
               {slices.map((s) => (
                 <button
                   key={s.id}
@@ -340,7 +437,7 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
                   role="radio"
                   aria-checked={s.id === sliceId}
                   className={`calseg__btn${s.id === sliceId ? ' calseg__btn--on' : ''}`}
-                  onClick={() => setSliceId(s.id)}
+                  onClick={() => setPicked(s.id)}
                 >
                   {s.label}
                 </button>
@@ -418,30 +515,73 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
             {/* The empty-state copy floats over the basemap: a map with no pins is
                 still a map, and a blank panel taught nothing about where campus is. */}
             {emptyCopy && <div className="campusmap__empty">{emptyCopy}</div>}
+            {noRoomEmpty && (
+              <div className="campusmap__empty campusmap__empty--noroom">
+                <MapPinIcon size={36} className="empty__mark" strokeWidth={1.4} />
+                <div className="empty__title">No rooms from TSS yet</div>
+                <p className="empty__text">
+                  TSS hasn’t listed a room for these {viewNoun} yet — check back after browsing the course again.
+                </p>
+                <ul className="campusmap__noroom-list">
+                  {noRoom.map((p, i) => (
+                    <li key={`${p.courseId}-${p.label}-${i}`}>
+                      <b>{p.courseCode}</b> {p.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="campusmap__attrib" aria-hidden="true">
               UC San Diego GIS · © OpenStreetMap contributors
             </div>
           </>
         )}
 
-        {unplaced.length > 0 && (
+        {(unplaced.length > 0 || (noRoom.length > 0 && !noRoomEmpty)) && (
           <div className="campusmap__unlocated">
-            <button
-              type="button"
-              className="btn btn--sm btn--ghost campusmap__unlocated-toggle"
-              aria-expanded={unplacedOpen}
-              onClick={() => setUnplacedOpen((v) => !v)}
-            >
-              {unplaced.length} not on the map <span aria-hidden="true">{unplacedOpen ? '▾' : '▸'}</span>
-            </button>
-            {unplacedOpen && (
-              <ul className="campusmap__unlocated-list">
-                {unplaced.map((u, i) => (
-                  <li key={`${u.pin.courseId}-${u.reason}-${i}`}>
-                    <b>{u.pin.courseCode}</b> {u.pin.label} — {u.detail}
-                  </li>
-                ))}
-              </ul>
+            {/* column-reverse: each toggle sits below the list it opens, and the
+                first toggle in DOM order is the bottom one. */}
+            {noRoom.length > 0 && !noRoomEmpty && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn--sm btn--ghost campusmap__unlocated-toggle campusmap__noroom-toggle"
+                  aria-expanded={noRoomOpen}
+                  onClick={() => setNoRoomOpen((v) => !v)}
+                >
+                  {noRoom.length} without a room yet <span aria-hidden="true">{noRoomOpen ? '▾' : '▸'}</span>
+                </button>
+                {noRoomOpen && (
+                  <ul className="campusmap__unlocated-list">
+                    {noRoom.map((p, i) => (
+                      <li key={`${p.courseId}-${p.label}-${i}`}>
+                        <b>{p.courseCode}</b> {p.label} — no room listed in TSS yet
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+            {unplaced.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn--sm btn--ghost campusmap__unlocated-toggle"
+                  aria-expanded={unplacedOpen}
+                  onClick={() => setUnplacedOpen((v) => !v)}
+                >
+                  {unplaced.length} not on the map <span aria-hidden="true">{unplacedOpen ? '▾' : '▸'}</span>
+                </button>
+                {unplacedOpen && (
+                  <ul className="campusmap__unlocated-list">
+                    {unplaced.map((u, i) => (
+                      <li key={`${u.pin.courseId}-${u.reason}-${i}`}>
+                        <b>{u.pin.courseCode}</b> {u.pin.label} — {u.detail}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
           </div>
         )}

@@ -8,7 +8,7 @@ interface Props {
   onChange: (v: PlannerView) => void;
   /** The first tab reads "Calendar" on the planner and "Classes" on the map. */
   calendarLabel?: string;
-  /** Views drawn in place but not wired up yet: rendered disabled, clicks ignored. */
+  /** Ids rendered but not selectable; the tab gets `disabled` and a "Coming soon" title. Currently unused in production. */
   disabled?: readonly PlannerView[];
   /** Finals-conflict count; the badge shows only when > 0. */
   finalsBadge?: number;

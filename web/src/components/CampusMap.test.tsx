@@ -110,6 +110,64 @@ function planOnline(): PlanState {
   };
 }
 
+/** A final in York Hall (a real, matchable building) on Wed Dec 09, structured fields. */
+function planWithFinal(): PlanState {
+  const course = courseWithMeeting();
+  course.options[0]!.final = {
+    date: '2026-12-09',
+    start: '11:30',
+    end: '14:29',
+    modality: 'In Person',
+    location: 'York Hall Room 2622',
+    building: 'York Hall',
+    room: '2622',
+  };
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
+/** Two dated midterms in Center Hall: Sat Oct 31 (week of Oct 26) and Sat Nov 14 (week of Nov 09). */
+function planWithMidterms(): PlanState {
+  const course = courseWithMeeting();
+  course.options[0]!.components[0]!.rawSched =
+    'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109\n' +
+    'Midterm Examination 11/14/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109';
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
+/** Two dated midterms whose Sched lines stop at the modality — TSS listed no room at all. */
+function planWithUnroomedMidterms(): PlanState {
+  const course = courseWithMeeting();
+  course.options[0]!.components[0]!.rawSched =
+    'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person\n' +
+    'Midterm Examination 11/14/2026 10:00 AM - 11:50 AM In Person';
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
+/** One midterm in Center Hall, one with no place at all. */
+function planWithMixedMidterms(): PlanState {
+  const course = courseWithMeeting();
+  course.options[0]!.components[0]!.rawSched =
+    'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109\n' +
+    'Midterm Examination 11/14/2026 10:00 AM - 11:50 AM In Person';
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
@@ -152,6 +210,18 @@ async function settleConstructed() {
     if (FakeMap.instances.length > 0) return;
   }
   throw new Error('map was never constructed');
+}
+
+function tabNamed(name: string): HTMLButtonElement {
+  return [...document.querySelectorAll('.campusmap__island [role="tab"]')].find(
+    (t) => t.textContent === name,
+  ) as HTMLButtonElement;
+}
+function sliceButtons(): HTMLButtonElement[] {
+  return [...document.querySelectorAll('.campusmap__slices .calseg__btn')] as HTMLButtonElement[];
+}
+function sliceOn(): string {
+  return sliceButtons().find((b) => b.classList.contains('calseg__btn--on'))!.textContent ?? '';
 }
 
 describe('CampusMap', () => {
@@ -355,11 +425,11 @@ describe('CampusMap', () => {
     expect(root.querySelector('.campusmap__hint')).toBeNull();
     expect(island.querySelector('.campusmap__title')!.textContent).toBe('Campus map');
     // The same segmented control as the planner toolbar, reading Classes here;
-    // Midterms / Finals are drawn in place but not wired up yet.
+    // Midterms / Finals switch what the map shows.
     const tabs = [...island.querySelectorAll('[role="tab"]')] as HTMLButtonElement[];
     expect(tabs.map((t) => t.textContent)).toEqual(['Classes', 'Midterms', 'Finals']);
     expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
-    expect(tabs.map((t) => t.disabled)).toEqual([false, true, true]);
+    expect(tabs.map((t) => t.disabled)).toEqual([false, false, false]);
     // The day filter is the small segmented control (calseg), All first.
     const days = [...island.querySelectorAll('.campusmap__slices .calseg__btn')] as HTMLButtonElement[];
     expect(days.map((d) => d.textContent)).toEqual(['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
@@ -603,5 +673,222 @@ describe('CampusMap', () => {
     await act(async () => reset.click());
     await settle();
     expect(reset.disabled).toBe(true);
+  });
+
+  it('opens on the view it was given', async () => {
+    // (The default — Classes — is already asserted by 'floats a control island…' above.
+    // Do NOT re-render the same root with a different initialView: it is initial state,
+    // a prop change after mount is deliberately ignored.)
+    render({ plan: planWithFinal(), initialView: 'finals' });
+    await settle();
+    expect(tabNamed('Finals').getAttribute('aria-selected')).toBe('true');
+    expect(tabNamed('Classes').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('Finals: exam chips, date slices, "Filter by date", and the folded summary names the view', async () => {
+    render({ plan: planWithFinal() });
+    await settle();
+    // Classes view: the Monday lecture is on the map, the final is not.
+    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('LEC');
+    act(() => tabNamed('Finals').click());
+    expect(tabNamed('Finals').getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('Final');
+    expect(container.querySelector('.campusmap__chipcode')!.textContent).toBe('CSE-8A');
+    expect(sliceButtons().map((b) => b.textContent)).toEqual(['All', 'Dec 09']);
+    expect(container.querySelector('.campusmap__slices')!.getAttribute('aria-label')).toBe('Filter by date');
+    act(() => sliceButtons()[1]!.click());
+    act(() => (container.querySelector('.campusmap__collapse') as HTMLButtonElement).click());
+    expect(container.querySelector('.campusmap__summary')!.textContent).toBe('Finals · Dec 09');
+  });
+
+  it('Midterms: one slice per Mon–Sun week that has an exam, "Filter by week"', async () => {
+    render({ plan: planWithMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    expect(sliceButtons().map((b) => b.textContent)).toEqual(['All', 'Oct 26–Nov 01', 'Nov 09–15']);
+    expect(container.querySelector('.campusmap__slices')!.getAttribute('aria-label')).toBe('Filter by week');
+    // Both sittings are in Center Hall: one marker, its chip counts them.
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    act(() => sliceButtons()[2]!.click());
+    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('Midterm 2');
+    act(() => tabNamed('Classes').click());
+    expect(container.querySelector('.campusmap__slices')!.getAttribute('aria-label')).toBe('Filter by day');
+  });
+
+  it('opens on today’s exam date when the map opens on Finals on that day', async () => {
+    vi.setSystemTime(new Date(2026, 11, 9, 9)); // Wed Dec 09 — the day of the final
+    render({ plan: planWithFinal(), initialView: 'finals' });
+    await settle();
+    expect(sliceOn()).toBe('Dec 09');
+  });
+
+  it('says why an exam view is empty, per view', async () => {
+    render({ plan: planWithMeeting() }); // classes only: no midterm, no final
+    await settle();
+    expect(container.querySelector('.campusmap__empty')).toBeNull();
+    act(() => tabNamed('Midterms').click());
+    expect(container.querySelector('.campusmap__empty')!.textContent).toBe(
+      'No midterm locations yet — TSS hasn’t announced a dated midterm for these courses.',
+    );
+    act(() => tabNamed('Finals').click());
+    expect(container.querySelector('.campusmap__empty')!.textContent).toBe(
+      'No final exam locations yet. Pick sections that carry a final and they’ll appear here.',
+    );
+  });
+
+  it('Booked only filters exam views too', async () => {
+    render({ plan: planWithFinal(), booked: new Set(['MATH-20C|2026|2']) });
+    await settle();
+    act(() => tabNamed('Finals').click());
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
+    expect(container.textContent).toContain('Booked only is on and nothing here is booked yet');
+  });
+
+  it('the marker card in an exam view is dated on the code row', async () => {
+    render({ plan: planWithFinal(), initialView: 'finals' });
+    await settle();
+    act(() => {
+      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const card = container.querySelector('.campusmap__card')!;
+    expect(card.querySelector('.campusmap__card-place')!.textContent).toBe('York Hall');
+    expect(card.querySelector('.campusmap__card-date')!.textContent).toBe('Wed Dec 09');
+    expect([...card.querySelectorAll('.campusmap__card-rows li')].map((li) => li.textContent)).toEqual(['Final · Room 2622']);
+  });
+
+  it('re-runs the today rule when the tab changes: All on Classes, today’s date on Finals', async () => {
+    vi.setSystemTime(new Date(2026, 11, 9, 9)); // Wed Dec 09, the final's day; the Monday lecture isn't today
+    render({ plan: planWithFinal() });
+    await settle();
+    expect(sliceOn()).toBe('All');
+    act(() => tabNamed('Finals').click());
+    expect(sliceOn()).toBe('Dec 09');
+    // …and back: Classes has nothing today, so it opens on All again.
+    act(() => tabNamed('Classes').click());
+    expect(sliceOn()).toBe('All');
+  });
+
+  it('Midterms opens on this week’s bucket when it has a sitting, whatever was picked before', async () => {
+    vi.setSystemTime(new Date(2026, 9, 28, 9)); // Wed Oct 28: the week of the Oct 31 midterm
+    render({ plan: planWithMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    expect(sliceOn()).toBe('Oct 26–Nov 01');
+    // A pick sticks within the view…
+    act(() => sliceButtons()[2]!.click());
+    expect(sliceOn()).toBe('Nov 09–15');
+    // …but leaving and coming back re-runs the rule.
+    act(() => tabNamed('Finals').click());
+    act(() => tabNamed('Midterms').click());
+    expect(sliceOn()).toBe('Oct 26–Nov 01');
+  });
+
+  it('keeps the pick when the active tab is clicked again', async () => {
+    vi.setSystemTime(new Date(2026, 9, 28, 9)); // Wed Oct 28: the week of the Oct 31 midterm
+    render({ plan: planWithMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    act(() => sliceButtons()[2]!.click());
+    expect(sliceOn()).toBe('Nov 09–15');
+    act(() => tabNamed('Midterms').click()); // still in the view: nothing to re-run
+    expect(sliceOn()).toBe('Nov 09–15');
+  });
+
+  it('a card left open in one view does not survive a tab switch: Escape then closes the map', async () => {
+    const onClose = render({ plan: planWithFinal() });
+    await settle();
+    act(() => {
+      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+    act(() => tabNamed('Finals').click());
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // …and coming back does not resurrect it.
+    act(() => tabNamed('Classes').click());
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+  });
+
+  it('a pick yields while Booked only hides its slice, and returns when Booked only is lifted', async () => {
+    vi.setSystemTime(new Date(2026, 9, 28, 9)); // Wed Oct 28: the week of the Oct 31 midterm
+    render({ plan: planWithMidterms(), booked: new Set(['MATH-20C|2026|2']) }); // nothing in this plan is booked
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    act(() => sliceButtons()[2]!.click());
+    expect(sliceOn()).toBe('Nov 09–15');
+    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
+    expect(sliceOn()).toBe('All'); // no booked pins → no slices but All
+    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
+    expect(sliceOn()).toBe('Nov 09–15');
+  });
+
+  it('says TSS has listed no room yet — icon, title, the sittings — instead of "not on the map"', async () => {
+    render({ plan: planWithUnroomedMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
+    const empty = container.querySelector('.campusmap__empty--noroom')!;
+    expect(empty).not.toBeNull();
+    expect(empty.querySelector('.empty__mark')).not.toBeNull();
+    expect(empty.querySelector('.empty__title')!.textContent).toBe('No rooms from TSS yet');
+    expect(empty.querySelector('.empty__text')!.textContent).toBe(
+      'TSS hasn’t listed a room for these midterms yet — check back after browsing the course again.',
+    );
+    expect([...empty.querySelectorAll('.campusmap__noroom-list li')].map((li) => li.textContent)).toEqual([
+      'CSE-8A Midterm 1',
+      'CSE-8A Midterm 2',
+    ]);
+    // A sitting with no place is not "not on the map" — that list must not appear.
+    expect(container.querySelector('.campusmap__unlocated')).toBeNull();
+    expect(container.textContent).not.toContain('not on the map');
+    expect(container.textContent).not.toContain('mapped part of campus');
+  });
+
+  it('with some sittings placed, the roomless ones get their own bottom-left line, not the "not on the map" list', async () => {
+    render({ plan: planWithMixedMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    expect(container.querySelector('.campusmap__empty')).toBeNull();
+    expect(container.textContent).not.toContain('not on the map');
+    const pill = container.querySelector('.campusmap__noroom-toggle') as HTMLButtonElement;
+    expect(pill.textContent).toContain('1 without a room yet');
+    act(() => pill.click());
+    expect(container.textContent).toContain('CSE-8A Midterm 2 — no room listed in TSS yet');
+  });
+
+  it('a vertical wheel over the slice row scrolls it sideways (mouse users have no other way in)', async () => {
+    render({ plan: planWithMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    const row = container.querySelector('.campusmap__slices') as HTMLDivElement;
+    // jsdom lays nothing out; give the row an overflow to scroll.
+    Object.defineProperty(row, 'scrollWidth', { value: 420, configurable: true });
+    Object.defineProperty(row, 'clientWidth', { value: 316, configurable: true });
+    const consumed = !row.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true }));
+    expect(consumed).toBe(true);
+    expect(row.scrollLeft).toBe(40);
+    // A sideways gesture is the browser's own business.
+    const passed = row.dispatchEvent(new WheelEvent('wheel', { deltaX: 30, deltaY: 5, bubbles: true, cancelable: true }));
+    expect(passed).toBe(true);
+  });
+
+  it('the no-room copy names the view: classes, midterms, finals', async () => {
+    const course = courseWithMeeting();
+    const meeting = course.options[0]!.components[0]!.meetings[0]!;
+    delete (meeting as { building?: string }).building;
+    delete (meeting as { room?: string }).room;
+    delete (meeting as { location?: string }).location;
+    course.options[0]!.final = { date: '2026-12-09', start: '11:30', end: '14:29', modality: 'In Person' };
+    render({ plan: { version: 1, term: { year: '2026', period: '2', label: 'Fall 2026' }, entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }] } });
+    await settle();
+    expect(container.querySelector('.campusmap__empty--noroom .empty__text')!.textContent).toContain('for these classes yet');
+    act(() => tabNamed('Finals').click());
+    expect(container.querySelector('.campusmap__empty--noroom .empty__text')!.textContent).toContain('for these finals yet');
   });
 });
