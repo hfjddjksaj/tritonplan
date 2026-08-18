@@ -134,11 +134,6 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   };
   const atHome = view === null;
 
-  // Escape peels one layer at a time: the popover (which registers its own handler
-  // while `mapLoc` is set — without this guard both would fire on one keypress),
-  // then the open marker card, then the map itself.
-  useEscapeKey(mapLoc ? () => {} : openKey ? () => setOpenKey(null) : onClose);
-
   useEffect(() => {
     let live = true;
     loadCampusGeo().then((g) => {
@@ -172,10 +167,11 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // the moment the view actually changes, so the today rule gets to run again; it
   // also yields early if Booked only has removed its slice from what's offered.
   const [picked, setPicked] = useState<string | null>(null);
+  const today = useMemo(() => todayKey(by), [by]);
   const sliceId =
     picked !== null && slices.some((s) => s.id === picked)
       ? picked
-      : defaultSliceId(sliced, scoped, todayKey(by));
+      : defaultSliceId(sliced, scoped, today);
   const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
 
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
@@ -192,6 +188,15 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   );
   const unplaced = useMemo(() => unplacedPins(shown, offCanvas), [shown, offCanvas]);
   const open = onCanvas.find((g) => g.key === openKey) ?? null;
+
+  // Escape peels one layer at a time: the popover (which registers its own handler
+  // while `mapLoc` is set — without this guard both would fire on one keypress),
+  // then the open marker card, then the map itself. Keyed off `open` (the group
+  // actually on screen) rather than `openKey`: a tab switch can leave `openKey`
+  // pointing at a group that no longer exists in this view, and Escape must not
+  // spend itself clearing a key nobody can see.
+  useEscapeKey(mapLoc ? () => {} : open ? () => setOpenKey(null) : onClose);
+
   const openAnchor = open && shownView ? toScreen(project(open.lng, open.lat), shownView) : null;
   const openPlace = open ? (open.place ?? open.building) : undefined;
   const reserved = useMemo(() => (open && cardBox ? [cardBox] : NO_BOXES), [open, cardBox]);
@@ -289,8 +294,12 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
               value={mapView}
               onChange={(v) => {
                 // ViewTabs fires onChange on every click of an enabled tab, including
-                // the one already active — only an actual view change forgets the pick.
-                if (v !== mapView) setPicked(null);
+                // the one already active — only an actual view change forgets the pick
+                // and any card left open in the view being left.
+                if (v !== mapView) {
+                  setPicked(null);
+                  setOpenKey(null);
+                }
                 setMapView(v);
               }}
               calendarLabel="Classes"

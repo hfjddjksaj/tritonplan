@@ -628,4 +628,35 @@ describe('CampusMap', () => {
     act(() => tabNamed('Midterms').click()); // still in the view: nothing to re-run
     expect(sliceOn()).toBe('Nov 09–15');
   });
+
+  it('a card left open in one view does not survive a tab switch: Escape then closes the map', async () => {
+    const onClose = render({ plan: planWithFinal() });
+    await settle();
+    act(() => {
+      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+    act(() => tabNamed('Finals').click());
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // …and coming back does not resurrect it.
+    act(() => tabNamed('Classes').click());
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+  });
+
+  it('a pick yields while Booked only hides its slice, and returns when Booked only is lifted', async () => {
+    vi.setSystemTime(new Date(2026, 9, 28, 9)); // Wed Oct 28: the week of the Oct 31 midterm
+    render({ plan: planWithMidterms(), booked: new Set(['MATH-20C|2026|2']) }); // nothing in this plan is booked
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    act(() => sliceButtons()[2]!.click());
+    expect(sliceOn()).toBe('Nov 09–15');
+    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
+    expect(sliceOn()).toBe('All'); // no booked pins → no slices but All
+    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
+    expect(sliceOn()).toBe('Nov 09–15');
+  });
 });

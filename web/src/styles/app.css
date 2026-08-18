@@ -2561,8 +2561,8 @@ button.termsw__cell:hover {
   font-weight: 600;
   color: var(--text-muted);
 }
-/* The two control rows share one width: whichever is wider sets the island,
-   the other stretches to meet it, its segments sharing the width evenly. */
+/* Both rows stretch to the island's fixed desktop width; the tabs' segments
+   share it evenly, while the slice row can outgrow it and scrolls instead. */
 .campusmap__island .tabs {
   align-self: stretch;
   box-shadow: none;

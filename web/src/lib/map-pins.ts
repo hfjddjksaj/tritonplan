@@ -223,7 +223,7 @@ export function todayKey(by: SliceBy, now = new Date()): string {
  * copy claiming there is nothing to place. Falling back to All shows what
  * they do have.
  */
-export function defaultSliceId(sliced: PinSlices, pins: MapPin[], todayKey: string): string {
-  if (!sliced.slices.some((s) => s.id === todayKey)) return ALL.id;
-  return pins.some(sliced.predicate(todayKey)) ? todayKey : ALL.id;
+export function defaultSliceId(sliced: PinSlices, pins: MapPin[], todayId: string): string {
+  if (!sliced.slices.some((s) => s.id === todayId)) return ALL.id;
+  return pins.some(sliced.predicate(todayId)) ? todayId : ALL.id;
 }
