@@ -199,7 +199,9 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   }, []);
 
   const style = useMemo(
-    () => (data ? buildStyle({ sources: buildSources(data.geo, data.map), assetBase: assetBase() }) : null),
+    // terrain: the bundled DEM shades the ground in 2D (hillshade) and becomes real
+    // relief under the buildings in 3D — see TERRAIN_* in map-style.ts.
+    () => (data ? buildStyle({ sources: buildSources(data.geo, data.map), assetBase: assetBase(), terrain: true }) : null),
     [data],
   );
   const pad = campusPadding(canvas.w, canvas.h);
@@ -368,7 +370,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     if (gl.ready && gl.map) applyHosts(gl.map, onCanvas);
   }, [gl.ready, gl.map, onCanvas]);
   useEffect(() => {
-    if (gl.ready && gl.map) applyMode(gl.map, mode);
+    if (gl.ready && gl.map) applyMode(gl.map, mode, true);
   }, [gl.ready, gl.map, mode]);
   // Not fatal is not the same as not worth knowing: a map that renders but lost
   // its labels or a texture says so here, and nowhere else.
@@ -726,7 +728,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
               </div>
             )}
             <div className="campusmap__attrib" aria-hidden="true">
-              UC San Diego GIS · © OpenStreetMap contributors
+              UC San Diego GIS · © OpenStreetMap contributors · Terrain: Mapzen / AWS Open Data
             </div>
           </>
         )}

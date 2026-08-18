@@ -12,9 +12,9 @@
  * its ~230 KB into the app's first-paint chunk instead of the lazy map chunk.
  *
  * Zero-runtime-external-requests red line: every URL this module writes into
- * the style (currently just `glyphs`; terrain tiles land in Phase 3) is
- * built from the caller-supplied `assetBase()` — the page's own origin. No
- * CDN, no tile server, no font server, ever.
+ * the style — the glyph stacks and the elevation tiles — is built from the
+ * caller-supplied `assetBase()`, the page's own origin. No CDN, no tile server,
+ * no font server, no DEM service, ever.
  */
 import type { ExpressionSpecification, FilterSpecification, StyleSpecification } from 'maplibre-gl';
 import { colorsForHue } from './colors';
@@ -144,9 +144,22 @@ export const HOME_ZOOM_BOOST = Math.log2(1.3);
 export interface StyleOptions {
   sources: MapSources;
   assetBase: string;
-  /** Phase 3: adds the hillshade layer and lets `applyMode` set real terrain. Default false. */
+  /** Adds the hillshade layer and lets `applyMode` set real terrain. Default false. */
   terrain?: boolean;
 }
+
+/**
+ * The bundled DEM: source id, and the box and zooms `scripts/fetch-terrain.mjs`
+ * actually downloaded. These four numbers and two zooms must match that script —
+ * `map-terrain.test.ts` holds them to it by checking the tiles exist on disk —
+ * because MapLibre asks for tiles inside `bounds` and gets a 404 for anything the
+ * script did not fetch. `maxzoom: 14` is not a coverage limit: MapLibre overzooms
+ * its deepest level, so z14 samples fine all the way to the camera's z19.
+ */
+export const TERRAIN_SOURCE = 'terrain';
+export const TERRAIN_BOUNDS: [number, number, number, number] = [-117.3, 32.83, -117.17, 32.93];
+export const TERRAIN_MINZOOM = 13;
+export const TERRAIN_MAXZOOM = 14;
 
 /** `['in', ['get','name'], ['literal', names]]` — the host footprints to recolour. */
 export function hostFilter(groups: readonly PinGroup[]): FilterSpecification {
@@ -226,7 +239,7 @@ export function applyMode(map: StyleTarget, mode: MapMode, terrain = false): voi
   map.setLayoutProperty(LAYER.trees, 'visibility', 'visible');
   map.setLayoutProperty(LAYER.trees3d, 'visibility', 'none');
 
-  map.setTerrain?.(mode === '3d' && terrain ? { source: 'terrain', exaggeration: 1.2 } : null);
+  map.setTerrain?.(mode === '3d' && terrain ? { source: TERRAIN_SOURCE, exaggeration: 1.2 } : null);
 }
 
 /**
@@ -319,7 +332,30 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
     },
     // 3. ocean
     { id: LAYER.ocean, type: 'fill', source: LAYER.ocean, paint: { 'fill-color': MAP_PALETTE.ocean } },
-    // 4. hillshade — Phase 3
+    // 4. hillshade — the relief UCSD's own map shows: the canyons that cut the
+    // campus up (North Canyon, Pepper Canyon, the Scripps grade) are why the walk
+    // between two buildings 200 m apart can be a climb, so the shading is doing
+    // real work rather than decorating. Under everything the campus draws, over
+    // land and ocean, and only when the DEM is bundled — the layer without the
+    // tiles would be a grid of 404s.
+    ...(o.terrain
+      ? [
+          {
+            id: LAYER.hillshade,
+            type: 'hillshade' as const,
+            source: TERRAIN_SOURCE,
+            paint: {
+              // Restrained on purpose: 0.35 reads as ground that is not flat,
+              // where the default 0.5 turns the mesa into a relief map and fights
+              // the ground-surface colours for attention.
+              'hillshade-exaggeration': 0.35,
+              'hillshade-shadow-color': '#5B6B4A',
+              'hillshade-highlight-color': '#FFFFFF',
+              'hillshade-accent-color': '#7A8A66',
+            },
+          },
+        ]
+      : []),
     // 5. campus
     { id: LAYER.campus, type: 'fill', source: LAYER.campus, paint: { 'fill-color': MAP_PALETTE.campus } },
     // 6. ground
@@ -530,6 +566,21 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
       [LAYER.campus]: { type: 'geojson', data: sources.campus },
       [LAYER.landuse]: { type: 'geojson', data: sources.landuse },
       labels: { type: 'geojson', data: sources.labels },
+      // Terrarium-encoded elevation, from our own origin like every other asset.
+      ...(o.terrain
+        ? {
+            [TERRAIN_SOURCE]: {
+              type: 'raster-dem' as const,
+              tiles: [`${base}map/terrain/{z}/{x}/{y}.png`],
+              tileSize: 256,
+              encoding: 'terrarium' as const,
+              minzoom: TERRAIN_MINZOOM,
+              maxzoom: TERRAIN_MAXZOOM,
+              bounds: TERRAIN_BOUNDS,
+              attribution: 'Terrain: Mapzen / AWS Open Data',
+            },
+          }
+        : {}),
     },
     layers,
   };
