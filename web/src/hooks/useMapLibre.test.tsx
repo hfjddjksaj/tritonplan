@@ -245,11 +245,17 @@ describe('useMapLibre', () => {
     const m = FakeMap.instances[0]!;
     await act(async () => m.jumpTo({ zoom: 17 })); // room to step twice inside [13.5, 19]
     const z0 = m.getZoom();
+    // Three, not two: starting an ease STOPS the one in flight, and stopping it
+    // fires `moveend` from inside that same `easeTo` call — so a naive "clear on
+    // moveend" survives the second click and only loses the third. That is the
+    // shape the real browser showed (two clicks moved 1 level, not 2).
+    await act(async () => handle.zoomOut());
     await act(async () => handle.zoomOut());
     await act(async () => handle.zoomOut());
     const asked = m.easeRequests.filter((r) => typeof r.zoom === 'number').map((r) => r.zoom);
-    expect(asked.at(-2)).toBeCloseTo(z0 - 1, 6);
-    expect(asked.at(-1)).toBeCloseTo(z0 - 2, 6);
+    expect(asked.at(-3)).toBeCloseTo(z0 - 1, 6);
+    expect(asked.at(-2)).toBeCloseTo(z0 - 2, 6);
+    expect(asked.at(-1)).toBeCloseTo(z0 - 3, 6);
     // And the accumulator lets go once the camera settles, so the next click
     // starts from wherever the student actually is.
     FakeMap.easeProgress = 1;

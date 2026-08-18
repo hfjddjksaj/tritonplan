@@ -95,7 +95,17 @@ export class FakeMap {
   jumpTo(o: Partial<FakeCamera>) { return this.move(o); }
   /** Every camera target `easeTo` was asked for, in order — what was REQUESTED, not what landed. */
   easeRequests: (Partial<FakeCamera> & { duration?: number })[] = [];
+  /** An ease is still running: the next one has to stop it first, like the real thing. */
+  private animating = false;
   easeTo(o: Partial<FakeCamera> & { duration?: number }) {
+    // Real MapLibre stops a running animation before starting a new one, and
+    // stopping it fires `moveend` — synchronously, from inside this call. That
+    // detail is load-bearing (it wiped the zoom-button accumulator), so it is
+    // modelled rather than glossed over.
+    if (this.animating) {
+      this.animating = false;
+      this.fire('moveend', {});
+    }
     this.easeRequests.push(o);
     const { duration = 0, ...cam } = o;
     if (duration > 0 && FakeMap.easeProgress < 1) {
@@ -103,6 +113,7 @@ export class FakeMap {
       const partial = { ...cam };
       if (typeof cam.zoom === 'number') partial.zoom = this.cam.zoom + (cam.zoom - this.cam.zoom) * p;
       this.cam = { ...this.cam, ...partial };
+      this.animating = true;
       this.fire('movestart', {}); this.fire('move', {}); // no moveend: still animating
       return this;
     }

@@ -224,10 +224,23 @@ export function useMapLibre(
       if (active) setReady(true);
     });
     m.on('move', scheduleTick);
+    // Let go of the accumulated zoom target only when the camera ACTUALLY got
+    // there. Clearing on every `moveend` looked right and was not: starting an
+    // ease while another is running makes MapLibre stop the old one, and
+    // stopping it fires `moveend` — from inside the very `easeTo` call that had
+    // just set the new target, so the second of two fast clicks wiped its own
+    // accumulator and the button lost the step it was meant to add. Measured in
+    // a real browser: two clicks moved 1 level, not 2, even with the ref in
+    // place. An interrupted ease ends short of the target, so this test tells
+    // the two cases apart.
     m.on('moveend', () => {
-      targetZoom.current = null;
+      const t = targetZoom.current;
+      if (t !== null && Math.abs(m.getZoom() - t) < 1e-6) targetZoom.current = null;
     });
     m.on('movestart', (e) => {
+      // A wheel, a pinch or a drag is the student steering, not the buttons —
+      // the next button press must start from where they actually are.
+      if (e.originalEvent) targetZoom.current = null;
       if (active && e.originalEvent) setAtHome(false);
     });
     m.on('error', (e) => {
