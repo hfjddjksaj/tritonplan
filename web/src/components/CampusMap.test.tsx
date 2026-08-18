@@ -140,6 +140,32 @@ function planWithMidterms(): PlanState {
   };
 }
 
+/** Two dated midterms whose Sched lines stop at the modality — TSS listed no room at all. */
+function planWithUnroomedMidterms(): PlanState {
+  const course = courseWithMeeting();
+  course.options[0]!.components[0]!.rawSched =
+    'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person\n' +
+    'Midterm Examination 11/14/2026 10:00 AM - 11:50 AM In Person';
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
+/** One midterm in Center Hall, one with no place at all. */
+function planWithMixedMidterms(): PlanState {
+  const course = courseWithMeeting();
+  course.options[0]!.components[0]!.rawSched =
+    'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person @ Center Hall Room 109\n' +
+    'Midterm Examination 11/14/2026 10:00 AM - 11:50 AM In Person';
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Let the dynamic geo import and its promise settle (a cold import can take a few ticks). */
@@ -658,5 +684,54 @@ describe('CampusMap', () => {
     expect(sliceOn()).toBe('All'); // no booked pins → no slices but All
     act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
     expect(sliceOn()).toBe('Nov 09–15');
+  });
+
+  it('says TSS has listed no room yet — icon, title, the sittings — instead of "not on the map"', async () => {
+    render({ plan: planWithUnroomedMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
+    const empty = container.querySelector('.campusmap__empty--noroom')!;
+    expect(empty).not.toBeNull();
+    expect(empty.querySelector('.empty__mark')).not.toBeNull();
+    expect(empty.querySelector('.empty__title')!.textContent).toBe('No rooms from TSS yet');
+    expect(empty.querySelector('.empty__text')!.textContent).toBe(
+      'TSS hasn’t listed a room for these midterms yet — check back after browsing the course again.',
+    );
+    expect([...empty.querySelectorAll('.campusmap__noroom-list li')].map((li) => li.textContent)).toEqual([
+      'CSE-8A Midterm 1',
+      'CSE-8A Midterm 2',
+    ]);
+    // A sitting with no place is not "not on the map" — that list must not appear.
+    expect(container.querySelector('.campusmap__unlocated')).toBeNull();
+    expect(container.textContent).not.toContain('not on the map');
+    expect(container.textContent).not.toContain('mapped part of campus');
+  });
+
+  it('with some sittings placed, the roomless ones get their own bottom-left line, not the "not on the map" list', async () => {
+    render({ plan: planWithMixedMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    expect(container.querySelector('.campusmap__empty')).toBeNull();
+    expect(container.textContent).not.toContain('not on the map');
+    const pill = container.querySelector('.campusmap__noroom-toggle') as HTMLButtonElement;
+    expect(pill.textContent).toContain('1 without a room yet');
+    act(() => pill.click());
+    expect(container.textContent).toContain('CSE-8A Midterm 2 — no room listed in TSS yet');
+  });
+
+  it('the no-room copy names the view: classes, midterms, finals', async () => {
+    const course = courseWithMeeting();
+    const meeting = course.options[0]!.components[0]!.meetings[0]!;
+    delete (meeting as { building?: string }).building;
+    delete (meeting as { room?: string }).room;
+    delete (meeting as { location?: string }).location;
+    course.options[0]!.final = { date: '2026-12-09', start: '11:30', end: '14:29', modality: 'In Person' };
+    render({ plan: { version: 1, term: { year: '2026', period: '2', label: 'Fall 2026' }, entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }] } });
+    await settle();
+    expect(container.querySelector('.campusmap__empty--noroom .empty__text')!.textContent).toContain('for these classes yet');
+    act(() => tabNamed('Finals').click());
+    expect(container.querySelector('.campusmap__empty--noroom .empty__text')!.textContent).toContain('for these finals yet');
   });
 });

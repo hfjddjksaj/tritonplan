@@ -8,6 +8,7 @@ import {
   defaultSliceId,
   todayKey,
   isOnlineModality,
+  hasNoLocation,
   weekStartIso,
   weekLabel,
   type MapPin,
@@ -267,6 +268,30 @@ describe('isOnlineModality', () => {
     expect(isOnlineModality('Other')).toBe(false);
     expect(isOnlineModality('Unknown')).toBe(false);
     expect(isOnlineModality(undefined)).toBe(false);
+  });
+});
+
+describe('hasNoLocation', () => {
+  it('is true only when TSS gave no place at all: no building, no raw location, not online', () => {
+    const bare = examPinAt('2026-10-31', { building: undefined, place: undefined, room: undefined, rawLocation: undefined, coords: null });
+    expect(hasNoLocation(bare)).toBe(true);
+  });
+
+  it('is false for a place TSS did give, however it fared on the map', () => {
+    // matched and placed
+    expect(hasNoLocation(examPinAt('2026-10-31'))).toBe(false);
+    // given but not matched to a building
+    expect(
+      hasNoLocation(
+        examPinAt('2026-10-31', { building: 'A Building That Does Not Exist', place: undefined, coords: null, rawLocation: 'A Building That Does Not Exist 000' }),
+      ),
+    ).toBe(false);
+    // only the raw text survived (legacy captures)
+    expect(hasNoLocation(examPinAt('2026-10-31', { building: undefined, place: undefined, coords: null, rawLocation: 'TBA' }))).toBe(false);
+    // online is its own story, not "no location"
+    expect(
+      hasNoLocation(examPinAt('2026-10-31', { building: undefined, place: undefined, coords: null, rawLocation: undefined, modality: 'Live Online' })),
+    ).toBe(false);
   });
 });
 

@@ -3,7 +3,7 @@ import type { PlanState } from '@triton/shared';
 import { campusViewport, loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
 import type { Box } from '../lib/map-basemap';
 import { panView, project, toScreen, zoomLevel, zoomView, type Viewport } from '../lib/map-projection';
-import { defaultSliceId, finalPins, meetingPins, midtermPins, slicesFor, todayKey, type MapPin, type SliceBy } from '../lib/map-pins';
+import { defaultSliceId, finalPins, hasNoLocation, meetingPins, midtermPins, slicesFor, todayKey, type MapPin, type SliceBy } from '../lib/map-pins';
 import { groupPins, splitByViewport, unplacedPins } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
 import { pluralize } from '../lib/format';
@@ -46,6 +46,8 @@ interface MapViewDef {
   pins: (plan: PlanState, booked: ReadonlySet<string>) => MapPin[];
   /** Shown over the basemap when nothing in this view can be placed. */
   empty: string;
+  /** What this view's pins are called in the "TSS hasn’t listed a room" copy: "classes" / "midterms" / "finals". */
+  noun: string;
 }
 
 const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
@@ -55,6 +57,7 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
     sliceAria: 'Filter by day',
     pins: meetingPins,
     empty: 'No class locations to place yet. Add courses with scheduled meetings, and they’ll appear here.',
+    noun: 'classes',
   },
   midterms: {
     label: 'Midterms',
@@ -62,6 +65,7 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
     sliceAria: 'Filter by week',
     pins: midtermPins,
     empty: 'No midterm locations yet — TSS hasn’t announced a dated midterm for these courses.',
+    noun: 'midterms',
   },
   finals: {
     label: 'Finals',
@@ -69,6 +73,7 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
     sliceAria: 'Filter by date',
     pins: finalPins,
     empty: 'No final exam locations yet. Pick sections that carry a final and they’ll appear here.',
+    noun: 'finals',
   },
 };
 
@@ -107,8 +112,9 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const [cardBox, setCardBox] = useState<Box | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   const [unplacedOpen, setUnplacedOpen] = useState(false);
+  const [noRoomOpen, setNoRoomOpen] = useState(false);
   const [mapView, setMapView] = useState<PlannerView>(initialView);
-  const { label: viewLabel, by, sliceAria, empty: emptyViewCopy } = MAP_VIEWS[mapView];
+  const { label: viewLabel, by, sliceAria, empty: emptyViewCopy, noun: viewNoun } = MAP_VIEWS[mapView];
 
   // The fitted frame is the anchor for zoom limits and the ⟲ button; `view` is
   // what the canvas actually draws through and what wheel/drag/pinch move.
@@ -186,7 +192,16 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
         : { onCanvas: [], offCanvas: [] },
     [shown, homeView, canvas.w, canvas.h],
   );
-  const unplaced = useMemo(() => unplacedPins(shown, offCanvas), [shown, offCanvas]);
+  // Two different absences. "Not on the map" is a place TSS did give that we could
+  // not put on this canvas (unmatched text, online, outside the mapped area) — the
+  // list says where it actually is. A pin TSS gave NO place for is not on any list
+  // of places: it gets its own line, and its own empty state, saying TSS hasn't
+  // listed a room yet — pointing at "where these actually meet" would be a lie.
+  const noRoom = useMemo(() => shown.filter(hasNoLocation), [shown]);
+  const unplaced = useMemo(
+    () => unplacedPins(shown, offCanvas).filter((u) => !hasNoLocation(u.pin)),
+    [shown, offCanvas],
+  );
   const open = onCanvas.find((g) => g.key === openKey) ?? null;
 
   // Escape peels one layer at a time: the popover (which registers its own handler
@@ -213,9 +228,11 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     ? 'Booked only is on and nothing here is booked yet. Turn it off to see every course in your plan.'
     : onCanvas.length === 0 && unplaced.length > 0
       ? 'Nothing here lands on the mapped part of campus — the list at the bottom-left has where these classes actually meet.'
-      : onCanvas.length === 0
+      : onCanvas.length === 0 && noRoom.length === 0
         ? emptyViewCopy
         : null;
+  // Nothing placed and nothing else to point at: TSS simply hasn't listed rooms yet.
+  const noRoomEmpty = !emptyCopy && onCanvas.length === 0 && noRoom.length > 0;
 
   const cluster = (
     <div className="campusmap__cluster">
@@ -380,27 +397,70 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
             {/* The empty-state copy floats over the basemap: a map with no pins is
                 still a map, and a blank panel taught nothing about where campus is. */}
             {emptyCopy && <div className="campusmap__empty">{emptyCopy}</div>}
+            {noRoomEmpty && (
+              <div className="campusmap__empty campusmap__empty--noroom">
+                <MapPinIcon size={36} className="empty__mark" strokeWidth={1.4} />
+                <div className="empty__title">No rooms from TSS yet</div>
+                <p className="empty__text">
+                  TSS hasn’t listed a room for these {viewNoun} yet — check back after browsing the course again.
+                </p>
+                <ul className="campusmap__noroom-list">
+                  {noRoom.map((p, i) => (
+                    <li key={`${p.courseId}-${p.label}-${i}`}>
+                      <b>{p.courseCode}</b> {p.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         )}
 
-        {unplaced.length > 0 && (
+        {(unplaced.length > 0 || (noRoom.length > 0 && !noRoomEmpty)) && (
           <div className="campusmap__unlocated">
-            <button
-              type="button"
-              className="btn btn--sm btn--ghost campusmap__unlocated-toggle"
-              aria-expanded={unplacedOpen}
-              onClick={() => setUnplacedOpen((v) => !v)}
-            >
-              {unplaced.length} not on the map <span aria-hidden="true">{unplacedOpen ? '▾' : '▸'}</span>
-            </button>
-            {unplacedOpen && (
-              <ul className="campusmap__unlocated-list">
-                {unplaced.map((u, i) => (
-                  <li key={`${u.pin.courseId}-${u.reason}-${i}`}>
-                    <b>{u.pin.courseCode}</b> {u.pin.label} — {u.detail}
-                  </li>
-                ))}
-              </ul>
+            {/* column-reverse: each toggle sits below the list it opens, and the
+                first toggle in DOM order is the bottom one. */}
+            {noRoom.length > 0 && !noRoomEmpty && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn--sm btn--ghost campusmap__unlocated-toggle campusmap__noroom-toggle"
+                  aria-expanded={noRoomOpen}
+                  onClick={() => setNoRoomOpen((v) => !v)}
+                >
+                  {noRoom.length} without a room yet <span aria-hidden="true">{noRoomOpen ? '▾' : '▸'}</span>
+                </button>
+                {noRoomOpen && (
+                  <ul className="campusmap__unlocated-list">
+                    {noRoom.map((p, i) => (
+                      <li key={`${p.courseId}-${p.label}-${i}`}>
+                        <b>{p.courseCode}</b> {p.label} — no room listed in TSS yet
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+            {unplaced.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn--sm btn--ghost campusmap__unlocated-toggle"
+                  aria-expanded={unplacedOpen}
+                  onClick={() => setUnplacedOpen((v) => !v)}
+                >
+                  {unplaced.length} not on the map <span aria-hidden="true">{unplacedOpen ? '▾' : '▸'}</span>
+                </button>
+                {unplacedOpen && (
+                  <ul className="campusmap__unlocated-list">
+                    {unplaced.map((u, i) => (
+                      <li key={`${u.pin.courseId}-${u.reason}-${i}`}>
+                        <b>{u.pin.courseCode}</b> {u.pin.label} — {u.detail}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
           </div>
         )}

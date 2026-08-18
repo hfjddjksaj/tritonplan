@@ -66,6 +66,16 @@ export function isOnlineModality(modality: string | undefined): boolean {
   return /online/i.test(modality ?? '');
 }
 
+/**
+ * TSS gave this pin no place at all — no building, no raw location text, and it
+ * is not online. Such a pin is not "not on the map" (there is nothing to place):
+ * TSS simply hasn't listed a room yet, and the UI must say that instead of
+ * pointing at a list of "where these actually meet".
+ */
+export function hasNoLocation(pin: MapPin): boolean {
+  return pin.coords === null && !pin.building && !pin.rawLocation && !isOnlineModality(pin.modality);
+}
+
 function located(building: string | undefined): Pick<MapPin, 'place' | 'coords'> {
   const hit = matchBuilding(building);
   return hit ? { place: hit.name, coords: { lat: hit.lat, lng: hit.lng } } : { coords: null };

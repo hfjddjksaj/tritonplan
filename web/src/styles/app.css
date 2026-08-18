@@ -2814,6 +2814,44 @@ button.termsw__cell:hover {
   border-radius: var(--r-md);
   box-shadow: var(--shadow-md);
 }
+/* "TSS hasn't listed a room yet": the same island, but shaped like the calendar's
+   empty states (mark · title · text) plus the sittings it is talking about — a
+   pin with no place is not "not on the map", it has nowhere to be yet. */
+.campusmap__empty--noroom {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px 20px 16px;
+  width: min(360px, calc(100% - 24px));
+}
+.campusmap__empty--noroom .empty__mark {
+  color: var(--line-strong);
+}
+.campusmap__empty--noroom .empty__text {
+  margin: 0;
+  max-width: none;
+}
+.campusmap__noroom-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+.campusmap__noroom-list li {
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+.campusmap__noroom-list b {
+  font-weight: 700;
+}
 /* --- "not on the map": an island bottom-left that opens upward into the list --- */
 .campusmap__unlocated {
   position: absolute;
