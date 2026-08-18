@@ -85,12 +85,12 @@ describe('bundled campus geometry', () => {
       (n, s) => n + s.rings.reduce((m, r) => m + r.length / 2, 0),
       0,
     );
-    // Unsimplified (RDP eps 0) since the geometry-precision fix — measured
-    // ~26202 (up from ~10800 when the fetch script still ran RDP at 1 m; the
-    // encodeRing zero-length-segment guard added in the F1 review round then
-    // trimmed the initial ~27647 down by ~1445 duplicate-quantised points).
-    expect(verts).toBeGreaterThan(18300);
-    expect(verts).toBeLessThan(34100);
+    // RDP simplification is back at the user's chosen default (0.25 m,
+    // geo-encode.mjs) — the branch briefly shipped a fully-lossless `eps 0`
+    // (measured ~26202 here), which traded away more payload than the user
+    // wanted for a ~1.5 s map-open cost. Back down to ~15090 at 0.25 m.
+    expect(verts).toBeGreaterThan(10560);
+    expect(verts).toBeLessThan(19620);
 
     // Every coordinate must land in greater UCSD, not in the ocean or at 0,0
     // (the classic sign of a projection or scaling mistake). The footprints
@@ -237,9 +237,9 @@ describe('bundled campus map data', () => {
     expect(types.has('Curb')).toBe(false);
     // Dropping `maxAllowableOffset` raised the raw feature count; the
     // ground-Building dedup (Fix 2) then removes the ~310 that duplicate a
-    // footprint, and the F1-review-round encodeRing zero-length-segment
-    // guard drops any polygon whose rings all degenerated. Net measured
-    // ~4644, comfortably in the thousands either way.
+    // footprint, and RDP simplification (0.25 m default) plus the
+    // zero-length-segment guard drop any polygon that degenerates. Net
+    // measured ~4390, comfortably in the thousands either way.
     expect(m.ground.length).toBeGreaterThan(3000);
     expect(m.trees.length).toBeGreaterThan(1500);
     expect(m.trees.every((t) => t.cls >= 0 && t.cls <= 4)).toBe(true);

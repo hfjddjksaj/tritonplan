@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rdp, pointInRing, centroid, centroidInsideAny, encodeRing, GEO_SCALE, retryAfterMs } from './geo-encode.mjs';
+import { rdp, pointInRing, centroid, centroidInsideAny, encodeRing, GEO_SCALE, retryAfterMs, M_PER_DEG_LAT } from './geo-encode.mjs';
 
 describe('rdp', () => {
   it('returns the input unchanged when eps <= 0 — no simplification', () => {
@@ -64,6 +64,32 @@ describe('encodeRing scale round-trip', () => {
       expect(decoded[i][1]).toBeCloseTo(ring[i][1], 5);
     }
     expect(GEO_SCALE).toBe(1e6);
+  });
+});
+
+describe('encodeRing default epsM (0.25 m, the precision/payload trade-off)', () => {
+  // p1 sits ~0.1 m off the line from p0 to p2 (pure latitude offset, so
+  // M_PER_DEG_LAT converts degrees to metres directly) — inside the default
+  // 0.25 m RDP tolerance. p3 is a real, distant corner so the ring still has
+  // 3 distinct points (p0, p2, p3) left after p1 is simplified away — not a
+  // degenerate 2-point line, which encodeRing would otherwise (correctly)
+  // drop as unable to represent a polygon.
+  const bumpDeg = 0.1 / M_PER_DEG_LAT;
+  const ring = [
+    [-117.234, 32.879],
+    [-117.2335, 32.879 + bumpDeg],
+    [-117.233, 32.879],
+    [-117.23, 32.876],
+  ];
+
+  it('simplifies the sub-0.25 m point using only the default — no epsM argument', () => {
+    const wire = encodeRing(ring); // no epsM — exercises the real default
+    expect(wire.length / 2).toBe(3); // p1 simplified away
+  });
+
+  it('keeps every point when eps is explicitly 0 (round 1’s lossless mode still reachable)', () => {
+    const wire = encodeRing(ring, 0);
+    expect(wire.length / 2).toBe(4); // nothing simplified away at eps 0
   });
 });
 

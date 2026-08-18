@@ -139,11 +139,14 @@ let cached: Promise<CampusGeo> | null = null;
 
 /**
  * Load and decode the bundled campus geometry. Imported dynamically and as a
- * raw string: `?raw` keeps TypeScript from deep-typing ~77k numeric literals
- * (footprints + districts + OSM lines, unsimplified since the geometry-
- * precision fix — this was ~11k before it), keeps the payload out of the
+ * raw string: `?raw` keeps TypeScript from deep-typing ~43k numeric literals
+ * (footprints + districts + OSM lines), keeps the payload out of the
  * first-paint chunk, and makes JSON.parse the cost instead of evaluating a
  * giant JS array literal. Memoized — reopening the map never re-parses.
+ * (This count moves with the RDP tolerance in geo-encode.mjs's
+ * `encodeRing`/`encodeShape` default `epsM` — was ~11k pre-precision-fix,
+ * ~77k at the briefly-shipped fully-lossless `eps 0`, now ~43k at the
+ * user's chosen `eps 0.25`.)
  */
 export function loadCampusGeo(): Promise<CampusGeo> {
   cached ??= import('../data/ucsd-campus-geo.json?raw').then((mod) => {
@@ -170,9 +173,10 @@ let cachedMap: Promise<CampusMapData> | null = null;
 /**
  * Load and decode the bundled ground surfaces, trees, boundary and land use.
  * Same dynamic `?raw` import scheme as `loadCampusGeo`, and for the same
- * reason: ~565k numeric literals (mostly the unsimplified ground layer),
- * far too many to let TypeScript deep-type. Memoized the same way —
- * reopening the map never re-parses.
+ * reason: ~214k numeric literals (mostly the ground layer), far too many to
+ * let TypeScript deep-type. Memoized the same way — reopening the map never
+ * re-parses. (Was ~565k at the briefly-shipped `eps 0`; RDP at the user's
+ * chosen 0.25 m brought this back down.)
  */
 export function loadCampusMap(): Promise<CampusMapData> {
   cachedMap ??= import('../data/ucsd-campus-map.json?raw').then((mod) => {

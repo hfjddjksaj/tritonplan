@@ -19,9 +19,12 @@ const today = new Date().toISOString().slice(0, 10);
 
 /* ---------------------------------------------------------------------------
  * Building footprints (layer 1 of UCSD's Buildings_Public service) + named
- * campus districts. Unsimplified (RDP eps 0) and delta-encoded at GEO_SCALE
- * (~0.11 m) — the map draws to z19, where 1 screen pixel is ≈ 0.25 m, so any
- * coarser tolerance visibly bevels corners and collapses narrow wings.
+ * campus districts. RDP-simplified at the default 0.25 m and delta-encoded
+ * at GEO_SCALE (~0.11 m) — the user's own precision/payload trade-off: the
+ * map draws to z19, where 1 screen pixel is ≈ 0.25 m, so the combined
+ * worst-case deviation (≈ 0.3 m, see geo-encode.mjs) stays under 1.2 px,
+ * comfortably below where the original 1 m tolerance visibly bevelled
+ * corners and collapsed narrow wings.
  * ------------------------------------------------------------------------- */
 
 const FOOTPRINTS =
@@ -98,7 +101,7 @@ const survivingGroundBuildings = dedupedGroundFeats.filter((f) => (f.attributes.
 // polygon whose rings all degenerated (nothing left to draw).
 const ground = dedupedGroundFeats
   .filter((f) => f.geometry?.rings?.length && groundTypes.includes((f.attributes.Type ?? '').trim()))
-  .map((f) => [groundTypes.indexOf(f.attributes.Type.trim()), f.geometry.rings.map((r) => encodeRing(r, 0)).filter((r) => r.length > 0)])
+  .map((f) => [groundTypes.indexOf(f.attributes.Type.trim()), f.geometry.rings.map((r) => encodeRing(r, 0.25)).filter((r) => r.length > 0)])
   .filter(([, rings]) => rings.length > 0);
 
 const treeFeats = await queryAll(TREES, { ...envelope, outFields: 'height', returnGeometry: 'true', geometryPrecision: '6' });
@@ -137,12 +140,37 @@ function heightFor(footprintRings) {
 // real 3D height is never replaced.
 const HEIGHT_OVERRIDES = { 'Geisel Library': 34 }; // the extrusion layer omits buildings the official scene renders as detailed meshes; ≈8 storeys — measured value, not from the data
 
-const footprints = rawFootprints.map((s) => {
+const footprintsRaw = rawFootprints.map((s) => {
   const h = heightFor(s.rings) ?? HEIGHT_OVERRIDES[s.name] ?? null;
   const e = encodeShape(s);
   return h && h >= 3 && h <= 120 ? [...e, h] : e;
 });
-const districts = rawDistricts.map((s) => encodeShape(s));
+const districtsRaw = rawDistricts.map((s) => encodeShape(s));
+
+// encodeShape drops a ring that quantised to fewer than 3 distinct vertices
+// after RDP. Round 1 assumed a real building/district is always far bigger
+// than the tolerance and threw on this — wrong: live-verified, "Torrey
+// Pines Center North Parking" is a genuine, named ArcGIS record whose only
+// ring is 3 points spanning ~0.15 m, smaller than a single GEO_SCALE cell
+// even before RDP touches it. That is a data-digitisation glitch, not
+// something worth rendering at any zoom, so it is dropped (and logged) the
+// same way a degenerate ground/landuse ring already is. A cap still fails
+// loudly if a real upstream break (a reshaped layer, a broken query) starts
+// dropping many shapes at once, rather than silently shipping a mutilated
+// basemap.
+const droppedFootprints = footprintsRaw.filter((f) => f[1].length === 0).map((f) => f[0]);
+const footprints = footprintsRaw.filter((f) => f[1].length > 0);
+const droppedDistricts = districtsRaw.filter((d) => d[1].length === 0).map((d) => d[0]);
+const districts = districtsRaw.filter((d) => d[1].length > 0);
+if (droppedFootprints.length > 5)
+  throw new Error(`too many degenerate footprints (${droppedFootprints.length}): ${droppedFootprints.join(', ')}`);
+if (droppedDistricts.length > 2)
+  throw new Error(`too many degenerate districts (${droppedDistricts.length}): ${droppedDistricts.join(', ')}`);
+if (droppedFootprints.length || droppedDistricts.length)
+  console.log(
+    `Dropped ${droppedFootprints.length} degenerate footprint(s) [${droppedFootprints.join(', ')}] and ` +
+      `${droppedDistricts.length} degenerate district(s) [${droppedDistricts.join(', ')}] — too small to render after RDP+quantisation.`,
+  );
 
 const fpVerts = vertexCount(footprints);
 
@@ -152,21 +180,11 @@ if (footprints.length < 550 || footprints.length > 700)
   throw new Error(`footprint count out of band: ${footprints.length} (expected ~609)`);
 if (districts.length < 20 || districts.length > 40)
   throw new Error(`district count out of band: ${districts.length} (expected ~25)`);
-// encodeShape drops a ring that quantised to fewer than 3 distinct vertices;
-// a real building/district is always far bigger than the 0.11m grid, so a
-// shape ending up with zero rings would mean something upstream broke, not
-// an expected sliver — fail loudly rather than ship an invisible building.
-const emptyFootprint = footprints.find((f) => f[1].length === 0);
-if (emptyFootprint) throw new Error(`footprint "${emptyFootprint[0]}" has no rings left after encoding`);
-const emptyDistrict = districts.find((d) => d[1].length === 0);
-if (emptyDistrict) throw new Error(`district "${emptyDistrict[0]}" has no rings left after encoding`);
-// Unsimplified (RDP eps 0) and, since the F1 review round, deduped of
-// consecutive points that round onto the same GEO_SCALE cell — that dedup
-// alone dropped ~1445 of the previous ~27647 (the 7-digit ArcGIS precision
-// is finer than the 1e6 grid). Measured against the raw ArcGIS footprint
-// layer, ±30% band per the drift-guard doctrine above.
-if (fpVerts < 18300 || fpVerts > 34100)
-  throw new Error(`footprint vertex count out of band: ${fpVerts} (expected ~26202)`);
+// RDP simplification is back (default epsM 0.25, the user's precision/
+// payload trade-off) — this fell from ~26202 (round 1's eps-0 figure) to
+// ~15090. ±30% band per the drift-guard doctrine above.
+if (fpVerts < 10560 || fpVerts > 19620)
+  throw new Error(`footprint vertex count out of band: ${fpVerts} (expected ~15090)`);
 
 const named = new Map(rawFootprints.map((s) => [s.name, s]));
 const tiogaH = heightFor(named.get('Tioga Hall').rings);
@@ -175,12 +193,11 @@ const withHeight = footprints.filter((f) => f.length === 3).length;
 if (withHeight < 350) throw new Error(`only ${withHeight} footprints got a height (expected ~450+)`);
 // For the controller to judge whether any other landmark needs a HEIGHT_OVERRIDES entry.
 const missingHeight = footprints.filter((f) => f.length === 2).map((f) => f[0]).sort();
-// Dropping `maxAllowableOffset` (was 0.55 m of server-side generalisation)
-// raised the raw feature count well past the old 3800–6400 band; after the
-// ground-Building dedup above and, since the F1 review round, dropping any
-// polygon whose rings all degenerated under the zero-length-segment guard,
-// this landed at ~4644 — ±30% band, per the drift-guard doctrine (not a spec).
-if (ground.length < 3250 || ground.length > 6040) throw new Error(`ground polygon count out of band: ${ground.length} (expected ~4644)`);
+// RDP at the default 0.25 m also occasionally pushes a small ground sliver
+// below the encodeRing degenerate-ring threshold (dropped, same as always).
+// This landed at ~4390 (was ~4644 at eps 0) — ±30% band.
+if (ground.length < 3070 || ground.length > 5710)
+  throw new Error(`ground polygon count out of band: ${ground.length} (expected ~4390)`);
 if (trees.length / 3 < 2000 || trees.length / 3 > 4000) throw new Error(`tree count out of band: ${trees.length / 3}`);
 // The footprint layer has 609 buildings; the ground layer's own `Building`
 // polygons duplicate almost all of them (a second survey, disagreeing by
@@ -293,7 +310,7 @@ const isClosedRing = (pts) =>
   pts.length > 3 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1];
 const landuse = allWays
   .filter((w) => landuseKind(w.tags) && isClosedRing(w.pts))
-  .map((w) => [landuseKind(w.tags), [encodeRing(w.pts, 0)]])
+  .map((w) => [landuseKind(w.tags), [encodeRing(w.pts, 0.25)]])
   .filter(([, rings]) => rings[0].length > 0); // encodeRing() returns [] for a ring that quantised away
 const ways = allWays.filter((w) => w.kind !== null);
 
@@ -377,7 +394,7 @@ function encodeLine({ name, kind, pts }, eps) {
 
 const KIND_ORDER = { coast: 0, hwy: 1, major: 2, minor: 3, walk: 4 };
 const lines = mergedLines
-  .map((l) => encodeLine(l, 0))
+  .map((l) => encodeLine(l, 0.25))
   .filter(([, , w]) => w.length >= 4)
   .sort((a, b) => KIND_ORDER[a[1]] - KIND_ORDER[b[1]] || a[0].localeCompare(b[0]));
 
@@ -385,14 +402,10 @@ const lineVerts = lines.reduce((n, [, , w]) => n + w.length / 2, 0);
 const coastCount = lines.filter(([, k]) => k === 'coast').length;
 if (lines.length < 150 || lines.length > 900)
   throw new Error(`OSM line count out of band: ${lines.length} (expected ~240)`);
-// Unsimplified (RDP eps 0), so this jumped from ~2700 to ~6404 — ±30% band,
-// per the drift-guard doctrine (not a spec).
-// encodeLine already had its own "rounding collapsed a step" guard before
-// this review round, so F1's encodeRing fix doesn't move this figure; the
-// ~8-vertex difference from the last measurement is ordinary live-OSM-data
-// drift between fetch runs, well inside the existing band.
-if (lineVerts < 4400 || lineVerts > 8400)
-  throw new Error(`OSM vertex count out of band: ${lineVerts} (expected ~6396)`);
+// encodeLine's default eps went back to 0.25 too — this fell from ~6396
+// (round 1's eps-0 figure) to ~4447. ±30% band.
+if (lineVerts < 3110 || lineVerts > 5780)
+  throw new Error(`OSM vertex count out of band: ${lineVerts} (expected ~4447)`);
 if (coastCount !== 1)
   throw new Error(`expected exactly one coastline chain, got ${coastCount}`);
 for (const must of [
@@ -431,16 +444,18 @@ console.log(
 
 /* ---------------------------------------------------------------------------
  * ucsd-campus-map.json: ground surfaces, trees, campus boundary, OSM land use.
- * No RDP simplification (`encodeRing(r, 0)`) — the map draws to z19, where
- * one screen pixel is ≈ 0.25 m, so anything less than the source geometry
- * bevels right angles and collapses narrow wings into slivers. This is
- * deliberately bigger than the file's earlier size targets; the user has
- * accepted that cost, so do NOT reintroduce simplification (or drop ground
- * types) to shrink it back down. The console line below just reports the
- * size — it is no longer a pass/fail budget.
+ * RDP-simplified at the default 0.25 m (geo-encode.mjs) — the branch briefly
+ * shipped `eps 0` (fully lossless) after the original 1 m tolerance produced
+ * visible bevels, but that traded away more payload than the user wanted for
+ * a ~1.5 s map-open cost; 0.25 m is their own considered choice, landing the
+ * combined worst-case deviation at ≈ 0.3 m ≈ 1.2 px at z19 — still under a
+ * pixel and a half. Do not push the tolerance higher, or drop ground types,
+ * to shrink the file further without asking; equally, do not quietly revert
+ * to `eps 0` "to be safe" — 0.25 m *is* the considered answer. The console
+ * line below just reports the size — it is not a pass/fail budget.
  * ------------------------------------------------------------------------- */
 
-const encodedBoundary = encodeRing(mainRing, 0);
+const encodedBoundary = encodeRing(mainRing, 0.25);
 // The whole La Jolla campus outline degenerating to `[]` (encodeRing's
 // too-few-distinct-vertices signal) would mean the boundary query returned
 // garbage — fail loudly rather than ship a map with no campus outline.

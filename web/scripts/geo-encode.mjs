@@ -7,12 +7,15 @@
 
 // Ramer–Douglas–Peucker with the tolerance expressed in metres. The map draws
 // to CAMERA.maxZoom 19, where one screen pixel is ≈ 0.25 m at UCSD's
-// latitude — the old 1 m default tolerance was ≈ 4 px, which sliced right
-// angles into diagonals and collapsed narrow wings into slivers. Every
-// fetch-script call site now passes `eps = 0`: the wire format carries the
-// source geometry unsimplified, quantised only by GEO_SCALE's own grid
-// (≈ 0.11 m — see below), which is below what a screen pixel can show even
-// at z19.
+// latitude — the original 1 m default tolerance was ≈ 4 px, which sliced
+// right angles into diagonals and collapsed narrow wings into slivers.
+// Every fetch-script call site now passes `eps = 0.25`: at 0.25 m plus the
+// ≈ 0.055 m worst-case quantisation error (half of GEO_SCALE's own grid —
+// see below), the combined worst-case deviation is ≈ 0.3 m ≈ 1.2 px at z19,
+// still under a pixel and a half. This is the user's own deliberate
+// precision/payload trade-off (the branch briefly shipped `eps = 0`, fully
+// lossless but noticeably heavier to download) — not a re-simplification of
+// the original 1 m bug, which really did produce visible bevels.
 export const M_PER_DEG_LAT = 111132;
 export const M_PER_DEG_LON = 93500; // 111320 * cos(32.88°)
 
@@ -47,33 +50,34 @@ export function rdp(pts, eps) {
 }
 
 // Integer quantisation grid: 1/GEO_SCALE degree ≈ 0.093 m of longitude /
-// 0.111 m of latitude at UCSD's latitude — below the ≈ 0.25 m one screen
-// pixel covers at the map's max zoom (19), so this is the only rounding the
-// wire format applies.
+// 0.111 m of latitude at UCSD's latitude — a further ≈ 0.055 m of
+// worst-case rounding error (half the grid spacing) on top of whatever RDP
+// simplification already removed.
 export const GEO_SCALE = 1e6;
 
 /**
  * One ring → integers at GEO_SCALE, delta-encoded, after RDP at `epsM`
- * metres. Two source points that round onto the same GEO_SCALE grid cell
- * (the 7-digit ArcGIS precision is finer than the 1e6 grid) would otherwise
- * encode as a `0, 0` delta — a real vertex spent on zero added precision.
- * Dropped here the same way `encodeLine` already drops them ("rounding
- * collapsed a step"), comparing only to the immediately *previous kept*
- * point, so a closed ring's deliberate return to its first point (last
- * point === first point, not adjacent to it in the array) is never mistaken
- * for one of these and always survives — see the round-trip test in
- * `geo-encode.test.mjs`.
+ * metres (default 0.25 — see the header comment above for the combined
+ * worst-case deviation this implies). Two points that survive RDP but still
+ * round onto the same GEO_SCALE grid cell (a real possibility at a sharp
+ * corner, even after simplification) would otherwise encode as a `0, 0`
+ * delta — a real vertex spent on zero added precision. Dropped here the
+ * same way `encodeLine` already drops them ("rounding collapsed a step"),
+ * comparing only to the immediately *previous kept* point, so a closed
+ * ring's deliberate return to its first point (last point === first point,
+ * not adjacent to it in the array) is never mistaken for one of these and
+ * always survives — see the round-trip test in `geo-encode.test.mjs`.
  *
  * A ring that collapses to fewer than 3 *distinct* quantised vertices can't
- * be a valid polygon ring any more — quantisation reduced it to a sliver or
- * a point. Counted with a Set rather than a fixed length threshold so a
- * closed ring's redundant closing repeat (same quantised point as the
- * first) never gets counted as a distinct vertex on its own. Rather than
- * ship a degenerate ring, this returns `[]`; callers filter it out (see the
- * `.filter((r) => r.length > 0)` at each `encodeRing`/`encodeShape` call
- * site in fetch-campus-map.mjs).
+ * be a valid polygon ring any more — RDP and/or quantisation reduced it to
+ * a sliver or a point. Counted with a Set rather than a fixed length
+ * threshold so a closed ring's redundant closing repeat (same quantised
+ * point as the first) never gets counted as a distinct vertex on its own.
+ * Rather than ship a degenerate ring, this returns `[]`; callers filter it
+ * out (see the `.filter((r) => r.length > 0)` at each `encodeRing`/
+ * `encodeShape` call site in fetch-campus-map.mjs).
  */
-export function encodeRing(ring, epsM = 0) {
+export function encodeRing(ring, epsM = 0.25) {
   const out = [];
   const distinct = new Set();
   let px = 0, py = 0;
@@ -85,7 +89,7 @@ export function encodeRing(ring, epsM = 0) {
   }
   return distinct.size < 3 ? [] : out;
 }
-export function encodeShape({ name, rings }, epsM = 0) {
+export function encodeShape({ name, rings }, epsM = 0.25) {
   return [name, rings.map((r) => encodeRing(r, epsM)).filter((r) => r.length > 0)];
 }
 /** Total vertices of encoded shapes — rings are always at index 1 ([name|type, rings, …]). */
