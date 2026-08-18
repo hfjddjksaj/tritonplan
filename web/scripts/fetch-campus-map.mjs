@@ -160,11 +160,13 @@ const emptyFootprint = footprints.find((f) => f[1].length === 0);
 if (emptyFootprint) throw new Error(`footprint "${emptyFootprint[0]}" has no rings left after encoding`);
 const emptyDistrict = districts.find((d) => d[1].length === 0);
 if (emptyDistrict) throw new Error(`district "${emptyDistrict[0]}" has no rings left after encoding`);
-// Unsimplified (RDP eps 0), so this jumped from ~10800 to ~27647 — measured
-// against the raw ArcGIS footprint layer, ±30% band per the drift-guard
-// doctrine above.
-if (fpVerts < 19000 || fpVerts > 36000)
-  throw new Error(`footprint vertex count out of band: ${fpVerts} (expected ~27647)`);
+// Unsimplified (RDP eps 0) and, since the F1 review round, deduped of
+// consecutive points that round onto the same GEO_SCALE cell — that dedup
+// alone dropped ~1445 of the previous ~27647 (the 7-digit ArcGIS precision
+// is finer than the 1e6 grid). Measured against the raw ArcGIS footprint
+// layer, ±30% band per the drift-guard doctrine above.
+if (fpVerts < 18300 || fpVerts > 34100)
+  throw new Error(`footprint vertex count out of band: ${fpVerts} (expected ~26202)`);
 
 const named = new Map(rawFootprints.map((s) => [s.name, s]));
 const tiogaH = heightFor(named.get('Tioga Hall').rings);
