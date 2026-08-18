@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { MapPin } from './map-pins';
 import {
-  chipText,
-  chipWidth,
+  chipRows,
+  chipSize,
+  CHIP_ROW_H,
   DOT_HIT_R,
   groupPins,
   hitMarker,
@@ -89,12 +90,42 @@ describe('splitByBounds', () => {
   });
 });
 
-describe('chip text', () => {
-  it('names one class, counts several', () => {
-    const p = (code: string, label: string) => ({ courseCode: code, label } as unknown as MapPin);
-    expect(chipText([p('CSE-8A', 'LEC')])).toBe('CSE-8A LEC');
-    expect(chipText([p('CSE-8A', 'LEC'), p('CSE-8A', 'DI')])).toBe('CSE-8A +1');
-    expect(chipWidth([p('CSE-8A', 'LEC')])).toBeGreaterThan(60);
+describe('chip rows', () => {
+  const p = (code: string, label: string, id = code) =>
+    ({ courseId: id, courseCode: code, label, hue: 231 } as unknown as MapPin);
+
+  it('lists the courses here, one line each, and nothing else', () => {
+    expect(chipRows([p('CSE-8A', 'LEC')]).map((r) => r.courseCode)).toEqual(['CSE-8A']);
+    expect(chipRows([p('CSE-8A', 'LEC'), p('MATH-20C', 'LEC')]).map((r) => r.courseCode)).toEqual([
+      'CSE-8A',
+      'MATH-20C',
+    ]);
+  });
+
+  // One course, several sittings in the same building: the lecture and its
+  // discussion, or a Tue/Thu pair, or two dated midterms. One LINE — the count
+  // that used to stand in for them ("CSE-8A +4") read as a warning about
+  // classes the map had failed to draw.
+  it('is one line per course, not per pin', () => {
+    const rows = chipRows([p('CSE-8A', 'LEC'), p('CSE-8A', 'DI'), p('CSE-8A', 'LEC')]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.courseCode).toBe('CSE-8A');
+  });
+
+  it('is as wide as its longest code and as tall as it has courses', () => {
+    const one = chipSize([p('CSE-8A', 'LEC')]);
+    const two = chipSize([p('CSE-8A', 'LEC'), p('CHEM-043A', 'LAB', 'CHEM')]);
+    expect(one.w).toBeGreaterThan(60);
+    expect(one.h).toBe(CHIP_ROW_H);
+    expect(two.w).toBeGreaterThan(one.w); // the longer code sets the width
+    expect(two.h).toBeGreaterThan(2 * CHIP_ROW_H - 1); // two rows plus the rule between them
+  });
+
+  // The two sittings of one midterm collapse to one line, so a chip cannot be
+  // taller than the building has courses.
+  it('does not grow with repeat sittings of the same course', () => {
+    const twice = [p('CSE-8A', 'Midterm 1'), p('CSE-8A', 'Midterm 2')];
+    expect(chipSize(twice)).toEqual(chipSize([p('CSE-8A', 'Midterm 1')]));
   });
 });
 
@@ -188,8 +219,10 @@ describe('hitMarker', () => {
     chip,
   });
 
-  const A = marker('a', 100, 100, { x: 112, y: 89, w: 120, h: 22 });
-  const B = marker('b', 400, 300, null); // the open marker: its chip is the card
+  const A = marker('a', 100, 100, { x: 112, y: 89, w: 120, h: 22, side: 'right' });
+  // Far from A, and its chip box is nowhere near the points this suite probes:
+  // what it stands for is a marker answered by its dot alone.
+  const B = marker('b', 400, 300, { x: 412, y: 289, w: 120, h: 22, side: 'right' });
 
   it('answers the chip a point lands in', () => {
     expect(hitMarker([A, B], 150, 95)).toBe('a');
@@ -200,7 +233,7 @@ describe('hitMarker', () => {
   it('answers the dot, with a fingertip-sized radius, chip or no chip', () => {
     expect(hitMarker([A, B], 100, 100)).toBe('a');
     expect(hitMarker([A, B], 100 + DOT_HIT_R - 0.5, 100)).toBe('a');
-    expect(hitMarker([A, B], 400, 300)).toBe('b'); // no chip, still hittable
+    expect(hitMarker([A, B], 400, 300)).toBe('b'); // the dot, not the chip beside it
   });
 
   it('answers nothing for empty map — which is what closes the open card', () => {
@@ -211,8 +244,8 @@ describe('hitMarker', () => {
   });
 
   it('prefers the marker drawn on top when two overlap', () => {
-    const under = marker('under', 100, 100, { x: 90, y: 90, w: 60, h: 22 });
-    const over = marker('over', 130, 100, { x: 100, y: 92, w: 60, h: 22 });
+    const under = marker('under', 100, 100, { x: 90, y: 90, w: 60, h: 22, side: 'right' });
+    const over = marker('over', 130, 100, { x: 100, y: 92, w: 60, h: 22, side: 'right' });
     expect(hitMarker([under, over], 120, 100)).toBe('over');
   });
 });

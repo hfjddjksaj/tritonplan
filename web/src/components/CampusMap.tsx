@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   campusPadding,
   coreBounds,
+  mappedBounds,
   loadCampusGeo,
   loadCampusMap,
   type CampusGeo,
@@ -12,6 +13,7 @@ import {
 import { buildSources } from '../lib/map-data';
 import { applyHosts, applyMode, assetBase, buildStyle, CAMERA, type MapMode } from '../lib/map-style';
 import {
+  ALL_SLICE_ID,
   defaultSliceId,
   finalPins,
   hasNoLocation,
@@ -25,7 +27,6 @@ import {
 import {
   groupPins,
   hitMarker,
-  inside,
   markerLabel,
   splitByBounds,
   unplacedPins,
@@ -73,6 +74,18 @@ interface MapViewDef {
   by: SliceBy;
   sliceAria: string;
   pins: (plan: PlanState, booked: ReadonlySet<string>) => MapPin[];
+  /**
+   * Which slice the view opens on when the student hasn't picked one.
+   *
+   * 'today' is the EXAM rule, and it only ever made sense there: an exam view
+   * is about a sitting on a date, so opening it on the day of one is opening it
+   * on the thing you came for. Classes are not like that — a plan is a week,
+   * and a weekday filter applied before the student asks for it hides four
+   * fifths of what they opened the map to see, with nothing on screen saying
+   * why. So Classes opens on All. (Both keep the student's own pick while they
+   * stay on the view; switching views clears it and this runs again.)
+   */
+  openOn: 'today' | 'all';
   /** Shown over the basemap when nothing in this view can be placed. */
   empty: string;
   /** What this view's pins are called in the "TSS hasn’t listed a room" copy: "classes" / "midterms" / "finals". */
@@ -85,6 +98,7 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
     by: 'weekday',
     sliceAria: 'Filter by day',
     pins: meetingPins,
+    openOn: 'all',
     empty: 'No class locations to place yet. Add courses with scheduled meetings, and they’ll appear here.',
     noun: 'classes',
   },
@@ -93,6 +107,7 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
     by: 'week',
     sliceAria: 'Filter by week',
     pins: midtermPins,
+    openOn: 'today',
     empty: 'No midterm locations yet — TSS hasn’t announced a dated midterm for these courses.',
     noun: 'midterms',
   },
@@ -101,6 +116,7 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
     by: 'date',
     sliceAria: 'Filter by date',
     pins: finalPins,
+    openOn: 'today',
     empty: 'No final exam locations yet. Pick sections that carry a final and they’ll appear here.',
     noun: 'finals',
   },
@@ -157,7 +173,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const [unplacedOpen, setUnplacedOpen] = useState(false);
   const [noRoomOpen, setNoRoomOpen] = useState(false);
   const [mapView, setMapView] = useState<PlannerView>(initialView);
-  const { label: viewLabel, by, sliceAria, empty: emptyViewCopy, noun: viewNoun } = MAP_VIEWS[mapView];
+  const { label: viewLabel, by, sliceAria, empty: emptyViewCopy, noun: viewNoun, openOn } = MAP_VIEWS[mapView];
 
   // Both bundles are dynamic `?raw` imports, so neither the geometry nor
   // `maplibre-gl` itself is in the first-paint chunk.
@@ -232,7 +248,9 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const sliceId =
     picked !== null && slices.some((s) => s.id === picked)
       ? picked
-      : defaultSliceId(sliced, scoped, today);
+      : openOn === 'today'
+        ? defaultSliceId(sliced, scoped, today)
+        : ALL_SLICE_ID;
   const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
 
   // The slice row scrolls sideways when the weeks don't fit the fixed island. A
@@ -256,14 +274,16 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
 
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
 
-  // Split against the home frame the camera fitted to: a marker outside it is not on
-  // the map the student opened onto, so it must not be counted as a building on the
-  // map, and it belongs in the list with its own explanation rather than disappearing.
+  // Split against the ground the basemap actually covers — NOT against the camera's
+  // opening frame, which is what this used to do. The home view is now framed tightly
+  // on the teaching core, and a marker the first frame happens to miss is still a
+  // marker on a building this map draws and the student can pan to; calling that
+  // "outside the mapped area" was false, and on a phone (whose frame is under 900 m
+  // wide) it was false about most of campus. What stays true off this box is
+  // Hillcrest, and anywhere else the bundled geometry has no ground for.
   const groups = useMemo(() => groupPins(shown), [shown]);
-  const { onCanvas, offCanvas } = useMemo(
-    () => splitByBounds(groups, gl.homeBounds),
-    [groups, gl.homeBounds],
-  );
+  const mapped = useMemo(() => (data ? mappedBounds(data.geo) : null), [data]);
+  const { onCanvas, offCanvas } = useMemo(() => splitByBounds(groups, mapped), [groups, mapped]);
   // Two different absences. "Not on the map" is a place TSS did give that we could
   // not put on this canvas (unmatched text, online, outside the mapped area) — the
   // list says where it actually is. A pin TSS gave NO place for is not on any list
@@ -274,41 +294,34 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     () => unplacedPins(shown, offCanvas).filter((u) => !hasNoLocation(u.pin)),
     [shown, offCanvas],
   );
-  const open = onCanvas.find((g) => g.key === openKey) ?? null;
-
-  // Re-projected on every camera tick: the card hangs off the dot and must follow it.
-  //
-  // Culled by the same `inside()` test `MapMarkers` culls its markers with, and at
-  // the same moment, so the card and its dot leave together. Without it the card
-  // outlived its marker: `project()` keeps answering off-screen coordinates,
-  // `cardPlacement` clamps them back into the canvas, and the card parked itself in
-  // a corner over open ocean with no dot and no relationship to anything (QA I2).
+  // Where every marker's dot and chip actually are, for this camera. Shared with
+  // `MapMarkers`, which draws from the same function — see `useMarkerLayout`.
+  const placed = useMarkerLayout(gl.map, gl.tick, onCanvas, canvas);
+  // The open marker as it is actually drawn: its dot, and the chip box the card
+  // grows out of. Absent while that dot is off the canvas, because the layout culls
+  // by the same `inside()` test the markers do — so the card and its dot leave
+  // together. Without that the card outlived its marker: `project()` keeps answering
+  // off-screen coordinates, `cardPlacement` clamps them back in, and the card parked
+  // itself in a corner over open ocean with no dot and nothing to belong to (QA I2).
   //
   // HIDDEN, not closed. The card is the open marker's chip, so it should come back
   // when the marker does — panning past a dot and back should not have thrown the
   // selection away, and closing on the boundary would make a dot resting one pixel
   // outside the frame permanently un-openable. Escape and a click on empty map are
   // still what actually close it.
-  const openAnchor = useMemo(() => {
-    if (!open || !gl.map) return null;
-    const pt = gl.map.project([open.lng, open.lat]);
-    return inside(pt.x, pt.y, canvas.w, canvas.h) ? pt : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, gl.map, gl.tick, canvas.w, canvas.h]);
-  // Where every marker's dot and chip actually are, for this camera. Shared with
-  // `MapMarkers`, which draws from the same function — see `useMarkerLayout`.
-  const placed = useMarkerLayout(gl.map, gl.tick, onCanvas, canvas, openKey);
+  const openMarker = placed.find((m) => m.group.key === openKey) ?? null;
+  const open = openMarker?.group ?? null;
   // Escape peels one layer at a time: the popover (which registers its own handler
   // while `mapLoc` is set — without this guard both would fire on one keypress),
   // then the open marker card, then the map itself.
   //
-  // Keyed off the card being VISIBLE — `open && openAnchor`, the same pair the card
-  // itself renders on — not off `open` alone. Two ways a selection outlives what it
+  // Keyed off the card being VISIBLE — `openMarker`, the same thing the card itself
+  // renders on — not off `openKey` alone. Two ways a selection outlives what it
   // draws: a tab switch can leave `openKey` pointing at a group this view no longer
   // has, and I2 hides the card once its dot pans off the canvas. In both cases
   // Escape must not spend itself clearing something nobody can see; it must close
   // the map, first press.
-  useEscapeKey(mapLoc ? () => {} : open && openAnchor ? () => setOpenKey(null) : onClose);
+  useEscapeKey(mapLoc ? () => {} : openMarker ? () => setOpenKey(null) : onClose);
 
   const openPlace = open ? (open.place ?? open.building) : undefined;
   // Without a working camera there is no home frame, so nothing is "on canvas" —
@@ -375,8 +388,14 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   useEffect(() => {
     const m = gl.map;
     if (!m) return;
+    // The dot as the overlay has it RIGHT NOW. The overlay's transforms are
+    // written from MapLibre's own `move`, so they can be a frame ahead of the
+    // tick-driven layout in `placedRef`; hit-testing against the layout alone
+    // therefore missed markers the student could plainly see, by as much as a
+    // frame of camera motion.
+    const liveDot = (p: PlacedMarker) => m.project([p.group.lng, p.group.lat]);
     const onClick = (e: { point: { x: number; y: number } }) => {
-      const hit = hitMarker(placedRef.current, e.point.x, e.point.y);
+      const hit = hitMarker(placedRef.current, e.point.x, e.point.y, liveDot);
       // TOGGLE, the same way the marker's own onClick does. Assigning the hit key
       // outright made a click on the OPEN marker's dot a no-op — it returns the key
       // that is already set — so the mouse and a screen reader (which reaches the
@@ -384,7 +403,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
       setOpenKey((prev) => (hit !== null && hit === prev ? null : hit));
     };
     const onMove = (e: { point: { x: number; y: number } }) => {
-      setHoverKey(hitMarker(placedRef.current, e.point.x, e.point.y));
+      setHoverKey(hitMarker(placedRef.current, e.point.x, e.point.y, liveDot));
     };
     const onOut = () => setHoverKey(null);
     m.on('click', onClick);
@@ -620,18 +639,26 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
               selectedKey={openKey}
               hoverKey={hoverKey}
               onSelect={setOpenKey}
+              /* Handed to MapMarkers rather than drawn here, so it mounts INSIDE its
+                 marker: one transform then moves dot, chip and card together, which
+                 is what keeps the card from swimming behind the map under a drag.
+                 Keyed by group, so opening a different marker replays the grow-out. */
+              card={
+                openMarker && (
+                  <MarkerCard
+                    key={openMarker.group.key}
+                    group={openMarker.group}
+                    anchor={{ x: openMarker.x, y: openMarker.y }}
+                    chip={openMarker.chip}
+                    canvas={canvas}
+                    insetTop={insetTop}
+                    onDirections={
+                      openPlace ? () => setMapLoc({ building: openPlace, room: openMarker.group.pins[0]!.room }) : undefined
+                    }
+                  />
+                )
+              }
             />
-            {open && openAnchor && (
-              <MarkerCard
-                group={open}
-                anchor={openAnchor}
-                canvas={canvas}
-                insetTop={insetTop}
-                onDirections={
-                  openPlace ? () => setMapLoc({ building: openPlace, room: open.pins[0]!.room }) : undefined
-                }
-              />
-            )}
             <div className="campusmap__zoom" role="group" aria-label="Zoom">
               <button type="button" className="btn btn--sm btn--icon campusmap__zoombtn" onClick={gl.zoomIn} aria-label="Zoom in">
                 <Plus size={14} />

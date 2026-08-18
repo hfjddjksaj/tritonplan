@@ -203,6 +203,25 @@ export function loadCampusMap(): Promise<CampusMapData> {
  * canvas — markers piled on top of each other with chips wider than the gaps
  * between the buildings they label.
  *
+ * NOT in the set, though every one of them is still DRAWN: 'North Campus'.
+ * Its polygon reaches from RIMAC (32.8849) up to 32.8917 — 680 m of canyon,
+ * playing fields and parking, and the northern 530 m of that hosts nothing at
+ * all. Because the fit is height-bound on a wide canvas, that empty band cost
+ * twice over, measured against the framing the user asked for (2.00 m/px
+ * centred on 32.88030, read off their reference screenshot's scale bar and
+ * marker positions): the fitted camera sat **310 m north** of it, which piled
+ * every teaching building into the bottom half of the canvas, and the fit came
+ * out **24 % wider** than asked. Dropping this one name lands within 46 m of
+ * that centre at 1.85 m/px on the same canvas, with no magic offset anywhere.
+ *
+ * The cost is 40 m: Rady's two halls (Otterson 32.8866, Wells Fargo 32.8869) are
+ * the northernmost buildings that host classes, and they sit just past the
+ * trimmed edge (32.8863) — on a desktop canvas the fitted view still reaches
+ * them, on a small one it may not. Which is safe now, and was not before:
+ * {@link mappedBounds}, not this box, decides what counts as being on the map,
+ * so a pin the first frame misses is still drawn, still counted, and one drag
+ * away rather than filed under "outside the mapped area".
+ *
  * Names are the exact `name` values in `ucsd-campus-geo.json` (ArcGIS "Campus
  * Districts", layer 4) — note "Theatre District", not "Theatre".
  */
@@ -215,7 +234,6 @@ export const ACADEMIC_CORE_DISTRICTS: readonly string[] = [
   'Ridge Walk North',
   'Pepper Canyon',
   'Theatre District',
-  'North Campus',
 ];
 
 /**
@@ -233,13 +251,13 @@ export function coreDistricts(geo: CampusGeo): CampusShape[] {
 /** A lon/lat bounding box: `[[west, south], [east, north]]`. */
 export type LngLatBox = [[number, number], [number, number]];
 
-/** The bounding box of {@link coreDistricts}, for framing a MapLibre view. */
-export function coreBounds(geo: CampusGeo): LngLatBox {
+/** The bounding box of a set of shapes, `[[west, south], [east, north]]`. */
+function boundsOf(shapes: readonly CampusShape[]): LngLatBox {
   let w = Infinity;
   let s = Infinity;
   let e = -Infinity;
   let n = -Infinity;
-  for (const d of coreDistricts(geo)) {
+  for (const d of shapes) {
     for (const r of d.rings) {
       for (let i = 0; i + 1 < r.length; i += 2) {
         w = Math.min(w, r[i]!);
@@ -250,6 +268,28 @@ export function coreBounds(geo: CampusGeo): LngLatBox {
     }
   }
   return [[w, s], [e, n]];
+}
+
+/** The bounding box of {@link coreDistricts}, for framing a MapLibre view. */
+export function coreBounds(geo: CampusGeo): LngLatBox {
+  return boundsOf(coreDistricts(geo));
+}
+
+/**
+ * Everywhere the basemap draws — every district, not just the framed core.
+ *
+ * This is what "on the map" means, and it is deliberately NOT the home view's
+ * frame. Those were the same box until the home view was tightened onto the
+ * teaching core: `splitByBounds` was fed the camera's opening bounds, so
+ * whatever the first frame happened to miss was reported to the student as
+ * "outside the mapped area" — a sentence that was false about a building the
+ * map draws and they can simply pan to, and that got worse the more the frame
+ * was tightened (a phone's frame is under 900 m wide, so it missed most of
+ * campus east–west). Camera framing is now a camera concern; a pin counts as
+ * on the map when the map actually has that ground.
+ */
+export function mappedBounds(geo: CampusGeo): LngLatBox {
+  return boundsOf(geo.districts);
 }
 
 /**

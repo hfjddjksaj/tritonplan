@@ -1,10 +1,26 @@
 /**
- * DOM overlay drawn on top of the MapLibre GL canvas: one focusable marker
- * per visible pin group, with its label chip beside it unless the marker is
- * the one currently open (the card takes over its chip's job). Positions come
- * from `useMarkerLayout`, so they track the GL camera exactly; the caller
- * re-renders this on every `tick` from `useMapLibre` so a pan or zoom
- * re-projects every marker in step with the map underneath it.
+ * DOM overlay drawn on top of the MapLibre GL canvas: one focusable marker per
+ * visible pin group — a dot on the building, and beside it a chip naming every
+ * course that meets there. The marker the student has open shows the card in
+ * place of its chip, in a layer pinned to that marker's dot (see below).
+ *
+ * GLUED TO THE MAP, and that is the reason this component writes DOM styles by
+ * hand instead of leaving positions to React. Every marker's dot transform is
+ * written synchronously from MapLibre's own `move` event, the way MapLibre's
+ * built-in `Marker` does it: `move` fires while the camera change is still
+ * being processed, so the overlay lands in the SAME frame the GL canvas paints.
+ * Driving the transforms off the rAF-throttled `tick` instead — a React state
+ * bump, so a re-render one frame later — is exactly what made the pins swim
+ * behind the basemap during a drag. `tick` still drives everything else
+ * (which markers exist, which side of the dot each chip sits on): those may
+ * settle a frame late without anyone seeing it, positions may not.
+ *
+ * The chip is a CHILD of its marker, offset from the dot in local pixels rather
+ * than placed in canvas coordinates, so the one transform carries both. The
+ * card rides in a layer of its own, pinned to the open marker's dot by the same
+ * writer — a sibling, not a child, because inside the marker its clicks and
+ * Enter presses bubbled into the marker's own toggle handler and closing the
+ * card was the first thing "Directions" did.
  *
  * POINTER-TRANSPARENT, deliberately. This overlay is a SIBLING of the GL
  * container, so anything it takes, MapLibre never sees. Markers used to be
@@ -16,7 +32,8 @@
  * pointer: every press, drag, pinch and wheel reaches MapLibre untouched, and
  * `CampusMap` opens the card from MapLibre's own `click` via `hitMarker()` —
  * which also means a drag that starts on a chip pans without opening anything,
- * because MapLibre does not fire `click` after a drag.
+ * because MapLibre does not fire `click` after a drag. The card itself takes
+ * the pointer back (app.css), because it holds a real button.
  *
  * Keyboard and assistive tech are unaffected, and must stay that way:
  * `pointer-events: none` does not touch the tab order, so Tab still reaches
@@ -27,25 +44,69 @@
  * mouse can no longer focus a marker at all — and the `:focus` / `:focus-visible`
  * pair in app.css keeps keyboard focus visible.
  */
+import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { colorsForHue } from '../lib/colors';
-import { markerLabel, type PinGroup } from '../lib/map-labels';
+import { chipRows, markerLabel, type PinGroup, type PlacedMarker } from '../lib/map-labels';
 import { useMarkerLayout } from '../hooks/useMarkerLayout';
 
 interface Props {
   map: MapLibreMap | null;
-  /** Bumped (rAF-throttled) by `useMapLibre` on every camera move — re-projects markers on change. */
+  /** Bumped (rAF-throttled) by `useMapLibre` on every camera move — re-runs the chip layout. */
   tick: number;
   groups: readonly PinGroup[];
   bounds: { w: number; h: number };
   selectedKey: string | null;
   /** The marker the pointer is over, from `CampusMap`'s hit test — see the note above. */
   hoverKey?: string | null;
+  /** The open marker's card. Drawn in its own layer, pinned to that marker's dot. */
+  card?: ReactNode;
   onSelect: (key: string | null) => void;
 }
 
-export function MapMarkers({ map, tick, groups, bounds, selectedKey, hoverKey = null, onSelect }: Props): JSX.Element | null {
-  const placed = useMarkerLayout(map, tick, groups, bounds, selectedKey);
+export function MapMarkers({
+  map,
+  tick,
+  groups,
+  bounds,
+  selectedKey,
+  hoverKey = null,
+  card = null,
+  onSelect,
+}: Props): JSX.Element | null {
+  const placed = useMarkerLayout(map, tick, groups, bounds);
+
+  // The marker elements, by group key, and the layout the position writer reads
+  // — a ref, so binding the `move` listener once per map survives every
+  // re-render that changes what is on screen.
+  const els = useRef(new Map<string, HTMLDivElement>());
+  const cardEl = useRef<HTMLDivElement | null>(null);
+  const layout = useRef<PlacedMarker[]>(placed);
+  layout.current = placed;
+
+  const writePositions = useCallback(() => {
+    if (!map) return;
+    for (const m of layout.current) {
+      const el = els.current.get(m.group.key);
+      const layerEl = m.group.key === selectedKey ? cardEl.current : null;
+      if (!el && !layerEl) continue;
+      const pt = map.project([m.group.lng, m.group.lat]);
+      const at = `translate(${pt.x}px, ${pt.y}px)`;
+      if (el) el.style.transform = at;
+      if (layerEl) layerEl.style.transform = at;
+    }
+  }, [map, selectedKey]);
+
+  // Once per commit (a marker that just mounted has no transform yet), and then
+  // once per camera change, in MapLibre's own event so the two move as one.
+  useLayoutEffect(writePositions);
+  useEffect(() => {
+    if (!map) return;
+    map.on('move', writePositions);
+    return () => {
+      map.off('move', writePositions);
+    };
+  }, [map, writePositions]);
 
   if (!map) return null;
 
@@ -55,17 +116,19 @@ export function MapMarkers({ map, tick, groups, bounds, selectedKey, hoverKey = 
         const c = colorsForHue(g.pins[0]!.hue);
         const booked = g.pins.some((p) => p.booked);
         const open = selectedKey === g.key;
-        const first = g.pins[0]!;
-        const chipLabel = g.pins.length === 1 ? first.label : `+${g.pins.length - 1}`;
+        const rows = chipRows(g.pins);
         return (
           <div
             key={g.key}
+            ref={(el) => {
+              if (el) els.current.set(g.key, el);
+              else els.current.delete(g.key);
+            }}
             className={`campusmap__marker${booked ? ' campusmap__marker--booked' : ''}${open ? ' campusmap__marker--open' : ''}${hoverKey === g.key ? ' campusmap__marker--hover' : ''}`}
             role="button"
             tabIndex={0}
             aria-label={markerLabel(g)}
             aria-pressed={open}
-            style={{ transform: `translate(${x}px, ${y}px)` }}
             onClick={(e) => {
               e.stopPropagation();
               onSelect(open ? null : g.key);
@@ -81,16 +144,34 @@ export function MapMarkers({ map, tick, groups, bounds, selectedKey, hoverKey = 
               className="campusmap__dot"
               style={{ background: booked ? c.spine : '#fff', borderColor: c.spine }}
             />
-            {chip && (
-              <span className="campusmap__chip" style={{ left: chip.x - x, top: chip.y - y }}>
-                <span className="campusmap__chip-dot" style={{ background: c.spine }} />
-                <span className="campusmap__chipcode">{first.courseCode}</span>
-                <span className="campusmap__chiplabel">{chipLabel}</span>
+            {/* Hidden while the card is open: the card stands in for it, and grows
+                out of the very box the chip was holding (the card layer below). */}
+            {!open && (
+              <span
+                className={`campusmap__chip${rows.length > 1 ? ' campusmap__chip--stack' : ''}`}
+                style={{ left: chip.x - x, top: chip.y - y }}
+              >
+                {rows.map((r) => (
+                  <span key={r.courseId} className="campusmap__chiprow">
+                    <span className="campusmap__chip-dot" style={{ background: colorsForHue(r.hue).spine }} />
+                    <span className="campusmap__chipcode">{r.courseCode}</span>
+                  </span>
+                ))}
               </span>
             )}
           </div>
         );
       })}
+      {/* The open marker's card, pinned to that marker's dot by the same writer
+          and drawn after every chip. Its own layer rather than a child of the
+          marker: the card holds real controls, and inside the marker their
+          clicks and key presses bubbled into the marker's toggle — pressing
+          "Directions" closed the card on the way to opening the popover. */}
+      {card && placed.some((m) => m.group.key === selectedKey) && (
+        <div className="campusmap__cardlayer" ref={cardEl}>
+          {card}
+        </div>
+      )}
     </div>
   );
 }

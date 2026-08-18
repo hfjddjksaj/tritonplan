@@ -152,23 +152,45 @@ function overlaps(a: Box, b: Box): boolean {
 
 /**
  * Where to put a card of `size` for a marker at `anchor` on a `canvas` whose
- * top `insetTop` px are under the floating header: right-below the dot by
- * default, else left-below, right-above, left-above — the first corner that
- * keeps the card whole on the canvas, below the header and off the zoom
- * buttons. If none does, right-below clamped inside the canvas: the card
- * is never clipped.
+ * top `insetTop` px are under the floating header.
+ *
+ * FIRST CHOICE, when the chip's box is given: exactly where the chip is. The
+ * card is that chip expanded, so it starts from the chip's own corner — the one
+ * nearest the dot — and grows away from the dot. Placing it a fixed gap
+ * below-right of the DOT instead (which is all this function used to do) left a
+ * chip-shaped hole between the dot and the card the moment a card opened, since
+ * the chip it replaces is drawn beside the dot, not under it.
+ *
+ * Then the old corners as fallbacks: right-below the dot, else left-below,
+ * right-above, left-above — the first candidate that keeps the card whole on
+ * the canvas, below the header and off the zoom buttons. If none does,
+ * right-below clamped inside the canvas: the card is never clipped.
  */
 export function cardPlacement(
   anchor: Point,
   size: Size,
   canvas: Size,
   insetTop: number,
+  chip?: { x: number; y: number; w: number; h: number },
 ): { left: number; top: number } {
   const right = anchor.x + GAP;
   const leftOf = anchor.x - GAP - size.w;
   const below = anchor.y + GAP;
   const above = anchor.y - GAP - size.h;
   const candidates = [
+    // Aligned to the chip on whichever axis it stands off the dot, so the card
+    // covers the chip's near edge and grows away from the dot: a chip wholly left
+    // of the dot shares the card's right edge, one wholly above shares its bottom
+    // edge, and anything else (to the right, or centred over the dot as an
+    // above/below chip is) shares its left / top edge.
+    ...(chip
+      ? [
+          {
+            left: chip.x + chip.w <= anchor.x ? chip.x + chip.w - size.w : chip.x,
+            top: chip.y + chip.h <= anchor.y ? chip.y + chip.h - size.h : chip.y,
+          },
+        ]
+      : []),
     { left: right, top: below },
     { left: leftOf, top: below },
     { left: right, top: above },

@@ -53,28 +53,63 @@ export function unlocatedPins(pins: MapPin[]): MapPin[] {
   return pins.filter((p) => p.coords === null);
 }
 
+/** One line of a marker chip: a course that meets in this building. */
+export interface ChipRow {
+  courseId: string;
+  courseCode: string;
+  hue: number;
+}
+
 /**
- * "CSE-8A LEC" for one class here, "CSE-8A +2" when several share the
- * building — the DOM overlay's marker chip and the SVG renderer's chip share
- * this text and its width metrics, so both draw the exact same pill.
+ * What a marker's chip prints: one line per COURSE here, in the order the pins
+ * arrive, and nothing else — no component label, no count.
+ *
+ * The chip used to be a single pill: "CSE-8A LEC" alone, "CSE-8A +4" when the
+ * building carried more. That "+4" was read as a warning rather than a summary
+ * — the natural reading is "four classes it could not draw" — so the chip now
+ * names every course it stands for and the reader never has to guess what the
+ * number was hiding.
+ *
+ * By course, not by pin: a Tue/Thu lecture is two pins, a lecture plus its
+ * discussion in the same room is two more, and two dated sittings of one
+ * midterm are two again — all one line, because they are one course. The rooms
+ * and components are what the card is for.
  */
-export function chipText(pins: readonly MapPin[]): string {
-  const first = pins[0]!;
-  return pins.length === 1 ? `${first.courseCode} ${first.label}` : `${first.courseCode} +${pins.length - 1}`;
+export function chipRows(pins: readonly MapPin[]): ChipRow[] {
+  const out: ChipRow[] = [];
+  const seen = new Set<string>();
+  for (const p of pins) {
+    if (seen.has(p.courseId)) continue;
+    seen.add(p.courseId);
+    out.push({ courseId: p.courseId, courseCode: p.courseCode, hue: p.hue });
+  }
+  return out;
 }
 
 /** Rough chip width per character — good enough for collision avoidance. */
 const CHAR_W = 7.1; // 12 px bold, tracked tight
-export const CHIP_H = 22;
-/** The pill's inner geometry: dot at the left, then the text, with end padding. */
+/** One course line, and the hairline between two of them (mirrors app.css). */
+export const CHIP_ROW_H = 22;
+const CHIP_RULE_H = 1;
+/** The pill's inner geometry: dot at the left, then the code, with end padding. */
 export const CHIP_PAD_L = 8;
 export const CHIP_DOT_R = 4.5;
 const CHIP_DOT_GAP = 6;
 const CHIP_PAD_R = 10;
 export const CHIP_TEXT_X = CHIP_PAD_L + CHIP_DOT_R * 2 + CHIP_DOT_GAP;
 
-export function chipWidth(pins: readonly MapPin[]): number {
-  return CHIP_TEXT_X + chipText(pins).length * CHAR_W + CHIP_PAD_R;
+/**
+ * The chip's box: as wide as its longest course code, as tall as it has
+ * courses. Both the collision pass and the hit test measure it from here, so a
+ * chip is never clickable somewhere it isn't drawn.
+ */
+export function chipSize(pins: readonly MapPin[]): { w: number; h: number } {
+  const rows = chipRows(pins);
+  const longest = rows.reduce((m, r) => Math.max(m, r.courseCode.length), 0);
+  return {
+    w: CHIP_TEXT_X + longest * CHAR_W + CHIP_PAD_R,
+    h: rows.length * CHIP_ROW_H + Math.max(0, rows.length - 1) * CHIP_RULE_H,
+  };
 }
 
 /** Spoken form of a marker: the chip is an abbreviation, this is the whole truth. */
@@ -236,14 +271,19 @@ export function placeLabels(anchors: LabelAnchor[], bounds?: { w: number; h: num
 }
 
 /**
- * A marker as it is actually drawn: its dot at (x, y) in canvas pixels, and its
- * chip's box — `null` for the open marker, whose chip the card stands in for.
+ * A marker as it is actually drawn: its dot at (x, y) in canvas pixels, and the
+ * box its chip occupies beside it, with the side the collision pass put it on.
+ *
+ * The open marker keeps its box like any other, even though its chip is not
+ * drawn (the card takes over that job): the card is placed by growing out of
+ * this box, and holding the slot means opening or closing a card never makes
+ * the neighbouring chips jump to a different side.
  */
 export interface PlacedMarker {
   group: PinGroup;
   x: number;
   y: number;
-  chip: { x: number; y: number; w: number; h: number } | null;
+  chip: { x: number; y: number; w: number; h: number; side: LabelSide };
 }
 
 /**
@@ -265,14 +305,31 @@ export const DOT_HIT_R = 11;
  * function afterwards costs nothing and fixes drag, pinch and wheel in one
  * move; MapLibre only fires `click` when the press was not a drag, so a drag
  * that starts on a chip pans without opening anything.
+ *
+ * `liveDot` exists because the overlay is drawn from a FRESHER camera than this
+ * layout: MapMarkers writes every dot's transform straight from MapLibre's
+ * `move` event, while the layout itself is recomputed on the rAF-throttled tick
+ * and so can be one frame behind. Ask for the dot's position now and the test
+ * matches what the student sees; leave it out and it matches the layout, which
+ * is the same thing whenever the camera is at rest. The chip is measured as an
+ * offset from its dot either way, because that is exactly how it is drawn (a
+ * child of the marker), so it cannot drift from the box it occupies.
  */
-export function hitMarker(placed: readonly PlacedMarker[], x: number, y: number): string | null {
+export function hitMarker(
+  placed: readonly PlacedMarker[],
+  x: number,
+  y: number,
+  liveDot?: (m: PlacedMarker) => { x: number; y: number },
+): string | null {
   // Later markers paint over earlier ones, so search back to front.
   for (let i = placed.length - 1; i >= 0; i--) {
     const m = placed[i]!;
+    const at = liveDot ? liveDot(m) : m;
     const c = m.chip;
-    if (c && x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h) return m.group.key;
-    if (Math.hypot(x - m.x, y - m.y) <= DOT_HIT_R) return m.group.key;
+    const cx = c.x + (at.x - m.x);
+    const cy = c.y + (at.y - m.y);
+    if (x >= cx && x <= cx + c.w && y >= cy && y <= cy + c.h) return m.group.key;
+    if (Math.hypot(x - at.x, y - at.y) <= DOT_HIT_R) return m.group.key;
   }
   return null;
 }

@@ -2709,6 +2709,17 @@ button.termsw__cell:hover {
   height: 0;
   pointer-events: none;
 }
+/* The card's layer: a zero-size box pinned to the open marker's dot, drawn after
+   every marker so the card paints over any chip nearby. Same transform as that
+   marker, written by the same pass — see MapMarkers.tsx. */
+.campusmap__cardlayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
 /* Dot and chip take their course colours inline; only shape lives here.
    __marker--booked needs no rule: booked vs. not is the dot's solid-vs-hollow
    fill, set inline for the same reason. */
@@ -2726,15 +2737,16 @@ button.termsw__cell:hover {
 .campusmap__marker--open .campusmap__dot {
   border-width: 3px;
 }
-/* The chip is a pill in the app's chip language: white, hairline, a dot in the
-   course colour, then the code in ink and the component label muted. */
+/* The chip is a pill in the app's chip language: white, hairline, and one line
+   per course that meets here — a dot in that course's colour, then its code.
+   Two or more lines are ruled off from each other edge to edge, so the padding
+   lives on the ROWS and not on the chip. Row height and rule height are
+   mirrored in map-labels.ts (CHIP_ROW_H): the collision pass and the hit test
+   measure the box from there. */
 .campusmap__chip {
   position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 22px;
-  padding: 0 10px 0 8px;
+  display: flex;
+  flex-direction: column;
   border-radius: 11px;
   background: #fff;
   border: 1px solid var(--line-strong);
@@ -2742,6 +2754,21 @@ button.termsw__cell:hover {
   white-space: nowrap;
   font-size: 12px;
   letter-spacing: -0.01em;
+}
+/* A stack of course lines is a small card, not a pill. */
+.campusmap__chip--stack {
+  border-radius: 9px;
+}
+.campusmap__chiprow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px 0 8px;
+  box-sizing: border-box;
+}
+.campusmap__chiprow + .campusmap__chiprow {
+  border-top: 1px solid var(--line);
 }
 /* Hover comes from the same hit test the click does — :hover cannot match on a
    pointer-transparent element. */
@@ -2757,10 +2784,6 @@ button.termsw__cell:hover {
 .campusmap__chipcode {
   font-weight: 700;
   color: var(--ink);
-}
-.campusmap__chiplabel {
-  font-weight: 600;
-  color: var(--text-muted);
 }
 /* A mouse click must not leave a ring around the dot for as long as the card is
    open; keyboard focus (Tab / Enter) still gets one, on the dot rather than on
@@ -2920,10 +2943,23 @@ button.termsw__cell:hover {
   box-shadow: var(--shadow-md);
 }
 
-/* --- marker card: the open marker's chip, grown into a card --------------- */
+/* --- marker card: the open marker's chip, grown into a card ---------------
+   Positioned relative to its MARKER, not the stage: the card is rendered inside
+   the open marker (MapMarkers.tsx), so left/top are offsets from the dot and the
+   marker's own transform is what keeps them together while the map moves.
+
+   It takes the pointer back, alone in the overlay: the overlay is
+   pointer-events: none so gestures reach the GL canvas, but this card holds a
+   real button, and a Directions button that cannot be pressed is not a button.
+
+   And it grows out of the chip it replaces — `transform-origin` is set inline to
+   the corner nearest the dot, so the animation reads as the chip expanding
+   rather than as a panel appearing somewhere nearby. */
 .campusmap__card {
   position: absolute;
   z-index: 4;
+  pointer-events: auto;
+  animation: campusmap-card-grow 150ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
   min-width: 190px;
   max-width: 340px;
   padding: 9px 10px 11px 13px;
@@ -2934,6 +2970,21 @@ button.termsw__cell:hover {
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-lg);
+}
+@keyframes campusmap-card-grow {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .campusmap__card {
+    animation-duration: 1ms;
+  }
 }
 .campusmap__card-head {
   display: flex;

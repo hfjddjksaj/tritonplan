@@ -74,19 +74,10 @@ export interface MapHandle {
   tick: number;
   /** False after any user-initiated move; true again after `goHome` or the initial fit. */
   atHome: boolean;
-  /** `map.getBounds()` right after the last home fit. */
-  homeBounds: LngLatBox | null;
   goHome(): void;
   zoomIn(): void;
   zoomOut(): void;
   easeCamera(o: { pitch?: number; bearing?: number }): void;
-}
-
-interface BoundsLike {
-  getWest(): number;
-  getSouth(): number;
-  getEast(): number;
-  getNorth(): number;
 }
 
 /**
@@ -96,14 +87,6 @@ interface BoundsLike {
  */
 function boostedHomeZoom(fittedZoom: number, maxZoom: number): number {
   return Math.min(maxZoom, fittedZoom + HOME_ZOOM_BOOST);
-}
-
-/** `map.getBounds()` → the plain `LngLatBox` the rest of the app deals in. */
-function boxOf(b: BoundsLike): LngLatBox {
-  return [
-    [b.getWest(), b.getSouth()],
-    [b.getEast(), b.getNorth()],
-  ];
 }
 
 /**
@@ -122,7 +105,6 @@ export function useMapLibre(
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [atHome, setAtHome] = useState(true);
-  const [homeBounds, setHomeBounds] = useState<LngLatBox | null>(null);
 
   // Latest values for callbacks/effects that must not re-run — or re-create
   // the map — just because a prop object got a fresh identity on some
@@ -273,7 +255,6 @@ export function useMapLibre(
       setReady(false);
       setStalled(false);
       setError(null);
-      setHomeBounds(null);
       setAtHome(true);
       setTick(0);
     };
@@ -289,7 +270,6 @@ export function useMapLibre(
     const cam = map.cameraForBounds(home.bounds, { padding: home.padding });
     if (!cam) return;
     map.jumpTo({ ...cam, zoom: boostedHomeZoom(cam.zoom ?? map.getZoom(), optsRef.current.maxZoom) });
-    setHomeBounds(boxOf(map.getBounds()));
   }, [map, home, ready]);
 
   const goHome = useCallback(() => {
@@ -351,5 +331,5 @@ export function useMapLibre(
     [map, durationMs],
   );
 
-  return { map, ready, stalled, error, tick, atHome, homeBounds, goHome, zoomIn, zoomOut, easeCamera };
+  return { map, ready, stalled, error, tick, atHome, goHome, zoomIn, zoomOut, easeCamera };
 }

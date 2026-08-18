@@ -95,6 +95,29 @@ describe('cardPlacement', () => {
     expect(cardPlacement({ x: 100, y: 100 }, size, canvas, 0)).toEqual({ left: 112, top: 112 });
   });
 
+  // The card IS the chip, expanded, so it starts where the chip was standing —
+  // sharing the edge nearest the dot and growing away from it. Hanging it a fixed
+  // gap below-right of the DOT instead left a chip-shaped hole on screen the
+  // moment a card opened, since the chip it replaces sits beside the dot.
+  it('grows out of the chip when given its box: same near edge, whichever side it is on', () => {
+    const dot = { x: 100, y: 100 };
+    const right = cardPlacement(dot, size, canvas, 0, { x: 112, y: 89, w: 80, h: 22 });
+    expect(right).toEqual({ left: 112, top: 89 }); // shares the chip's left edge
+
+    const left = cardPlacement({ x: 400, y: 100 }, size, canvas, 0, { x: 308, y: 89, w: 80, h: 22 });
+    expect(left).toEqual({ left: 308 + 80 - size.w, top: 89 }); // shares its right edge
+
+    const above = cardPlacement(dot, size, canvas, 0, { x: 60, y: 66, w: 80, h: 22 });
+    expect(above).toEqual({ left: 60, top: 66 + 22 - size.h }); // shares its bottom edge
+  });
+
+  it('falls back to the old corners when the chip-aligned box would not fit', () => {
+    // A chip hard against the right edge: aligning the card to it would run the
+    // card off the canvas, so the dot-relative candidates take over.
+    const p = cardPlacement({ x: 780, y: 100 }, size, canvas, 0, { x: 792, y: 89, w: 60, h: 22 });
+    expect(p.left + size.w).toBeLessThanOrEqual(canvas.w - 8);
+  });
+
   it('flips left of the dot when it would run off the right edge', () => {
     const p = cardPlacement({ x: 700, y: 100 }, size, canvas, 0);
     expect(p.left).toBe(700 - 12 - 200);

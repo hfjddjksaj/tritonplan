@@ -53,7 +53,7 @@ describe('useMapLibre', () => {
     await act(async () => root.unmount());
   });
 
-  it('creates one map, fits home on load, exposes homeBounds and camera helpers', async () => {
+  it('creates one map, fits home on load, exposes the camera helpers', async () => {
     let handle!: MapHandle;
     const root = createRoot(document.body.appendChild(document.createElement('div')));
     await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
@@ -63,7 +63,6 @@ describe('useMapLibre', () => {
     expect(m.opts.minZoom).toBe(13.5); expect(m.opts.attributionControl).toBe(false);
     expect(handle.ready).toBe(true);
     expect(handle.atHome).toBe(true);
-    expect(handle.homeBounds![0][0]).toBeLessThan(-117.235);
     expect(m.getCenter().lng).toBeCloseTo(-117.235, 3);
     // The fake's cameraForBounds always answers zoom 15; the home fit must
     // boost that by HOME_ZOOM_BOOST (the user's "~30% tighter" preference).
@@ -131,15 +130,13 @@ describe('useMapLibre', () => {
     expect(handle.atHome).toBe(true);
 
     // Case 1: home changes (to a box with a different center) while still at
-    // home -> re-fits (new center, new homeBounds).
-    const boundsAfterFirstFit = handle.homeBounds;
+    // home -> re-fits to the new centre.
     const shiftedHome: HomeSpec = {
       bounds: [[-117.24, 32.87], [-117.2, 32.91]],
       padding: HOME.padding,
     };
     await act(async () => setHome(shiftedHome));
     await flush();
-    expect(handle.homeBounds).not.toEqual(boundsAfterFirstFit);
     expect(m.getCenter().lng).toBeCloseTo((-117.24 + -117.2) / 2, 3);
 
     // Case 2: user pans away, then home changes again -> no auto re-fit.
@@ -147,11 +144,9 @@ describe('useMapLibre', () => {
     await flush();
     expect(handle.atHome).toBe(false);
     const centerAfterPan = m.getCenter();
-    const boundsBeforeSecondHomeChange = handle.homeBounds;
     await act(async () => setHome(HOME));
     await flush();
     expect(handle.atHome).toBe(false);
-    expect(handle.homeBounds).toEqual(boundsBeforeSecondHomeChange);
     expect(m.getCenter().lng).toBeCloseTo(centerAfterPan.lng, 5);
 
     await act(async () => root.unmount());

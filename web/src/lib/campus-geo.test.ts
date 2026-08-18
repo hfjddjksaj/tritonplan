@@ -4,6 +4,7 @@ import {
   campusPadding,
   coreBounds,
   coreDistricts,
+  mappedBounds,
   decodeGround,
   decodeRing,
   decodeLines,
@@ -275,5 +276,36 @@ describe('coreBounds', () => {
     expect(w).toBeLessThan(e); expect(s).toBeLessThan(n);
     expect(w).toBeGreaterThan(-117.25); expect(e).toBeLessThan(-117.22);
     expect(s).toBeGreaterThan(32.87); expect(n).toBeLessThan(32.895);
+  });
+
+  // North Campus is out of the framing set: its polygon runs 680 m north of
+  // RIMAC over canyon and playing fields, and because a wide canvas fits this
+  // box by its HEIGHT, that empty band both pushed the fitted camera north of
+  // the teaching core and forced the view wider than it needed to be. What must
+  // not happen is losing the northernmost buildings that do host classes.
+  it('stops at the built-up north end, not out over the canyon', async () => {
+    const [, [, n]] = coreBounds(await loadCampusGeo());
+    expect(n).toBeGreaterThan(32.885); // still takes in ERC and the top of Ridge Walk
+    expect(n).toBeLessThan(32.8875); // and stops short of RIMAC's fields and North Canyon
+  });
+});
+
+describe('mappedBounds', () => {
+  it('covers every district the basemap draws, well past the framed core', async () => {
+    const geo = await loadCampusGeo();
+    const [[mw, ms], [me, mn]] = mappedBounds(geo);
+    const [[cw, cs], [ce, cn]] = coreBounds(geo);
+    expect(mw).toBeLessThan(cw); expect(ms).toBeLessThan(cs);
+    expect(me).toBeGreaterThan(ce); expect(mn).toBeGreaterThan(cn);
+  });
+
+  // This is what "on the map" is decided against, so the two ends of that
+  // decision are worth pinning: Scripps is drawn (a class in Hubbs Hall is a
+  // marker you can pan to), Hillcrest is not on this map at all.
+  it('holds Scripps and not Hillcrest', async () => {
+    const [[w, s], [e, n]] = mappedBounds(await loadCampusGeo());
+    const has = (lat: number, lng: number) => lng >= w && lng <= e && lat >= s && lat <= n;
+    expect(has(32.86743, -117.2534)).toBe(true); // Hubbs Hall, Scripps
+    expect(has(32.755, -117.166)).toBe(false); // 304 Arbor Drive, Hillcrest
   });
 });

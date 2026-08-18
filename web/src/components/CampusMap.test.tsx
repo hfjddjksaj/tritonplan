@@ -110,6 +110,24 @@ function planOffTheMap(): PlanState {
   };
 }
 
+/**
+ * A class at Scripps — Hubbs Hall, a real building the basemap draws, a kilometre
+ * west-south-west of the framed teaching core. The home camera does not open on
+ * it; the map still has the ground under it.
+ */
+function planFarButMapped(): PlanState {
+  const course = courseWithMeeting();
+  const meeting = course.options[0]!.components[0]!.meetings[0]!;
+  meeting.building = 'Hubbs Hall';
+  meeting.room = '4500';
+  meeting.location = 'Hubbs Hall 4500';
+  return {
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: [{ course, selectedOptionId: course.options[0]!.id, color: '231' }],
+  };
+}
+
 /** A fully online lecture: no building, and none was ever expected. */
 function planOnline(): PlanState {
   const course = courseWithMeeting();
@@ -564,6 +582,20 @@ describe('CampusMap', () => {
     expect(container.querySelector('.campusmap__unlocated-list')).toBeNull();
   });
 
+  it('draws a class the opening frame misses, instead of calling it unmapped', async () => {
+    // What "on the map" means is the ground the basemap covers, not whatever the
+    // first frame happened to include. Framing the home view tightly on the
+    // teaching core would otherwise have turned every outlying class — and, on a
+    // phone, most of campus — into "outside the mapped area", about buildings this
+    // map draws and the student can simply pan to.
+    render({ plan: planFarButMapped() });
+    await settle();
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    expect(container.querySelector('.campusmap__count')!.textContent).toBe('1 building');
+    expect(container.querySelector('.campusmap__unlocated-toggle')).toBeNull();
+    expect(container.textContent).not.toContain('outside the mapped area');
+  });
+
   it('says an online class is online rather than calling it unplaceable', async () => {
     render({ plan: planOnline() });
     await settle();
@@ -923,12 +955,15 @@ describe('CampusMap', () => {
   it('Finals: exam chips, date slices, "Filter by date", and the folded summary names the view', async () => {
     render({ plan: planWithFinal() });
     await settle();
-    // Classes view: the Monday lecture is on the map, the final is not.
-    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('LEC');
+    // Classes view: the Monday lecture is on the map, the final is not. Either way
+    // the chip names the course and only the course — one row, no component label
+    // (the card is what says LEC or Final; see the exam-card test below).
+    expect(container.querySelector('.campusmap__chipcode')!.textContent).toBe('CSE-8A');
+    expect(container.querySelectorAll('.campusmap__chiprow')).toHaveLength(1);
     act(() => tabNamed('Finals').click());
     expect(tabNamed('Finals').getAttribute('aria-selected')).toBe('true');
-    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('Final');
     expect(container.querySelector('.campusmap__chipcode')!.textContent).toBe('CSE-8A');
+    expect(container.querySelectorAll('.campusmap__chiprow')).toHaveLength(1);
     expect(sliceButtons().map((b) => b.textContent)).toEqual(['All', 'Dec 09']);
     expect(container.querySelector('.campusmap__slices')!.getAttribute('aria-label')).toBe('Filter by date');
     act(() => sliceButtons()[1]!.click());
@@ -942,10 +977,22 @@ describe('CampusMap', () => {
     act(() => tabNamed('Midterms').click());
     expect(sliceButtons().map((b) => b.textContent)).toEqual(['All', 'Oct 26–Nov 01', 'Nov 09–15']);
     expect(container.querySelector('.campusmap__slices')!.getAttribute('aria-label')).toBe('Filter by week');
-    // Both sittings are in Center Hall: one marker, its chip counts them.
+    // Both sittings are in Center Hall, and both belong to one course: one marker,
+    // one chip row — the chip does not grow with repeat sittings.
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    expect(container.querySelectorAll('.campusmap__chiprow')).toHaveLength(1);
+    // Picking the week of the second sitting leaves only that one on the map, which
+    // the card is where you see: the chip says the course either way.
     act(() => sliceButtons()[2]!.click());
-    expect(container.querySelector('.campusmap__chiplabel')!.textContent).toBe('Midterm 2');
+    act(() => {
+      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect([...container.querySelectorAll('.campusmap__card-rows li')].map((li) => li.textContent)).toEqual([
+      'Midterm 2 · Room 109',
+    ]);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
     act(() => tabNamed('Classes').click());
     expect(container.querySelector('.campusmap__slices')!.getAttribute('aria-label')).toBe('Filter by day');
   });
@@ -991,6 +1038,19 @@ describe('CampusMap', () => {
     expect(card.querySelector('.campusmap__card-place')!.textContent).toBe('York Hall');
     expect(card.querySelector('.campusmap__card-date')!.textContent).toBe('Wed Dec 09');
     expect([...card.querySelectorAll('.campusmap__card-rows li')].map((li) => li.textContent)).toEqual(['Final · Room 2622']);
+  });
+
+  it('Classes opens on All even on a day that has classes — the today rule is for exams', async () => {
+    // The map opened on today's weekday, which quietly hid four fifths of the
+    // plan with nothing on screen saying why. A week is what a class plan IS, so
+    // Classes shows the week; an exam view still opens on the sitting you came for.
+    vi.setSystemTime(new Date(2026, 7, 17, 9)); // Monday — and the fixture's lecture is on Mondays
+    render({ plan: planWithMeeting() });
+    await settle();
+    expect(sliceOn()).toBe('All');
+    // The day tabs still work when the student asks for one.
+    act(() => sliceButtons()[1]!.click());
+    expect(sliceOn()).toBe('Mon');
   });
 
   it('re-runs the today rule when the tab changes: All on Classes, today’s date on Finals', async () => {

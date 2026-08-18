@@ -153,7 +153,10 @@ export interface PinSlices {
   predicate(sliceId: string): (pin: MapPin) => boolean;
 }
 
-const ALL: PinSlice = { id: 'all', label: 'All' };
+/** The id of the "All" slice — the one every view offers, whatever it slices by. */
+export const ALL_SLICE_ID = 'all';
+
+const ALL: PinSlice = { id: ALL_SLICE_ID, label: 'All' };
 
 /**
  * How a view slices its pins — one level below the view's span: Classes span a
