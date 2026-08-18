@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { PlanState } from '@triton/shared';
 import { campusViewport, loadCampusGeo, type CampusGeo } from '../lib/campus-geo';
 import type { Box } from '../lib/map-basemap';
@@ -10,6 +10,7 @@ import { pluralize } from '../lib/format';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useElementHeight, useStageSize } from '../hooks/useStageSize';
+import { useWheelToHorizontal } from '../hooks/useWheelToHorizontal';
 import { CampusMapCanvas, MAX_ZOOM, MIN_ZOOM } from './CampusMapCanvas';
 import { MarkerCard } from './MarkerCard';
 import { BuildingPopover } from './BuildingPopover';
@@ -180,6 +181,25 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
       : defaultSliceId(sliced, scoped, today);
   const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
 
+  // The slice row scrolls sideways when the weeks don't fit the fixed island. A
+  // mouse wheel must drive it (the scrollbar is hidden), and the checked chip must
+  // be in view whenever the selection changes under the student — the today rule
+  // can land on a week far to the right the moment the tab switches.
+  const slicesEl = useRef<HTMLDivElement | null>(null);
+  const wheelRef = useWheelToHorizontal<HTMLDivElement>();
+  const slicesRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      slicesEl.current = el;
+      wheelRef(el);
+    },
+    [wheelRef],
+  );
+  useEffect(() => {
+    slicesEl.current
+      ?.querySelector<HTMLElement>('.calseg__btn--on')
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [sliceId, collapsed]);
+
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
 
   // Split against the fitted frame: a marker outside it is not on the map the student
@@ -322,7 +342,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
               calendarLabel="Classes"
               ariaLabel="Map views"
             />
-            <div className="calseg campusmap__slices" role="radiogroup" aria-label={sliceAria}>
+            <div ref={slicesRef} className="calseg campusmap__slices" role="radiogroup" aria-label={sliceAria}>
               {slices.map((s) => (
                 <button
                   key={s.id}

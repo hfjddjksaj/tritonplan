@@ -721,6 +721,22 @@ describe('CampusMap', () => {
     expect(container.textContent).toContain('CSE-8A Midterm 2 — no room listed in TSS yet');
   });
 
+  it('a vertical wheel over the slice row scrolls it sideways (mouse users have no other way in)', async () => {
+    render({ plan: planWithMidterms() });
+    await settle();
+    act(() => tabNamed('Midterms').click());
+    const row = container.querySelector('.campusmap__slices') as HTMLDivElement;
+    // jsdom lays nothing out; give the row an overflow to scroll.
+    Object.defineProperty(row, 'scrollWidth', { value: 420, configurable: true });
+    Object.defineProperty(row, 'clientWidth', { value: 316, configurable: true });
+    const consumed = !row.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true }));
+    expect(consumed).toBe(true);
+    expect(row.scrollLeft).toBe(40);
+    // A sideways gesture is the browser's own business.
+    const passed = row.dispatchEvent(new WheelEvent('wheel', { deltaX: 30, deltaY: 5, bubbles: true, cancelable: true }));
+    expect(passed).toBe(true);
+  });
+
   it('the no-room copy names the view: classes, midterms, finals', async () => {
     const course = courseWithMeeting();
     const meeting = course.options[0]!.components[0]!.meetings[0]!;
