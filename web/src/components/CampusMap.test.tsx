@@ -610,6 +610,34 @@ describe('CampusMap', () => {
     expect(container.querySelector('.campusmap__loading')).toBeNull();
   });
 
+  it('still names the sittings TSS has not roomed when the map never starts', async () => {
+    // The centred "No rooms from TSS yet" island lives inside the ready branch, so
+    // in the WebGL fallback it cannot render — and the fallback's own list only
+    // names LOCATED buildings. If the flag that suppresses the bottom-left island
+    // were not tied to that branch, a Midterms view whose sittings TSS hasn't
+    // roomed would explain itself nowhere at all.
+    FakeMap.autoLoad = false;
+    render({ plan: planWithUnroomedMidterms(), initialView: 'midterms' });
+    await settleConstructed();
+    // Same reasoning one step earlier: while the map is still loading there is no
+    // home frame either, and the island must already be speaking.
+    expect(container.querySelector('.campusmap__loading')).not.toBeNull();
+    expect(container.querySelector('.campusmap__noroom-toggle')).not.toBeNull();
+    await act(async () => {
+      FakeMap.instances[0]!.fire('error', { error: new Error('WebGL2 unavailable') });
+    });
+    expect(container.querySelector('.campusmap__nogl')).not.toBeNull();
+    // Not the centred island — it is not in the branch that rendered.
+    expect(container.querySelector('.campusmap__empty--noroom')).toBeNull();
+    // So the bottom-left island has to take over.
+    const pill = container.querySelector('.campusmap__noroom-toggle') as HTMLButtonElement;
+    expect(pill).not.toBeNull();
+    expect(pill.textContent).toContain('2 without a room yet');
+    act(() => pill.click());
+    expect(container.textContent).toContain('CSE-8A Midterm 1 — no room listed in TSS yet');
+    expect(container.textContent).toContain('CSE-8A Midterm 2 — no room listed in TSS yet');
+  });
+
   it('keeps a loaded map — and its markers and controls — through a recoverable error', async () => {
     // A glyph, sprite or source failure arrives on the very same `error` event as
     // a fatal one. Swapping a working map for the no-WebGL panel over one 404

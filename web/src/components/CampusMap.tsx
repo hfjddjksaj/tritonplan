@@ -326,12 +326,21 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const emptyCopy = bookedOnlyHidesEverything
     ? 'Booked only is on and nothing here is booked yet. Turn it off to see every course in your plan.'
     : onCanvas.length === 0 && unplaced.length > 0
-      ? 'Nothing here lands on the mapped part of campus — the list at the bottom-left has where these classes actually meet.'
+      ? `Nothing here lands on the mapped part of campus — the list at the bottom-left has where these ${viewNoun} actually meet.`
       : onCanvas.length === 0 && noRoom.length === 0
         ? emptyViewCopy
         : null;
   // Nothing placed and nothing else to point at: TSS simply hasn't listed rooms yet.
-  const noRoomEmpty = !emptyCopy && onCanvas.length === 0 && noRoom.length > 0;
+  //
+  // Gated on `gl.ready` because this island is drawn INSIDE the ternary's third
+  // branch, while the bottom-left list it stands in for sits outside and hides
+  // itself whenever this is true. Without the gate the two cancel out exactly
+  // where the map is least able to speak for itself: with no camera there is no
+  // home frame, so `onCanvas` is empty by construction, and a view whose only
+  // absence is roomless sittings would suppress the island it cannot render AND
+  // the list that would have named them. (`mapUnusable` implies `!gl.ready`, so
+  // this one flag covers the WebGL fallback and the loading pane alike.)
+  const noRoomEmpty = gl.ready && !emptyCopy && onCanvas.length === 0 && noRoom.length > 0;
 
   const cluster = (
     <div className="campusmap__cluster">
@@ -462,7 +471,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
         {mapUnusable ? (
           <div className="campusmap__nogl" role="status">
             <p>
-              The campus map needs WebGL, which this browser has turned off. Where your classes
+              The campus map needs WebGL, which this browser has turned off. Where your {viewNoun}
               meet:
             </p>
             <ul>
