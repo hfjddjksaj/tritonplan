@@ -61,11 +61,32 @@ describe('roadLabelText / wantsRoadLabel', () => {
 });
 
 describe('buildingShortName', () => {
-  it('shortens stock words and refuses addresses and very long names', () => {
+  it('shortens stock words and refuses only the genuinely unreadable names', () => {
     expect(buildingShortName('Cognitive Science Building')).toBe('Cognitive Science Bldg');
     expect(buildingShortName('Applied Physics and Mathematics')).toBe('Applied Physics & Mathematics');
-    expect(buildingShortName('9500 Gilman Drive')).toBeNull();
     expect(buildingShortName('Sanders Hall')).toBe('Sanders Hall'); // "and" inside a word survives
-    expect(buildingShortName('Joan and Irwin Jacobs Center for La Jolla Playhouse')).toBeNull();
+    // 46 characters exactly — at the cap, not over it, so it is kept.
+    expect(buildingShortName('Joan and Irwin Jacobs Center for La Jolla Playhouse')).toBe(
+      'Joan & Irwin Jacobs Ctr for La Jolla Playhouse',
+    );
+    // 77 characters after abbreviation — genuinely too long for the map at any zoom.
+    expect(
+      buildingShortName('Robert Paine Scripps Forum for Science Society & the Environment - Auditorium'),
+    ).toBeNull();
+  });
+
+  it('reads an address-style name as its address instead of a blank grey block', () => {
+    // The old digit guard dropped these; the ruling is to abbreviate them like
+    // any other name (street words included) rather than blank them.
+    expect(buildingShortName('9500 Gilman Drive')).toBe('9500 Gilman Dr');
+    expect(buildingShortName('134 Dickinson')).toBe('134 Dickinson');
+  });
+
+  it('keeps a name between the old 30-char cap and the new 46-char cap', () => {
+    // 34 characters after abbreviation — dropped under the old cap of 30,
+    // recovered by the raised cap of 46.
+    expect(buildingShortName('Applied Physics and Mathematics Building')).toBe(
+      'Applied Physics & Mathematics Bldg',
+    );
   });
 });

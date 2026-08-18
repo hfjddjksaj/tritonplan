@@ -152,9 +152,15 @@ export function wantsRoadLabel(line: CampusLine): boolean {
 
 /* ------------------------------------------------------- building names */
 
-/** The stock words of a building name, shortened the way campus signage does. */
+/**
+ * The stock words of a building name, shortened the way campus signage does.
+ * Also runs the road {@link ABBREVIATIONS} (Drive→Dr, Street→St, North→N, …):
+ * a building whose official name is a street address (e.g. "9500 Gilman
+ * Drive", "134 Dickinson") needs the same shortening a road label gets, or it
+ * never fits the map at any zoom.
+ */
 export function abbreviateBuildingWords(name: string): string {
-  return name
+  let out = name
     .replace(/\bBuilding\b/g, 'Bldg')
     .replace(/\bLaboratory\b/g, 'Lab')
     .replace(/\bLaboratories\b/g, 'Labs')
@@ -165,12 +171,22 @@ export function abbreviateBuildingWords(name: string): string {
     .replace(/\bParking Structure\b/g, 'Parking')
     .replace(/\band\b/g, '&')
     .replace(/^The\s+/, '');
+  for (const [re, abbr] of ABBREVIATIONS) out = out.replace(re, abbr);
+  return out;
 }
 
-/** Footprint names too generic or too long to help; shortened where a stock word allows. */
+/**
+ * Footprint names too long to help, shortened where a stock word allows. Used
+ * to be null for any name starting with a digit (meant to filter street
+ * addresses like "9500 Gilman Drive"), but that also blanked real buildings
+ * whose official name simply starts with a number ("134 Dickinson", "64
+ * Degrees") — a building whose name *is* its address should read as that
+ * address rather than an unnamed grey block, so there is no address guard
+ * here any more.
+ */
 export function buildingShortName(name: string): string | null {
-  if (!name || /^\d/.test(name)) return null; // street addresses, e.g. "9500 Gilman Drive"
+  if (!name) return null;
   const out = abbreviateBuildingWords(name);
-  if (out.length > 30) return null;
+  if (out.length > 46) return null;
   return out;
 }

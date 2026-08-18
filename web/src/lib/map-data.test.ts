@@ -35,9 +35,18 @@ describe('buildSources', () => {
     expect(s.labels.features.find((f) => f.properties.label === 'Geisel Library' && f.properties.kind === 'landmark')).toBeDefined();
     expect(s.labels.features.find((f) => f.properties.kind === 'building' && f.properties.label === 'Geisel Library')).toBeUndefined();
   });
-  it('drops street-address footprints from the building names', async () => {
+  it('labels street-address footprints instead of leaving them a blank grey block', async () => {
+    // Fix 3's ruling: a building whose official name is its address (e.g.
+    // "134 Dickinson") reads as that address rather than getting dropped —
+    // the old digit guard used to blank all of these.
     const s = buildSources(await loadCampusGeo(), await loadCampusMap());
-    expect(s.labels.features.some((f) => f.properties.kind === 'building' && /^\d/.test(f.properties.label))).toBe(false);
+    const addressLabels = s.labels.features.filter(
+      (f) => f.properties.kind === 'building' && /^\d/.test(f.properties.label),
+    );
+    expect(addressLabels.length).toBeGreaterThan(0);
+    expect(
+      s.labels.features.some((f) => f.properties.kind === 'building' && f.properties.label === '134 Dickinson'),
+    ).toBe(true);
   });
 });
 
