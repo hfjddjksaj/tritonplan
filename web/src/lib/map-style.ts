@@ -220,9 +220,11 @@ export function applyHosts(map: StyleTarget, groups: readonly PinGroup[]): void 
 }
 
 /**
- * Switch between the flat 2D look and the extruded 3D look. Trees stay
- * visible (and `trees-3d` stays hidden) in both modes until Task 14 swaps in
- * billboarded tree models.
+ * Switch between the flat 2D look and the extruded 3D look: flat fills and
+ * circles give way to extrusions and billboards, and 3D gets real terrain when
+ * the DEM is bundled. Everything the map draws in one mode has a counterpart in
+ * the other, so this is a set of visibility flips rather than a style reload —
+ * the camera keeps its position and nothing re-tiles.
  */
 export function applyMode(map: StyleTarget, mode: MapMode, terrain = false): void {
   const flat = mode === '2d' ? 'visible' : 'none';
@@ -236,8 +238,9 @@ export function applyMode(map: StyleTarget, mode: MapMode, terrain = false): voi
   map.setLayoutProperty(LAYER.buildings3d, 'visibility', extruded);
   map.setLayoutProperty(LAYER.hosts3d, 'visibility', extruded);
 
-  map.setLayoutProperty(LAYER.trees, 'visibility', 'visible');
-  map.setLayoutProperty(LAYER.trees3d, 'visibility', 'none');
+  // Flat circles from above, billboards once the camera stands up.
+  map.setLayoutProperty(LAYER.trees, 'visibility', flat);
+  map.setLayoutProperty(LAYER.trees3d, 'visibility', extruded);
 
   map.setTerrain?.(mode === '3d' && terrain ? { source: TERRAIN_SOURCE, exaggeration: 1.2 } : null);
 }
@@ -285,6 +288,24 @@ const BUILDING_LINE_WIDTH: ExpressionSpecification = [
   0.3,
   17,
   0.8,
+] as ExpressionSpecification;
+
+/**
+ * The billboard sprite id 3D trees draw with. `tree-sprite.ts` makes the pixels;
+ * `CampusMap` hands them to `map.addImage` once the map is up — a style can name
+ * an image that does not exist yet, so the layer simply draws nothing until then.
+ */
+export const TREE_ICON = 'tree';
+
+/** Billboard scale, on the same class-and-zoom ramp as the flat circles' radius. */
+const TREE_ICON_SIZE: ExpressionSpecification = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  15,
+  ['*', 0.12, ['+', ['get', 'cls'], 1]],
+  18,
+  ['*', 0.45, ['+', ['get', 'cls'], 1]],
 ] as ExpressionSpecification;
 
 const TREE_RADIUS: ExpressionSpecification = [
@@ -464,13 +485,28 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
         'circle-radius': TREE_RADIUS,
       },
     },
-    // Phase 3 replaces this placeholder with billboarded tree models.
+    // 12b. trees-3d — the same 2,856 points as the layer above, standing up.
+    // Only 3D shows it (`applyMode`), because a billboard seen from straight
+    // overhead is a sticker; and only from z15, where the flat circles start too.
+    // Viewport alignment on both axes is what makes it a billboard rather than a
+    // decal: it stays upright and facing the camera through pitch and rotation.
+    // Overlap allowed — a canopy hidden because another canopy claimed the space
+    // is a hole in a wood, not a decluttered label.
     {
       id: LAYER.trees3d,
-      type: 'circle',
+      type: 'symbol',
       source: LAYER.trees,
-      layout: { visibility: 'none' },
-      paint: { 'circle-color': MAP_PALETTE.tree },
+      minzoom: 15,
+      layout: {
+        visibility: 'none',
+        'icon-image': TREE_ICON,
+        'icon-anchor': 'bottom',
+        'icon-pitch-alignment': 'viewport',
+        'icon-rotation-alignment': 'viewport',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-size': TREE_ICON_SIZE,
+      },
     },
     // 13. road-names
     // Mixed case, not uppercase: the user chose the official UCSD map's

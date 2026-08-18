@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildStyle, hostFilter, hostFill, hostLine, applyHosts, applyMode, GROUND_COLORS, LAYER, MAP_FONT_REGULAR, MAP_FONT_BOLD, assetBase, TERRAIN_SOURCE, TERRAIN_BOUNDS, TERRAIN_MINZOOM, TERRAIN_MAXZOOM, type StyleTarget } from './map-style';
+import { buildStyle, hostFilter, hostFill, hostLine, applyHosts, applyMode, GROUND_COLORS, LAYER, MAP_FONT_REGULAR, MAP_FONT_BOLD, assetBase, TREE_ICON, TERRAIN_SOURCE, TERRAIN_BOUNDS, TERRAIN_MINZOOM, TERRAIN_MAXZOOM, type StyleTarget } from './map-style';
 import { buildSources } from './map-data';
 import { loadCampusGeo, loadCampusMap } from './campus-geo';
 import { colorsForHue } from './colors';
@@ -165,8 +165,8 @@ describe('hosts', () => {
       [LAYER.hostsLine]: 'none',
       [LAYER.buildings3d]: 'visible',
       [LAYER.hosts3d]: 'visible',
-      [LAYER.trees]: 'visible',
-      [LAYER.trees3d]: 'none',
+      [LAYER.trees]: 'none',
+      [LAYER.trees3d]: 'visible',
     });
   });
   it('applyMode(_, "2d") sets the EXACT set of visibility flips the brief lists', () => {
@@ -185,6 +185,24 @@ describe('hosts', () => {
       [LAYER.trees3d]: 'none',
     });
   });
+  it('draws 3D trees as viewport-aligned billboards on the same points as the flat circles', async () => {
+    const style = buildStyle({ sources: buildSources(await loadCampusGeo(), await loadCampusMap()), assetBase: 'https://example.test/app/' });
+    const layer = style.layers.find((l) => l.id === LAYER.trees3d)!;
+    expect(layer.type).toBe('symbol');
+    expect((layer as { source: string }).source).toBe(LAYER.trees);
+    const layout = (layer as { layout: Record<string, unknown> }).layout;
+    expect(layout['icon-image']).toBe(TREE_ICON);
+    // A billboard, not a decal: upright and facing the camera at any pitch or bearing.
+    expect(layout['icon-pitch-alignment']).toBe('viewport');
+    expect(layout['icon-rotation-alignment']).toBe('viewport');
+    // Anchored at its foot, so the trunk meets the ground at the tree's own point.
+    expect(layout['icon-anchor']).toBe('bottom');
+    // A canopy dropped because a neighbour claimed the space is a hole in a wood.
+    expect(layout['icon-allow-overlap']).toBe(true);
+    expect(layout.visibility).toBe('none'); // 3D turns it on; see applyMode
+    expect((layer as { minzoom: number }).minzoom).toBe(15);
+  });
+
   it('applyMode(_, "3d", true) asks maplibre for the documented terrain source and exaggeration', () => {
     const map = new FakeMap({});
     applyMode(map, '3d', true);

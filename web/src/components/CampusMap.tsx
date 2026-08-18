@@ -11,7 +11,8 @@ import {
   type CampusMapData,
 } from '../lib/campus-geo';
 import { buildSources } from '../lib/map-data';
-import { applyHosts, applyMode, assetBase, buildStyle, CAMERA, type MapMode } from '../lib/map-style';
+import { applyHosts, applyMode, assetBase, buildStyle, CAMERA, TREE_ICON, type MapMode } from '../lib/map-style';
+import { treeSprite } from '../lib/tree-sprite';
 import {
   ALL_SLICE_ID,
   defaultSliceId,
@@ -372,6 +373,15 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   useEffect(() => {
     if (gl.ready && gl.map) applyMode(gl.map, mode, true);
   }, [gl.ready, gl.map, mode]);
+  // The 3D trees' billboard, computed rather than downloaded (tree-sprite.ts) and
+  // handed over once the map exists — a style may NAME an image before it has one,
+  // so `trees-3d` simply draws nothing until this lands. Guarded on `hasImage`
+  // because StrictMode runs every effect twice and MapLibre throws on a duplicate.
+  useEffect(() => {
+    if (gl.ready && gl.map && !gl.map.hasImage(TREE_ICON)) {
+      gl.map.addImage(TREE_ICON, treeSprite(), { pixelRatio: 2 });
+    }
+  }, [gl.ready, gl.map]);
   // Not fatal is not the same as not worth knowing: a map that renders but lost
   // its labels or a texture says so here, and nowhere else.
   useEffect(() => {

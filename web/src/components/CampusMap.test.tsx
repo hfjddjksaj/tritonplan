@@ -974,6 +974,22 @@ describe('CampusMap', () => {
     expect(map.calls).toContainEqual({ method: 'setLayoutProperty', args: ['buildings', 'visibility', 'visible'] });
   });
 
+  it('hands the map its tree billboard once, and only once', async () => {
+    // The sprite is computed, not fetched (tree-sprite.ts), and `trees-3d` names
+    // it before it exists — so this is the step that makes 3D trees appear at
+    // all. Once: MapLibre throws on a duplicate image id, and StrictMode runs
+    // every effect twice in development.
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const adds = map.calls.filter((c) => c.method === 'addImage' && c.args[0] === 'tree');
+    expect(adds).toHaveLength(1);
+    expect(adds[0]!.args[2]).toEqual({ pixelRatio: 2 });
+    const img = adds[0]!.args[1] as { width: number; height: number; data: Uint8ClampedArray };
+    expect(img.width).toBe(img.height);
+    expect(img.data.length).toBe(img.width * img.height * 4);
+  });
+
   it('the compass follows the bearing, and in 3D resets north WITHOUT flattening the map', async () => {
     render({ plan: planWithMeeting() });
     await settle();
