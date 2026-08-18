@@ -13,14 +13,15 @@
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { rdp, encodeRing, encodeShape, vertexCount, queryAll, GEO_SCALE } from './geo-encode.mjs';
+import { rdp, encodeRing, encodeShape, vertexCount, queryAll, GEO_SCALE, pointInRing, centroid, centroidInsideAny } from './geo-encode.mjs';
 
 const today = new Date().toISOString().slice(0, 10);
 
 /* ---------------------------------------------------------------------------
  * Building footprints (layer 1 of UCSD's Buildings_Public service) + named
- * campus districts. Simplified and delta-encoded so the whole basemap bundles
- * small (roads included).
+ * campus districts. Unsimplified (RDP eps 0) and delta-encoded at GEO_SCALE
+ * (~0.11 m) — the map draws to z19, where 1 screen pixel is ≈ 0.25 m, so any
+ * coarser tolerance visibly bevels corners and collapses narrow wings.
  * ------------------------------------------------------------------------- */
 
 const FOOTPRINTS =
@@ -64,11 +65,34 @@ const mainRing = boundaryRings.slice().sort((a, b) => ringAreaDeg(b) - ringAreaD
 const bbox = mainRing.reduce((b, [x, y]) => [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)], [Infinity, Infinity, -Infinity, -Infinity]);
 const envelope = { geometry: bbox.join(','), geometryType: 'esriGeometryEnvelope', inSR: '4326', spatialRel: 'esriSpatialRelIntersects' };
 
-const groundFeats = await queryAll(GROUND, { ...envelope, outFields: 'Type', returnGeometry: 'true', geometryPrecision: '6', maxAllowableOffset: '0.000005' });
+// No `maxAllowableOffset` (that was 0.000005° ≈ 0.55 m of server-side
+// generalisation) and `geometryPrecision: '7'` instead of '6': the raw layer
+// returns ~7419 rings where the generalised query returned ~5066.
+const groundFeats = await queryAll(GROUND, { ...envelope, outFields: 'Type', returnGeometry: 'true', geometryPrecision: '7' });
 const groundTypes = [...new Set(groundFeats.map((f) => (f.attributes.Type ?? '').trim()))].filter((t) => t && !GROUND_SKIP.has(t)).sort();
-const ground = groundFeats
+
+// Fix — one building geometry, not two: the ground layer's own `Building`
+// polygons are the same buildings the footprints layer already carries,
+// surveyed twice through different generalisation pipelines (outlines
+// disagree by 1–2 m). Both get painted the identical grey, but only the
+// footprint gets a visible outline, so the ground duplicate bleeds out from
+// under it and fills the gap between neighbouring buildings. Drop a ground
+// `Building` polygon only when its centroid actually falls inside a
+// footprint ring — the ~34 that don't (real structures the footprint layer
+// is missing) survive as the only ground `Building` polygons left.
+const isDuplicateGroundBuilding = (f) => {
+  if ((f.attributes.Type ?? '').trim() !== 'Building') return false;
+  const ring = f.geometry?.rings?.[0];
+  if (!ring || ring.length < 3) return false;
+  return centroidInsideAny(ring, rawFootprints);
+};
+const groundDupes = groundFeats.filter(isDuplicateGroundBuilding);
+const dedupedGroundFeats = groundFeats.filter((f) => !isDuplicateGroundBuilding(f));
+const survivingGroundBuildings = dedupedGroundFeats.filter((f) => (f.attributes.Type ?? '').trim() === 'Building').length;
+
+const ground = dedupedGroundFeats
   .filter((f) => f.geometry?.rings?.length && groundTypes.includes((f.attributes.Type ?? '').trim()))
-  .map((f) => [groundTypes.indexOf(f.attributes.Type.trim()), f.geometry.rings.map((r) => encodeRing(r, 0.75))]);
+  .map((f) => [groundTypes.indexOf(f.attributes.Type.trim()), f.geometry.rings.map((r) => encodeRing(r, 0))]);
 
 const treeFeats = await queryAll(TREES, { ...envelope, outFields: 'height', returnGeometry: 'true', geometryPrecision: '6' });
 // Official height buckets (feet): 4–15, 15–27, 27–38, 38–60, 60–132.
@@ -89,8 +113,8 @@ for (const f of b3d) {
   const zs = (f.geometry?.rings ?? []).flat().map((p) => p[2]).filter((z) => typeof z === 'number');
   if (zs.length) heightById.set(f.attributes.OBJECTID, Math.round((Math.max(...zs) - Math.min(...zs)) * 0.3048));
 }
-const pointInRing = (x, y, ring) => { let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const [xi, yi] = ring[i], [xj, yj] = ring[j]; if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside; } return inside; };
-const centroid = (ring) => ring.reduce((a, [x, y]) => [a[0] + x / ring.length, a[1] + y / ring.length], [0, 0]);
+// pointInRing / centroid are imported from geo-encode.mjs (shared with the
+// ground-Building dedup above) rather than redefined here.
 function heightFor(footprintRings) {
   const [cx, cy] = centroid(footprintRings[0]);
   for (const f of b3dFoot) if ((f.geometry?.rings ?? []).some((r) => pointInRing(cx, cy, r))) return heightById.get(f.attributes.OBJECTID) ?? null;
@@ -121,8 +145,11 @@ if (footprints.length < 550 || footprints.length > 700)
   throw new Error(`footprint count out of band: ${footprints.length} (expected ~609)`);
 if (districts.length < 20 || districts.length > 40)
   throw new Error(`district count out of band: ${districts.length} (expected ~25)`);
-if (fpVerts < 8000 || fpVerts > 16000)
-  throw new Error(`footprint vertex count out of band: ${fpVerts} (expected ~10800)`);
+// Unsimplified (RDP eps 0), so this jumped from ~10800 to ~27647 — measured
+// against the raw ArcGIS footprint layer, ±30% band per the drift-guard
+// doctrine above.
+if (fpVerts < 19000 || fpVerts > 36000)
+  throw new Error(`footprint vertex count out of band: ${fpVerts} (expected ~27647)`);
 
 const named = new Map(rawFootprints.map((s) => [s.name, s]));
 const tiogaH = heightFor(named.get('Tioga Hall').rings);
@@ -131,11 +158,18 @@ const withHeight = footprints.filter((f) => f.length === 3).length;
 if (withHeight < 350) throw new Error(`only ${withHeight} footprints got a height (expected ~450+)`);
 // For the controller to judge whether any other landmark needs a HEIGHT_OVERRIDES entry.
 const missingHeight = footprints.filter((f) => f.length === 2).map((f) => f[0]).sort();
-// Band widened from the spec's 8000–14000 estimate: the live envelope-clipped
-// query (after dropping GROUND_SKIP curb/gutter types) returns ~5066 features,
-// not ~11000 — observed value ±25%, per the drift-guard doctrine (not a spec).
-if (ground.length < 3800 || ground.length > 6400) throw new Error(`ground polygon count out of band: ${ground.length}`);
+// Dropping `maxAllowableOffset` (was 0.55 m of server-side generalisation)
+// raised the raw feature count well past the old 3800–6400 band; after the
+// ground-Building dedup above this landed at ~4756 — ±30% band, per the
+// drift-guard doctrine (not a spec).
+if (ground.length < 3300 || ground.length > 6200) throw new Error(`ground polygon count out of band: ${ground.length} (expected ~4756)`);
 if (trees.length / 3 < 2000 || trees.length / 3 > 4000) throw new Error(`tree count out of band: ${trees.length / 3}`);
+// The footprint layer has 609 buildings; the ground layer's own `Building`
+// polygons duplicate almost all of them (a second survey, disagreeing by
+// 1-2 m) — measured 33 orphans with no matching footprint, ±30% band.
+if (survivingGroundBuildings < 23 || survivingGroundBuildings > 43)
+  throw new Error(`ground-Building survivor count out of band: ${survivingGroundBuildings} (expected ~33, i.e. real structures the footprint layer is missing)`);
+console.log(`Ground-Building dedup: dropped ${groundDupes.length} duplicates of a footprint, kept ${survivingGroundBuildings} orphans (of ${groundFeats.filter((f) => (f.attributes.Type ?? '').trim() === 'Building').length} raw ground Building polygons).`);
 
 footprints.sort((a, b) => a[0].localeCompare(b[0]));
 districts.sort((a, b) => a[0].localeCompare(b[0]));
@@ -241,7 +275,7 @@ const isClosedRing = (pts) =>
   pts.length > 3 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1];
 const landuse = allWays
   .filter((w) => landuseKind(w.tags) && isClosedRing(w.pts))
-  .map((w) => [landuseKind(w.tags), [encodeRing(w.pts, 2)]]);
+  .map((w) => [landuseKind(w.tags), [encodeRing(w.pts, 0)]]);
 const ways = allWays.filter((w) => w.kind !== null);
 
 // A walkway that carries a road's name is that road's sidewalk — drop it.
@@ -324,7 +358,7 @@ function encodeLine({ name, kind, pts }, eps) {
 
 const KIND_ORDER = { coast: 0, hwy: 1, major: 2, minor: 3, walk: 4 };
 const lines = mergedLines
-  .map((l) => encodeLine(l, l.kind === 'coast' ? 3 : 1.5))
+  .map((l) => encodeLine(l, 0))
   .filter(([, , w]) => w.length >= 4)
   .sort((a, b) => KIND_ORDER[a[1]] - KIND_ORDER[b[1]] || a[0].localeCompare(b[0]));
 
@@ -332,8 +366,10 @@ const lineVerts = lines.reduce((n, [, , w]) => n + w.length / 2, 0);
 const coastCount = lines.filter(([, k]) => k === 'coast').length;
 if (lines.length < 150 || lines.length > 900)
   throw new Error(`OSM line count out of band: ${lines.length} (expected ~240)`);
-if (lineVerts < 1500 || lineVerts > 12000)
-  throw new Error(`OSM vertex count out of band: ${lineVerts} (expected ~2700)`);
+// Unsimplified (RDP eps 0), so this jumped from ~2700 to ~6404 — ±30% band,
+// per the drift-guard doctrine (not a spec).
+if (lineVerts < 4400 || lineVerts > 8400)
+  throw new Error(`OSM vertex count out of band: ${lineVerts} (expected ~6404)`);
 if (coastCount !== 1)
   throw new Error(`expected exactly one coastline chain, got ${coastCount}`);
 for (const must of [
@@ -372,12 +408,16 @@ console.log(
 
 /* ---------------------------------------------------------------------------
  * ucsd-campus-map.json: ground surfaces, trees, campus boundary, OSM land use.
- * Size budget: ≤ 350 KB gzipped. If this trips, first raise the ground RDP
- * tolerance in the `encodeRing(r, 0.75)` call above to 1 m, then drop the
- * `Gravel`, `Mulch` and `Rock` ground types from `groundTypes`/`ground`.
+ * No RDP simplification (`encodeRing(r, 0)`) — the map draws to z19, where
+ * one screen pixel is ≈ 0.25 m, so anything less than the source geometry
+ * bevels right angles and collapses narrow wings into slivers. This is
+ * deliberately bigger than the file's earlier size targets; the user has
+ * accepted that cost, so do NOT reintroduce simplification (or drop ground
+ * types) to shrink it back down. The console line below just reports the
+ * size — it is no longer a pass/fail budget.
  * ------------------------------------------------------------------------- */
 
-const mapOut = { source: `${CAMPUS_MAP} (layers 21, 24, 15) + ${BUILDINGS_3D} + OpenStreetMap (© OpenStreetMap contributors, ODbL)`, fetched: today, groundTypes, ground, trees, boundary: [encodeRing(mainRing, 1)], landuse };
+const mapOut = { source: `${CAMPUS_MAP} (layers 21, 24, 15) + ${BUILDINGS_3D} + OpenStreetMap (© OpenStreetMap contributors, ODbL)`, fetched: today, groundTypes, ground, trees, boundary: [encodeRing(mainRing, 0)], landuse };
 const mapDest = fileURLToPath(new URL('../src/data/ucsd-campus-map.json', import.meta.url));
 const mapJson = JSON.stringify(mapOut);
 await writeFile(mapDest, mapJson);
@@ -389,7 +429,4 @@ console.log(
   `Wrote ${ground.length} ground polygons (${groundVerts} verts, ${groundTypes.length} types: ${groundTypes.join(', ')}) + ` +
     `${trees.length / 3} trees + ${landuse.length} land-use polygons + boundary to ${mapDest}`,
 );
-console.log(
-  `  ${mapBytes} bytes / ${mapGzip} bytes gzipped (budget: 358400 bytes / 350 KB gzipped)` +
-    (mapGzip > 358400 ? ' — OVER BUDGET' : ''),
-);
+console.log(`  ${mapBytes} bytes / ${mapGzip} bytes gzipped`);
