@@ -19,7 +19,8 @@ const today = new Date().toISOString().slice(0, 10);
 
 /* ---------------------------------------------------------------------------
  * Building footprints (layer 1 of UCSD's Buildings_Public service) + named
- * campus districts. RDP-simplified at the default 0.25 m and delta-encoded
+ * campus districts. RDP-simplified at 0.25 m (explicit at every call site in
+ * this file, see the comment above `footprintsRaw` below) and delta-encoded
  * at GEO_SCALE (~0.11 m) — the user's own precision/payload trade-off: the
  * map draws to z19, where 1 screen pixel is ≈ 0.25 m, so the combined
  * worst-case deviation (≈ 0.3 m, see geo-encode.mjs) stays under 1.2 px,
@@ -98,11 +99,21 @@ const survivingGroundBuildings = dedupedGroundFeats.filter((f) => (f.attributes.
 
 // encodeRing drops a ring that quantised down to fewer than 3 distinct
 // vertices (`[]`); filter those out ring-by-ring, then drop any ground
-// polygon whose rings all degenerated (nothing left to draw).
-const ground = dedupedGroundFeats
+// polygon whose rings all degenerated (nothing left to draw). A ring dropped
+// out of a polygon that keeps other rings used to be silent — see the
+// ring-drop guard below (with the footprint/district equivalents) for why
+// that matters and what counts it into `droppedGroundRings`.
+const groundEncoded = dedupedGroundFeats
   .filter((f) => f.geometry?.rings?.length && groundTypes.includes((f.attributes.Type ?? '').trim()))
-  .map((f) => [groundTypes.indexOf(f.attributes.Type.trim()), f.geometry.rings.map((r) => encodeRing(r, 0.25)).filter((r) => r.length > 0)])
-  .filter(([, rings]) => rings.length > 0);
+  .map((f) => ({
+    entry: [groundTypes.indexOf(f.attributes.Type.trim()), f.geometry.rings.map((r) => encodeRing(r, 0.25)).filter((r) => r.length > 0)],
+    rawRingCount: f.geometry.rings.length,
+  }));
+const ground = groundEncoded.filter((g) => g.entry[1].length > 0).map((g) => g.entry);
+const droppedGroundRings = groundEncoded.reduce(
+  (n, g) => (g.entry[1].length > 0 ? n + (g.rawRingCount - g.entry[1].length) : n),
+  0,
+);
 
 const treeFeats = await queryAll(TREES, { ...envelope, outFields: 'height', returnGeometry: 'true', geometryPrecision: '6' });
 // Official height buckets (feet): 4–15, 15–27, 27–38, 38–60, 60–132.
@@ -140,12 +151,16 @@ function heightFor(footprintRings) {
 // real 3D height is never replaced.
 const HEIGHT_OVERRIDES = { 'Geisel Library': 34 }; // the extrusion layer omits buildings the official scene renders as detailed meshes; ≈8 storeys — measured value, not from the data
 
+// 0.25 passed explicitly (matching every other encodeRing/encodeShape call
+// site below) even though it equals encodeRing's own default — so a future
+// change to that default can't silently move footprints/districts without
+// also touching this file.
 const footprintsRaw = rawFootprints.map((s) => {
   const h = heightFor(s.rings) ?? HEIGHT_OVERRIDES[s.name] ?? null;
-  const e = encodeShape(s);
+  const e = encodeShape(s, 0.25);
   return h && h >= 3 && h <= 120 ? [...e, h] : e;
 });
-const districtsRaw = rawDistricts.map((s) => encodeShape(s));
+const districtsRaw = rawDistricts.map((s) => encodeShape(s, 0.25));
 
 // encodeShape drops a ring that quantised to fewer than 3 distinct vertices
 // after RDP. Round 1 assumed a real building/district is always far bigger
@@ -172,15 +187,43 @@ if (droppedFootprints.length || droppedDistricts.length)
       `${droppedDistricts.length} degenerate district(s) [${droppedDistricts.join(', ')}] — too small to render after RDP+quantisation.`,
   );
 
+// A ring dropped from a shape/polygon that still has other rings left is a
+// DIFFERENT failure mode from the whole-shape drops just above: an inner
+// ring is a hole (a courtyard), not a sliver of a lone building. Today every
+// such drop is a sub-0.25 m sliver ring, so nothing renders wrong — but if
+// an upstream change ever shaped a real hollow building, its hole would
+// vanish into a filled polygon with nothing logged and nothing to fail on.
+// Counted across footprints, districts and ground (`droppedGroundRings`,
+// computed above) — the only three collections where a shape can carry more
+// than one ring and so survive losing one. Landuse and the campus boundary
+// are each encoded as exactly one ring per shape, so a degenerate ring there
+// is definitionally a whole-shape drop already; OSM lines have no rings at
+// all. Capped the same way the whole-shape drops above are.
+const ringDropsIn = (raws, encoded) =>
+  raws.reduce((n, s, i) => (encoded[i][1].length > 0 ? n + (s.rings.length - encoded[i][1].length) : n), 0);
+const droppedFootprintRings = ringDropsIn(rawFootprints, footprintsRaw);
+const droppedDistrictRings = ringDropsIn(rawDistricts, districtsRaw);
+const droppedRings = droppedFootprintRings + droppedDistrictRings + droppedGroundRings;
+// Drift guard: printed at ~489 this run (1 footprint + 1 district + ~486
+// ground rings), ±30% per this file's usual band convention.
+if (droppedRings > 636)
+  throw new Error(`too many degenerate rings dropped from surviving shapes/polygons (${droppedRings}, expected ~489)`);
+if (droppedRings)
+  console.log(
+    `Dropped ${droppedRings} degenerate ring(s) from otherwise-surviving shapes/polygons ` +
+      `(footprints: ${droppedFootprintRings}, districts: ${droppedDistrictRings}, ground: ${droppedGroundRings}) — ` +
+      `too small to render after RDP+quantisation (an inner ring here would be a hole, not a sliver).`,
+  );
+
 const fpVerts = vertexCount(footprints);
 
 // Drift guard, same doctrine as ambiguousKeyCount(): if the upstream layer is
 // reshaped, fail loudly here instead of shipping a mutilated basemap.
 if (footprints.length < 550 || footprints.length > 700)
-  throw new Error(`footprint count out of band: ${footprints.length} (expected ~609)`);
+  throw new Error(`footprint count out of band: ${footprints.length} (expected ~608)`);
 if (districts.length < 20 || districts.length > 40)
   throw new Error(`district count out of band: ${districts.length} (expected ~25)`);
-// RDP simplification is back (default epsM 0.25, the user's precision/
+// RDP simplification is back (epsM 0.25, the user's precision/
 // payload trade-off) — this fell from ~26202 (round 1's eps-0 figure) to
 // ~15090. ±30% band per the drift-guard doctrine above.
 if (fpVerts < 10560 || fpVerts > 19620)
