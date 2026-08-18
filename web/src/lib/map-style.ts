@@ -125,6 +125,22 @@ export const CAMERA = {
   mode2d: { pitch: 0, bearing: 0 },
 } as const;
 
+/**
+ * How much tighter the home view fits than the core box's own
+ * `cameraForBounds` answer — a framing *preference* the user asked for
+ * ("too far out"), not a value derived from anything about the campus or the
+ * canvas. Applied as `cam.zoom + HOME_ZOOM_BOOST` (raising the fitted zoom)
+ * rather than shrinking the core bounds box: the core box is tall while the
+ * desktop canvas is wide, so the fit is already letterboxed on one axis, and
+ * shrinking the box would distort that relationship differently on a wide
+ * canvas than a tall one. `log2(1.3)` is exactly 30% linear magnification —
+ * on both axes, regardless of the canvas's aspect ratio — whatever zoom
+ * `cameraForBounds` lands on. Callers must still clamp the result to
+ * `CAMERA.maxZoom` themselves (a small enough canvas could otherwise push
+ * past it).
+ */
+export const HOME_ZOOM_BOOST = Math.log2(1.3);
+
 export interface StyleOptions {
   sources: MapSources;
   assetBase: string;

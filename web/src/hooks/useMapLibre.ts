@@ -16,6 +16,7 @@ import { Map as MapLibreMap, ScaleControl } from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
 import type { LngLatBox } from '../lib/campus-geo';
 import { configureMapWorker } from '../lib/map-worker';
+import { HOME_ZOOM_BOOST } from '../lib/map-style';
 
 /** The campus-core box the map homes to, plus the padding to fit it with. */
 export interface HomeSpec {
@@ -86,6 +87,15 @@ interface BoundsLike {
   getSouth(): number;
   getEast(): number;
   getNorth(): number;
+}
+
+/**
+ * Applies the {@link HOME_ZOOM_BOOST} framing preference to whatever
+ * `cameraForBounds` answered, clamped so a small enough canvas can never
+ * push the home view past `maxZoom`.
+ */
+function boostedHomeZoom(fittedZoom: number, maxZoom: number): number {
+  return Math.min(maxZoom, fittedZoom + HOME_ZOOM_BOOST);
 }
 
 /** `map.getBounds()` → the plain `LngLatBox` the rest of the app deals in. */
@@ -278,7 +288,7 @@ export function useMapLibre(
     if (!atHomeRef.current) return;
     const cam = map.cameraForBounds(home.bounds, { padding: home.padding });
     if (!cam) return;
-    map.jumpTo(cam);
+    map.jumpTo({ ...cam, zoom: boostedHomeZoom(cam.zoom ?? map.getZoom(), optsRef.current.maxZoom) });
     setHomeBounds(boxOf(map.getBounds()));
   }, [map, home, ready]);
 
@@ -289,8 +299,18 @@ export function useMapLibre(
     // `cameraForBounds` answers centre/zoom/bearing and says nothing about
     // pitch, so a tilted map used to stay tilted through "Reset view" — the
     // student had no way back to flat at all (QA I3). "Reset" means the view
-    // the map opened on, and that view is flat and north-up.
-    if (cam) map.easeTo({ ...cam, bearing: 0, pitch: 0, duration: durationMs() });
+    // the map opened on, and that view is flat and north-up — and, since the
+    // fit-on-load effect above boosts the same `cameraForBounds` answer,
+    // "Reset" has to boost it too, or it would land the camera on a WIDER
+    // view than the one the map actually opened on.
+    if (cam)
+      map.easeTo({
+        ...cam,
+        zoom: boostedHomeZoom(cam.zoom ?? map.getZoom(), optsRef.current.maxZoom),
+        bearing: 0,
+        pitch: 0,
+        duration: durationMs(),
+      });
     targetZoom.current = null;
     setAtHome(true);
   }, [map, durationMs]);

@@ -5,6 +5,7 @@ import { FakeMap, fakeMapLibreModule, workerUrls } from '../test/fake-maplibre';
 import { MAP_WORKER_URL } from '../lib/map-worker';
 vi.mock('maplibre-gl', () => fakeMapLibreModule);
 import { useMapLibre, MAP_LOAD_TIMEOUT_MS, type MapHandle, type HomeSpec } from './useMapLibre';
+import { HOME_ZOOM_BOOST } from '../lib/map-style';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const STYLE = { version: 8 as const, sources: {}, layers: [] };
@@ -64,6 +65,9 @@ describe('useMapLibre', () => {
     expect(handle.atHome).toBe(true);
     expect(handle.homeBounds![0][0]).toBeLessThan(-117.235);
     expect(m.getCenter().lng).toBeCloseTo(-117.235, 3);
+    // The fake's cameraForBounds always answers zoom 15; the home fit must
+    // boost that by HOME_ZOOM_BOOST (the user's "~30% tighter" preference).
+    expect(m.getZoom()).toBeCloseTo(15 + HOME_ZOOM_BOOST, 6);
     const tickBefore = handle.tick;
     await act(async () => { m.simulateUserPan(0.01, 0); });
     await flush();
@@ -73,8 +77,12 @@ describe('useMapLibre', () => {
     await flush();
     expect(handle.atHome).toBe(true);
     expect(m.getCenter().lng).toBeCloseTo(-117.235, 3);
+    // goHome ("Reset view") must land on the SAME boosted zoom the initial
+    // fit did — reset means the view the map opened on, not the wider,
+    // unboosted cameraForBounds answer.
+    expect(m.getZoom()).toBeCloseTo(15 + HOME_ZOOM_BOOST, 6);
     await act(async () => handle.zoomIn());
-    expect(m.getZoom()).toBe(16);
+    expect(m.getZoom()).toBeCloseTo(16 + HOME_ZOOM_BOOST, 6);
     expect(handle.atHome).toBe(false);
     await act(async () => root.unmount());
     expect(m.removed).toBe(true);
