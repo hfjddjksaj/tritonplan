@@ -52,6 +52,22 @@ describe('buildStyle', () => {
     const landmark = s.layers.find((l) => l.id === LAYER.landmarkNames)!.layout as Record<string, unknown>;
     expect(layout['text-size']).toBeLessThan(landmark['text-size'] as number);
   });
+  it('draws road names in mixed case, the user’s preference over uppercase', async () => {
+    // Reverses this plan's original Ruling 10 (uppercase) — the user's own
+    // call, made after seeing the official UCSD map's mixed-case labels.
+    // Pinned so a revert to uppercase is a failing test, not a quiet
+    // regression nobody sees until the next browser pass.
+    const s = buildStyle({ sources: buildSources(await loadCampusGeo(), await loadCampusMap()), assetBase: '/' });
+    const layout = s.layers.find((l) => l.id === LAYER.roadNames)!.layout as Record<string, unknown>;
+    expect(layout['text-transform']).not.toBe('uppercase');
+    // 0.12 em was uppercase tracking; unchanged on mixed case it reads as
+    // broken gaps between letters, so it must have come down with the case.
+    expect(layout['text-letter-spacing']).toBeLessThan(0.05);
+    // district-names is a different layer with its own tracking (0.08 em) —
+    // this change must not have touched it.
+    const district = s.layers.find((l) => l.id === LAYER.districtNames)!.layout as Record<string, unknown>;
+    expect(district['text-letter-spacing']).toBe(0.08);
+  });
   it('pins the spec palette-table anchor colours exactly, and both Pool/Fountain spellings alike', () => {
     // Anchors named directly, row by row, in the spec §1 palette table.
     expect(GROUND_COLORS['Grass']).toBe('#D4E5B9');

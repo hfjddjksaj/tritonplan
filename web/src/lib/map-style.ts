@@ -437,6 +437,12 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
       paint: { 'circle-color': MAP_PALETTE.tree },
     },
     // 13. road-names
+    // Mixed case, not uppercase: the user chose the official UCSD map's
+    // mixed-case road labels (reverses this plan's original Ruling 10 —
+    // their call, stands). 0.12 em tracking was sized for uppercase letters,
+    // which need the extra air between them; on mixed case it reads as
+    // broken-looking gaps, so it drops to 0.02 em, the same light tracking a
+    // mixed-case road sign typically gets.
     {
       id: LAYER.roadNames,
       type: 'symbol',
@@ -448,8 +454,7 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
         'text-field': ['get', 'label'] as ExpressionSpecification,
         'text-font': [MAP_FONT_REGULAR],
         'text-size': 11,
-        'text-transform': 'uppercase',
-        'text-letter-spacing': 0.12,
+        'text-letter-spacing': 0.02,
         'text-max-angle': 30,
       },
       paint: { 'text-color': MAP_PALETTE.textRoad, 'text-halo-color': MAP_PALETTE.halo, 'text-halo-width': 1.2 },
