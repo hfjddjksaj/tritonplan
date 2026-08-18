@@ -86,7 +86,7 @@ export function markerLabel(g: PinGroup): string {
 }
 
 /** Whether a projected point lands inside the drawn canvas. */
-function inside(x: number, y: number, w: number, h: number): boolean {
+export function inside(x: number, y: number, w: number, h: number): boolean {
   return x >= 0 && x <= w && y >= 0 && y <= h;
 }
 

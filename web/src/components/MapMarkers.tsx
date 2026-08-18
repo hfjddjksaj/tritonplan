@@ -16,7 +16,7 @@
 import { useMemo } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { colorsForHue } from '../lib/colors';
-import { CHIP_H, chipWidth, markerLabel, placeLabels, type PinGroup } from '../lib/map-labels';
+import { CHIP_H, chipWidth, inside, markerLabel, placeLabels, type PinGroup } from '../lib/map-labels';
 
 interface Props {
   map: MapLibreMap | null;
@@ -26,10 +26,6 @@ interface Props {
   bounds: { w: number; h: number };
   selectedKey: string | null;
   onSelect: (key: string | null) => void;
-}
-
-function inside(x: number, y: number, w: number, h: number): boolean {
-  return x >= 0 && x <= w && y >= 0 && y <= h;
 }
 
 export function MapMarkers({ map, tick, groups, bounds, selectedKey, onSelect }: Props): JSX.Element | null {

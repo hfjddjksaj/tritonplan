@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { FakeMap } from '../test/fake-maplibre';
 import type { PinGroup } from '../lib/map-labels';
 import type { MapPin } from '../lib/map-pins';
+import { colorsForHue } from '../lib/colors';
 import { MapMarkers } from './MapMarkers';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -15,6 +16,25 @@ const group = (key: string, lng: number, lat: number, place: string, pins: MapPi
 const CENTER_HALL = group('a', -117.2374, 32.8781, 'Center Hall', [pin('CSE-8A', 'LEC')]);
 const YORK = group('b', -117.2405, 32.8748, 'York Hall', [pin('MUS-1', 'LEC', 12), pin('MUS-1', 'DI', 12)]);
 const HILLCREST = group('c', -117.166, 32.755, '304 Arbor Drive', [pin('MED-100', 'LEC')]);
+
+/**
+ * Mirrors `FakeMap.project` exactly (same expression, same evaluation order),
+ * so the result is bit-identical to what the component's `map.project()` call
+ * produces — an independent oracle for the marker's `translate()`, not a call
+ * into the same collaborator the component uses.
+ */
+const expectedProject = (lng: number, lat: number, center: [number, number], zoom: number) => {
+  const s = (256 * 2 ** zoom) / 360;
+  return { x: (lng - center[0]) * s + FakeMap.size.w / 2, y: (center[1] - lat) * s + FakeMap.size.h / 2 };
+};
+
+/** jsdom normalizes an inline `background` colour (e.g. hsl() -> rgb()) on the way
+ *  into `style`, so compare against the same round-trip rather than the raw string. */
+const cssColor = (v: string) => {
+  const el = document.createElement('div');
+  el.style.background = v;
+  return el.style.background;
+};
 
 describe('MapMarkers', () => {
   let container: HTMLDivElement;
@@ -74,11 +94,33 @@ describe('MapMarkers', () => {
   });
 
   it('re-projects when tick changes after the map moved', async () => {
-    await render({ tick: 0 });
-    const before = (container.querySelector('.campusmap__marker') as HTMLElement).style.transform;
+    // Same `groups` reference across both renders, so `groups`' identity can't
+    // be what forces the memo to recompute — `tick` has to carry that weight
+    // on its own, or this test would pass even with `tick` dropped from the
+    // memo's dependency array.
+    const groups = [CENTER_HALL, YORK, HILLCREST];
+    const marker = () => container.querySelector('.campusmap__marker') as HTMLElement;
+
+    await render({ tick: 0, groups });
+    const before = expectedProject(CENTER_HALL.lng, CENTER_HALL.lat, [-117.235, 32.88], 15);
+    expect(marker().style.transform).toBe(`translate(${before.x}px, ${before.y}px)`);
+
     map.jumpTo({ center: [-117.24, 32.88], zoom: 15 });
-    await render({ tick: 1 });
-    const after = (container.querySelector('.campusmap__marker') as HTMLElement).style.transform;
-    expect(after).not.toBe(before);
+    await render({ tick: 1, groups });
+    const after = expectedProject(CENTER_HALL.lng, CENTER_HALL.lat, [-117.24, 32.88], 15);
+    expect(marker().style.transform).toBe(`translate(${after.x}px, ${after.y}px)`);
+  });
+
+  it('fills the dot from the course colour when booked, marks the marker --booked; plain white otherwise', async () => {
+    const bookedGroup = group('a', CENTER_HALL.lng, CENTER_HALL.lat, 'Center Hall', [pin('CSE-8A', 'LEC', 231, true)]);
+    await render({ groups: [bookedGroup, YORK, HILLCREST] });
+
+    const booked = container.querySelector('.campusmap__marker--booked') as HTMLElement;
+    expect(booked).not.toBeNull();
+    expect((booked.querySelector('.campusmap__dot') as HTMLElement).style.background).toBe(cssColor(colorsForHue(231).spine));
+
+    const unbooked = container.querySelector('.campusmap__marker:not(.campusmap__marker--booked)') as HTMLElement;
+    expect(unbooked).not.toBeNull();
+    expect((unbooked.querySelector('.campusmap__dot') as HTMLElement).style.background).toBe(cssColor('#fff'));
   });
 });
