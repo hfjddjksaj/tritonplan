@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildStyle, hostFilter, hostFill, hostLine, applyHosts, applyMode, GROUND_COLORS, LAYER, MAP_FONT_REGULAR, MAP_FONT_BOLD, assetBase, TREE_ICON, TERRAIN_SOURCE, TERRAIN_BOUNDS, TERRAIN_MINZOOM, TERRAIN_MAXZOOM, type StyleTarget } from './map-style';
+import { buildStyle, hostFilter, hostFill, hostFill3d, hostLine, applyHosts, applyMode, GROUND_COLORS, LAYER, MAP_PALETTE, MAP_FONT_REGULAR, MAP_FONT_BOLD, assetBase, TREE_ICON, TERRAIN_SOURCE, TERRAIN_BOUNDS, TERRAIN_MINZOOM, TERRAIN_MAXZOOM, type StyleTarget } from './map-style';
 import { buildSources } from './map-data';
 import { loadCampusGeo, loadCampusMap } from './campus-geo';
 import { colorsForHue } from './colors';
@@ -141,6 +141,23 @@ describe('hosts', () => {
       map.calls.find((c) => c.method === 'setPaintProperty' && c.args[0] === id && c.args[1] === prop)?.args[2];
     expect(paintValue(LAYER.hosts, 'fill-color')).toEqual(hostFill(gs));
     expect(paintValue(LAYER.hostsLine, 'line-color')).toEqual(hostLine(gs));
+    // The extrusion takes the SATURATED colour, not the flat wash — see below.
+    expect(paintValue(LAYER.hosts3d, 'fill-extrusion-color')).toEqual(hostFill3d(gs));
+  });
+
+  it('paints extruded hosts in the course spine colour, because the flat wash goes white when it is lit', () => {
+    // Browser QA, 3D at home zoom: with the 2D fill (`hsl(h 68% 96.5%)`) on the
+    // extrusion, the student's own building was one more white block among grey
+    // ones — an outline identifies a host in 2D, and an extrusion has no outline.
+    const gs = [
+      { key: 'a', lat: 0, lng: 0, place: 'York Hall', pins: [{ hue: 231 }] },
+    ] as unknown as PinGroup[];
+    const flat = hostFill(gs) as unknown[];
+    const solid = hostFill3d(gs) as unknown[];
+    expect(solid).not.toEqual(flat);
+    expect(solid).toContain(colorsForHue(231).spine);
+    // With nothing booked it must not tint every building on campus.
+    expect(hostFill3d([])).toBe(MAP_PALETTE.building3d);
   });
   it('applyMode flips visibility between the flat and extruded building layers', () => {
     const calls: unknown[][] = [];

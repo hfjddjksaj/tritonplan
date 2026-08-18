@@ -188,6 +188,26 @@ export function hostFill(groups: readonly PinGroup[]): ExpressionSpecification |
   return match as ExpressionSpecification;
 }
 
+/**
+ * The host colour for EXTRUSIONS, which is not the flat one.
+ *
+ * In 2D a host building is a pale wash with a saturated outline, and the outline
+ * is what actually identifies it. An extrusion has no outline, and MapLibre
+ * shades its faces by light angle — so the pale wash (`hsl(h 68% 96.5%)`) came
+ * out white, and in 3D the student's own building was indistinguishable from the
+ * grey blocks around it, which is precisely when picking it out matters most.
+ * This uses the course's spine colour instead: the same colour as its pin dot
+ * and its chip, so "mine is the blue one" needs no explaining.
+ */
+export function hostFill3d(groups: readonly PinGroup[]): ExpressionSpecification | string {
+  const pairs = hostNamesAndHues(groups);
+  if (pairs.length === 0) return MAP_PALETTE.building3d;
+  const match: unknown[] = ['match', ['get', 'name']];
+  for (const [name, hue] of pairs) match.push(name, colorsForHue(hue).spine);
+  match.push(MAP_PALETTE.building3d);
+  return match as ExpressionSpecification;
+}
+
 /** Same as {@link hostFill} but keyed to each course's spine colour, for outlines. */
 export function hostLine(groups: readonly PinGroup[]): ExpressionSpecification | string {
   const pairs = hostNamesAndHues(groups);
@@ -216,7 +236,7 @@ export function applyHosts(map: StyleTarget, groups: readonly PinGroup[]): void 
   map.setFilter(LAYER.hostsLine, filter);
   map.setPaintProperty(LAYER.hostsLine, 'line-color', line);
   map.setFilter(LAYER.hosts3d, filter);
-  map.setPaintProperty(LAYER.hosts3d, 'fill-extrusion-color', fill);
+  map.setPaintProperty(LAYER.hosts3d, 'fill-extrusion-color', hostFill3d(groups));
 }
 
 /**
