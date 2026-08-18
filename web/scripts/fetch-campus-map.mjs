@@ -204,10 +204,12 @@ const ringDropsIn = (raws, encoded) =>
 const droppedFootprintRings = ringDropsIn(rawFootprints, footprintsRaw);
 const droppedDistrictRings = ringDropsIn(rawDistricts, districtsRaw);
 const droppedRings = droppedFootprintRings + droppedDistrictRings + droppedGroundRings;
-// Drift guard: printed at ~489 this run (1 footprint + 1 district + ~486
-// ground rings), ±30% per this file's usual band convention.
-if (droppedRings > 636)
-  throw new Error(`too many degenerate rings dropped from surviving shapes/polygons (${droppedRings}, expected ~489)`);
+// Drift guard: printed at 359 this run (2 footprints + 1 district + 356
+// ground rings), capped at ~1.3x per this file's usual band convention —
+// no lower bound, same as the whole-shape caps above, since fewer drops
+// than expected is cleaner data, not drift.
+if (droppedRings > 467)
+  throw new Error(`too many degenerate rings dropped from surviving shapes/polygons (${droppedRings}, expected ~359)`);
 if (droppedRings)
   console.log(
     `Dropped ${droppedRings} degenerate ring(s) from otherwise-surviving shapes/polygons ` +
