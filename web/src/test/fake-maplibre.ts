@@ -35,7 +35,16 @@ export class FakeMap {
    * by `reset()`, so a test that flips it cannot leak into the next.
    */
   static autoLoad = true;
-  static reset() { FakeMap.instances = []; FakeMap.autoLoad = true; }
+  /**
+   * How far an animated `easeTo` gets before the test looks. 1 = it lands and
+   * fires `moveend`, which is what every test that does not care wants. Set
+   * below 1 to model an ease still IN FLIGHT: the camera sits part-way there and
+   * no `moveend` comes, which is the state a second zoom-button click used to
+   * read its starting zoom from (QA M2). Only applies when a duration was asked
+   * for — `reduceMotion` callers pass 0 and always land.
+   */
+  static easeProgress = 1;
+  static reset() { FakeMap.instances = []; FakeMap.autoLoad = true; FakeMap.easeProgress = 1; }
 
   readonly opts: Record<string, unknown>;
   calls: { method: string; args: unknown[] }[] = [];
@@ -84,9 +93,32 @@ export class FakeMap {
     return this;
   }
   jumpTo(o: Partial<FakeCamera>) { return this.move(o); }
-  easeTo(o: Partial<FakeCamera> & { duration?: number }) { const { duration: _d, ...cam } = o; return this.move(cam); }
+  /** Every camera target `easeTo` was asked for, in order — what was REQUESTED, not what landed. */
+  easeRequests: (Partial<FakeCamera> & { duration?: number })[] = [];
+  easeTo(o: Partial<FakeCamera> & { duration?: number }) {
+    this.easeRequests.push(o);
+    const { duration = 0, ...cam } = o;
+    if (duration > 0 && FakeMap.easeProgress < 1) {
+      const p = FakeMap.easeProgress;
+      const partial = { ...cam };
+      if (typeof cam.zoom === 'number') partial.zoom = this.cam.zoom + (cam.zoom - this.cam.zoom) * p;
+      this.cam = { ...this.cam, ...partial };
+      this.fire('movestart', {}); this.fire('move', {}); // no moveend: still animating
+      return this;
+    }
+    return this.move(cam);
+  }
   zoomIn() { return this.move({ zoom: this.cam.zoom + 1 }); }
   zoomOut() { return this.move({ zoom: this.cam.zoom - 1 }); }
+  /**
+   * What a click on the GL canvas looks like from the outside. Real MapLibre
+   * always carries `point` (canvas-relative pixels) and only fires `click` when
+   * the press was not a drag; the app hit-tests markers against that point, so a
+   * fake click without one is not a click.
+   */
+  simulateMapClick(x: number, y: number) { return this.fire('click', { point: { x, y } }); }
+  /** Pointer motion over the canvas — drives the hover/cursor hit test. */
+  simulateMapMouseMove(x: number, y: number) { return this.fire('mousemove', { point: { x, y } }); }
   /** What a user drag looks like from the outside: a move that carries an originalEvent. */
   simulateUserPan(dLng: number, dLat: number) {
     return this.move({ center: [this.cam.center[0] + dLng, this.cam.center[1] + dLat] }, { originalEvent: new Event('pointermove') });

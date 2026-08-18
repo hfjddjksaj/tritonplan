@@ -6,6 +6,7 @@ import { makePlan } from '../lib/fixtures';
 import { FakeMap, fakeMapLibreModule } from '../test/fake-maplibre';
 vi.mock('maplibre-gl', () => fakeMapLibreModule);
 import { CampusMap } from './CampusMap';
+import { MAP_LOAD_TIMEOUT_MS } from '../hooks/useMapLibre';
 
 /**
  * A course whose lecture meets in a real, matchable UCSD building — mirrors
@@ -408,7 +409,7 @@ describe('CampusMap', () => {
 
     // A click on the map background closes it, and the chip comes back.
     act(() => {
-      FakeMap.instances[0]!.fire('click', {});
+      FakeMap.instances[0]!.simulateMapClick(0, 0);
     });
     expect(container.querySelector('.campusmap__card')).toBeNull();
     expect(container.querySelector('.campusmap__chip')).not.toBeNull();
@@ -482,7 +483,8 @@ describe('CampusMap', () => {
     // Phase 1 wires it to "put north back up"; Phase 2 makes it spin with the bearing.
     const compass = cluster.querySelector('.campusmap__compass') as HTMLButtonElement;
     expect(compass.tagName).toBe('BUTTON');
-    expect(compass.getAttribute('aria-label')).toBe('Reset north');
+    // Bearing AND pitch: the compass is the only way back to a flat map (QA I3).
+    expect(compass.getAttribute('aria-label')).toBe('Reset north and tilt');
   });
 
   it('explains a booked-only-hidden plan instead of claiming there is nothing to place', async () => {
@@ -663,6 +665,139 @@ describe('CampusMap', () => {
     warn.mockRestore();
   });
 
+  it('opens a card from a click on the CANVAS, because the markers no longer take the pointer', async () => {
+    // QA I1. The marker overlay is a sibling of the GL canvas, so while the
+    // markers were `pointer-events: auto` a press on a chip or a dot never
+    // reached MapLibre at all: the map did not pan, did not zoom, and no card
+    // opened either. They are transparent now, and this is the path a real
+    // mouse takes — MapLibre's own click, hit-tested against the drawn chips.
+    // (MapLibre does not fire `click` after a drag, so a drag STARTED on a chip
+    // pans and opens nothing; that half is the library's, and is verified in a
+    // real browser rather than here.)
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const marker = container.querySelector('.campusmap__marker') as HTMLElement;
+    const [x, y] = marker.style.transform.match(/[0-9.]+/g)!.map(Number);
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+
+    await act(async () => map.simulateMapClick(Number(x), Number(y)));
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+
+    // ...and its chip is a target too, not just the 15 px dot.
+    await act(async () => map.simulateMapClick(0, 0));
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+    const chip = container.querySelector('.campusmap__chip') as HTMLElement;
+    const chipX = Number(x) + parseFloat(chip.style.left) + 4;
+    const chipY = Number(y) + parseFloat(chip.style.top) + 4;
+    await act(async () => map.simulateMapClick(chipX, chipY));
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+  });
+
+  it('lights the hovered marker and the canvas cursor from the same hit test', async () => {
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const marker = container.querySelector('.campusmap__marker') as HTMLElement;
+    const [x, y] = marker.style.transform.match(/[0-9.]+/g)!.map(Number);
+    expect(container.querySelector('.campusmap__gl')!.classList.contains('is-over-marker')).toBe(false);
+    await act(async () => map.simulateMapMouseMove(Number(x), Number(y)));
+    expect(container.querySelector('.campusmap__gl')!.classList.contains('is-over-marker')).toBe(true);
+    expect(container.querySelector('.campusmap__marker--hover')).not.toBeNull();
+    await act(async () => map.simulateMapMouseMove(0, 0));
+    expect(container.querySelector('.campusmap__gl')!.classList.contains('is-over-marker')).toBe(false);
+    expect(container.querySelector('.campusmap__marker--hover')).toBeNull();
+  });
+
+  it('hides the open card once its dot pans off the canvas, and brings it back when the dot returns', async () => {
+    // QA I2: the card used to outlive its marker — `project()` kept answering
+    // off-screen coordinates and `cardPlacement` clamped them back inside, so it
+    // parked in a corner over open ocean with no dot and no way to relate it to
+    // anything. Hidden rather than closed: the card IS the marker's chip, so
+    // panning past it and back must not have thrown the selection away.
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const marker = container.querySelector('.campusmap__marker') as HTMLElement;
+    const [x, y] = marker.style.transform.match(/[0-9.]+/g)!.map(Number);
+    await act(async () => map.simulateMapClick(Number(x), Number(y)));
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+
+    await act(async () => map.simulateUserPan(1, 0)); // a degree of longitude: far off screen
+    await settle();
+    expect(container.querySelector('.campusmap__marker')).toBeNull();
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+
+    await act(async () => map.simulateUserPan(-1, 0));
+    await settle();
+    expect(container.querySelector('.campusmap__marker')).not.toBeNull();
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+  });
+
+  it('falls back to the building list when the map never finishes starting, error or no error', async () => {
+    // QA C3. Neither a 404'd worker chunk nor a container the CSS cascade
+    // collapsed to zero height produces a MapLibre `error`, so `gl.error` stays
+    // null and the WebGL fallback never fires — the student watched
+    // "Loading campus…" forever with a clean console. This is the other way in.
+    // The suite's own fake clock only fakes Date (so the "today" slice is
+    // stable); the load timer needs setTimeout faked too, and its own pump.
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    vi.setSystemTime(new Date(2026, 7, 16, 12));
+    const tick = async (ms: number) => {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+    };
+    FakeMap.autoLoad = false;
+    render({ plan: planWithMeeting() });
+    for (let i = 0; i < 40 && FakeMap.instances.length === 0; i++) await tick(20);
+    expect(FakeMap.instances.length).toBeGreaterThan(0);
+    expect(container.querySelector('.campusmap__loading')).not.toBeNull();
+    expect(container.querySelector('.campusmap__nogl')).toBeNull();
+
+    await tick(MAP_LOAD_TIMEOUT_MS + 10);
+    const nogl = container.querySelector('.campusmap__nogl');
+    expect(nogl).not.toBeNull();
+    expect(container.querySelector('.campusmap__loading')).toBeNull();
+    // Not the WebGL sentence — nothing here says the browser turned anything off.
+    expect(nogl!.textContent).toContain('The campus map didn’t load');
+    expect(nogl!.textContent).not.toContain('WebGL');
+    // It still names every building it would have drawn.
+    expect(nogl!.textContent).toContain('Center Hall');
+  });
+
+  it('makes the planner behind the overlay unreachable while the map is open, and gives itself focus', async () => {
+    // QA I4: `aria-modal="true"` with no containment meant 43 Tab presses to the
+    // first marker, 31 of them through invisible planner controls.
+    // Mirrors App's shape: the map renders inline, as a SIBLING of the planner,
+    // not through a portal — which is exactly why `inert` goes on the siblings.
+    const app = (withMap: boolean) => (
+      <div className="app">
+        <button id="planner-btn">open in TSS</button>
+        {withMap && (
+          <CampusMap plan={planWithMeeting()} booked={new Set()} readOnly={false} onClose={() => {}} />
+        )}
+      </div>
+    );
+    await act(async () => root.render(app(false)));
+    const outside = container.querySelector('#planner-btn') as HTMLButtonElement;
+    outside.focus();
+    expect(document.activeElement).toBe(outside);
+
+    await act(async () => root.render(app(true)));
+    await settle();
+    expect(outside.hasAttribute('inert')).toBe(true);
+    const dialog = container.querySelector('.campusmap') as HTMLElement;
+    expect(dialog.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement).toBe(dialog);
+
+    // ...and the planner comes back, with focus, when the map closes.
+    await act(async () => root.render(app(false)));
+    expect(outside.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(outside);
+  });
+
   it('deselects the open marker on a background click', async () => {
     await act(async () =>
       root.render(
@@ -675,7 +810,7 @@ describe('CampusMap', () => {
     });
     expect(container.querySelector('.campusmap__card')).not.toBeNull();
     await act(async () => {
-      FakeMap.instances[0]!.fire('click', {});
+      FakeMap.instances[0]!.simulateMapClick(0, 0);
     });
     expect(container.querySelector('.campusmap__card')).toBeNull();
   });

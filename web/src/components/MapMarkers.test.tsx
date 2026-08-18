@@ -81,16 +81,30 @@ describe('MapMarkers', () => {
     expect(onSelect).toHaveBeenLastCalledWith(null);
   });
 
-  it('opens from the keyboard (Enter) and preventDefaults a mouse press so focus stays put', async () => {
+  it('opens from the keyboard (Enter) and never touches a pointer press', async () => {
+    // The markers are pointer-transparent now (QA I1), so a press must reach the
+    // GL canvas underneath and start MapLibre's drag. Cancelling pointerdown —
+    // which this component used to do, to keep a mouse press from leaving a focus
+    // ring — is exactly what made every chip and dot a dead zone. Nothing may
+    // consume the press here; the focus ring is handled in CSS instead.
     const onSelect = vi.fn();
     await render({ onSelect });
     const m = container.querySelector('.campusmap__marker') as HTMLElement;
     expect(m.getAttribute('tabindex')).toBe('0');
     await act(async () => { m.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); });
     expect(onSelect).toHaveBeenLastCalledWith('a');
-    const down = new Event('pointerdown', { bubbles: true, cancelable: true });
-    await act(async () => { m.dispatchEvent(down); });
-    expect(down.defaultPrevented).toBe(true);
+    for (const type of ['pointerdown', 'mousedown', 'touchstart']) {
+      const ev = new Event(type, { bubbles: true, cancelable: true });
+      await act(async () => { m.dispatchEvent(ev); });
+      expect(ev.defaultPrevented, type).toBe(false);
+    }
+  });
+
+  it('marks the hovered marker so its chip can answer a hit test the pointer cannot reach', async () => {
+    await render({ hoverKey: 'a' });
+    const hovered = container.querySelector('.campusmap__marker--hover')!;
+    expect(hovered.getAttribute('aria-label')).toMatch(/Center Hall/);
+    expect(container.querySelectorAll('.campusmap__marker--hover')).toHaveLength(1);
   });
 
   it('re-projects when tick changes after the map moved', async () => {

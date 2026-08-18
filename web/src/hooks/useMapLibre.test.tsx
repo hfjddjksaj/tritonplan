@@ -3,15 +3,15 @@ import { act, StrictMode, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FakeMap, fakeMapLibreModule } from '../test/fake-maplibre';
 vi.mock('maplibre-gl', () => fakeMapLibreModule);
-import { useMapLibre, type MapHandle, type HomeSpec } from './useMapLibre';
+import { useMapLibre, MAP_LOAD_TIMEOUT_MS, type MapHandle, type HomeSpec } from './useMapLibre';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const STYLE = { version: 8 as const, sources: {}, layers: [] };
 const HOME = { bounds: [[-117.245, 32.872], [-117.225, 32.892]] as [[number, number], [number, number]], padding: { top: 100, right: 20, bottom: 20, left: 20 } };
 
-function Harness({ onHandle, home = HOME }: { onHandle: (h: MapHandle) => void; home?: typeof HOME }) {
+function Harness({ onHandle, home = HOME, reduceMotion = true }: { onHandle: (h: MapHandle) => void; home?: typeof HOME; reduceMotion?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const h = useMapLibre(ref, STYLE, home, { minZoom: 13.5, maxZoom: 19, maxPitch: 65, reduceMotion: true });
+  const h = useMapLibre(ref, STYLE, home, { minZoom: 13.5, maxZoom: 19, maxPitch: 65, reduceMotion });
   onHandle(h);
   return <div ref={ref} />;
 }
@@ -193,5 +193,118 @@ describe('useMapLibre', () => {
     expect(m.getPitch()).toBe(55);
     expect(m.getBearing()).toBe(-25);
     expect(handle.atHome).toBe(false);
+  });
+
+  it('easeCamera does nothing — and does not un-home the view — when the camera is already there', async () => {
+    // QA M4: the compass pressed at bearing 0 used to re-enable "Reset view" for
+    // a camera that never moved.
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
+    await flush();
+    const m = FakeMap.instances[0]!;
+    expect(handle.atHome).toBe(true);
+    const eases = m.easeRequests.length;
+    await act(async () => handle.easeCamera({ bearing: 0, pitch: 0 }));
+    expect(m.easeRequests).toHaveLength(eases);
+    expect(handle.atHome).toBe(true);
+    // ...but it still fires once the camera has actually drifted.
+    await act(async () => handle.easeCamera({ bearing: 0, pitch: 40 }));
+    expect(handle.atHome).toBe(false);
+    await act(async () => handle.easeCamera({ bearing: 0, pitch: 0 }));
+    expect(m.getPitch()).toBe(0);
+  });
+
+  it('goHome levels the map, not just its bearing', async () => {
+    // QA I3: cameraForBounds answers centre/zoom/bearing and says nothing about
+    // pitch, so a tilted map stayed tilted through "Reset view" forever.
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
+    await flush();
+    const m = FakeMap.instances[0]!;
+    await act(async () => handle.easeCamera({ pitch: 50, bearing: -30 }));
+    expect(m.getPitch()).toBe(50);
+    await act(async () => handle.goHome());
+    await flush();
+    expect(m.getPitch()).toBe(0);
+    expect(m.getBearing()).toBe(0);
+    expect(handle.atHome).toBe(true);
+  });
+
+  it('accumulates zoom steps instead of re-reading a camera that is still animating', async () => {
+    // QA M2: two clicks inside the 500 ms ease moved 1.04 levels, not 2, because
+    // the second click started from the interpolated zoom.
+    FakeMap.easeProgress = 0.4;
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () =>
+      root.render(<Harness onHandle={(h) => (handle = h)} reduceMotion={false} />),
+    );
+    await flush();
+    const m = FakeMap.instances[0]!;
+    await act(async () => m.jumpTo({ zoom: 17 })); // room to step twice inside [13.5, 19]
+    const z0 = m.getZoom();
+    await act(async () => handle.zoomOut());
+    await act(async () => handle.zoomOut());
+    const asked = m.easeRequests.filter((r) => typeof r.zoom === 'number').map((r) => r.zoom);
+    expect(asked.at(-2)).toBeCloseTo(z0 - 1, 6);
+    expect(asked.at(-1)).toBeCloseTo(z0 - 2, 6);
+    // And the accumulator lets go once the camera settles, so the next click
+    // starts from wherever the student actually is.
+    FakeMap.easeProgress = 1;
+    await act(async () => m.simulateUserPan(0.01, 0));
+    await act(async () => handle.zoomIn());
+    expect(m.easeRequests.at(-1)!.zoom).toBeCloseTo(m.getZoom(), 6);
+  });
+
+  it('never lets the zoom buttons walk past the camera limits', async () => {
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
+    await flush();
+    const m = FakeMap.instances[0]!;
+    for (let i = 0; i < 12; i++) await act(async () => handle.zoomOut());
+    expect(m.getZoom()).toBe(13.5);
+    for (let i = 0; i < 30; i++) await act(async () => handle.zoomIn());
+    expect(m.getZoom()).toBe(19);
+  });
+
+  it('gives up on a map that never starts, without waiting on an error that is not coming', async () => {
+    // QA C3: a 404'd worker chunk and a zero-height container both leave the map
+    // "starting" forever — ready false, error null, console clean. Nothing else
+    // in the app can tell that apart from a slow load.
+    vi.useFakeTimers();
+    try {
+      FakeMap.autoLoad = false;
+      let handle!: MapHandle;
+      const root = createRoot(document.body.appendChild(document.createElement('div')));
+      await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
+      expect(handle.ready).toBe(false);
+      expect(handle.error).toBeNull();
+      expect(handle.stalled).toBe(false);
+      await act(async () => { vi.advanceTimersByTime(MAP_LOAD_TIMEOUT_MS - 1); });
+      expect(handle.stalled).toBe(false);
+      await act(async () => { vi.advanceTimersByTime(2); });
+      expect(handle.stalled).toBe(true);
+      expect(handle.error).toBeNull(); // still no error — that is the whole point
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never gives up on a map that did start', async () => {
+    vi.useFakeTimers();
+    try {
+      let handle!: MapHandle;
+      const root = createRoot(document.body.appendChild(document.createElement('div')));
+      await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
+      await act(async () => { await Promise.resolve(); });
+      expect(handle.ready).toBe(true);
+      await act(async () => { vi.advanceTimersByTime(MAP_LOAD_TIMEOUT_MS * 3); });
+      expect(handle.stalled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

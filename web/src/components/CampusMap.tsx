@@ -22,12 +22,21 @@ import {
   type MapPin,
   type SliceBy,
 } from '../lib/map-pins';
-import { groupPins, markerLabel, splitByBounds, unplacedPins } from '../lib/map-labels';
+import {
+  groupPins,
+  hitMarker,
+  inside,
+  markerLabel,
+  splitByBounds,
+  unplacedPins,
+  type PlacedMarker,
+} from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
 import { pluralize } from '../lib/format';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useMapLibre } from '../hooks/useMapLibre';
+import { useMarkerLayout } from '../hooks/useMarkerLayout';
 import { useElementHeight, useStageSize } from '../hooks/useStageSize';
 import { useWheelToHorizontal } from '../hooks/useWheelToHorizontal';
 import { MapMarkers } from './MapMarkers';
@@ -116,14 +125,16 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
  * Layering, and why no `suppressClick` guard survives from the SVG renderer:
  * `.campusmap__gl` (the GL canvas MapLibre owns and binds its drag/zoom
  * handlers to) and `.campusmap__overlay` (the DOM markers) are SIBLINGS, and
- * the overlay is `pointer-events: none` with only the markers `auto`. So a
- * press on empty map goes straight to the canvas and pans it, while a press on
- * a marker never reaches MapLibre's container at all — it cannot start a drag
- * to begin with. And a drag that starts on the canvas and is released over a
- * marker fires its `click` on the two targets' nearest common ancestor (the
- * stage), never on the marker, so the marker's handler is not even in the
- * propagation path. The old hand-rolled pan handler needed `suppressClick`
- * only because its markers lived INSIDE the element it dragged.
+ * the overlay is `pointer-events: none` THROUGHOUT — markers included. Every
+ * press, drag, pinch and wheel therefore reaches MapLibre untouched, wherever
+ * on the canvas it lands, and marker selection rides on MapLibre's own `click`
+ * instead: the handler below asks `hitMarker()` what was under the point. That
+ * is also why no `suppressClick` guard is needed. MapLibre does not fire
+ * `click` after a drag, so a drag released over a marker opens nothing, and a
+ * drag STARTED on one pans normally — which is the whole point, because while
+ * the markers took the pointer they were a dead zone that swallowed the
+ * gesture entirely (QA I1). The old hand-rolled pan handler needed
+ * `suppressClick` only because its markers lived INSIDE the element it dragged.
  */
 export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', onClose }: Props) {
   const [data, setData] = useState<{ geo: CampusGeo; map: CampusMapData } | null>(null);
@@ -262,11 +273,27 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   useEscapeKey(mapLoc ? () => {} : open ? () => setOpenKey(null) : onClose);
 
   // Re-projected on every camera tick: the card hangs off the dot and must follow it.
-  const openAnchor = useMemo(
-    () => (open && gl.map ? gl.map.project([open.lng, open.lat]) : null),
+  //
+  // Culled by the same `inside()` test `MapMarkers` culls its markers with, and at
+  // the same moment, so the card and its dot leave together. Without it the card
+  // outlived its marker: `project()` keeps answering off-screen coordinates,
+  // `cardPlacement` clamps them back into the canvas, and the card parked itself in
+  // a corner over open ocean with no dot and no relationship to anything (QA I2).
+  //
+  // HIDDEN, not closed. The card is the open marker's chip, so it should come back
+  // when the marker does — panning past a dot and back should not have thrown the
+  // selection away, and closing on the boundary would make a dot resting one pixel
+  // outside the frame permanently un-openable. Escape and a click on empty map are
+  // still what actually close it.
+  const openAnchor = useMemo(() => {
+    if (!open || !gl.map) return null;
+    const pt = gl.map.project([open.lng, open.lat]);
+    return inside(pt.x, pt.y, canvas.w, canvas.h) ? pt : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [open, gl.map, gl.tick],
-  );
+  }, [open, gl.map, gl.tick, canvas.w, canvas.h]);
+  // Where every marker's dot and chip actually are, for this camera. Shared with
+  // `MapMarkers`, which draws from the same function — see `useMarkerLayout`.
+  const placed = useMarkerLayout(gl.map, gl.tick, onCanvas, canvas, openKey);
   const openPlace = open ? (open.place ?? open.building) : undefined;
   // Without a working camera there is no home frame, so nothing is "on canvas" —
   // the WebGL fallback still has to name every located building it would have drawn.
@@ -285,6 +312,15 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // lands, where a hook-side latch would have frozen the panel on for the rest
   // of the session. The hook stays the honest record of "the last error seen".
   const mapUnusable = gl.error !== null && !gl.ready;
+  // The OTHER way a map fails: it never finishes starting and never says so. A
+  // 404'd worker chunk and a container the cascade collapsed to zero height both
+  // did exactly that in QA — no `error` event, no console line, "Loading campus…"
+  // forever. A separate condition rather than a wider `mapUnusable`, because the
+  // two failures are not the same thing and do not deserve the same sentence:
+  // this one is not "your browser turned WebGL off". Same destination though —
+  // the list of buildings, which is the only thing the map was going to tell them.
+  const mapStalled = gl.stalled && !gl.ready;
+  const showFallback = mapUnusable || mapStalled;
 
   // The host footprints are recoloured to the plan's courses, and the flat/extruded
   // look is a layer-visibility switch — both are style mutations on a live map, so
@@ -302,16 +338,38 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
       console.warn(`[TritonPlan] campus map reported an error after loading: ${gl.error}`);
     }
   }, [gl.error, gl.ready]);
-  // A click on the map itself (not on a marker — those stop propagation, and never
-  // reach the canvas anyway) closes the open card. MapLibre suppresses this event
-  // after a drag, so panning away from a card does not shut it.
+  // Marker selection runs off MapLibre's own pointer events, because the marker
+  // overlay is now transparent to the pointer (see the note in MapMarkers.tsx —
+  // taking the pointer there made every chip and dot a dead zone for panning).
+  // So the canvas sees every press, and this asks afterwards what was under it:
+  // a marker opens, empty map closes. MapLibre does not fire `click` after a
+  // drag, which is exactly the semantics wanted — a drag that begins on a chip
+  // pans the map and opens nothing, and panning away from an open card does not
+  // shut it. `mousemove` gives the chips back their hover affordance and the
+  // canvas a pointer cursor over them, which `pointer-events: none` costs.
+  //
+  // The layout is read through a ref so these listeners are bound once per map
+  // rather than re-bound on every camera tick.
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const placedRef = useRef<PlacedMarker[]>([]);
+  placedRef.current = placed;
   useEffect(() => {
     const m = gl.map;
     if (!m) return;
-    const h = () => setOpenKey(null);
-    m.on('click', h);
+    const onClick = (e: { point: { x: number; y: number } }) => {
+      setOpenKey(hitMarker(placedRef.current, e.point.x, e.point.y));
+    };
+    const onMove = (e: { point: { x: number; y: number } }) => {
+      setHoverKey(hitMarker(placedRef.current, e.point.x, e.point.y));
+    };
+    const onOut = () => setHoverKey(null);
+    m.on('click', onClick);
+    m.on('mousemove', onMove);
+    m.on('mouseout', onOut);
     return () => {
-      m.off('click', h);
+      m.off('click', onClick);
+      m.off('mousemove', onMove);
+      m.off('mouseout', onOut);
     };
   }, [gl.map]);
 
@@ -342,6 +400,43 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // this one flag covers the WebGL fallback and the loading pane alike.)
   const noRoomEmpty = gl.ready && !emptyCopy && onCanvas.length === 0 && noRoom.length > 0;
 
+  // `aria-modal="true"` is a promise to assistive tech that nothing outside this
+  // dialog is reachable, and until now it was a lie: with no containment, Tab
+  // walked 31 controls of the planner underneath the full-screen overlay — every
+  // course card's "open in TSS", "mark booked", "Remove" — before it reached the
+  // map's own island, and 43 presses before the first marker (QA I4).
+  //
+  // `inert` on the dialog's SIBLINGS rather than a hand-rolled Tab trap: the
+  // browser then removes that whole subtree from the tab order, from hit
+  // testing and from the accessibility tree in one go, which is more than a
+  // keydown handler can do and cannot be defeated by focus arriving from
+  // somewhere unexpected. Scoping it to siblings — not to any named planner
+  // root — keeps this component from having to know App's layout; it renders
+  // inline rather than through a portal, so its siblings ARE the planner.
+  // Written as the attribute, not the IDL property, because jsdom does not
+  // implement `HTMLElement.inert` while every browser honours the attribute.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    const parent = el?.parentElement;
+    if (!el || !parent) return;
+    const restore = document.activeElement;
+    const inerted: Element[] = [];
+    for (const sib of Array.from(parent.children)) {
+      if (sib === el || sib.hasAttribute('inert')) continue;
+      sib.setAttribute('inert', '');
+      inerted.push(sib);
+    }
+    // Focus lands on the dialog itself rather than on a control: a screen reader
+    // then reads "Campus map, dialog" before anything else, and the first Tab
+    // goes to the island — the top of the map's own order, not the middle of it.
+    el.focus({ preventScroll: true });
+    return () => {
+      for (const sib of inerted) sib.removeAttribute('inert');
+      if (restore instanceof HTMLElement && restore.isConnected) restore.focus({ preventScroll: true });
+    };
+  }, []);
+
   const cluster = (
     <div className="campusmap__cluster">
       {showBookedToggle && (
@@ -360,15 +455,21 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
           <span className="campusmap__bookedtoggle-label">Booked only</span>
         </button>
       )}
-      {/* The GL camera can be rotated (drag with the right button / two fingers), so
-          the needle is a button that puts north back up. Phase 2 spins it with the
-          bearing; in Phase 1 it is simply the way back. */}
+      {/* The GL camera can be rotated AND tilted (drag with the right button / two
+          fingers), so the needle is the button that puts the map back: north up and
+          flat. Pitch has to be in there — `cameraForBounds` behind "Reset view"
+          returns centre/zoom/bearing only, so without this a student who
+          two-finger-pitched by accident had no way back to a flat map at all
+          (QA I3). The gestures themselves stay enabled: pitch renders correctly
+          and the chips stay anchored through it, and Phase 2's 3D control wants
+          them. Phase 2 spins the needle with the bearing; in Phase 1 it is simply
+          the way back. */}
       <button
         type="button"
         className="btn btn--sm btn--icon campusmap__compass"
-        aria-label="Reset north"
-        title="Reset north"
-        onClick={() => gl.easeCamera({ bearing: 0 })}
+        aria-label="Reset north and tilt"
+        title="Reset north and tilt"
+        onClick={() => gl.easeCamera({ bearing: 0, pitch: 0 })}
       >
         <Compass size={18} />
       </button>
@@ -386,9 +487,11 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   return (
     <div
       className="campusmap"
+      ref={rootRef}
       role="dialog"
       aria-modal="true"
       aria-label="Campus map"
+      tabIndex={-1}
       style={{ '--map-inset': `${insetTop}px` } as CSSProperties}
     >
       <section
@@ -463,16 +566,17 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
             moment the style and home frame are ready, so it must never be gated
             behind the ready/error state it is what produces. */}
         <div
-          className="campusmap__gl"
+          className={`campusmap__gl${hoverKey ? ' is-over-marker' : ''}`}
           ref={glRef}
           aria-label="UCSD campus map of this term's class locations"
           role="group"
         />
-        {mapUnusable ? (
+        {showFallback ? (
           <div className="campusmap__nogl" role="status">
             <p>
-              The campus map needs WebGL, which this browser has turned off. Where your {viewNoun}
-              meet:
+              {mapUnusable
+                ? `The campus map needs WebGL, which this browser has turned off. Where your ${viewNoun} meet:`
+                : `The campus map didn’t load. Where your ${viewNoun} meet:`}
             </p>
             <ul>
               {onCanvasOrAll.map((g) => (
@@ -490,6 +594,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
               groups={onCanvas}
               bounds={{ w: canvas.w, h: canvas.h }}
               selectedKey={openKey}
+              hoverKey={hoverKey}
               onSelect={setOpenKey}
             />
             {open && openAnchor && (

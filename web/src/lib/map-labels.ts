@@ -234,3 +234,45 @@ export function placeLabels(anchors: LabelAnchor[], bounds?: { w: number; h: num
   }
   return out;
 }
+
+/**
+ * A marker as it is actually drawn: its dot at (x, y) in canvas pixels, and its
+ * chip's box — `null` for the open marker, whose chip the card stands in for.
+ */
+export interface PlacedMarker {
+  group: PinGroup;
+  x: number;
+  y: number;
+  chip: { x: number; y: number; w: number; h: number } | null;
+}
+
+/**
+ * The dot's clickable radius. The drawn dot is 15 px across; this is a little
+ * wider so a fingertip on a phone has something to hit.
+ */
+export const DOT_HIT_R = 11;
+
+/**
+ * Which marker, if any, is under a point on the canvas — topmost first, so the
+ * answer matches what the student sees.
+ *
+ * This exists because the markers themselves are `pointer-events: none` (see
+ * MapMarkers.tsx). They used to take the pointer, and since the overlay is a
+ * SIBLING of the GL canvas, every press that landed on a chip or a dot was
+ * swallowed whole: the map did not pan, did not zoom, and no card opened
+ * either — up to ~4 % of the canvas, concentrated exactly where the eye and the
+ * finger go (QA I1). Letting every gesture through to MapLibre and asking this
+ * function afterwards costs nothing and fixes drag, pinch and wheel in one
+ * move; MapLibre only fires `click` when the press was not a drag, so a drag
+ * that starts on a chip pans without opening anything.
+ */
+export function hitMarker(placed: readonly PlacedMarker[], x: number, y: number): string | null {
+  // Later markers paint over earlier ones, so search back to front.
+  for (let i = placed.length - 1; i >= 0; i--) {
+    const m = placed[i]!;
+    const c = m.chip;
+    if (c && x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h) return m.group.key;
+    if (Math.hypot(x - m.x, y - m.y) <= DOT_HIT_R) return m.group.key;
+  }
+  return null;
+}

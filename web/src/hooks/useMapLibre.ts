@@ -31,6 +31,29 @@ export interface MapCameraOptions {
   reduceMotion: boolean;
 }
 
+/**
+ * How long the map gets to fire `load` before we stop waiting on it (QA C3).
+ *
+ * MapLibre has exactly one honest failure channel, the `error` event, and two
+ * of the three ways this map died in QA never reached it: a worker whose script
+ * 404s, and a container the cascade collapsed to zero height. Both leave the map
+ * "starting" forever, with `ready` false, `error` null, and nothing in the
+ * console — so the student watches "Loading campus…" for the rest of the
+ * session. This timer turns that silence into the same building list the WebGL
+ * fallback shows.
+ *
+ * 12 s, chosen to be far too long rather than nearly too short. The clock starts
+ * at `new Map()`, which is already AFTER the campus geometry bundles have
+ * downloaded and the style object has been built — so it only has to cover
+ * style parse, the worker's own script, the two glyph ranges and the first
+ * paint. Measured end-to-end on this desktop (dev server, cold, StrictMode
+ * double-mount included): 3.6 s from opening the map to markers on screen, of
+ * which the timed window is the tail. Triple the worst phone-on-a-cold-cache
+ * arithmetic (~470 KB worker over a slow link plus GeoJSON tiling on a weak
+ * CPU) still lands inside 12 s.
+ */
+export const MAP_LOAD_TIMEOUT_MS = 12_000;
+
 export interface MapHandle {
   /** Set once created — after mount, once both `style` and `home` are non-null. */
   map: MapLibreMap | null;
@@ -38,6 +61,14 @@ export interface MapHandle {
   ready: boolean;
   /** e.g. WebGL2 missing — set from the map's `error` event. */
   error: string | null;
+  /**
+   * True when the map was built but never finished starting within
+   * `MAP_LOAD_TIMEOUT_MS`. A SEPARATE signal from `error`, because the failures
+   * it catches are exactly the ones that raise no error at all; it is latched
+   * (a `load` that arrives late still sets `ready`, and the caller gates on
+   * `!ready`).
+   */
+  stalled: boolean;
   /** Increments (rAF-throttled) on every `move` — re-project overlays on change. */
   tick: number;
   /** False after any user-initiated move; true again after `goHome` or the initial fit. */
@@ -77,6 +108,7 @@ export function useMapLibre(
 ): MapHandle {
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [ready, setReady] = useState(false);
+  const [stalled, setStalled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [atHome, setAtHome] = useState(true);
@@ -99,6 +131,14 @@ export function useMapLibre(
   }, [opts]);
 
   const durationMs = useCallback(() => (optsRef.current.reduceMotion ? 0 : 500), []);
+
+  // Where the zoom buttons are steering, while an ease is still in flight.
+  // Reading `map.getZoom()` per click sampled the ANIMATION instead: a second
+  // click inside the 500 ms ease restarted from the interpolated value, so two
+  // clicks moved 1.04 levels rather than 2 (QA M2). Cleared on `moveend` —
+  // which covers the end of our own ease and any wheel/pinch the student does
+  // in between — so it never drifts away from the real camera.
+  const targetZoom = useRef<number | null>(null);
 
   const createdRef = useRef(false);
 
@@ -169,10 +209,24 @@ export function useMapLibre(
       });
     };
 
+    // Stop waiting on a map that is never going to start. Cleared by `load`,
+    // so a map that does start never pays for this.
+    let loadTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      loadTimer = null;
+      if (active) setStalled(true);
+    }, MAP_LOAD_TIMEOUT_MS);
+
     m.on('load', () => {
+      if (loadTimer !== null) {
+        clearTimeout(loadTimer);
+        loadTimer = null;
+      }
       if (active) setReady(true);
     });
     m.on('move', scheduleTick);
+    m.on('moveend', () => {
+      targetZoom.current = null;
+    });
     m.on('movestart', (e) => {
       if (active && e.originalEvent) setAtHome(false);
     });
@@ -185,6 +239,7 @@ export function useMapLibre(
     return () => {
       active = false;
       if (rafId !== null) cancelAnimationFrame(rafId);
+      if (loadTimer !== null) clearTimeout(loadTimer);
       m.remove();
       createdRef.current = false;
       // A genuinely clean reconstruction: nothing about the removed map's
@@ -193,6 +248,7 @@ export function useMapLibre(
       // cleanup — nothing renders these updates afterward.
       setMap(null);
       setReady(false);
+      setStalled(false);
       setError(null);
       setHomeBounds(null);
       setAtHome(true);
@@ -217,27 +273,44 @@ export function useMapLibre(
     const h = homeRef.current;
     if (!map || !h) return;
     const cam = map.cameraForBounds(h.bounds, { padding: h.padding });
-    if (cam) map.easeTo({ ...cam, duration: durationMs() });
+    // `cameraForBounds` answers centre/zoom/bearing and says nothing about
+    // pitch, so a tilted map used to stay tilted through "Reset view" — the
+    // student had no way back to flat at all (QA I3). "Reset" means the view
+    // the map opened on, and that view is flat and north-up.
+    if (cam) map.easeTo({ ...cam, bearing: 0, pitch: 0, duration: durationMs() });
+    targetZoom.current = null;
     setAtHome(true);
   }, [map, durationMs]);
 
-  const zoomIn = useCallback(() => {
-    map?.zoomIn({ duration: durationMs() });
-    setAtHome(false);
-  }, [map, durationMs]);
-
-  const zoomOut = useCallback(() => {
-    map?.zoomOut({ duration: durationMs() });
-    setAtHome(false);
-  }, [map, durationMs]);
-
-  const easeCamera = useCallback(
-    (o: { pitch?: number; bearing?: number }) => {
-      map?.easeTo({ ...o, duration: durationMs() });
+  const stepZoom = useCallback(
+    (delta: number) => {
+      if (!map) return;
+      const { minZoom, maxZoom } = optsRef.current;
+      const from = targetZoom.current ?? map.getZoom();
+      const next = Math.min(maxZoom, Math.max(minZoom, from + delta));
+      targetZoom.current = next;
+      map.easeTo({ zoom: next, duration: durationMs() });
       setAtHome(false);
     },
     [map, durationMs],
   );
 
-  return { map, ready, error, tick, atHome, homeBounds, goHome, zoomIn, zoomOut, easeCamera };
+  const zoomIn = useCallback(() => stepZoom(1), [stepZoom]);
+  const zoomOut = useCallback(() => stepZoom(-1), [stepZoom]);
+
+  const easeCamera = useCallback(
+    (o: { pitch?: number; bearing?: number }) => {
+      if (!map) return;
+      // A control that changes nothing must not report that it did: pressing
+      // the compass at bearing 0 used to re-enable "Reset view" for a camera
+      // that never moved (QA M4).
+      const settled = (want: number | undefined, have: number) => want === undefined || Math.abs(want - have) < 0.01;
+      if (settled(o.bearing, map.getBearing()) && settled(o.pitch, map.getPitch())) return;
+      map.easeTo({ ...o, duration: durationMs() });
+      setAtHome(false);
+    },
+    [map, durationMs],
+  );
+
+  return { map, ready, stalled, error, tick, atHome, homeBounds, goHome, zoomIn, zoomOut, easeCamera };
 }

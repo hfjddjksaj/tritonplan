@@ -446,11 +446,19 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
       filter: ['==', ['get', 'kind'], 'district'] as FilterSpecification,
       minzoom: 13,
       maxzoom: 15.6,
+      // Sized against the official map rather than by eye: theirs sets district
+      // names at roughly 10-11 px with no tracking, ours were 13 px at 0.2 em —
+      // about 1.2x taller and a quarter wider per word. That extra width is what
+      // put WARREN and EAST CAMPUS OPEN SPACE PRESERVE under the course chips and
+      // the marker card, where they broke into fragments (WAR, "T CAMPUS / EN
+      // SPACE / RESERVE") that read as noise rather than as a covered name (QA
+      // I5 / A6 / B11). 11 px at 0.08 em keeps the tier legible and distinct from
+      // the 12 px landmark names while giving the overlays much less to hit.
       layout: {
         'text-font': [MAP_FONT_BOLD],
-        'text-size': 13,
+        'text-size': 11,
         'text-transform': 'uppercase',
-        'text-letter-spacing': 0.2,
+        'text-letter-spacing': 0.08,
         'text-field': ['get', 'label'] as ExpressionSpecification,
         'symbol-sort-key': ['get', 'rank'] as ExpressionSpecification,
       },

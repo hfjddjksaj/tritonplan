@@ -3,12 +3,15 @@ import type { MapPin } from './map-pins';
 import {
   chipText,
   chipWidth,
+  DOT_HIT_R,
   groupPins,
+  hitMarker,
   placeLabels,
   splitByBounds,
   unlocatedPins,
   unplacedPins,
   type PinGroup,
+  type PlacedMarker,
 } from './map-labels';
 
 function pin(over: Partial<MapPin>): MapPin {
@@ -170,5 +173,46 @@ describe('placeLabels near the canvas edge', () => {
     expect(q!.side).toBe('left');
     // Without bounds, the old behaviour: right first, always.
     expect(placeLabels([{ key: 'b', x: 395, y: 100, w: 60, h: 16 }])[0]!.side).toBe('right');
+  });
+});
+
+describe('hitMarker', () => {
+  // The overlay's markers are pointer-transparent so that every press reaches
+  // the GL canvas and pans it (QA I1: they used to swallow the gesture whole).
+  // This is what stands in for the browser's own hit testing afterwards, so it
+  // has to agree with the boxes MapMarkers draws — same chip rect, same dot.
+  const marker = (key: string, x: number, y: number, chip: PlacedMarker['chip']): PlacedMarker => ({
+    group: { key, lat: 0, lng: 0, pins: [] } as unknown as PinGroup,
+    x,
+    y,
+    chip,
+  });
+
+  const A = marker('a', 100, 100, { x: 112, y: 89, w: 120, h: 22 });
+  const B = marker('b', 400, 300, null); // the open marker: its chip is the card
+
+  it('answers the chip a point lands in', () => {
+    expect(hitMarker([A, B], 150, 95)).toBe('a');
+    expect(hitMarker([A, B], 112, 89)).toBe('a'); // top-left corner counts
+    expect(hitMarker([A, B], 232, 111)).toBe('a'); // bottom-right corner counts
+  });
+
+  it('answers the dot, with a fingertip-sized radius, chip or no chip', () => {
+    expect(hitMarker([A, B], 100, 100)).toBe('a');
+    expect(hitMarker([A, B], 100 + DOT_HIT_R - 0.5, 100)).toBe('a');
+    expect(hitMarker([A, B], 400, 300)).toBe('b'); // no chip, still hittable
+  });
+
+  it('answers nothing for empty map — which is what closes the open card', () => {
+    expect(hitMarker([A, B], 300, 200)).toBeNull();
+    expect(hitMarker([A, B], 100, 100 + DOT_HIT_R + 2)).toBeNull(); // below the dot, left of the chip
+    expect(hitMarker([A, B], 240, 100)).toBeNull(); // just past the chip's right edge
+    expect(hitMarker([], 100, 100)).toBeNull();
+  });
+
+  it('prefers the marker drawn on top when two overlap', () => {
+    const under = marker('under', 100, 100, { x: 90, y: 90, w: 60, h: 22 });
+    const over = marker('over', 130, 100, { x: 100, y: 92, w: 60, h: 22 });
+    expect(hitMarker([under, over], 120, 100)).toBe('over');
   });
 });

@@ -2624,6 +2624,12 @@ button.termsw__cell:hover {
   box-shadow: var(--shadow-sm);
 }
 
+/* The dialog takes focus when it opens (see the inert effect in CampusMap.tsx),
+   and a ring around the whole viewport is not what that is for. */
+.campusmap:focus {
+  outline: none;
+}
+
 /* The stage is the positioning context for everything that floats over the map. */
 .campusmap__stage {
   position: absolute;
@@ -2661,6 +2667,12 @@ button.termsw__cell:hover {
 .campusmap__gl .maplibregl-canvas:active {
   cursor: grabbing;
 }
+/* Set while the hit test says a marker is under the pointer. The markers are
+   pointer-transparent, so their cursor has to come from the canvas beneath
+   them; three classes, so it also outranks the :active grabbing rule above. */
+.campusmap .campusmap__gl.is-over-marker .maplibregl-canvas {
+  cursor: pointer;
+}
 .campusmap__gl .maplibregl-ctrl-bottom-left {
   bottom: 6px;
   left: 12px;
@@ -2673,11 +2685,16 @@ button.termsw__cell:hover {
 }
 
 /* --- the marker overlay: DOM markers projected over the GL canvas ---------
-   The overlay itself is transparent to the pointer so a press on empty map
-   reaches the canvas and pans it; only the markers take events back. That is
-   also why the old renderer's suppressClick guard is gone: a drag started on
-   the canvas fires its click on the two targets' common ancestor (the stage),
-   never on a marker released over. */
+   The overlay is transparent to the pointer ALL THE WAY DOWN — markers
+   included — so every press, drag, pinch and wheel reaches the GL canvas
+   underneath, wherever it lands. Markers that took the pointer were a dead
+   zone: the overlay is a sibling of the canvas, so a press on a chip or a dot
+   never reached MapLibre at all and the map simply did not move (QA I1).
+   Selection instead rides on MapLibre's own click, hit-tested against the same
+   chip boxes drawn here (hitMarker in map-labels.ts) — which is also why the
+   old renderer's suppressClick guard is gone: MapLibre does not fire click
+   after a drag. Keyboard focus is untouched by pointer-events, so Tab / Enter /
+   Space still work on every marker. */
 .campusmap__overlay {
   position: absolute;
   inset: 0;
@@ -2690,8 +2707,7 @@ button.termsw__cell:hover {
   top: 0;
   width: 0;
   height: 0;
-  pointer-events: auto;
-  cursor: pointer;
+  pointer-events: none;
 }
 /* Dot and chip take their course colours inline; only shape lives here.
    __marker--booked needs no rule: booked vs. not is the dot's solid-vs-hollow
@@ -2727,7 +2743,9 @@ button.termsw__cell:hover {
   font-size: 12px;
   letter-spacing: -0.01em;
 }
-.campusmap__marker:hover .campusmap__chip {
+/* Hover comes from the same hit test the click does — :hover cannot match on a
+   pointer-transparent element. */
+.campusmap__marker--hover .campusmap__chip {
   border-color: var(--text-faint);
 }
 .campusmap__chip-dot {
@@ -2746,7 +2764,8 @@ button.termsw__cell:hover {
 }
 /* A mouse click must not leave a ring around the dot for as long as the card is
    open; keyboard focus (Tab / Enter) still gets one, on the dot rather than on
-   the marker's zero-size box. */
+   the marker's zero-size box. A mouse cannot focus a marker at all now that the
+   overlay is pointer-transparent, so this pair is what carries the rule. */
 .campusmap__marker:focus {
   outline: none;
 }
@@ -2784,6 +2803,12 @@ button.termsw__cell:hover {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+/* Every control in the map chrome is 28 px: the compass, the three zoom
+   buttons. `.btn--icon` is 30 px wide, which left the close button the only
+   28-px-tall control that was not also 28 px wide (QA M3). */
+.campusmap__close {
+  width: 28px;
 }
 .campusmap__zoombtn {
   width: 28px;
