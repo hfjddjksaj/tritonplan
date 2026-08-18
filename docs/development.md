@@ -93,15 +93,16 @@ The normalized model shared by both halves is `shared/src/types.ts`
 in `App.tsx`) and must stay one — it pulls in MapLibre GL plus the campus GeoJSON, together
 roughly 980 kB / gzip 260 kB, which nobody who never opens the map should have to download.
 
-**No tiles.** The map is MapLibre GL rendering bundled GeoJSON — there is no tile server and no
-API key. Every URL the style references (glyphs, and the worker below) is built from
+**No tile server.** The map is MapLibre GL rendering bundled GeoJSON, with the only raster in it
+(the elevation DEM) shipped as files under `web/public/map/terrain/` — there is no tile service and
+no API key. Every URL the style references (glyphs, DEM tiles, and the worker below) is built from
 `assetBase()` in `map-style.ts`, which resolves relative to the page's own origin (`import.meta.env.BASE_URL`
 against `document.baseURI`), so the map stays same-origin and keeps working under the GitHub
 Pages subpath without knowing what that subpath is. This is the hardest constraint in the whole
 feature — nothing here may ever point off-origin, and it's worth re-checking after any change to
 the style or its data URLs.
 
-**The two data scripts.** Both hit the network and are run **by hand**; their output is
+**The three data scripts.** All hit the network and are run **by hand**; their output is
 committed, and the app itself never fetches anything at runtime:
 
 - `npm run fetch:campus-map -w @triton/web` — UCSD's ground surfaces (grass, paths, parking,
@@ -115,7 +116,17 @@ committed, and the app itself never fetches anything at runtime:
   TSS-only names live in `web/src/lib/building-aliases.ts` — extend it when an unmatched name
   shows up there).
 
-Both share Ramer–Douglas–Peucker simplification and integer/delta wire encoding
+- `npm run fetch:terrain -w @triton/web` — 58 terrarium-encoded elevation tiles (Mapzen /
+  AWS Open Data, USGS-derived) at z13–14 over ~12 × 11 km around campus, into
+  `web/public/map/terrain/{z}/{x}/{y}.png` (4.0 MB). They are what the hillshade layer shades
+  from in 2D and what `setTerrain` lifts the ground with in 3D. z14 is the deepest level on
+  purpose: a DEM is sampled, not drawn, and MapLibre overzooms its deepest level, so z15 would
+  quadruple the payload for shading nobody can see. `map-terrain.test.ts` walks the box the
+  style declares and fails on the first tile the script did not fetch — a gap there is a 404
+  storm and a hole in the shading, not a graceful degradation. Provenance and licence:
+  `web/public/map/terrain/README.md`.
+
+The first two share Ramer–Douglas–Peucker simplification and integer/delta wire encoding
 (`web/scripts/geo-encode.mjs`). Rerun the relevant script and commit when campus geometry,
 ground surfaces, trees, building heights or land use change.
 
@@ -155,10 +166,31 @@ checks, and don't let the build check stand in for the unit test again.
 `map-data.ts` turns it into MapLibre GeoJSON sources (`buildSources`); `map-names.ts` holds the
 naming rules (district → college labels, which roads get labels, landmark list, building-name
 abbreviation); `map-style.ts` is the full style plus `applyHosts` (course-colour fills on booked
-buildings) and `applyMode` (the 2D/3D layer-visibility swap that Phase 2's toggle drives).
-`useMapLibre` owns the `Map` instance and the camera — home fit, zoom/pan/reset helpers, and an
-rAF-throttled `tick` counter. `MapMarkers` is a DOM overlay, not part of the GL canvas: it
-positions chips/dots with `map.project()` and re-projects them on every `tick` the hook emits.
+buildings) and `applyMode` (the 2D ⇄ 3D swap the `3D` button drives: flat fills give way to
+extrusions at real heights, flat tree circles to the billboard sprite from `tree-sprite.ts`, and
+the DEM becomes real terrain). `useMapLibre` owns the `Map` instance and the camera — home fit,
+zoom/pan/reset helpers, and an rAF-throttled `tick` counter.
+
+**Two framing boxes, and they are not the same box.** `coreBounds` is what the camera opens on
+(the academic core's districts, minus North Campus — its polygon is mostly canyon and playing
+fields, and because a wide canvas fits that box by its HEIGHT the empty band both pushed the
+camera north and forced the view wider). `mappedBounds` is every district the basemap draws, and
+that is what decides whether a class counts as being *on the map* at all. Keep them separate: they
+were the same box once, and every class the opening frame happened to miss was then reported to
+the student as "outside the mapped area" — false about a building the map draws and a drag away,
+and on a phone false about most of campus.
+
+**`MapMarkers` is a DOM overlay, not part of the GL canvas**, and how it is positioned is
+load-bearing. Each marker's dot transform is written **synchronously inside MapLibre's own
+`move` event** — the same mechanism MapLibre's built-in `Marker` uses — so the overlay lands in
+the frame the GL canvas paints. Driving it from the rAF-throttled `tick` instead (a React state
+bump, so a re-render a frame later) is what made every pin visibly swim behind the basemap during
+a drag. `tick` still drives the things that may settle a frame late without anyone seeing:
+which markers exist, and which side of its dot each chip sits on. The chip is a child of its
+marker and the open marker's card rides in `.campusmap__cardlayer` pinned by the same writer, so
+one transform carries all three. Because the layout can be a frame behind what is drawn,
+`hitMarker` takes a live projection function — a marker you can see has to be a marker you can
+click.
 
 ## Reference material
 

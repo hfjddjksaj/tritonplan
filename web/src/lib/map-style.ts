@@ -490,8 +490,10 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
     // overhead is a sticker; and only from z15, where the flat circles start too.
     // Viewport alignment on both axes is what makes it a billboard rather than a
     // decal: it stays upright and facing the camera through pitch and rotation.
-    // Overlap allowed — a canopy hidden because another canopy claimed the space
-    // is a hole in a wood, not a decluttered label.
+    // Overlap allowed BOTH ways: a canopy hidden because a neighbour claimed the
+    // space is a hole in a wood rather than a decluttered label, and a tree must
+    // not push a building name off the map either (`icon-ignore-placement`) —
+    // these are scenery, and the labels outrank them.
     {
       id: LAYER.trees3d,
       type: 'symbol',
