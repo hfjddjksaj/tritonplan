@@ -6,6 +6,7 @@
  *
  * Pure geometry — no React, no DOM — so the fiddly part is unit-testable.
  */
+import type { LngLatBox } from './campus-geo';
 import { isOnlineModality, type MapPin } from './map-pins';
 import { project, toScreen, type Viewport } from './map-projection';
 
@@ -53,6 +54,37 @@ export function unlocatedPins(pins: MapPin[]): MapPin[] {
   return pins.filter((p) => p.coords === null);
 }
 
+/**
+ * "CSE-8A LEC" for one class here, "CSE-8A +2" when several share the
+ * building — the DOM overlay's marker chip and the SVG renderer's chip share
+ * this text and its width metrics, so both draw the exact same pill.
+ */
+export function chipText(pins: readonly MapPin[]): string {
+  const first = pins[0]!;
+  return pins.length === 1 ? `${first.courseCode} ${first.label}` : `${first.courseCode} +${pins.length - 1}`;
+}
+
+/** Rough chip width per character — good enough for collision avoidance. */
+const CHAR_W = 7.1; // 12 px bold, tracked tight
+export const CHIP_H = 22;
+/** The pill's inner geometry: dot at the left, then the text, with end padding. */
+export const CHIP_PAD_L = 8;
+export const CHIP_DOT_R = 4.5;
+const CHIP_DOT_GAP = 6;
+const CHIP_PAD_R = 10;
+export const CHIP_TEXT_X = CHIP_PAD_L + CHIP_DOT_R * 2 + CHIP_DOT_GAP;
+
+export function chipWidth(pins: readonly MapPin[]): number {
+  return CHIP_TEXT_X + chipText(pins).length * CHAR_W + CHIP_PAD_R;
+}
+
+/** Spoken form of a marker: the chip is an abbreviation, this is the whole truth. */
+export function markerLabel(g: PinGroup): string {
+  const what = g.pins.map((p) => `${p.courseCode} ${p.label}`).join(', ');
+  const where = g.place ?? g.building;
+  return where ? `${where}: ${what}` : what;
+}
+
 /** Whether a projected point lands inside the drawn canvas. */
 function inside(x: number, y: number, w: number, h: number): boolean {
   return x >= 0 && x <= w && y >= 0 && y <= h;
@@ -76,6 +108,38 @@ export function splitByViewport(
   for (const g of groups) {
     const p = toScreen(project(g.lng, g.lat), view);
     (inside(p.x, p.y, w, h) ? onCanvas : offCanvas).push(g);
+  }
+  return { onCanvas, offCanvas };
+}
+
+/** An axis-aligned pixel rectangle — a chip, a dot's obstacle box, a reserved area. */
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Same split as {@link splitByViewport}, against a MapLibre `LngLatBox` frame
+ * instead of the SVG renderer's `Viewport` + width/height. Used once the
+ * MapLibre camera (not the old fitted SVG viewport) is what decides what's
+ * visible.
+ *
+ * `box === null` means the map hasn't produced a home frame yet — nothing is
+ * drawn and nothing is reported as off-map either, rather than guessing.
+ */
+export function splitByBounds(
+  groups: PinGroup[],
+  box: LngLatBox | null,
+): { onCanvas: PinGroup[]; offCanvas: PinGroup[] } {
+  if (!box) return { onCanvas: [], offCanvas: [] };
+  const [[west, south], [east, north]] = box;
+  const onCanvas: PinGroup[] = [];
+  const offCanvas: PinGroup[] = [];
+  for (const g of groups) {
+    const within = g.lng >= west && g.lng <= east && g.lat >= south && g.lat <= north;
+    (within ? onCanvas : offCanvas).push(g);
   }
   return { onCanvas, offCanvas };
 }
@@ -154,10 +218,7 @@ function boxFor(a: LabelAnchor, side: LabelSide): { x: number; y: number } {
   }
 }
 
-function overlaps(
-  a: { x: number; y: number; w: number; h: number },
-  b: { x: number; y: number; w: number; h: number },
-): boolean {
+function overlaps(a: Box, b: Box): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
@@ -171,9 +232,9 @@ const SIDES: LabelSide[] = ['right', 'left', 'above', 'below'];
  * chip on the right rather than half-clipped.
  */
 export function placeLabels(anchors: LabelAnchor[], bounds?: { w: number; h: number }): PlacedLabel[] {
-  const taken: { x: number; y: number; w: number; h: number }[] = [];
+  const taken: Box[] = [];
   const out: PlacedLabel[] = [];
-  const offCanvas = (b: { x: number; y: number; w: number; h: number }) =>
+  const offCanvas = (b: Box) =>
     bounds !== undefined && (b.x < 0 || b.y < 0 || b.x + b.w > bounds.w || b.y + b.h > bounds.h);
   for (const a of anchors) {
     let chosen: PlacedLabel | null = null;

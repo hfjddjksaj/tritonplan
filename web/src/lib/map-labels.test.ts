@@ -2,11 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { campusViewport, type CampusGeo } from './campus-geo';
 import type { MapPin } from './map-pins';
 import {
+  chipText,
+  chipWidth,
   groupPins,
   placeLabels,
+  splitByBounds,
   splitByViewport,
   unlocatedPins,
   unplacedPins,
+  type PinGroup,
 } from './map-labels';
 
 function pin(over: Partial<MapPin>): MapPin {
@@ -98,6 +102,28 @@ describe('splitByViewport', () => {
     // Panned a full canvas width away: York Hall is off the drawn area.
     const panned = { ...home, offsetX: home.offsetX + 800 };
     expect(splitByViewport(groups, panned, 800, 600).offCanvas.map((g) => g.building)).toEqual(['York Hall']);
+  });
+});
+
+describe('splitByBounds', () => {
+  const inside = { key: 'a', lat: 32.88, lng: -117.235, pins: [] } as unknown as PinGroup;
+  const outside = { key: 'b', lat: 32.755, lng: -117.16, pins: [] } as unknown as PinGroup;
+  it('separates markers the home frame can show from the ones it cannot', () => {
+    const r = splitByBounds([inside, outside], [[-117.25, 32.87], [-117.22, 32.895]]);
+    expect(r.onCanvas.map((g) => g.key)).toEqual(['a']);
+    expect(r.offCanvas.map((g) => g.key)).toEqual(['b']);
+  });
+  it('shows nothing until there is a frame', () => {
+    expect(splitByBounds([inside], null)).toEqual({ onCanvas: [], offCanvas: [] });
+  });
+});
+
+describe('chip text', () => {
+  it('names one class, counts several', () => {
+    const p = (code: string, label: string) => ({ courseCode: code, label } as unknown as MapPin);
+    expect(chipText([p('CSE-8A', 'LEC')])).toBe('CSE-8A LEC');
+    expect(chipText([p('CSE-8A', 'LEC'), p('CSE-8A', 'DI')])).toBe('CSE-8A +1');
+    expect(chipWidth([p('CSE-8A', 'LEC')])).toBeGreaterThan(60);
   });
 });
 

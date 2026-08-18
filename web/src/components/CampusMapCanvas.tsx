@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { CampusGeo, CampusShape, LineKind } from '../lib/campus-geo';
 import type { MapPin } from '../lib/map-pins';
-import { groupPins, placeLabels, type PinGroup } from '../lib/map-labels';
+import {
+  CHIP_DOT_R,
+  CHIP_H,
+  CHIP_PAD_L,
+  CHIP_TEXT_X,
+  chipWidth,
+  groupPins,
+  markerLabel,
+  placeLabels,
+  type PinGroup,
+} from '../lib/map-labels';
 import {
   districtLabel,
   districtPriority,
@@ -49,22 +59,10 @@ interface Props {
   reserved?: readonly Box[];
 }
 
-/** Rough chip width per character — good enough for collision avoidance. */
-const CHAR_W = 7.1; // 12 px bold, tracked tight
-const CHIP_H = 22;
-/** The pill's inner geometry: dot at the left, then the text, with end padding. */
-const CHIP_PAD_L = 8;
-const CHIP_DOT_R = 4.5;
-const CHIP_DOT_GAP = 6;
-const CHIP_PAD_R = 10;
 /** The marker dot: radius, its white halo, and the obstacle box names keep out of. */
 const DOT_R = 7.5;
 const DOT_HALO_R = 9.5;
 const DOT_BOX = 11;
-const CHIP_TEXT_X = CHIP_PAD_L + CHIP_DOT_R * 2 + CHIP_DOT_GAP;
-function chipWidth(pins: MapPin[]): number {
-  return CHIP_TEXT_X + chipText(pins).length * CHAR_W + CHIP_PAD_R;
-}
 /** Basemap name metrics (uppercase, letter-spaced districts; small landmarks). */
 const DISTRICT_CHAR_W = 9.6;
 const DISTRICT_H = 13;
@@ -641,17 +639,4 @@ export function CampusMapCanvas({
       </text>
     </svg>
   );
-}
-
-/** Spoken form of a marker: the chip is an abbreviation, this is the whole truth. */
-function markerLabel(g: PinGroup): string {
-  const what = g.pins.map((p) => `${p.courseCode} ${p.label}`).join(', ');
-  const where = g.place ?? g.building;
-  return where ? `${where}: ${what}` : what;
-}
-
-/** "CSE-8A LEC" for one class here, "CSE-8A +2" when several share the building. */
-function chipText(pins: MapPin[]): string {
-  const first = pins[0]!;
-  return pins.length === 1 ? `${first.courseCode} ${first.label}` : `${first.courseCode} +${pins.length - 1}`;
 }
