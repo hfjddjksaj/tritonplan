@@ -12,6 +12,7 @@
     "test": "vitest run",
     "fetch:buildings": "node scripts/fetch-buildings.mjs",
     "fetch:campus-map": "node scripts/fetch-campus-map.mjs",
+    "fetch:terrain": "node scripts/fetch-terrain.mjs",
     "build:map-glyphs": "node scripts/build-map-glyphs.mjs",
     "fetch:ui-font": "node scripts/fetch-ui-font.mjs"
   },
