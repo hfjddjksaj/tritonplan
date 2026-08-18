@@ -139,10 +139,14 @@ describe('useMapLibre', () => {
     );
     await flush();
     expect(handle.map).not.toBeNull();
-    expect(handle.map!.removed).toBe(false);
+    // `MapHandle.map` is typed as the real maplibre-gl `Map`; under `vi.mock`
+    // it's actually the `FakeMap` double at runtime — narrow once here, then
+    // read everything off `FakeMap.instances` like the rest of this file does.
+    const liveMap = handle.map as unknown as FakeMap;
+    expect(liveMap.removed).toBe(false);
     // Every OTHER instance the double-invoke created must be the one that got
     // torn down — the hook must be holding the live map, not a removed one.
-    const others = FakeMap.instances.filter((m) => m !== handle.map);
+    const others = FakeMap.instances.filter((m) => m !== liveMap);
     expect(others.length).toBeGreaterThan(0);
     expect(others.every((m) => m.removed)).toBe(true);
     await act(async () => root.unmount());
