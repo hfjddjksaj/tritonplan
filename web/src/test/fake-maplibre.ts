@@ -27,7 +27,15 @@ export class FakeScaleControl {
 export class FakeMap {
   static instances: FakeMap[] = [];
   static size = { w: 1100, h: 760 };
-  static reset() { FakeMap.instances = []; }
+  /**
+   * Whether a new map fires `load` by itself. Set false to model a browser
+   * that cannot start the map at all (no WebGL2): the instance is still
+   * constructed and still fires `error`, but `load` never comes — which is
+   * what separates a fatal failure from a recoverable one. Restored to true
+   * by `reset()`, so a test that flips it cannot leak into the next.
+   */
+  static autoLoad = true;
+  static reset() { FakeMap.instances = []; FakeMap.autoLoad = true; }
 
   readonly opts: Record<string, unknown>;
   calls: { method: string; args: unknown[] }[] = [];
@@ -42,7 +50,7 @@ export class FakeMap {
     if (opts.center) this.cam.center = opts.center as [number, number];
     if (typeof opts.zoom === 'number') this.cam.zoom = opts.zoom;
     FakeMap.instances.push(this);
-    queueMicrotask(() => this.fire('load', {}));
+    if (FakeMap.autoLoad) queueMicrotask(() => this.fire('load', {}));
   }
 
   /* events */

@@ -113,22 +113,45 @@ function planOnline(): PlanState {
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
+ * One turn of the loop, wide enough for a dynamic import AND for jsdom's rAF:
+ * `useMapLibre` throttles its camera ticks on requestAnimationFrame, which
+ * jsdom backs with a real ~16.7 ms interval, so a 0 ms timeout has no
+ * guaranteed budget to let one fire.
+ */
+async function pump() {
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 20));
+  });
+}
+
+/**
  * Let the dynamic geo/map imports, the GL map's construction and its `load`
- * settle (a cold import can take a few ticks). The 20 ms wait is jsdom's rAF
- * floor — `useMapLibre` throttles its camera ticks on requestAnimationFrame,
- * which jsdom backs with a real ~16.7 ms interval, so a 0 ms timeout has no
- * guaranteed budget to let one fire. The loading pane goes away exactly when
- * the map's `load` has fired, so waiting on it waits on `FakeMap.instances[0]`
- * existing and being ready.
+ * settle (a cold import can take a few ticks). The loading pane goes away
+ * exactly when the map's `load` has fired, so waiting on it waits on the map
+ * existing AND being ready. Throws rather than returning quietly: a map that
+ * stopped being constructed should fail here, by name, instead of leaving
+ * every later line to die on an undefined `FakeMap.instances[0]`.
  */
 async function settle() {
   for (let i = 0; i < 40; i++) {
-    await act(async () => {
-      await Promise.resolve();
-      await new Promise((r) => setTimeout(r, 20));
-    });
+    await pump();
     if (FakeMap.instances.length > 0 && !document.querySelector('.campusmap__loading')) return;
   }
+  throw new Error('map never became ready');
+}
+
+/**
+ * Wait only for the map to be CONSTRUCTED — for the no-WebGL case, where
+ * `FakeMap.autoLoad = false` means `load` never fires and {@link settle} would
+ * (correctly) time out.
+ */
+async function settleConstructed() {
+  for (let i = 0; i < 40; i++) {
+    await pump();
+    if (FakeMap.instances.length > 0) return;
+  }
+  throw new Error('map was never constructed');
 }
 
 describe('CampusMap', () => {
@@ -287,7 +310,7 @@ describe('CampusMap', () => {
     expect(container.querySelector('.campusmap__detail')).toBeNull();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
     expect(container.querySelector('.campusmap__card')).toBeNull();
-    // The marker is a real focusable DOM button in the overlay above the GL canvas.
+    // The marker is a focusable div with a button role, in the overlay above the GL canvas.
     const marker = container.querySelector('.campusmap__overlay .campusmap__marker')!;
     expect(marker.tagName).toBe('DIV');
     expect(marker.getAttribute('role')).toBe('button');
@@ -494,13 +517,18 @@ describe('CampusMap', () => {
     expect(JSON.stringify(filters.at(-1)!.args[1])).toContain('Center Hall');
   });
 
-  it('shows the WebGL message, with the buildings as text, when the map errors', async () => {
+  it('shows the WebGL message, with the buildings as text, when the map never starts', async () => {
+    // What a browser with no WebGL2 actually does: the map object is built, it
+    // reports an error, and `load` never comes. There is no camera, so no home
+    // frame either — which is exactly the case the fallback list's "every located
+    // group" branch exists for, since nothing can be classed on-canvas yet.
+    FakeMap.autoLoad = false;
     await act(async () =>
       root.render(
         <CampusMap plan={planWithMeeting()} booked={new Set()} readOnly={false} onClose={() => {}} />,
       ),
     );
-    await settle();
+    await settleConstructed();
     await act(async () => {
       FakeMap.instances[0]!.fire('error', { error: new Error('WebGL2 unavailable') });
     });
@@ -508,6 +536,33 @@ describe('CampusMap', () => {
     expect(box.textContent).toContain('The campus map needs WebGL');
     expect(box.textContent).toContain('Center Hall');
     expect(container.querySelector('.campusmap__marker')).toBeNull();
+    // It replaces the loading pane rather than sitting beside it.
+    expect(container.querySelector('.campusmap__loading')).toBeNull();
+  });
+
+  it('keeps a loaded map — and its markers and controls — through a recoverable error', async () => {
+    // A glyph, sprite or source failure arrives on the very same `error` event as
+    // a fatal one. Swapping a working map for the no-WebGL panel over one 404
+    // would be a lie to the student and would take their markers with it.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await act(async () =>
+      root.render(
+        <CampusMap plan={planWithMeeting()} booked={new Set()} readOnly={false} onClose={() => {}} />,
+      ),
+    );
+    await settle();
+    await act(async () => {
+      FakeMap.instances[0]!.fire('error', {
+        error: new Error('Failed to load glyph range 0-255'),
+      });
+    });
+    expect(container.querySelector('.campusmap__nogl')).toBeNull();
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    expect(container.querySelector('.campusmap__zoom')).not.toBeNull();
+    expect(container.querySelector('.campusmap__attrib')).not.toBeNull();
+    // Not fatal, but not swallowed either.
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Failed to load glyph range 0-255'));
+    warn.mockRestore();
   });
 
   it('deselects the open marker on a background click', async () => {

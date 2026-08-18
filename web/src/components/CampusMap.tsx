@@ -185,6 +185,20 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
   // the WebGL fallback still has to name every located building it would have drawn.
   const onCanvasOrAll = onCanvas.length > 0 ? onCanvas : groups;
 
+  // `error` is MapLibre's general-purpose channel: a missing WebGL2 context comes
+  // through it, but so do a glyph or sprite 404 and a source hiccup, and the map
+  // carries on fine after those. The distinction that matters to a student is
+  // whether the map ever became usable at all, so the text fallback is gated on
+  // `!gl.ready` — an error before `load` means there is nothing on screen to
+  // look at, one after it means a working map that lost some detail.
+  //
+  // Gated here rather than latched inside `useMapLibre` deliberately: this
+  // expression is re-evaluated every render, so a recoverable error that happens
+  // to arrive BEFORE `load` (a glyph 404 can) un-does itself the moment `load`
+  // lands, where a hook-side latch would have frozen the panel on for the rest
+  // of the session. The hook stays the honest record of "the last error seen".
+  const mapUnusable = gl.error !== null && !gl.ready;
+
   // The host footprints are recoloured to the plan's courses, and the flat/extruded
   // look is a layer-visibility switch — both are style mutations on a live map, so
   // they run as effects rather than in the style object the map was built from.
@@ -194,6 +208,13 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
   useEffect(() => {
     if (gl.ready && gl.map) applyMode(gl.map, mode);
   }, [gl.ready, gl.map, mode]);
+  // Not fatal is not the same as not worth knowing: a map that renders but lost
+  // its labels or a texture says so here, and nowhere else.
+  useEffect(() => {
+    if (gl.error && gl.ready) {
+      console.warn(`[TritonPlan] campus map reported an error after loading: ${gl.error}`);
+    }
+  }, [gl.error, gl.ready]);
   // A click on the map itself (not on a marker — those stop propagation, and never
   // reach the canvas anyway) closes the open card. MapLibre suppresses this event
   // after a drag, so panning away from a card does not shut it.
@@ -341,7 +362,7 @@ export function CampusMap({ plan, booked, readOnly, onClose }: Props) {
           aria-label="UCSD campus map of this term's class locations"
           role="group"
         />
-        {gl.error ? (
+        {mapUnusable ? (
           <div className="campusmap__nogl" role="status">
             <p>
               The campus map needs WebGL, which this browser has turned off. Where your classes

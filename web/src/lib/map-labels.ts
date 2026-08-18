@@ -89,8 +89,9 @@ export function inside(x: number, y: number, w: number, h: number): boolean {
   return x >= 0 && x <= w && y >= 0 && y <= h;
 }
 
-/** An axis-aligned pixel rectangle — a chip, a dot's obstacle box, a reserved area. */
-export interface Box {
+/** An axis-aligned pixel rectangle: a chip's box while labels are being placed.
+ *  Internal — the SVG renderer's `reserved` areas were its last outside caller. */
+interface Box {
   x: number;
   y: number;
   w: number;
