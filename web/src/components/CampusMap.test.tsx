@@ -5,6 +5,20 @@ import type { CourseOffering, PlanState } from '@triton/shared';
 import { makePlan } from '../lib/fixtures';
 import { FakeMap, fakeMapLibreModule } from '../test/fake-maplibre';
 vi.mock('maplibre-gl', () => fakeMapLibreModule);
+
+/**
+ * A switch for "the campus geometry chunk 404s". Passes straight through to the
+ * real loader unless a test flips it, so nothing else in this file is affected.
+ */
+const chunks = vi.hoisted(() => ({ fail: false }));
+vi.mock('../lib/campus-geo', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../lib/campus-geo')>();
+  return {
+    ...real,
+    loadCampusGeo: () =>
+      chunks.fail ? Promise.reject(new Error('Failed to fetch dynamically imported module')) : real.loadCampusGeo(),
+  };
+});
 import { CampusMap } from './CampusMap';
 import { MAP_LOAD_TIMEOUT_MS } from '../hooks/useMapLibre';
 
@@ -231,6 +245,7 @@ describe('CampusMap', () => {
   beforeEach(() => {
     localStorage.clear();
     FakeMap.reset();
+    chunks.fail = false;
     // The map opens on today's weekday when it has classes; pin "today" to a
     // Sunday so every test starts on "All" whatever day it actually runs.
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -694,6 +709,45 @@ describe('CampusMap', () => {
     expect(container.querySelector('.campusmap__card')).not.toBeNull();
   });
 
+  it('closes the open card when its own dot is clicked again, exactly as the marker handler does', async () => {
+    // The canvas handler used to assign the hit key outright, so clicking the OPEN
+    // marker returned the key already set and nothing happened — while the marker's
+    // own onClick (the path a screen reader takes) toggled. One control, two answers.
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const marker = container.querySelector('.campusmap__marker') as HTMLElement;
+    const [x, y] = marker.style.transform.match(/[0-9.]+/g)!.map(Number);
+    await act(async () => map.simulateMapClick(x, y));
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+    await act(async () => map.simulateMapClick(x, y));
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+    // ...and the chip comes back, because the card is no longer standing in for it.
+    expect(container.querySelector('.campusmap__chip')).not.toBeNull();
+  });
+
+  it('spends one Escape, not two, when the card is hidden because its dot left the canvas', async () => {
+    // I2 hides the card without clearing the selection, so `open` stays truthy.
+    // Keyed off `open` alone, the first Escape cleared a card nobody could see and
+    // the student had to press it twice to leave the map.
+    const onClose = render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const marker = container.querySelector('.campusmap__marker') as HTMLElement;
+    const [x, y] = marker.style.transform.match(/[0-9.]+/g)!.map(Number);
+    await act(async () => map.simulateMapClick(x, y));
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+
+    await act(async () => map.simulateUserPan(1, 0)); // dot off the canvas; card hidden
+    await settle();
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('lights the hovered marker and the canvas cursor from the same hit test', async () => {
     render({ plan: planWithMeeting() });
     await settle();
@@ -764,6 +818,24 @@ describe('CampusMap', () => {
     expect(nogl!.textContent).toContain('The campus map didn’t load');
     expect(nogl!.textContent).not.toContain('WebGL');
     // It still names every building it would have drawn.
+    expect(nogl!.textContent).toContain('Center Hall');
+  });
+
+  it('falls back to the building list when the campus data itself never arrives', async () => {
+    // The third silent hang, and the nastiest: with no geometry there is no style
+    // and no home frame, so `new MapLibreMap()` never runs — which means C3's load
+    // timeout never even starts. Same class of cause as C1 (an asset the build was
+    // supposed to emit), so it needs the same exit.
+    chunks.fail = true;
+    render({ plan: planWithMeeting() });
+    for (let i = 0; i < 20 && !container.querySelector('.campusmap__nogl'); i++) await pump();
+
+    const nogl = container.querySelector('.campusmap__nogl');
+    expect(nogl).not.toBeNull();
+    expect(FakeMap.instances).toHaveLength(0); // no map was ever built — nothing could time out
+    expect(container.querySelector('.campusmap__loading')).toBeNull();
+    expect(nogl!.textContent).toContain('The campus map didn’t load');
+    expect(nogl!.textContent).not.toContain('WebGL');
     expect(nogl!.textContent).toContain('Center Hall');
   });
 

@@ -291,6 +291,27 @@ describe('useMapLibre', () => {
     expect(m.easeRequests.at(-1)!.zoom).toBeCloseTo(m.getZoom(), 6);
   });
 
+  it('drops the accumulated zoom target when easeCamera interrupts the ease', async () => {
+    // The compass interrupts an in-flight zoom ease, and an interrupted ease ends
+    // short of its target — so the "did we arrive?" release test never fires. Left
+    // alone, the accumulator would survive and the next zoom click would step from
+    // a zoom the camera never reached.
+    FakeMap.easeProgress = 0.4;
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} reduceMotion={false} />));
+    await flush();
+    const m = FakeMap.instances[0]!;
+    await act(async () => m.jumpTo({ zoom: 17 }));
+    await act(async () => handle.zoomOut()); // target 16, ease still running
+    await act(async () => handle.easeCamera({ bearing: 0, pitch: 45 })); // interrupts it
+    const zAfterCompass = m.getZoom();
+    expect(zAfterCompass).not.toBeCloseTo(16, 6); // it really did stop short
+    await act(async () => handle.zoomIn());
+    // One step up from where the camera ACTUALLY is, not from the abandoned 16.
+    expect(m.easeRequests.at(-1)!.zoom).toBeCloseTo(zAfterCompass + 1, 6);
+  });
+
   it('never lets the zoom buttons walk past the camera limits', async () => {
     let handle!: MapHandle;
     const root = createRoot(document.body.appendChild(document.createElement('div')));

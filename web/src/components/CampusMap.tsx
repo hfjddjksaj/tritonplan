@@ -138,6 +138,7 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
  */
 export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', onClose }: Props) {
   const [data, setData] = useState<{ geo: CampusGeo; map: CampusMapData } | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
   const isMobile = useIsMobile();
   // The stage's own box: the size the overlay projects into and the card is
   // placed against. The island floats over its top edge, so the map is fitted
@@ -160,11 +161,22 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
 
   // Both bundles are dynamic `?raw` imports, so neither the geometry nor
   // `maplibre-gl` itself is in the first-paint chunk.
+  //
+  // The `.catch` is not defensive boilerplate: without it, a geometry chunk that
+  // 404s leaves `style` and `home` null forever, so `new MapLibreMap()` never runs,
+  // so the load timeout that C3 exists to fire never even starts — the exact silent
+  // hang C1 shipped, from the same class of cause (an asset the build was supposed
+  // to emit). A failure here has to reach the same fallback the other two do.
   useEffect(() => {
     let live = true;
-    Promise.all([loadCampusGeo(), loadCampusMap()]).then(([geo, map]) => {
-      if (live) setData({ geo, map });
-    });
+    Promise.all([loadCampusGeo(), loadCampusMap()])
+      .then(([geo, map]) => {
+        if (live) setData({ geo, map });
+      })
+      .catch((err: unknown) => {
+        if (!live) return;
+        setDataError(err instanceof Error ? err.message : 'Campus data failed to load');
+      });
     return () => {
       live = false;
     };
@@ -264,14 +276,6 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   );
   const open = onCanvas.find((g) => g.key === openKey) ?? null;
 
-  // Escape peels one layer at a time: the popover (which registers its own handler
-  // while `mapLoc` is set — without this guard both would fire on one keypress),
-  // then the open marker card, then the map itself. Keyed off `open` (the group
-  // actually on screen) rather than `openKey`: a tab switch can leave `openKey`
-  // pointing at a group that no longer exists in this view, and Escape must not
-  // spend itself clearing a key nobody can see.
-  useEscapeKey(mapLoc ? () => {} : open ? () => setOpenKey(null) : onClose);
-
   // Re-projected on every camera tick: the card hangs off the dot and must follow it.
   //
   // Culled by the same `inside()` test `MapMarkers` culls its markers with, and at
@@ -294,6 +298,18 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // Where every marker's dot and chip actually are, for this camera. Shared with
   // `MapMarkers`, which draws from the same function — see `useMarkerLayout`.
   const placed = useMarkerLayout(gl.map, gl.tick, onCanvas, canvas, openKey);
+  // Escape peels one layer at a time: the popover (which registers its own handler
+  // while `mapLoc` is set — without this guard both would fire on one keypress),
+  // then the open marker card, then the map itself.
+  //
+  // Keyed off the card being VISIBLE — `open && openAnchor`, the same pair the card
+  // itself renders on — not off `open` alone. Two ways a selection outlives what it
+  // draws: a tab switch can leave `openKey` pointing at a group this view no longer
+  // has, and I2 hides the card once its dot pans off the canvas. In both cases
+  // Escape must not spend itself clearing something nobody can see; it must close
+  // the map, first press.
+  useEscapeKey(mapLoc ? () => {} : open && openAnchor ? () => setOpenKey(null) : onClose);
+
   const openPlace = open ? (open.place ?? open.building) : undefined;
   // Without a working camera there is no home frame, so nothing is "on canvas" —
   // the WebGL fallback still has to name every located building it would have drawn.
@@ -320,7 +336,10 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // this one is not "your browser turned WebGL off". Same destination though —
   // the list of buildings, which is the only thing the map was going to tell them.
   const mapStalled = gl.stalled && !gl.ready;
-  const showFallback = mapUnusable || mapStalled;
+  // ...and the third way in: the campus geometry never arrived, so there was never
+  // anything to build a map from. Same destination, same sentence as a stall — from
+  // where the student sits, the map did not load, and why is our problem, not theirs.
+  const showFallback = mapUnusable || mapStalled || dataError !== null;
 
   // The host footprints are recoloured to the plan's courses, and the flat/extruded
   // look is a layer-visibility switch — both are style mutations on a live map, so
@@ -357,7 +376,12 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     const m = gl.map;
     if (!m) return;
     const onClick = (e: { point: { x: number; y: number } }) => {
-      setOpenKey(hitMarker(placedRef.current, e.point.x, e.point.y));
+      const hit = hitMarker(placedRef.current, e.point.x, e.point.y);
+      // TOGGLE, the same way the marker's own onClick does. Assigning the hit key
+      // outright made a click on the OPEN marker's dot a no-op — it returns the key
+      // that is already set — so the mouse and a screen reader (which reaches the
+      // marker's handler directly) disagreed about what clicking the same control does.
+      setOpenKey((prev) => (hit !== null && hit === prev ? null : hit));
     };
     const onMove = (e: { point: { x: number; y: number } }) => {
       setHoverKey(hitMarker(placedRef.current, e.point.x, e.point.y));

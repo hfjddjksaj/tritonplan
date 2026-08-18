@@ -319,6 +319,12 @@ export function useMapLibre(
       // that never moved (QA M4).
       const settled = (want: number | undefined, have: number) => want === undefined || Math.abs(want - have) < 0.01;
       if (settled(o.bearing, map.getBearing()) && settled(o.pitch, map.getPitch())) return;
+      // This ease interrupts any zoom ease in flight, and an interrupted one ends
+      // SHORT of its target — so the "did we arrive?" release test in `moveend`
+      // never fires and the accumulator would sit there stale, making the next
+      // zoom click step from a zoom the camera never reached. `goHome` already
+      // lets go for the same reason.
+      targetZoom.current = null;
       map.easeTo({ ...o, duration: durationMs() });
       setAtHome(false);
     },
