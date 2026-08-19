@@ -51,7 +51,13 @@ function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
 export function bookedOptionOf(
   course: CourseOffering,
   enrolledEventIds: readonly string[] | undefined,
+  optionCode?: string,
 ): SectionOption | null {
+  // TSS said it outright ("My Courses" names the package). Nothing to deduce — but it
+  // still has to be a package we know, or there is nothing to point the student at.
+  if (optionCode) {
+    return course.options.find((o) => o.code === optionCode) ?? null;
+  }
   if (!enrolledEventIds || enrolledEventIds.length === 0) return null;
   const enrolled = keysOf(enrolledEventIds);
   const known = new Set<string>();
@@ -74,8 +80,9 @@ export function bookedElsewhere(
   course: CourseOffering,
   selectedOptionId: string | null,
   enrolledEventIds: readonly string[] | undefined,
+  optionCode?: string,
 ): SectionOption | null {
-  const booked = bookedOptionOf(course, enrolledEventIds);
+  const booked = bookedOptionOf(course, enrolledEventIds, optionCode);
   if (booked === null || selectedOptionId === null) return null;
   return booked.id === selectedOptionId ? null : booked;
 }

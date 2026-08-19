@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SectionOption } from '@triton/shared';
-import { tssDeepLink, tssBookingLink, openInTss, openTssHome, TSS_HOME_URL } from './tss';
+import {
+  tssDeepLink, tssBookingLink, openInTss, openTssHome,
+  TSS_HOME_URL, TSS_MY_COURSES_URL,
+} from './tss';
 import { PAGE_BRIDGE_SOURCE } from './bridge';
 import { makeCourse } from './fixtures';
 
@@ -97,20 +100,29 @@ describe('openTssHome', () => {
       source: PAGE_BRIDGE_SOURCE,
       type: 'open-tss-home',
       version: 1,
-      payload: { url: TSS_HOME_URL },
+      payload: { url: TSS_MY_COURSES_URL },
     });
   });
 
   it('falls back to a plain new tab without the extension', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     openTssHome();
-    expect(open).toHaveBeenCalledWith(TSS_HOME_URL, '_blank', 'noopener');
+    expect(open).toHaveBeenCalledWith(TSS_MY_COURSES_URL, '_blank', 'noopener');
     open.mockRestore();
   });
 
-  // Confirmed by a student 2026-08-19: this is the page the booked feed was captured
-  // from, and the bare origin https://tss.ucsd.edu/ does not resolve at all.
-  it('points at the launchpad overview route, not the bare origin', () => {
+  // Confirmed by a student 2026-08-19: the bare origin https://tss.ucsd.edu/ does not
+  // resolve at all, and the launchpad IS the #YStudent-Overview route.
+  it('keeps the launchpad route, not the bare origin', () => {
     expect(TSS_HOME_URL).toBe('https://tss.ucsd.edu/fiori#YStudent-Overview');
+  });
+
+  // The check goes to My Courses, not the launchpad: only that page's feed names the
+  // package each course was booked on (verified live 2026-08-19). A cold load there
+  // fetches nothing from the home page, so the extension must read this feed.
+  it('checks bookings on the My Courses route', () => {
+    expect(TSS_MY_COURSES_URL).toBe(
+      'https://tss.ucsd.edu/fiori#ZUSModule-display?TileType=MYMOD&sap-app-origin-hint=&/MyModules',
+    );
   });
 });

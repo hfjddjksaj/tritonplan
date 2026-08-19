@@ -153,6 +153,51 @@ describe('CaptureStore booked list survives the round trip honestly', () => {
   });
 });
 
+describe('CaptureStore: the My Courses feed', () => {
+  const MY_URL = 'https://tss.ucsd.edu/sap/opu/odata/ITUS/PR_MY_MODULES_V2_SRV/$batch?sap-client=500';
+  const myRow = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    __metadata: { type: 'ITUS.PR_MY_MODULES_V2_SRV.ModuleHeader' },
+    SmShort: 'CHEM-114A', SmObjid: '00002077', AcademicYear: '2026', AcademicSession: '002',
+    EventPackageAbbr: 'P-002-004', EventPackageId: '00152206', SmStatus: '01',
+    SmStatusText: 'Booked', ModregId: 'redacted-1',
+    ...over,
+  });
+  const batched = (rows: unknown[]): string =>
+    '--batch_x\r\nContent-Type: application/http\r\n\r\nHTTP/1.1 200 OK\r\n' +
+    `Content-Type: application/json\r\n\r\n${JSON.stringify({ d: { results: rows } })}\r\n--batch_x--\r\n`;
+
+  it('reports the booking AND the package it was booked on, from one feed', () => {
+    const store = new CaptureStore();
+    expect(store.ingestBody(batched([myRow()]), MY_URL)).toBe(true);
+    expect(store.getBooked()).toEqual([
+      { courseCode: 'CHEM-114A', moduleId: '2077', term: { year: '2026', period: '2', label: 'Fall 2026' }, optionCode: 'P-002-004' },
+    ]);
+    expect(store.getBookedAt()).not.toBeNull();
+  });
+
+  it('is not confused with the home feed: same keys, different service', () => {
+    // My Courses rows carry ModregId/SmShort/SmObjid too — only __metadata.type tells
+    // them apart, which is why rows are attributed rather than shape-guessed.
+    const store = new CaptureStore();
+    store.ingestBody(batched([myRow()]), MY_URL);
+    // A later home-page capture replaces the list but must not lose the packages.
+    store.ingestBody(BODY, URL);
+    expect(store.getBooked()?.[0]?.optionCode).toBe('P-002-004');
+  });
+
+  it('reads only the status verified live — a booking, not a guess at the others', () => {
+    const store = new CaptureStore();
+    expect(store.ingestBody(batched([myRow({ SmStatus: '02', SmStatusText: 'Waitlisted' })]), MY_URL)).toBe(false);
+    expect(store.getBooked()).toBeNull();
+  });
+
+  it('survives serialize/deserialize', () => {
+    const store = new CaptureStore();
+    store.ingestBody(batched([myRow()]), MY_URL);
+    expect(CaptureStore.deserialize(store.serialize()).getBooked()).toEqual(store.getBooked());
+  });
+});
+
 describe('CaptureStore: which SECTION was booked', () => {
   const TT_URL =
     'https://tss.ucsd.edu/sap/opu/odata/ited/EVENT_TIMETABLE_SRV/EventListSet?$filter=(EventDate%20ge%20datetime%272025-01-01T00:00:00%27)';

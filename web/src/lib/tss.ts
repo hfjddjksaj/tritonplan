@@ -40,31 +40,42 @@ export function openApptTimesInTss(): void {
 }
 
 /**
- * Where to send someone to have TSS report their bookings.
- *
- * The `#YStudent-Overview` route, confirmed by a student on 2026-08-19: this is the
- * page they were on when the booked feed was captured, and the bare origin
- * `https://tss.ucsd.edu/` does not even resolve. (It was briefly used here on a
- * misreading of "I just opened TSS" — the launchpad IS this URL, not the origin.)
+ * The TSS launchpad home. Confirmed by a student on 2026-08-19: the bare origin
+ * `https://tss.ucsd.edu/` does not even resolve — the launchpad IS this URL.
+ * Its "Booked Courses" card, and the timetable feed beside it, load here.
  */
 export const TSS_HOME_URL = 'https://tss.ucsd.edu/fiori#YStudent-Overview';
 
 /**
- * Check the student's bookings: put them on the TSS home page. Its "Booked Courses"
- * card is the ONLY place TSS states which modules a student is enrolled in, and it
- * fetches that feed on a full page load only — a course deep link (tssDeepLink) never
- * brings booked status back with it, verified live 2026-08-18. This is the one action
- * that does, which is why the planner offers it as its own button.
+ * "My Courses" — where Check bookings goes.
  *
- * Through the extension when present, so a TSS tab already on the home page is reused
- * and reloaded instead of a new tab per check; a plain new tab otherwise.
+ * Reached in TSS by clicking the home page's Booked Courses card. Its feed
+ * (`ITUS/PR_MY_MODULES_V2_SRV/ModuleHeaderSet`, verified live 2026-08-19) is the
+ * richest of the three: course, term AND the package each was booked on, in one row.
+ * The home page needs two separate feeds and a deduction to say the same thing, and
+ * says nothing at all about which section.
+ *
+ * A cold load here fetches ONLY this app's feed — no home-page feeds — which is
+ * exactly why the extension had to learn to read it before this became the target.
+ */
+export const TSS_MY_COURSES_URL =
+  'https://tss.ucsd.edu/fiori#ZUSModule-display?TileType=MYMOD&sap-app-origin-hint=&/MyModules';
+
+/**
+ * Check the student's bookings: put them on My Courses. TSS states enrolment only on
+ * pages the student loads themselves — a course deep link (tssDeepLink) never brings
+ * booked status back with it, verified live 2026-08-18. This is the one action that
+ * does, which is why the planner offers it as its own button.
+ *
+ * Through the extension when present, so a TSS tab already sitting there is reused and
+ * reloaded instead of a new tab per check; a plain new tab otherwise.
  *
  * ⛔ NO-BAN: navigation the student asked for by clicking, no different from typing
  * the URL. The page then fetches its own data; nothing of ours is replayed.
  */
 export function openTssHome(viaExtension = false): void {
-  if (viaExtension) postOpenTssHome(TSS_HOME_URL);
-  else window.open(TSS_HOME_URL, '_blank', 'noopener');
+  if (viaExtension) postOpenTssHome(TSS_MY_COURSES_URL);
+  else window.open(TSS_MY_COURSES_URL, '_blank', 'noopener');
 }
 
 /** Numeric part of an EventPackage code like "SE00152185" → "152185". */

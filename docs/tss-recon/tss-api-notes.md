@@ -301,14 +301,27 @@ section/package/enrollCode)。这条给的是学生**真正选上的 event**:
   所以只有 lecture 时必然歧义 → 沉默。
 - Fixture:`fixtures/timetable-fall2026.json`(第 1-2 行实录,第 3 行按同 schema 合成)。
 
-## Page: `#ZUSModule-display?TileType=MYMOD&…&/MyModules` — "My Courses"(2026-08-19 用户发现)
+## Service: `ITUS/PR_MY_MODULES_V2_SRV` — "My Courses" ⭐⭐ (VERIFIED LIVE 2026-08-19)
 
-首页 Booked Courses 卡片可以点进去,进的就是这一页。UI 上**直接写着 book 的包号**:
-`CHEM-114A (P-002-004)` + `Fall Quarter 2026/2027` + `Booked` —— 正是我们 `SectionOption.code` 的原文,
-比 event 匹配更直接。**但没抓到它的线格式**:模块列表只在 app 冷启动时请求一次,之后走缓存,页面内
-hash 跳转和点详情都不再发;而 document_start 那一发抢不到(注入工具会等 load 完)。
-所以本轮走的是 `EVENT_TIMETABLE_SRV` 那条路(数据同样跟着首页来,且已实测对齐)。
-**若以后要拿这一页**:需要在扩展里加日志,或在 SW 里记录 `ZUSModule` 相关 URL 的响应。
+`POST /sap/opu/odata/ITUS/PR_MY_MODULES_V2_SRV/$batch?sap-client=500` → `ModuleHeaderSet`(OData v2,
+**装在 `$batch` 里**)。页面:`https://tss.ucsd.edu/fiori#ZUSModule-display?TileType=MYMOD&sap-app-origin-hint=&/MyModules`
+(首页 Booked Courses 卡片点进去就是它;2026-08-19 用户发现并指定为 `Check bookings` 的落点)。
+
+**三条 feed 里最强的一条**:一行里同时有课、学期、**和 book 的那个 package**。首页要两条 feed 加一次推断才能说出同样的话。
+
+- 关键字段:`SmShort` "CHEM-114A" · `SmObjid` "00002077"(零填充) · `AcademicYear` "2026" + `AcademicSession` "002"
+  · **`EventPackageAbbr` "P-002-004"** ← 就是我们 `SectionOption.code` 的原文
+  · `EventPackageId` "00152206" ←我们的 `enrollCode` "SE00152206" 去掉前缀 · `SmStatus` "01" / `SmStatusText` "Booked"
+  · `WaitlistBooking` / `WaitlistPosition` / `Credits` / `SemanticState`。
+- `__metadata.type` = `ITUS.PR_MY_MODULES_V2_SRV.ModuleHeader`。**注意它也带 `ModregId`/`SmShort`/`SmObjid`** ——
+  跟 booked feed 的形状撞车,只有归属字段能区分。这正是 `looksLikeBookedRow` 必须查 `__metadata.type` 的原因。
+- **只读 `SmStatus === '01'`(Booked)**。waitlist / withdrawal 长什么样**未验证**,宁可不认也不要给一门可能没选上的课挂绿标。
+- ⚠ **冷启动这一页只发它自己这条 feed**:`BC_OVP_BOOKED_MODULES_SRV/ModuleSet` 和 `EVENT_TIMETABLE_SRV/EventListSet`
+  **一条都不发**(实测)。所以把 `Check bookings` 改到这一页之前,扩展**必须**先会读这条 —— 否则 Booked 徽章会整个消失。
+- 抓取难点(记录一下,免得下次再踩):模块列表**只在 app 冷启动时请求一次**,之后走缓存 —— 页面内 hash 跳转、
+  点详情都不再发;而注入探针抢不到 document_start(工具会等 load 完)。**最后是从页面内存里的 UI5 model 读出来的**
+  (`sap.ui.core.Element.registry` → `oModels` → `oData` 里找带 `EventPackageAbbr` 的行)。
+- Fixture:`fixtures/my-modules-fall2026.json`(GUID 已脱敏)。
 
 ## Day-abbreviation → Weekday map
 `M`→Mon, `Tu`→Tue, `W`→Wed, `Th`→Thu, `F`→Fri, `Sa`→Sat, `Su`→Sun.

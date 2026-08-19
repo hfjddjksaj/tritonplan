@@ -631,23 +631,23 @@ p {
   background: #e7f5ec;
   color: #1b7f4d;
   border-color: transparent;
-  gap: 5px;
 }
-/* "…but not the section you have." Sits inside the Booked badge, in the warning hue
-   the rest of the app already uses for a clash, so it reads as a caveat on that badge
-   rather than as a new kind of status. */
-.tag__warn {
-  display: inline-flex;
-  align-items: center;
+/* "…but not the section you have." A square plate beside Booked — the standard
+   warning shape, and square because a 13px circle with a glyph in it read as a
+   smudge at this size. Same box metrics as its neighbours (18px tall) so the row of
+   badges keeps one baseline; the glyph is centred by flex, not by line-height,
+   which is what had it sitting off-centre. */
+.tag--alert {
+  width: 18px;
+  padding: 0;
   justify-content: center;
-  width: 13px;
-  height: 13px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
-  color: #fff;
-  background: var(--conflict-ink);
-  border-radius: 50%;
+  color: var(--conflict-ink);
+  background: var(--conflict-soft);
+  border: 1.5px solid var(--conflict-ink);
+  border-radius: 3px;
   cursor: help;
 }
 /* The four actions as two explicit rows. Explicit is what keeps them in the card:

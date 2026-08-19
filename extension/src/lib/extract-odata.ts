@@ -12,6 +12,7 @@ import type {
   TssApptPeriodsRow,
   TssBookedModuleRow,
   TssTimetableRow,
+  TssMyModuleRow,
 } from '../parser/tss-types.js';
 
 interface ODataCollection {
@@ -177,6 +178,19 @@ function looksLikeBookedRow(v: unknown): v is TssBookedModuleRow {
   return typeof type === 'string' ? BOOKED_ENTITY_TYPE.test(type) : true;
 }
 
+/** `__metadata.type` of a My Courses row: `ITUS.PR_MY_MODULES_V2_SRV.ModuleHeader`. */
+const MY_MODULE_ENTITY_TYPE = /PR_MY_MODULES_V2_SRV\./;
+
+/** A row of the "My Courses" page — the only feed that names the booked package. */
+function looksLikeMyModuleRow(v: unknown): v is TssMyModuleRow {
+  if (!v || typeof v !== 'object') return false;
+  if (!('EventPackageAbbr' in v && 'SmShort' in v && 'SmObjid' in v && 'AcademicYear' in v)) {
+    return false;
+  }
+  const type = (v as TssMyModuleRow).__metadata?.type;
+  return typeof type === 'string' ? MY_MODULE_ENTITY_TYPE.test(type) : true;
+}
+
 /** `__metadata.type` of a timetable row: `ITED_EVENT_TIMETABLE_SRV.EventList`. */
 const TIMETABLE_ENTITY_TYPE = /EVENT_TIMETABLE_SRV\.EventList$/;
 
@@ -212,6 +226,8 @@ export interface ClassifiedCapture {
   bookedRows: TssBookedModuleRow[];
   /** The student's own timetable rows (which events they are enrolled in). */
   timetableRows: TssTimetableRow[];
+  /** 'My Courses' rows — booked course AND the package it was booked on. */
+  myModuleRows: TssMyModuleRow[];
   /** True when the body was a genuine OData-v2 JSON document (`{"d":{"results":[...]}}`),
    *  including a real zero-row document. False for anything else (XML `$metadata`,
    *  malformed/truncated JSON, HTML error pages, ...) — callers must not treat those
@@ -227,6 +243,7 @@ export function classifyCapture(body: string): ClassifiedCapture {
   const apptPeriods: TssApptPeriodsRow[] = [];
   const bookedRows: TssBookedModuleRow[] = [];
   const timetableRows: TssTimetableRow[] = [];
+  const myModuleRows: TssMyModuleRow[] = [];
   for (const coll of extractODataCollections(body)) {
     const ctx = coll['@odata.context'];
     if (typeof ctx === 'string' && APPT_CONTEXT_RE.test(ctx)) {
@@ -249,5 +266,9 @@ export function classifyCapture(body: string): ClassifiedCapture {
   const isV2Doc = v2Results !== null;
   bookedRows.push(...(v2Results ?? []).filter(looksLikeBookedRow));
   timetableRows.push(...(v2Results ?? []).filter(looksLikeTimetableRow));
-  return { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows, timetableRows, isV2Doc };
+  myModuleRows.push(...(v2Results ?? []).filter(looksLikeMyModuleRow));
+  return {
+    moduleRows, sectionRows, prereqTrees, apptPeriods,
+    bookedRows, timetableRows, myModuleRows, isV2Doc,
+  };
 }

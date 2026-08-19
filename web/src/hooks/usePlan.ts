@@ -599,6 +599,18 @@ export function usePlan() {
     return out;
   }, [bookedRows, viewPlan.term]);
 
+  /** Per course id, the package TSS says was booked ("P-002-004") — when it told us
+   *  outright, which only the My Courses feed does. */
+  const bookedOptionCodes = useMemo<ReadonlyMap<string, string>>(() => {
+    const t = viewPlan.term;
+    const out = new Map<string, string>();
+    for (const r of bookedRows) {
+      if (r.term.year !== t.year || r.term.period !== t.period) continue;
+      if (r.optionCode) out.set(`${r.courseCode}|${r.term.year}|${r.term.period}`, r.optionCode);
+    }
+    return out;
+  }, [bookedRows, viewPlan.term]);
+
   /** Whether TSS has ever reported this term's bookings — drives the sync prompt. */
   const bookedSynced = useMemo<boolean>(() => {
     const ws = termsState.terms[termKey(viewPlan.term)];
@@ -656,6 +668,7 @@ export function usePlan() {
     bookedIds,
     tssBookedIds,
     enrolledEventIds,
+    bookedOptionCodes,
     bookedSynced,
     bookedAt,
     bookedRows,

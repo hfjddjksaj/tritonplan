@@ -63,7 +63,28 @@ describe('bookedOptionOf', () => {
   });
 });
 
+describe('bookedOptionOf, when TSS named the package outright', () => {
+  it('takes TSS at its word — no deduction needed', () => {
+    expect(bookedOptionOf(course, undefined, 'P-002-004')?.code).toBe('P-002-004');
+  });
+
+  it('beats the event-id deduction, which is the fallback', () => {
+    expect(bookedOptionOf(course, ['00001078', '00002565'], 'P-001-001')?.code).toBe('P-001-001');
+  });
+
+  it('stays silent about a package this course does not have', () => {
+    // Our capture of the course is older than the booking, or partial. Nothing to
+    // point at, so nothing to say.
+    expect(bookedOptionOf(course, undefined, 'P-009-009')).toBeNull();
+  });
+});
+
 describe('bookedElsewhere', () => {
+  it('uses the named package when there is one', () => {
+    expect(bookedElsewhere(course, 'SEP-002-001', undefined, 'P-002-004')?.code).toBe('P-002-004');
+    expect(bookedElsewhere(course, 'SEP-002-004', undefined, 'P-002-004')).toBeNull();
+  });
+
   it('says nothing when the plan is on the booked package', () => {
     expect(bookedElsewhere(course, 'SEP-002-004', ['00001078', '00002565'])).toBeNull();
   });

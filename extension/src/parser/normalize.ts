@@ -19,7 +19,13 @@ import type {
   TeachingMethod,
   Term,
 } from '@triton/shared';
-import type { TssApptPeriodsRow, TssBookedModuleRow, TssPrereqRow, TssSectionRow } from './tss-types.js';
+import type {
+  TssApptPeriodsRow,
+  TssBookedModuleRow,
+  TssMyModuleRow,
+  TssPrereqRow,
+  TssSectionRow,
+} from './tss-types.js';
 import { parseSched } from './parse-sched.js';
 
 export interface CourseMeta {
@@ -242,6 +248,29 @@ const stripLeadingZeros = (s: string): string => s.replace(/^0+(?=.)/, '');
 
 /** Homepage booked row → BookedModule. moduleId/period are zero-padded in this
  *  feed ("00002077"/"002") but must match course-capture keys ("2077"/"2"). */
+/**
+ * A "My Courses" row → the same BookedModule, plus the package it was booked on.
+ *
+ * This one feed says what the home page needs two feeds and a deduction to say. Only
+ * `SmStatus === '01'` ("Booked") is read as a booking: it is the only value seen live,
+ * and guessing at what a waitlist or a withdrawal looks like would put a green badge
+ * on a course the student may not have.
+ */
+export function myModuleRowToBooked(
+  row: TssMyModuleRow,
+): { module: BookedModule; optionCode: string } | null {
+  if (row.SmStatus !== undefined && row.SmStatus !== '01') return null;
+  const courseCode = row.SmShort?.trim();
+  const moduleId = stripLeadingZeros(row.SmObjid ?? '');
+  const year = row.AcademicYear?.trim();
+  const period = stripLeadingZeros(row.AcademicSession ?? '');
+  if (!courseCode || !moduleId || !year || !period) return null;
+  return {
+    module: { courseCode, moduleId, term: termFromRow(year, period) },
+    optionCode: row.EventPackageAbbr?.trim() ?? '',
+  };
+}
+
 export function bookedRowToModule(row: TssBookedModuleRow): BookedModule | null {
   const courseCode = row.SmShort?.trim();
   const moduleId = stripLeadingZeros(row.SmObjid ?? '');

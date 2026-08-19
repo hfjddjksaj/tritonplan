@@ -104,16 +104,16 @@ describe('CourseCard booked state', () => {
       });
     }
 
-    it('marks the Booked badge, and names the package TSS actually has', () => {
+    it('puts a square alert beside Booked, naming the package TSS actually has', () => {
       render('P-002-004');
-      const warn = container.querySelector('.tag--booked .tag__warn');
+      const warn = container.querySelector('.tag--alert');
       expect(warn?.textContent).toBe('!');
       expect(warn?.getAttribute('title')).toMatch(/TSS has you in P-002-004/);
     });
 
     it('stays quiet when the two agree — silence is the normal case', () => {
       render();
-      expect(container.querySelector('.tag__warn')).toBeNull();
+      expect(container.querySelector('.tag--alert')).toBeNull();
       expect(container.querySelector('.tag--booked')?.textContent).toBe('Booked');
     });
   });

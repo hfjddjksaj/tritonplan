@@ -178,4 +178,11 @@ export interface BookedModule {
    * captured, so treat "no eventIds" as "unknown", never as "no components".
    */
   eventIds?: string[];
+  /**
+   * The package the student actually booked, as TSS abbreviates it — "P-002-004",
+   * the same string as `SectionOption.code`. From the "My Courses" page, the one feed
+   * that states it outright; absent when only the home page's feeds were captured, in
+   * which case `eventIds` is the way to work it out.
+   */
+  optionCode?: string;
 }

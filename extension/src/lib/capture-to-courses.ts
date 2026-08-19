@@ -6,7 +6,14 @@
 
 import type { ApptTimes, BookedModule, CourseOffering } from '@triton/shared';
 import type { TssModuleRow, TssPrereqRow, TssSectionRow } from '../parser/tss-types.js';
-import { apptPeriodsToApptTimes, bookedRowToModule, normalizeSections, prereqTreeToGroups, type CourseMeta } from '../parser/normalize.js';
+import {
+  apptPeriodsToApptTimes,
+  bookedRowToModule,
+  myModuleRowToBooked,
+  normalizeSections,
+  prereqTreeToGroups,
+  type CourseMeta,
+} from '../parser/normalize.js';
 import { classifyCapture } from './extract-odata.js';
 
 interface StoreShape {
@@ -18,6 +25,7 @@ interface StoreShape {
   booked?: BookedModule[];                             // homepage feed; absent in old stores
   bookedAt?: string;                                   // ISO time of that capture; absent in old stores
   enrolled?: Record<string, string[]>;                 // moduleId → TSS EventIDs the student is in
+  bookedOptions?: Record<string, string>;              // moduleId → booked package code
 }
 
 function creditsToUnits(s: string | undefined): number | undefined {
@@ -84,6 +92,8 @@ export class CaptureStore {
    * section I actually booked?".
    */
   private enrolled = new Map<string, string[]>();
+  /** moduleId → the package code TSS says was booked ("P-002-004"), from My Courses. */
+  private bookedOptions = new Map<string, string>();
 
   /**
    * Ingest one captured OData response body (plain or $batch). Returns true if anything
@@ -92,9 +102,31 @@ export class CaptureStore {
    * browse replaces them (freshest seats/status win).
    */
   ingestBody(body: string, url?: string): boolean {
-    const { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows, timetableRows, isV2Doc } =
-      classifyCapture(body);
+    const {
+      moduleRows, sectionRows, prereqTrees, apptPeriods,
+      bookedRows, timetableRows, myModuleRows, isV2Doc,
+    } = classifyCapture(body);
     let changed = false;
+    if (myModuleRows.length) {
+      // "My Courses" reports the whole booking list AND the package each was booked
+      // on. Richer than the home page's two feeds put together, so when it speaks it
+      // sets the list; same rule as everywhere else, though — a report we understood
+      // nothing in changes nothing.
+      const booked: BookedModule[] = [];
+      const options = new Map<string, string>();
+      for (const row of myModuleRows) {
+        const parsed = myModuleRowToBooked(row);
+        if (!parsed) continue;
+        booked.push(parsed.module);
+        if (parsed.optionCode) options.set(parsed.module.moduleId, parsed.optionCode);
+      }
+      if (booked.length) {
+        this.booked = booked;
+        this.bookedAt = new Date().toISOString();
+        this.bookedOptions = options;
+        changed = true;
+      }
+    }
     if (timetableRows.length) {
       // The feed carries every dated occurrence of every event, across terms, in one
       // response — so one capture is the whole truth and replaces what we held. Rows
@@ -262,7 +294,13 @@ export class CaptureStore {
     // `eventIds` ABSENT — "we don't know which section", never "no sections".
     return this.booked.map((m) => {
       const eventIds = this.enrolled.get(m.moduleId);
-      return eventIds && eventIds.length ? { ...m, eventIds } : m;
+      const optionCode = this.bookedOptions.get(m.moduleId);
+      if (!eventIds?.length && !optionCode) return m;
+      return {
+        ...m,
+        ...(eventIds?.length ? { eventIds } : {}),
+        ...(optionCode ? { optionCode } : {}),
+      };
     });
   }
 
@@ -281,6 +319,7 @@ export class CaptureStore {
       ...(this.booked !== null ? { booked: this.booked } : {}),
       ...(this.bookedAt !== null ? { bookedAt: this.bookedAt } : {}),
       ...(this.enrolled.size ? { enrolled: Object.fromEntries(this.enrolled) } : {}),
+      ...(this.bookedOptions.size ? { bookedOptions: Object.fromEntries(this.bookedOptions) } : {}),
     };
   }
 
@@ -293,6 +332,7 @@ export class CaptureStore {
     fillMap(store.prereqs, shape.prereqs);
     fillMap(store.apptTimes, shape.apptTimes);
     fillMap(store.enrolled, shape.enrolled);
+    fillMap(store.bookedOptions, shape.bookedOptions);
     // A stored EMPTY list is dropped rather than loaded, so it reads as "never
     // captured" instead of "TSS says you have none". Stores written before the clear
     // rule was narrowed can hold an empty list that no student ever earned, and that

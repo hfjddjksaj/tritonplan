@@ -89,6 +89,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
               entry.course,
               entry.selectedOptionId,
               ctl.enrolledEventIds.get(entry.course.id),
+              ctl.bookedOptionCodes.get(entry.course.id),
             );
             return (
               <CourseCard
@@ -273,8 +274,9 @@ export function bookedTitle(
   viewedTerm: Term,
 ): string {
   const how =
-    "TSS lists what you're enrolled in on its home page only — opening a course from " +
-    'here never passes it along. This opens that page, which hands the list over as it loads.';
+    "TSS states what you're enrolled in only on pages you load yourself — opening a " +
+    'course from here never passes it along. This opens My Courses, which reports both ' +
+    'your bookings and the section each one is on.';
   const count = bookedIds.size;
   if (!synced) return `Booked courses not read yet. ${how}`;
   if (at === null) {

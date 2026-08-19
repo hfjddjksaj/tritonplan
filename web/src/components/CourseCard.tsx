@@ -88,20 +88,6 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             {booked ? (
               <span className="tag tag--booked" title="You are enrolled in this course">
                 Booked
-                {/* TSS has you in a DIFFERENT package than the one on the grid. Rides
-                    the Booked badge instead of taking a badge slot of its own: it is a
-                    qualifier on "booked", not a second piece of standing. Nothing here
-                    switches the section — that stays the student's own click. */}
-                {bookedOptionCode && (
-                  <span
-                    className="tag__warn"
-                    role="img"
-                    aria-label={`Booked section differs: TSS has ${bookedOptionCode}`}
-                    title={`TSS has you in ${bookedOptionCode}. Your plan shows a different section — open the section list below to switch it, if you meant to.`}
-                  >
-                    !
-                  </span>
-                )}
               </span>
             ) : (
               full && (
@@ -109,6 +95,21 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                   Full
                 </span>
               )
+            )}
+            {/* TSS has you in a DIFFERENT package than the one on the grid. Its own
+                mark, beside Booked rather than inside it: a caveat crammed into
+                another badge reads as decoration on that badge, and at 13px it read
+                as a smudge. Nothing here switches the section — that stays the
+                student's own click. */}
+            {booked && bookedOptionCode && (
+              <span
+                className="tag tag--alert"
+                role="img"
+                aria-label={`Booked section differs: TSS has ${bookedOptionCode}`}
+                title={`TSS has you in ${bookedOptionCode}. Your plan shows a different section — open the section list below to switch it, if you meant to.`}
+              >
+                !
+              </span>
             )}
           </div>
           <div className="course-card__title">{course.title}</div>

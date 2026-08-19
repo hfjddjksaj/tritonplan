@@ -167,7 +167,9 @@ async function openOrFocusTss(url: string, moduleId: string): Promise<void> {
  */
 async function openOrReuseBookingTab(url: string): Promise<void> {
   const tabs = await queryTssTabs();
-  const booking = tabs.find((t) => t.id != null && (t.url ?? '').includes(BOOKING_HASH));
+  const booking = tabs.find(
+    (t) => t.id != null && (t.url ?? '').includes(BOOKING_HASH) && !isMyCoursesTab(t.url ?? ''),
+  );
   if (booking && booking.id != null) {
     try {
       if (booking.url === url) {
@@ -203,6 +205,18 @@ function isTssLandingTab(url: string): boolean {
 }
 
 /**
+ * The "My Courses" list — where "Check bookings" goes.
+ *
+ * It shares the `ZUSModule-display?TileType=MYMOD` prefix with a section's BOOKING
+ * page, so the two are told apart by their route tail: `/MyModules` for the list,
+ * `/Detail/EventPackage/…` for a booking. Without this, "book section" would hijack
+ * the list tab, and the check would reload whichever booking page was open.
+ */
+function isMyCoursesTab(url: string): boolean {
+  return (url.split('#')[1] ?? '').includes('/MyModules');
+}
+
+/**
  * "Check my bookings": put the student on the TSS home page. A tab already sitting
  * there is focused and RELOADED — TSS is a UI5 single-page app, so only a full page
  * load makes it fetch the booked feed again, and focusing a stale tab would look like
@@ -214,14 +228,27 @@ function isTssLandingTab(url: string): boolean {
  */
 async function openOrReloadTssHome(url: string): Promise<void> {
   const tabs = await queryTssTabs();
-  const home = tabs.find((t) => t.id != null && isTssLandingTab(t.url ?? ''));
-  if (home && home.id != null) {
+  // Already on the list: reload it. TSS is a UI5 single-page app, so only a full load
+  // re-fetches — focusing a stale tab would look like the check silently did nothing.
+  const listed = tabs.find((t) => t.id != null && isMyCoursesTab(t.url ?? ''));
+  if (listed && listed.id != null) {
     try {
-      await focusTab(home);
-      await chrome.tabs.reload(home.id);
+      await focusTab(listed);
+      await chrome.tabs.reload(listed.id);
       return;
     } catch {
-      /* tab vanished between query and update — fall through to create */
+      /* tab vanished between query and update — fall through */
+    }
+  }
+  // Sitting on the launchpad: send that tab on, exactly as clicking the Booked
+  // Courses card would. A booking tab is never taken over — that is work in progress.
+  const landing = tabs.find((t) => t.id != null && isTssLandingTab(t.url ?? ''));
+  if (landing) {
+    try {
+      await focusTab(landing, url);
+      return;
+    } catch {
+      /* fall through to create */
     }
   }
   try {

@@ -120,6 +120,37 @@ export interface TssBookedModuleRow {
 }
 
 /**
+ * One row of the "My Courses" page —
+ * POST /sap/opu/odata/ITUS/PR_MY_MODULES_V2_SRV/$batch → ModuleHeaderSet.
+ * OData **v2**, inside a `$batch`. Verified live 2026-08-19.
+ *
+ * The richest of the three: course, term AND the booked package in one row, where the
+ * home page needs two feeds and a deduction to say the same thing. Reached from the
+ * home page's Booked Courses card (`#ZUSModule-display?TileType=MYMOD&…&/MyModules`),
+ * which is what the planner's "Check bookings" opens.
+ */
+export interface TssMyModuleRow {
+  __metadata?: { type?: string };
+  SmShort: string;           // "CHEM-114A"
+  SmObjid: string;           // ZERO-PADDED module objid
+  SmStext?: string;          // short title
+  SmDescription?: string;    // long title
+  AcademicYear: string;      // "2026"
+  AcademicSession: string;   // ZERO-PADDED: "002"
+  EventPackageAbbr: string;  // "P-002-004" — same string as SectionOption.code
+  EventPackageId?: string;   // "00152206" — SectionOption.id without its "SE" prefix
+  EventPackageName?: string; // "CHEM-114A (P-002-004)"
+  /** "01" = Booked (the only value seen live). Other statuses are UNVERIFIED, so
+   *  anything else is left alone rather than guessed at. */
+  SmStatus?: string;
+  SmStatusText?: string;     // "Booked"
+  WaitlistBooking?: boolean;
+  WaitlistPosition?: number;
+  Credits?: string;
+  CreditUnit?: string;
+}
+
+/**
  * One row of the student's own timetable —
  * GET /sap/opu/odata/ited/EVENT_TIMETABLE_SRV/EventListSet?$filter=(EventDate ge … le …).
  * OData **v2**. Verified live 2026-08-19 (126 rows, one per dated occurrence).
