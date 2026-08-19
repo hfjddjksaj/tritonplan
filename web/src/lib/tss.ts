@@ -1,6 +1,6 @@
 /** Deep links back into the Triton Student System (TSS) for a given course. */
 import type { CourseOffering, SectionOption } from '@triton/shared';
-import { postOpenBooking, postOpenTss } from './bridge';
+import { postOpenBooking, postOpenTss, postOpenTssHome } from './bridge';
 
 /**
  * Build a TSS Fiori deep link to a course module's schedule view.
@@ -43,16 +43,21 @@ export function openApptTimesInTss(): void {
 export const TSS_HOME_URL = 'https://tss.ucsd.edu/fiori#YStudent-Overview';
 
 /**
- * Open the TSS home page. Its "Booked Courses" card is the ONLY place TSS states
- * which modules a student is enrolled in, and it fetches that feed on a full page
- * load only — so a course deep link (tssDeepLink) never brings booked status back
- * with it. This is the one action that does.
+ * Check the student's bookings: put them on the TSS home page. Its "Booked Courses"
+ * card is the ONLY place TSS states which modules a student is enrolled in, and it
+ * fetches that feed on a full page load only — a course deep link (tssDeepLink) never
+ * brings booked status back with it, verified live 2026-08-18. This is the one action
+ * that does, which is why the planner offers it as its own button.
  *
- * ⛔ NO-BAN: a plain new tab from a click the student made. The page then fetches
- * its own data exactly as it would if they had typed the URL; nothing is replayed.
+ * Through the extension when present, so a TSS tab already on the home page is reused
+ * and reloaded instead of a new tab per check; a plain new tab otherwise.
+ *
+ * ⛔ NO-BAN: navigation the student asked for by clicking, no different from typing
+ * the URL. The page then fetches its own data; nothing of ours is replayed.
  */
-export function openTssHome(): void {
-  window.open(TSS_HOME_URL, '_blank', 'noopener');
+export function openTssHome(viaExtension = false): void {
+  if (viaExtension) postOpenTssHome(TSS_HOME_URL);
+  else window.open(TSS_HOME_URL, '_blank', 'noopener');
 }
 
 /** Numeric part of an EventPackage code like "SE00152185" → "152185". */

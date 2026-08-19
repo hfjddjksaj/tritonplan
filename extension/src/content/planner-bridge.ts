@@ -127,8 +127,9 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 // Page → extension requests:
-//  - "open this course/booking in TSS" — the SW focuses/reuses an existing TSS tab
-//    instead of the page spawning a new one per click. User-driven navigation only.
+//  - "open this course/booking in TSS", and "open the TSS home page" (the planner's
+//    check-my-bookings action) — the SW focuses/reuses an existing TSS tab instead of
+//    the page spawning a new one per click. User-driven navigation only.
 //  - "forget these courses" — the student removed browsed courses in the planner;
 //    the SW drops their captured data so they don't come back on the next push.
 window.addEventListener('message', (event: MessageEvent) => {
@@ -156,11 +157,16 @@ window.addEventListener('message', (event: MessageEvent) => {
     }
     return;
   }
-  if (d.type !== 'open-tss' && d.type !== 'open-booking') return;
+  const ROUTES = {
+    'open-tss': MSG.OPEN_TSS,
+    'open-booking': MSG.OPEN_BOOKING,
+    'open-tss-home': MSG.OPEN_TSS_HOME,
+  } as const;
+  const type = ROUTES[d.type as keyof typeof ROUTES];
+  if (type === undefined) return;
   const url = d.payload?.url;
   if (typeof url !== 'string' || !url.startsWith(TSS_URL_PREFIX)) return;
   const moduleId = typeof d.payload?.moduleId === 'string' ? d.payload.moduleId : '';
-  const type = d.type === 'open-tss' ? MSG.OPEN_TSS : MSG.OPEN_BOOKING;
   try {
     void chrome.runtime.sendMessage({ type, url, moduleId }).catch(() => {
       // SW unreachable — degrade to a plain new tab (may be popup-blocked; best effort).

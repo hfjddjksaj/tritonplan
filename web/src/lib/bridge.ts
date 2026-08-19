@@ -175,6 +175,28 @@ export function postOpenTss(url: string, moduleId: string): void {
   window.postMessage(msg, window.location.origin);
 }
 
+/**
+ * Ask the extension to open the TSS home page — the planner's "check my bookings".
+ * Routed through the extension so a TSS tab already sitting on the home page is
+ * reused and reloaded, rather than piling up a new tab per check.
+ */
+export interface OpenTssHomeMessage {
+  source: typeof PAGE_BRIDGE_SOURCE;
+  type: 'open-tss-home';
+  version: 1;
+  payload: { url: string };
+}
+
+export function postOpenTssHome(url: string): void {
+  const msg: OpenTssHomeMessage = {
+    source: PAGE_BRIDGE_SOURCE,
+    type: 'open-tss-home',
+    version: 1,
+    payload: { url },
+  };
+  window.postMessage(msg, window.location.origin);
+}
+
 /** Ask the extension to open a section's booking page, reusing the one booking tab. */
 export interface OpenBookingMessage {
   source: typeof PAGE_BRIDGE_SOURCE;

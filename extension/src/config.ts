@@ -56,10 +56,8 @@ export const MSG = {
   GET_COURSES: 'tp:get-courses',
   /** any → SW: return the captured ApptTimes[] (student's enrollment windows). */
   GET_APPT_TIMES: 'tp:get-appt-times',
-  /** any → SW: return the captured booked-modules list (null = never captured). */
-  GET_BOOKED: 'tp:get-booked',
-  /** popup → SW: the booked list PLUS when TSS last reported it, so a student can
-   *  see whether the homepage feed has ever reached us and how stale it is. */
+  /** any → SW: the booked-modules list PLUS when TSS last reported it.
+   *  `{ list: null }` = the homepage feed has never reached us. */
   GET_BOOKED_STATUS: 'tp:get-booked-status',
   /** tss-inject → SW: student clicked "+ TritonPlan" on a section. */
   PLAN_ADD: 'tp:plan-add',
@@ -71,6 +69,10 @@ export const MSG = {
   OPEN_TSS: 'tp:open-tss',
   /** planner-bridge → SW: open a booking page, reusing the one booking tab. */
   OPEN_BOOKING: 'tp:open-booking',
+  /** planner-bridge → SW: open the TSS home page — the "check my bookings" action.
+   *  Reuses a TSS tab already on it, RELOADING it, because only a full page load
+   *  makes TSS fetch the Booked Courses feed. */
+  OPEN_TSS_HOME: 'tp:open-tss-home',
   /** planner-bridge → SW: permanently drop captured data for these ModuleIDs
    *  (the student removed the courses from the planner's browsed list). */
   FORGET_COURSES: 'tp:forget-courses',

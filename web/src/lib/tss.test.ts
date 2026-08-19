@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SectionOption } from '@triton/shared';
-import { tssDeepLink, tssBookingLink, openInTss } from './tss';
+import { tssDeepLink, tssBookingLink, openInTss, openTssHome, TSS_HOME_URL } from './tss';
 import { PAGE_BRIDGE_SOURCE } from './bridge';
 import { makeCourse } from './fixtures';
 
@@ -74,5 +74,41 @@ describe('openInTss', () => {
     openInTss(course());
     expect(open).toHaveBeenCalledWith(tssDeepLink(course()), '_blank', 'noopener');
     open.mockRestore();
+  });
+});
+
+/**
+ * "Check bookings" is the planner's only route to booked status, because TSS reports
+ * it on a full load of its home page and nowhere else — verified live 2026-08-18,
+ * where opening a course deep link captured nothing and opening tss.ucsd.edu captured
+ * three courses. Through the extension a tab already there gets reloaded, so a repeat
+ * check actually re-reads instead of just focusing a stale page.
+ */
+describe('openTssHome', () => {
+  it('posts an open-tss-home request for the extension bridge when routed through it', async () => {
+    const seen: unknown[] = [];
+    const onMsg = (e: MessageEvent) => seen.push(e.data);
+    window.addEventListener('message', onMsg);
+    openTssHome(true);
+    await new Promise((r) => setTimeout(r, 0));
+    window.removeEventListener('message', onMsg);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      source: PAGE_BRIDGE_SOURCE,
+      type: 'open-tss-home',
+      version: 1,
+      payload: { url: TSS_HOME_URL },
+    });
+  });
+
+  it('falls back to a plain new tab without the extension', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    openTssHome();
+    expect(open).toHaveBeenCalledWith(TSS_HOME_URL, '_blank', 'noopener');
+    open.mockRestore();
+  });
+
+  it('points at the launchpad home route, not a course deep link', () => {
+    expect(TSS_HOME_URL).toBe('https://tss.ucsd.edu/fiori#YStudent-Overview');
   });
 });

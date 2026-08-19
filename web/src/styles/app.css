@@ -660,12 +660,19 @@ p {
 }
 .booksync--ok {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px 8px;
   border-style: solid;
   border-color: var(--line);
   padding: 8px 10px 8px 12px;
+}
+/* Button keeps its full label and hugs the right edge — if the pair won't fit on one
+   line in a narrow rail, it drops to its own line rather than breaking mid-label. */
+.booksync .btn {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
 }
 .booksync__text {
   margin: 0 0 9px;
@@ -676,6 +683,7 @@ p {
 .booksync--ok .booksync__text {
   margin: 0;
   min-width: 0;
+  flex: 1 1 auto;
 }
 .booksync__when {
   color: var(--text-faint);

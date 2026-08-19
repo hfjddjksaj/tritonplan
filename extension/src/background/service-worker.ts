@@ -188,6 +188,39 @@ async function openOrReuseBookingTab(url: string): Promise<void> {
   }
 }
 
+/** Hash route of the TSS launchpad home page — the only page that fetches the
+ *  student's Booked Courses feed. */
+const HOME_HASH = '#YStudent-Overview';
+
+/**
+ * "Check my bookings": put the student on the TSS home page. A tab already sitting
+ * there is focused and RELOADED — TSS is a UI5 single-page app, so only a full page
+ * load makes it fetch the booked feed again, and focusing a stale tab would look like
+ * the check silently did nothing. Otherwise a fresh tab, like any link.
+ *
+ * ⛔ NO-BAN: this is the student's own click, navigating their own browser to a page
+ * they asked for — the same act as typing the URL or pressing F5 on it. Nothing is
+ * fetched, replayed or automated by us; the page then requests its own data.
+ */
+async function openOrReloadTssHome(url: string): Promise<void> {
+  const tabs = await queryTssTabs();
+  const home = tabs.find((t) => t.id != null && (t.url ?? '').includes(HOME_HASH));
+  if (home && home.id != null) {
+    try {
+      await focusTab(home);
+      await chrome.tabs.reload(home.id);
+      return;
+    } catch {
+      /* tab vanished between query and update — fall through to create */
+    }
+  }
+  try {
+    await chrome.tabs.create({ url });
+  } catch {
+    /* ignore */
+  }
+}
+
 /* ---- Message router ------------------------------------------------------- */
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== 'object') return false;
@@ -238,18 +271,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return true;
     }
 
-    case MSG.GET_BOOKED: {
-      (async () => {
-        try {
-          const store = await getStore();
-          sendResponse(store.getBooked()); // null = never captured → bridge won't push
-        } catch {
-          sendResponse(null);
-        }
-      })();
-      return true;
-    }
-
     case MSG.GET_BOOKED_STATUS: {
       (async () => {
         try {
@@ -291,12 +312,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
 
     case MSG.OPEN_TSS:
-    case MSG.OPEN_BOOKING: {
+    case MSG.OPEN_BOOKING:
+    case MSG.OPEN_TSS_HOME: {
       const url = typeof msg.url === 'string' ? msg.url : '';
       const moduleId = typeof msg.moduleId === 'string' ? msg.moduleId : '';
       (async () => {
         if (url.startsWith(TSS_URL_PREFIX)) {
           if (msg.type === MSG.OPEN_BOOKING) await openOrReuseBookingTab(url);
+          else if (msg.type === MSG.OPEN_TSS_HOME) await openOrReloadTssHome(url);
           else await openOrFocusTss(url, moduleId);
           sendResponse({ ok: true });
         } else {

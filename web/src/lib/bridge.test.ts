@@ -13,8 +13,10 @@ import {
   type PlanAddMessage,
   isBookedMessage,
   type BookedMessage,
+  postOpenTssHome,
 } from './bridge';
 import { makeCourse } from './fixtures';
+import { TSS_HOME_URL } from './tss';
 
 const APPT: ApptTimes = {
   academicYear: '2026',
@@ -283,6 +285,55 @@ describe('postForgetCourses', () => {
       ]);
       postForgetCourses([]);
       expect(posted).toHaveLength(1); // empty list posts nothing
+    } finally {
+      window.postMessage = orig;
+    }
+  });
+});
+
+describe('booked freshness rides along optionally', () => {
+  const good: BookedMessage = { source: BRIDGE_SOURCE, type: 'booked', version: 1, payload: [BOOKED_ROW] };
+
+  it('hands capturedAt to the handler when present, undefined when not', () => {
+    const seen: (string | undefined)[] = [];
+    const off = installBridgeListener({
+      onCourses: () => {}, onPlanAdd: () => {},
+      onBooked: (_rows, at) => seen.push(at),
+    });
+    try {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { ...good, capturedAt: '2026-08-19T00:00:00.000Z' },
+        source: window, origin: window.location.origin,
+      }));
+      window.dispatchEvent(new MessageEvent('message', {
+        data: good, source: window, origin: window.location.origin,
+      }));
+    } finally {
+      off();
+    }
+    expect(seen).toEqual(['2026-08-19T00:00:00.000Z', undefined]);
+  });
+
+  it('still validates the envelope with capturedAt attached', () => {
+    expect(isBookedMessage({ ...good, capturedAt: 'whenever' })).toBe(true);
+  });
+});
+
+describe('postOpenTssHome', () => {
+  it('posts the open-tss-home envelope so the extension can reuse a TSS tab', () => {
+    const posted: unknown[] = [];
+    const orig = window.postMessage.bind(window);
+    window.postMessage = ((msg: unknown) => { posted.push(msg); }) as typeof window.postMessage;
+    try {
+      postOpenTssHome(TSS_HOME_URL);
+      expect(posted).toEqual([
+        {
+          source: 'triton-planner-page',
+          type: 'open-tss-home',
+          version: 1,
+          payload: { url: 'https://tss.ucsd.edu/fiori#YStudent-Overview' },
+        },
+      ]);
     } finally {
       window.postMessage = orig;
     }

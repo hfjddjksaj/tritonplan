@@ -64,7 +64,7 @@ import {
 } from '../lib/terms-state';
 import { isArchived, termKey, type TermKey } from '../lib/terms';
 import { mirrorSeedPlan, planToMirrorHash, readHash } from '../lib/share';
-import { openBooking, openInTss } from '../lib/tss';
+import { openBooking, openInTss, openTssHome } from '../lib/tss';
 import {
   buildSelectedCourses,
   emptyPlan,
@@ -525,6 +525,11 @@ export function usePlan() {
     openBooking(course, option, bridgeSeen.current);
   }, []);
 
+  /** "Check bookings" — the TSS home page is the only page that reports them. */
+  const checkBookings = useCallback(() => {
+    openTssHome(bridgeSeen.current);
+  }, []);
+
   // ---- derived view data (memoized) --------------------------------------
   // Everything the screen shows derives from the plan being VIEWED — the user's
   // own, or a received one (read-only). Archived terms are read-only too.
@@ -595,6 +600,7 @@ export function usePlan() {
     bookedSynced,
     bookedAt,
     extensionSeen,
+    checkBookings,
     toggleBooked,
     openCourseInTss,
     openBookingInTss,

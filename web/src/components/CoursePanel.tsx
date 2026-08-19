@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { findOption } from '../lib/plan';
 import { relativeTime } from '../lib/format';
-import { openTssHome, tssBookingLink } from '../lib/tss';
+import { tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
 import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -55,7 +55,12 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
 
       <div className="rail__scroll">
         {!readOnly && !isMobile && ctl.extensionSeen && (
-          <BookedSync synced={ctl.bookedSynced} at={ctl.bookedAt} count={ctl.bookedIds.size} />
+          <BookedSync
+            synced={ctl.bookedSynced}
+            at={ctl.bookedAt}
+            count={ctl.bookedIds.size}
+            onCheck={ctl.checkBookings}
+          />
         )}
 
         {hasEntries ? (
@@ -223,10 +228,12 @@ function BookedSync({
   synced,
   at,
   count,
+  onCheck,
 }: {
   synced: boolean;
   at: string | null;
   count: number;
+  onCheck: () => void;
 }) {
   const fresh = at ? relativeTime(at) : '';
   return (
@@ -247,14 +254,14 @@ function BookedSync({
       <button
         type="button"
         className={`btn btn--sm${synced ? '' : ' btn--primary'}`}
-        onClick={openTssHome}
+        onClick={onCheck}
         title={
           'Open the TSS home page. Its Booked Courses card is the only place TSS lists your ' +
           'enrolments, and it hands the list over as the page loads — opening a single course ' +
           'from here never does.'
         }
       >
-        <External size={13} /> {synced ? 'Refresh' : 'Open TSS home'}
+        <External size={13} /> Check bookings
       </button>
     </div>
   );
