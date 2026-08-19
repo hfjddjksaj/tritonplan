@@ -331,7 +331,7 @@ describe('postOpenTssHome', () => {
           source: 'triton-planner-page',
           type: 'open-tss-home',
           version: 1,
-          payload: { url: 'https://tss.ucsd.edu/fiori#YStudent-Overview' },
+          payload: { url: TSS_HOME_URL },
         },
       ]);
     } finally {

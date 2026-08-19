@@ -39,8 +39,16 @@ export function openApptTimesInTss(): void {
   window.open(TSS_APPT_TIMES_URL, '_blank', 'noopener');
 }
 
-/** The TSS launchpad home page (OVP app `yucsd.ovp.student`, verified 2026-08-11). */
-export const TSS_HOME_URL = 'https://tss.ucsd.edu/fiori#YStudent-Overview';
+/**
+ * Where to send someone to have TSS report their bookings.
+ *
+ * The bare origin, NOT the `#YStudent-Overview` route the recon notes name for the
+ * OVP app. That route was inferred from where the Booked Courses card lives; the bare
+ * origin is what a student actually opens, and on 2026-08-18 a student opening it
+ * captured three booked courses while a course deep link captured none. Land them on
+ * the page that is known to work rather than the one that ought to.
+ */
+export const TSS_HOME_URL = 'https://tss.ucsd.edu/';
 
 /**
  * Check the student's bookings: put them on the TSS home page. Its "Booked Courses"

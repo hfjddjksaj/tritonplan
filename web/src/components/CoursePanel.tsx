@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { BookedModule, Term } from '@triton/shared';
 import { findOption } from '../lib/plan';
 import { relativeTime } from '../lib/format';
 import { tssBookingLink } from '../lib/tss';
@@ -51,7 +52,13 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
               type="button"
               className="btn btn--sm rail__check"
               onClick={ctl.checkBookings}
-              title={bookedTitle(ctl.bookedSynced, ctl.bookedIds.size, ctl.bookedAt)}
+              title={bookedTitle(
+                ctl.bookedSynced,
+                ctl.bookedIds.size,
+                ctl.bookedAt,
+                ctl.bookedRows,
+                ctl.viewPlan.term,
+              )}
             >
               <External size={13} /> Check bookings
             </button>
@@ -231,13 +238,34 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
  * page, and hands the list over only as that page loads. Neither "open in TSS" nor
  * "book section" goes near it: both deep-link straight into another Fiori app
  * (verified live 2026-08-18). So this button exists, and so does this explanation.
+ *
+ * The interesting case is "read, but none for this term". The badges key off the term
+ * on screen, so bookings TSS reports for a DIFFERENT term look identical to no
+ * bookings at all — say which term they are in instead of reporting a flat zero.
  */
-function bookedTitle(synced: boolean, count: number, at: string | null): string {
-  const head = !synced
-    ? 'Booked courses not read yet.'
-    : `${count === 0 ? 'No booked courses' : `${count} booked`}${at ? `, read ${relativeTime(at)}` : ''}.`;
-  return (
-    `${head} TSS lists what you're enrolled in on its home page only — opening a course ` +
-    'from here never passes it along. This opens that page, which hands the list over as it loads.'
+export function bookedTitle(
+  synced: boolean,
+  count: number,
+  at: string | null,
+  rows: readonly BookedModule[],
+  viewedTerm: Term,
+): string {
+  const how =
+    "TSS lists what you're enrolled in on its home page only — opening a course from " +
+    'here never passes it along. This opens that page, which hands the list over as it loads.';
+  if (!synced) return `Booked courses not read yet. ${how}`;
+
+  const read = at ? `, read ${relativeTime(at)}` : '';
+  if (count > 0) return `${count} booked in ${viewedTerm.label}${read}. ${how}`;
+
+  const elsewhere = [...new Set(rows.map((r) => r.term.label))].filter(
+    (label) => label !== viewedTerm.label,
   );
+  if (rows.length > 0 && elsewhere.length > 0) {
+    return (
+      `TSS reports ${rows.length} booked, but in ${elsewhere.join(' and ')} — none in ` +
+      `${viewedTerm.label}, the term on screen${read}. ${how}`
+    );
+  }
+  return `TSS reports no bookings at all${read}. ${how}`;
 }

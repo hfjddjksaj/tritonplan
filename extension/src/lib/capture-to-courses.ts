@@ -52,6 +52,11 @@ function fillMap<V>(map: Map<string, V>, record: Record<string, V> | undefined):
   for (const [k, v] of Object.entries(record)) map.set(k, v);
 }
 
+/** The booked feed's one entity set. Named in the URL on a plain GET, and in the
+ *  embedded request line when the launchpad batches the read. */
+const URL_NAMES_SET = /ModuleSet/;
+const BODY_NAMES_SET = /ModuleSet/;
+
 export class CaptureStore {
   private modules = new Map<string, TssModuleRow>();
   private sections = new Map<string, TssSectionRow[]>();
@@ -119,8 +124,16 @@ export class CaptureStore {
     // The same feed URL also serves a $metadata XML doc (and can serve error/HTML
     // bodies) — only a REAL v2 JSON document (isV2Doc) counts as "the feed reported
     // its list", even when that report is zero rows.
-    const isBookedFeed = url?.includes('BC_OVP_BOOKED_MODULES_SRV') ?? false;
-    if (bookedRows.length || (isBookedFeed && isV2Doc)) {
+    //
+    // Naming the service is NOT enough on its own. Since v2 documents began being read
+    // out of $batch bodies too, any other v2 payload riding that service's endpoint
+    // would satisfy "the feed reported" and wipe a good list to empty. So the capture
+    // must also be about ModuleSet — named in the URL for a plain GET, or in the
+    // embedded request line of a batch. Anything less keeps what we already had.
+    const namesFeed = url?.includes('BC_OVP_BOOKED_MODULES_SRV') ?? false;
+        const reportsModuleSet =
+      namesFeed && (URL_NAMES_SET.test(url ?? '') || BODY_NAMES_SET.test(body));
+    if (bookedRows.length || (reportsModuleSet && isV2Doc)) {
       this.booked = bookedRows
         .map(bookedRowToModule)
         .filter((m): m is BookedModule => m !== null);

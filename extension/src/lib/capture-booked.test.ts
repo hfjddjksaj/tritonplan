@@ -89,3 +89,30 @@ describe('CaptureStore booked freshness', () => {
     expect(store.getBooked()).toEqual([bookedRowToModule(ROW)]);
   });
 });
+
+describe('CaptureStore booked list is not wiped by neighbours', () => {
+  it('keeps the list when another v2 payload rides the same service endpoint', () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    // Same service, but this response is about something else entirely. Reading v2 out
+    // of $batch made bodies like this look like "the feed reported zero" for a while.
+    const other = JSON.stringify({ d: { results: [{ Setting: 'x', Value: '1' }] } });
+    store.ingestBody(other, 'https://tss.ucsd.edu/sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/$batch');
+    expect(store.getBooked()).toHaveLength(1);
+  });
+
+  it('still clears when the ModuleSet itself reports zero, plain or batched', () => {
+    const plain = new CaptureStore();
+    plain.ingestBody(BODY, URL);
+    plain.ingestBody(JSON.stringify({ d: { results: [] } }), URL);
+    expect(plain.getBooked()).toEqual([]);
+
+    const batched = new CaptureStore();
+    batched.ingestBody(BODY, URL);
+    const body =
+      '--batch_x\r\nContent-Type: application/http\r\n\r\nGET ModuleSet HTTP/1.1\r\n\r\n' +
+      'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{"d":{"results":[]}}\r\n--batch_x--\r\n';
+    batched.ingestBody(body, 'https://tss.ucsd.edu/sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/$batch');
+    expect(batched.getBooked()).toEqual([]);
+  });
+});

@@ -1,6 +1,7 @@
 /** The app's single source of truth: the browsed course pool + the working plan, with actions. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  type BookedModule,
   type CourseOffering,
   type PlanState,
   type SectionOption,
@@ -441,6 +442,10 @@ export function usePlan() {
   // When TSS last reported the booked list. Session state, not persisted: the bridge
   // re-pushes it on every planner load, so there is nothing to remember across one.
   const [bookedAt, setBookedAt] = useState<string | null>(null);
+  // The last push VERBATIM, every term of it. bookedIds is narrowed to the term on
+  // screen, which cannot tell "TSS says you have none" apart from "TSS says you have
+  // three, in a term you aren't looking at" — and those need different answers.
+  const [bookedRows, setBookedRows] = useState<BookedModule[]>([]);
   const markBridgeSeen = useCallback(() => {
     bridgeSeen.current = true;
     setExtensionSeen(true);
@@ -483,6 +488,7 @@ export function usePlan() {
       onBooked: (rows, capturedAt) => {
         markBridgeSeen();
         setBookedAt(capturedAt ?? null);
+        setBookedRows(rows);
         setTermsState((s) => {
           const nowIso = new Date().toISOString();
           const now = new Date();
@@ -599,6 +605,7 @@ export function usePlan() {
     bookedIds,
     bookedSynced,
     bookedAt,
+    bookedRows,
     extensionSeen,
     checkBookings,
     toggleBooked,

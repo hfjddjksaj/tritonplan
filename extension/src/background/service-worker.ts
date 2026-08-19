@@ -188,9 +188,19 @@ async function openOrReuseBookingTab(url: string): Promise<void> {
   }
 }
 
-/** Hash route of the TSS launchpad home page — the only page that fetches the
- *  student's Booked Courses feed. */
-const HOME_HASH = '#YStudent-Overview';
+/**
+ * Is this TSS tab sitting on the launchpad landing, rather than inside an app?
+ *
+ * Matched loosely on purpose: which hash route the launchpad settles on is not
+ * something we have verified, and getting it wrong here only ever means "reuse a tab
+ * that was already home". A bare origin or /fiori with no route counts; so do the
+ * shell's own home routes.
+ */
+function isTssLandingTab(url: string): boolean {
+  const hash = url.split('#')[1] ?? '';
+  if (!hash) return true;
+  return hash.startsWith('Shell-home') || hash.startsWith('YStudent-Overview');
+}
 
 /**
  * "Check my bookings": put the student on the TSS home page. A tab already sitting
@@ -204,7 +214,7 @@ const HOME_HASH = '#YStudent-Overview';
  */
 async function openOrReloadTssHome(url: string): Promise<void> {
   const tabs = await queryTssTabs();
-  const home = tabs.find((t) => t.id != null && (t.url ?? '').includes(HOME_HASH));
+  const home = tabs.find((t) => t.id != null && isTssLandingTab(t.url ?? ''));
   if (home && home.id != null) {
     try {
       await focusTab(home);

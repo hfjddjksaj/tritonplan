@@ -108,7 +108,8 @@ describe('openTssHome', () => {
     open.mockRestore();
   });
 
-  it('points at the launchpad home route, not a course deep link', () => {
-    expect(TSS_HOME_URL).toBe('https://tss.ucsd.edu/fiori#YStudent-Overview');
+  it('points at the bare TSS origin — the landing a student is known to capture from', () => {
+    expect(TSS_HOME_URL).toBe('https://tss.ucsd.edu/');
+    expect(TSS_HOME_URL).not.toContain('#'); // no app route: any hash lands elsewhere
   });
 });
