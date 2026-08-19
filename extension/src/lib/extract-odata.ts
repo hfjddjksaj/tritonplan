@@ -11,6 +11,7 @@ import type {
   TssSectionRow,
   TssApptPeriodsRow,
   TssBookedModuleRow,
+  TssTimetableRow,
 } from '../parser/tss-types.js';
 
 interface ODataCollection {
@@ -176,6 +177,19 @@ function looksLikeBookedRow(v: unknown): v is TssBookedModuleRow {
   return typeof type === 'string' ? BOOKED_ENTITY_TYPE.test(type) : true;
 }
 
+/** `__metadata.type` of a timetable row: `ITED_EVENT_TIMETABLE_SRV.EventList`. */
+const TIMETABLE_ENTITY_TYPE = /EVENT_TIMETABLE_SRV\.EventList$/;
+
+/** A row of the student's own timetable — same attribution rule as a booked row.
+ *  Verified live 2026-08-19 on the TSS home page, which loads it beside the booked
+ *  feed; the two together are what identify the SECTION a student booked. */
+function looksLikeTimetableRow(v: unknown): v is TssTimetableRow {
+  if (!v || typeof v !== 'object') return false;
+  if (!('EventId' in v && 'ModuleId' in v && 'EventDate' in v)) return false;
+  const type = (v as TssTimetableRow).__metadata?.type;
+  return typeof type === 'string' ? TIMETABLE_ENTITY_TYPE.test(type) : true;
+}
+
 /** The requirements tree can be EMPTY (course without prereqs), so it's recognized
  *  by its @odata.context — which is also the only place the owning moduleid lives:
  *  `…$metadata#YUCSD_I_PREREQ_TREE(moduleid='2117',keydate=2026-09-21)/Set`. */
@@ -196,6 +210,8 @@ export interface ClassifiedCapture {
   prereqTrees: PrereqTreeCapture[];
   apptPeriods: TssApptPeriodsRow[];
   bookedRows: TssBookedModuleRow[];
+  /** The student's own timetable rows (which events they are enrolled in). */
+  timetableRows: TssTimetableRow[];
   /** True when the body was a genuine OData-v2 JSON document (`{"d":{"results":[...]}}`),
    *  including a real zero-row document. False for anything else (XML `$metadata`,
    *  malformed/truncated JSON, HTML error pages, ...) — callers must not treat those
@@ -210,6 +226,7 @@ export function classifyCapture(body: string): ClassifiedCapture {
   const prereqTrees: PrereqTreeCapture[] = [];
   const apptPeriods: TssApptPeriodsRow[] = [];
   const bookedRows: TssBookedModuleRow[] = [];
+  const timetableRows: TssTimetableRow[] = [];
   for (const coll of extractODataCollections(body)) {
     const ctx = coll['@odata.context'];
     if (typeof ctx === 'string' && APPT_CONTEXT_RE.test(ctx)) {
@@ -231,5 +248,6 @@ export function classifyCapture(body: string): ClassifiedCapture {
   const v2Results = extractV2Results(body);
   const isV2Doc = v2Results !== null;
   bookedRows.push(...(v2Results ?? []).filter(looksLikeBookedRow));
-  return { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows, isV2Doc };
+  timetableRows.push(...(v2Results ?? []).filter(looksLikeTimetableRow));
+  return { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows, timetableRows, isV2Doc };
 }

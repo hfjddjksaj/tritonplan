@@ -19,38 +19,6 @@ describe('bookedTitle: what TSS said vs what this plan shows', () => {
     expect(t).toMatch(/^2 booked in Fall 2026, read /);
   });
 
-  it('does NOT blame TSS when the student unmarked every reported course', () => {
-    // The real state that cost three rounds: the feed reported all three, the student
-    // had unmarked all three, and this line said "TSS reports no bookings at all".
-    const rows = [row('CHEM-114A'), row('CHEM-152'), row('PHYS-002CL')];
-    const t = bookedTitle(true, new Set<string>(), NOW, rows, FALL);
-    expect(t).not.toMatch(/no bookings at all/);
-    expect(t).toMatch(/TSS reports 3 booked in Fall 2026/);
-    expect(t).toMatch(/you unmarked them here/);
-    expect(t).toMatch(/mark booked/);
-  });
-
-  it('says "it" for a single unmarked course', () => {
-    const rows = [row('CHEM-114A')];
-    expect(bookedTitle(true, new Set<string>(), NOW, rows, FALL)).toMatch(/you unmarked it here/);
-  });
-
-  it('names the partial disagreement rather than quietly showing the smaller number', () => {
-    const rows = [row('CHEM-114A'), row('CHEM-152'), row('PHYS-002CL')];
-    const kept = new Set([idOf(rows[0]!), idOf(rows[1]!)]);
-    const t = bookedTitle(true, kept, NOW, rows, FALL);
-    expect(t).toMatch(/^2 booked in Fall 2026, read /);
-    expect(t).toMatch(/TSS reports 3; 1 unmarked here/);
-  });
-
-  it('a course the student marked by hand is not counted as an unmark', () => {
-    const rows = [row('CHEM-114A')];
-    const kept = new Set([idOf(rows[0]!), 'MATH-020C|2026|2']); // one manual mark
-    const t = bookedTitle(true, kept, NOW, rows, FALL);
-    expect(t).toMatch(/^2 booked in Fall 2026/);
-    expect(t).not.toMatch(/unmarked here/);
-  });
-
   it('still names the other term when every booking is elsewhere', () => {
     const rows = [row('CHEM-114A', WINTER)];
     const t = bookedTitle(true, new Set<string>(), NOW, rows, FALL);

@@ -17,6 +17,7 @@ interface StoreShape {
   apptTimes?: Record<string, ApptTimes>;               // by "<year>|<session>"; absent in old stores
   booked?: BookedModule[];                             // homepage feed; absent in old stores
   bookedAt?: string;                                   // ISO time of that capture; absent in old stores
+  enrolled?: Record<string, string[]>;                 // moduleId → TSS EventIDs the student is in
 }
 
 function creditsToUnits(s: string | undefined): number | undefined {
@@ -75,6 +76,14 @@ export class CaptureStore {
   private booked: BookedModule[] | null = null;
   /** ISO time the booked list above was last reported. null whenever booked is null. */
   private bookedAt: string | null = null;
+  /**
+   * Which EVENTS the student is enrolled in, by module — "E 00001078" style ids, the
+   * same space as `Component.id`. From the timetable feed, which the home page loads
+   * beside the booked feed. This is the only thing TSS gives us that names a SECTION:
+   * the booked feed itself is module-level and could never answer "is my plan on the
+   * section I actually booked?".
+   */
+  private enrolled = new Map<string, string[]>();
 
   /**
    * Ingest one captured OData response body (plain or $batch). Returns true if anything
@@ -83,8 +92,31 @@ export class CaptureStore {
    * browse replaces them (freshest seats/status win).
    */
   ingestBody(body: string, url?: string): boolean {
-    const { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows, isV2Doc } = classifyCapture(body);
+    const { moduleRows, sectionRows, prereqTrees, apptPeriods, bookedRows, timetableRows, isV2Doc } =
+      classifyCapture(body);
     let changed = false;
+    if (timetableRows.length) {
+      // The feed carries every dated occurrence of every event, across terms, in one
+      // response — so one capture is the whole truth and replaces what we held. Rows
+      // for a module the student dropped simply stop appearing.
+      const byModule = new Map<string, Set<string>>();
+      for (const row of timetableRows) {
+        if (row.EventIsExam) continue; // exams are their own events, never in a package
+        // Ids stay VERBATIM as TSS wrote them ("00001078"). The planner matches them
+        // against its own "E 00001078" by digits, so neither side has to guess at a
+        // prefix convention it only ever saw on one campus.
+        const moduleId = (row.ModuleId ?? '').replace(/^0+(?=.)/, '');
+        const eventId = (row.EventId ?? '').trim();
+        if (!moduleId || !eventId) continue;
+        const set = byModule.get(moduleId);
+        if (set) set.add(eventId);
+        else byModule.set(moduleId, new Set([eventId]));
+      }
+      if (byModule.size) {
+        this.enrolled = new Map([...byModule].map(([k, v]) => [k, [...v].sort()]));
+        changed = true;
+      }
+    }
     for (const m of moduleRows) {
       this.modules.set(m.ModuleID, m);
       changed = true;
@@ -224,7 +256,14 @@ export class CaptureStore {
 
   /** The student's booked modules. null = homepage never captured; [] = captured, zero bookings. */
   getBooked(): BookedModule[] | null {
-    return this.booked;
+    if (this.booked === null) return null;
+    // The two feeds are captured separately and can arrive in either order, so they
+    // are joined here rather than at ingest. A module with no timetable rows keeps
+    // `eventIds` ABSENT — "we don't know which section", never "no sections".
+    return this.booked.map((m) => {
+      const eventIds = this.enrolled.get(m.moduleId);
+      return eventIds && eventIds.length ? { ...m, eventIds } : m;
+    });
   }
 
   /** When that list was last reported by TSS. null whenever getBooked() is null. */
@@ -241,6 +280,7 @@ export class CaptureStore {
       apptTimes: Object.fromEntries(this.apptTimes),
       ...(this.booked !== null ? { booked: this.booked } : {}),
       ...(this.bookedAt !== null ? { bookedAt: this.bookedAt } : {}),
+      ...(this.enrolled.size ? { enrolled: Object.fromEntries(this.enrolled) } : {}),
     };
   }
 
@@ -252,6 +292,7 @@ export class CaptureStore {
     fillMap(store.capturedAt, shape.capturedAt);
     fillMap(store.prereqs, shape.prereqs);
     fillMap(store.apptTimes, shape.apptTimes);
+    fillMap(store.enrolled, shape.enrolled);
     // A stored EMPTY list is dropped rather than loaded, so it reads as "never
     // captured" instead of "TSS says you have none". Stores written before the clear
     // rule was narrowed can hold an empty list that no student ever earned, and that

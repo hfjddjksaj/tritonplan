@@ -62,10 +62,12 @@ describe('applyAutoBooked (self-healing)', () => {
     expect(next.bookedOff).toEqual([]);
     expect(bookedSet(next).has(A)).toBe(false);
   });
-  it('keeps a still-contradicted bookedOff', () => {
+  it('TSS overrules a standing unmark: what the feed reports comes out booked', () => {
+    // The unmark used to win forever. One student's three enrolled courses stayed
+    // dark for days that way, with the feed reporting all three on every read.
     const next = applyAutoBooked(ws({ bookedAuto: [A], bookedOff: [A] }), [A]);
-    expect(next.bookedOff).toEqual([A]);
-    expect(bookedSet(next).has(A)).toBe(false);
+    expect(next.bookedOff).toEqual([]);
+    expect(bookedSet(next).has(A)).toBe(true);
   });
   it('returns the SAME reference when nothing changes', () => {
     const w = ws({ bookedAuto: [A] });

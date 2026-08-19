@@ -47,16 +47,21 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
 }
 
 /**
- * Apply a fresh auto capture. Self-healing keeps overrides from rotting:
- * a manual mark the feed now confirms and a manual unmark the feed no longer
- * contradicts both dissolve — state converges back to pure auto, and a real
- * drop (course gone from the feed) clears the badge by itself.
+ * Apply a fresh auto capture. TSS WINS: every id the feed reports comes out booked,
+ * and any manual mark or unmark of that course dissolves. Enrolment is a fact TSS
+ * owns — a student who is enrolled has no reason to say otherwise here, and letting
+ * a stale unmark outvote the feed is exactly how three of one student's courses went
+ * dark while TSS reported all three (2026-08-19). Manual marks survive only for
+ * courses the feed says nothing about, and a real drop clears its badge by itself.
  */
 export function applyAutoBooked(ws: TermWorkspace, ids: readonly string[]): TermWorkspace {
   const auto = [...new Set(ids)];
   const autoSet = new Set(auto);
   const on = (ws.bookedOn ?? []).filter((id) => !autoSet.has(id));
-  const off = (ws.bookedOff ?? []).filter((id) => autoSet.has(id));
+  // Nothing survives here. An unmark can only ever have been aimed at a course the
+  // feed reported (that is the only case `toggleBooked` records one for), and the feed
+  // now overrules it; an unmark of anything else subtracts from a set it was never in.
+  const off: string[] = [];
   if (
     // `bookedAuto: []` and no `bookedAuto` at all hold the same ids but are not the
     // same fact: only the first says TSS has reported. A student with zero bookings

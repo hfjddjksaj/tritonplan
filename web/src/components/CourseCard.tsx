@@ -25,10 +25,13 @@ interface Props {
   /** TSS itself reported this course as booked, whatever the student marked here.
    *  Only used to surface the disagreement; `booked` alone decides how the card reads. */
   bookedByTss?: boolean;
+  /** Code of the package TSS says was booked, when it is NOT the one selected here
+   *  (e.g. "P-002-004"). Absent whenever they agree or nothing is certain. */
+  bookedOptionCode?: string;
   onToggleBooked?: () => void;
 }
 
-export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, bookedByTss = false, onToggleBooked }: Props) {
+export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, bookedByTss = false, bookedOptionCode, onToggleBooked }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
@@ -85,17 +88,20 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             {booked ? (
               <span className="tag tag--booked" title="You are enrolled in this course">
                 Booked
-              </span>
-            ) : bookedByTss ? (
-              // TSS says enrolled, this plan says not: the student unmarked it. Say so
-              // where they can see it — an unmark that only shows as an ABSENT badge
-              // reads as TSS losing the course, and that misreading cost three rounds
-              // of chasing the capture pipeline (2026-08-19).
-              <span
-                className="tag tag--unmarked"
-                title={`TSS reports you are enrolled in ${course.courseCode} — you unmarked it here. Press “mark booked” to restore.`}
-              >
-                Unmarked
+                {/* TSS has you in a DIFFERENT package than the one on the grid. Rides
+                    the Booked badge instead of taking a badge slot of its own: it is a
+                    qualifier on "booked", not a second piece of standing. Nothing here
+                    switches the section — that stays the student's own click. */}
+                {bookedOptionCode && (
+                  <span
+                    className="tag__warn"
+                    role="img"
+                    aria-label={`Booked section differs: TSS has ${bookedOptionCode}`}
+                    title={`TSS has you in ${bookedOptionCode}. Your plan shows a different section — open the section list below to switch it, if you meant to.`}
+                  >
+                    !
+                  </span>
+                )}
               </span>
             ) : (
               full && (
@@ -174,7 +180,12 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
           >
             prerequisites
           </button>
-          {onToggleBooked && (
+          {/* Manual marking exists for courses TSS has not spoken about. Once it
+              reports one, there is nothing here to decide — enrolment is its fact, not
+              a preference — and the toggle only offered a way to contradict it that no
+              enrolled student wants. One student unmarked all three of theirs and spent
+              days wondering why the badges were dark (2026-08-19). */}
+          {onToggleBooked && !bookedByTss && (
             <button
               type="button"
               className="course-card__tss"
@@ -182,9 +193,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               title={
                 booked
                   ? `Unmark ${course.courseCode} as booked`
-                  : bookedByTss
-                    ? `Restore ${course.courseCode} to booked — TSS reports you are enrolled in it`
-                    : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
+                  : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
               }
             >
               {booked ? 'unmark' : 'mark booked'}

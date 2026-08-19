@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { BookedModule, Term } from '@triton/shared';
 import { findOption } from '../lib/plan';
+import { bookedElsewhere } from '../lib/booked-section';
 import { relativeTime } from '../lib/format';
 import { tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
@@ -82,6 +83,13 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
           entries.map((entry, i) => {
             const option = findOption(entry.course, entry.selectedOptionId);
             const bookable = option && tssBookingLink(entry.course, option) !== null;
+            // Warn only, and only when TSS names one specific other package. Switching
+            // a section stays a click the student makes themselves.
+            const elsewhere = bookedElsewhere(
+              entry.course,
+              entry.selectedOptionId,
+              ctl.enrolledEventIds.get(entry.course.id),
+            );
             return (
               <CourseCard
                 key={entry.course.id}
@@ -98,6 +106,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                 }
                 booked={ctl.bookedIds.has(entry.course.id)}
                 bookedByTss={ctl.tssBookedIds.has(entry.course.id)}
+                {...(elsewhere ? { bookedOptionCode: elsewhere.code } : {})}
                 onToggleBooked={readOnly ? undefined : () => ctl.toggleBooked(entry.course)}
               />
             );
@@ -240,13 +249,12 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
  * "book section" goes near it: both deep-link straight into another Fiori app
  * (verified live 2026-08-18). So this button exists, and so does this explanation.
  *
- * Two things get counted here and they are NOT the same number: what TSS reported
- * (`rows`) and what this plan shows after the student's own marks and unmarks
- * (`bookedIds`). Conflating them is how this line spent three rounds telling a
- * student "TSS reports no bookings at all" while TSS was reporting all three of
- * theirs — they had unmarked each one by hand, and the sentence blamed the feed for
- * their own edit (found by reading the stored state, 2026-08-19). When the two
- * disagree, say so, and say which way.
+ * Counts what the plan shows (bookedIds), never what the feed said (rows) — those
+ * are two different numbers, and conflating them is how this line spent three rounds
+ * saying "TSS reports no bookings at all" while TSS was reporting all three of a
+ * student's courses: they had unmarked each by hand, and this blamed the feed for
+ * their own edit. The feed now overrules an unmark (see applyAutoBooked), so the two
+ * can only differ for a course TSS never mentioned.
  *
  * The other case is "read, but none for this term". The badges key off the term on
  * screen, so bookings TSS reports for a DIFFERENT term look identical to no bookings
@@ -278,21 +286,7 @@ export function bookedTitle(
   const read = `, read ${relativeTime(at)}`;
   const isHere = (r: BookedModule): boolean =>
     r.term.year === viewedTerm.year && r.term.period === viewedTerm.period;
-  const here = rows.filter(isHere);
-  // Reported for this term, yet not booked in the plan = the student unmarked it.
-  const unmarked = here.filter((r) => !bookedIds.has(courseIdOf(r))).length;
-
-  if (count > 0) {
-    const also = unmarked > 0 ? ` (TSS reports ${here.length}; ${unmarked} unmarked here)` : '';
-    return `${count} booked in ${viewedTerm.label}${read}${also}. ${how}`;
-  }
-  if (unmarked > 0) {
-    const it = unmarked === 1 ? 'it' : 'them';
-    return (
-      `TSS reports ${unmarked} booked in ${viewedTerm.label}${read} — you unmarked ` +
-      `${it} here. Press “mark booked” on the course to restore. ${how}`
-    );
-  }
+  if (count > 0) return `${count} booked in ${viewedTerm.label}${read}. ${how}`;
 
   const elsewhere = [...new Set(rows.filter((r) => !isHere(r)).map((r) => r.term.label))];
   if (elsewhere.length > 0) {
@@ -304,7 +298,3 @@ export function bookedTitle(
   return `TSS reports no bookings at all${read}. ${how}`;
 }
 
-/** A feed row's course id, in the same space the plan and the badges use. */
-function courseIdOf(r: BookedModule): string {
-  return `${r.courseCode}|${r.term.year}|${r.term.period}`;
-}

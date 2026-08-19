@@ -118,3 +118,24 @@ export interface TssBookedModuleRow {
   CreditUnit?: string;
   ConditionalBooking?: boolean; // semantics unverified — do not interpret
 }
+
+/**
+ * One row of the student's own timetable —
+ * GET /sap/opu/odata/ited/EVENT_TIMETABLE_SRV/EventListSet?$filter=(EventDate ge … le …).
+ * OData **v2**. Verified live 2026-08-19 (126 rows, one per dated occurrence).
+ *
+ * One row per DATE, so a weekly lecture appears ~10 times; we only ever read which
+ * events the student is in, never the dates. `EventId` is the plain objid of the same
+ * event our section captures call `EventID` — `Component.id` is "E " + this, verified
+ * on two of one student's courses (CHEM-114A 00001078, CHEM-152 00001085).
+ */
+export interface TssTimetableRow {
+  __metadata?: { type?: string };
+  EventId: string;         // "00001078" — Component.id without the "E " prefix
+  ModuleId: string;        // ZERO-PADDED: "00002077" → moduleId "2077"
+  EventDate: string;       // "/Date(1790208000000)/"
+  EventName?: string;      // "CHEM-114A-LE (002-000)" — course + method + section code
+  CourseName?: string;     // "Biochemical Structure&Function"
+  TeachingMethod?: string; // "Lecture" (display text, NOT the LE/DI/LA code)
+  EventIsExam?: boolean;   // exams are separate events, never part of a package
+}

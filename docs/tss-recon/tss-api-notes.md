@@ -279,8 +279,36 @@ The launchpad homepage (`#YStudent-Overview`, OVP app `yucsd.ovp.student`) shows
   `__metadata.type`（`ITED.BC_OVP_BOOKED_MODULES_SRV.Module`）做归属：**有这个字段就以它为准，没有才退回形状判断**（2026-08-11
   那次裸 GET 是有的）。配套规则：**"读到了行但一行都读不懂" ≠ "你没有选课"** —— 只有"读懂了至少一行"或
   "权威来源（整包 v2 + URL 指名 ModuleSet）确实返回零行"才允许写入 `booked`/`bookedAt`。
-- Related lead, same page, NOT yet reverse-engineered: `EVENT_TIMETABLE_SRV/EventListSet`
-  (`$filter=EventDate ge … le …`) — the student's own dated timetable events.
+## Service: `EVENT_TIMETABLE_SRV` — the student's own timetable ⭐ (VERIFIED LIVE 2026-08-19)
+
+`GET /sap/opu/odata/ited/EVENT_TIMETABLE_SRV/EventListSet?$filter=(EventDate ge datetime'2025-01-01T00:00:00' and EventDate le datetime'2027-12-31T00:00:00')` (OData v2)
+
+**这是唯一能回答"我 book 的是哪个 section"的 feed。** booked feed 只到 module 级(15 个字段没有任何
+section/package/enrollCode)。这条给的是学生**真正选上的 event**:
+
+- 与 booked feed **同在首页整页加载时触发**(实测同一次 load 里两条都发),所以 planner 的 `Check bookings`
+  不需要多开任何页面就能同时拿到两半。进 `#ZUSModule-display …/MyModules` 应用时也会重发一次。
+- **一行 = 一次上课**(126 行 / 一个学生 / 2025-2027),同一门周课重复约 10 行 → 去重后才是 event 集合。
+- 关键字段:`EventId` `ModuleId`(都是零填充)、`EventName`(`"CHEM-114A-LE (002-000)"`,课号+方式+**section 码**)、
+  `EventIsExam`(考试是独立 event,不属于任何 package,必须排除)、`TeachingMethod`(是 `"Lecture"` 这种**显示文本**,
+  不是 `LE` 代码)、`StartTime`/`EndTime` 是 `"PT10H00M00S"`,`EventDate` 是 `"/Date(1790294400000)/"`。
+- **🔑 `Component.id` === `"E " + EventId`** —— 同一个对象,我们的 section 抓取带类型前缀,课表这边不带。
+  2026-08-19 在真实账号上对过两门:CHEM-114A 选的 `E 00001078` ↔ 课表 `00001078`(`002-000-LE`)、
+  CHEM-152 `E 00001085` ↔ `00001085`。planner 侧按**数字**比对(`web/src/lib/booked-section.ts`),
+  两边谁带前缀都不影响。
+- 匹配规则:某门课的"已选 event 集合" ∩ "这门课我们已知的 event" == 某个 package 的 component 集合 → 那就是他 book 的
+  package。**只有唯一命中才发声**;多个 package 共用一节 lecture(实测 CHEM-114A 有 8 个 package 共用 2 节 lecture),
+  所以只有 lecture 时必然歧义 → 沉默。
+- Fixture:`fixtures/timetable-fall2026.json`(第 1-2 行实录,第 3 行按同 schema 合成)。
+
+## Page: `#ZUSModule-display?TileType=MYMOD&…&/MyModules` — "My Courses"(2026-08-19 用户发现)
+
+首页 Booked Courses 卡片可以点进去,进的就是这一页。UI 上**直接写着 book 的包号**:
+`CHEM-114A (P-002-004)` + `Fall Quarter 2026/2027` + `Booked` —— 正是我们 `SectionOption.code` 的原文,
+比 event 匹配更直接。**但没抓到它的线格式**:模块列表只在 app 冷启动时请求一次,之后走缓存,页面内
+hash 跳转和点详情都不再发;而 document_start 那一发抢不到(注入工具会等 load 完)。
+所以本轮走的是 `EVENT_TIMETABLE_SRV` 那条路(数据同样跟着首页来,且已实测对齐)。
+**若以后要拿这一页**:需要在扩展里加日志,或在 SW 里记录 `ZUSModule` 相关 URL 的响应。
 
 ## Day-abbreviation → Weekday map
 `M`→Mon, `Tu`→Tue, `W`→Wed, `Th`→Thu, `F`→Fri, `Sa`→Sat, `Su`→Sun.

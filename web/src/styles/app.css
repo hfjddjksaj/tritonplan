@@ -631,14 +631,24 @@ p {
   background: #e7f5ec;
   color: #1b7f4d;
   border-color: transparent;
+  gap: 5px;
 }
-/* TSS says enrolled, this plan says not. Deliberately quiet — it marks the student's
-   own standing decision, not a problem — but present, because the alternative was an
-   invisible override that read as TSS losing a course. Dashed = "held open by hand". */
-.tag--unmarked {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px dashed var(--line);
+/* "…but not the section you have." Sits inside the Booked badge, in the warning hue
+   the rest of the app already uses for a clash, so it reads as a caveat on that badge
+   rather than as a new kind of status. */
+.tag__warn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  background: var(--conflict-ink);
+  border-radius: 50%;
+  cursor: help;
 }
 /* The four actions as two explicit rows. Explicit is what keeps them in the card:
    the old single wrapping row let the fourth button run past the edge, where the

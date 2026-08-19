@@ -153,6 +153,76 @@ describe('CaptureStore booked list survives the round trip honestly', () => {
   });
 });
 
+describe('CaptureStore: which SECTION was booked', () => {
+  const TT_URL =
+    'https://tss.ucsd.edu/sap/opu/odata/ited/EVENT_TIMETABLE_SRV/EventListSet?$filter=(EventDate%20ge%20datetime%272025-01-01T00:00:00%27)';
+  const ttRow = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    __metadata: { type: 'ITED_EVENT_TIMETABLE_SRV.EventList' },
+    EventId: '00001078', ModuleId: '00002077', EventDate: '/Date(1790294400000)/',
+    EventName: 'CHEM-114A-LE (002-000)', EventIsExam: false,
+    ...over,
+  });
+  const ttBody = (rows: unknown[]): string => JSON.stringify({ d: { results: rows } });
+
+  it('joins the timetable to the booked list: which events, per module', () => {
+    // The booked feed names the course; only the timetable names the events. Neither
+    // alone can answer "am I planning the section I booked?".
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    store.ingestBody(ttBody([ttRow(), ttRow({ EventId: '00002565' })]), TT_URL);
+    expect(store.getBooked()).toEqual([{ ...bookedRowToModule(ROW), eventIds: ['00001078', '00002565'] }]);
+  });
+
+  it('joins in either capture order', () => {
+    const store = new CaptureStore();
+    store.ingestBody(ttBody([ttRow()]), TT_URL);
+    store.ingestBody(BODY, URL);
+    expect(store.getBooked()?.[0]?.eventIds).toEqual(['00001078']);
+  });
+
+  it('collapses the one-row-per-date feed to the distinct events', () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    // Same lecture, ten weeks of it.
+    const weeks = Array.from({ length: 10 }, (_, i) =>
+      ttRow({ EventDate: `/Date(${1790294400000 + i * 604800000})/` }),
+    );
+    store.ingestBody(ttBody(weeks), TT_URL);
+    expect(store.getBooked()?.[0]?.eventIds).toEqual(['00001078']);
+  });
+
+  it('leaves exams out — they are their own events, never part of a package', () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    store.ingestBody(ttBody([ttRow(), ttRow({ EventId: '00009999', EventIsExam: true })]), TT_URL);
+    expect(store.getBooked()?.[0]?.eventIds).toEqual(['00001078']);
+  });
+
+  it('leaves eventIds ABSENT for a module the timetable says nothing about', () => {
+    // Absent means "we don't know which section", which the planner must not read as
+    // "no components" — that would make every course look mis-planned.
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    store.ingestBody(ttBody([ttRow({ ModuleId: '00009999' })]), TT_URL);
+    expect(store.getBooked()?.[0]).toEqual(bookedRowToModule(ROW));
+  });
+
+  it('ignores rows another service typed as its own', () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    store.ingestBody(ttBody([ttRow({ __metadata: { type: 'ITED.SOMETHING_ELSE.Row' } })]), TT_URL);
+    expect(store.getBooked()?.[0]?.eventIds).toBeUndefined();
+  });
+
+  it('survives serialize/deserialize', () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    store.ingestBody(ttBody([ttRow()]), TT_URL);
+    const revived = CaptureStore.deserialize(store.serialize());
+    expect(revived.getBooked()).toEqual(store.getBooked());
+  });
+});
+
 describe('CaptureStore booked list: rows it cannot read are not zero bookings', () => {
   const BATCH_URL = 'https://tss.ucsd.edu/sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/$batch';
   const batchOf = (json: string): string =>

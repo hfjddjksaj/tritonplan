@@ -166,4 +166,16 @@ export interface BookedModule {
   courseCode: string; // SmShort, e.g. "CHEM-114A"
   moduleId: string;   // SmObjid with leading zeros stripped, e.g. "2077"
   term: Term;
+  /**
+   * TSS EventIDs of the components the student is actually enrolled in, verbatim as
+   * TSS writes them there: `["00001078", "00002565"]`. `Component.id` is the same
+   * event with a type prefix ("E 00001078"), so the two match on their digits — which
+   * is what makes "is my plan on the section I booked?" answerable.
+   *
+   * NOT from the booked feed: that one is module-level and names no section at all.
+   * These come from the student's own timetable (`EVENT_TIMETABLE_SRV/EventListSet`),
+   * which the TSS home page loads alongside it. Absent when that feed hasn't been
+   * captured, so treat "no eventIds" as "unknown", never as "no components".
+   */
+  eventIds?: string[];
 }

@@ -65,45 +65,56 @@ describe('CourseCard booked state', () => {
     expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'unmark')).toBe(true);
   });
 
-  describe('when TSS disagrees with the student', () => {
-    function render(booked: boolean, bookedByTss: boolean) {
+  describe('a course TSS itself reports as booked', () => {
+    function render(bookedByTss: boolean) {
       act(() => {
         root.render(
           <CourseCard
             entry={fullEntry()} index={0} conflicted={false}
-            booked={booked} bookedByTss={bookedByTss} onToggleBooked={vi.fn()}
+            booked={true} bookedByTss={bookedByTss} onToggleBooked={vi.fn()}
             onSelect={() => {}} onRemove={() => {}} onOpenTss={() => {}}
           />,
         );
       });
     }
 
-    it('shows the standing unmark instead of leaving it invisible', () => {
-      // An unmark used to show only as an ABSENT badge, which reads as TSS losing the
-      // course — the misreading that sent three rounds after the capture pipeline.
-      render(false, true);
-      const tag = container.querySelector('.tag--unmarked');
-      expect(tag?.textContent).toBe('Unmarked');
-      expect(tag?.getAttribute('title')).toMatch(/TSS reports you are enrolled/);
-      expect(container.querySelector('.tag--full')).toBeNull(); // one status badge only
-    });
-
-    it('offers to restore rather than to mark, when TSS already says booked', () => {
-      render(false, true);
-      const btn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'mark booked')!;
-      expect(btn.getAttribute('title')).toMatch(/Restore CHEM-43A to booked/);
-    });
-
-    it('says nothing extra once the two agree', () => {
-      render(true, true);
+    it('drops the toggle — enrolment is TSS\'s fact, not a preference', () => {
+      render(true);
       expect(container.querySelector('.tag--booked')?.textContent).toBe('Booked');
-      expect(container.querySelector('.tag--unmarked')).toBeNull();
+      expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'unmark')).toBe(false);
     });
 
-    it('a course TSS never reported keeps the plain Full treatment', () => {
-      render(false, false);
-      expect(container.querySelector('.tag--unmarked')).toBeNull();
-      expect(container.querySelector('.tag--full')?.textContent).toBe('Full');
+    it('keeps the toggle for a course TSS has said nothing about', () => {
+      render(false);
+      expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'unmark')).toBe(true);
+    });
+  });
+
+  describe('booked, but not the section on the grid', () => {
+    function render(bookedOptionCode?: string) {
+      act(() => {
+        root.render(
+          <CourseCard
+            entry={fullEntry()} index={0} conflicted={false}
+            booked={true} bookedByTss={true}
+            {...(bookedOptionCode ? { bookedOptionCode } : {})}
+            onSelect={() => {}} onRemove={() => {}} onOpenTss={() => {}}
+          />,
+        );
+      });
+    }
+
+    it('marks the Booked badge, and names the package TSS actually has', () => {
+      render('P-002-004');
+      const warn = container.querySelector('.tag--booked .tag__warn');
+      expect(warn?.textContent).toBe('!');
+      expect(warn?.getAttribute('title')).toMatch(/TSS has you in P-002-004/);
+    });
+
+    it('stays quiet when the two agree — silence is the normal case', () => {
+      render();
+      expect(container.querySelector('.tag__warn')).toBeNull();
+      expect(container.querySelector('.tag--booked')?.textContent).toBe('Booked');
     });
   });
 });

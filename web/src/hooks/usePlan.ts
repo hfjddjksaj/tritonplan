@@ -582,6 +582,23 @@ export function usePlan() {
     );
   }, [bookedRows, viewPlan.term]);
 
+  /**
+   * Per course id, the events TSS says the student is enrolled in — the raw material
+   * for "your plan is on a different section than you booked". Keyed off the viewed
+   * term, like every other booked reading.
+   */
+  const enrolledEventIds = useMemo<ReadonlyMap<string, string[]>>(() => {
+    const t = viewPlan.term;
+    const out = new Map<string, string[]>();
+    for (const r of bookedRows) {
+      if (r.term.year !== t.year || r.term.period !== t.period) continue;
+      if (r.eventIds && r.eventIds.length) {
+        out.set(`${r.courseCode}|${r.term.year}|${r.term.period}`, r.eventIds);
+      }
+    }
+    return out;
+  }, [bookedRows, viewPlan.term]);
+
   /** Whether TSS has ever reported this term's bookings — drives the sync prompt. */
   const bookedSynced = useMemo<boolean>(() => {
     const ws = termsState.terms[termKey(viewPlan.term)];
@@ -638,6 +655,7 @@ export function usePlan() {
     clearBrowsed,
     bookedIds,
     tssBookedIds,
+    enrolledEventIds,
     bookedSynced,
     bookedAt,
     bookedRows,
