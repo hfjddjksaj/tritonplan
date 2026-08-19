@@ -22,10 +22,13 @@ interface Props {
   onBook?: () => void;
   /** User has confirmed enrollment — supersedes the "Full" seat-count treatment. */
   booked: boolean;
+  /** TSS itself reported this course as booked, whatever the student marked here.
+   *  Only used to surface the disagreement; `booked` alone decides how the card reads. */
+  bookedByTss?: boolean;
   onToggleBooked?: () => void;
 }
 
-export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, onToggleBooked }: Props) {
+export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, bookedByTss = false, onToggleBooked }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
@@ -82,6 +85,17 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             {booked ? (
               <span className="tag tag--booked" title="You are enrolled in this course">
                 Booked
+              </span>
+            ) : bookedByTss ? (
+              // TSS says enrolled, this plan says not: the student unmarked it. Say so
+              // where they can see it — an unmark that only shows as an ABSENT badge
+              // reads as TSS losing the course, and that misreading cost three rounds
+              // of chasing the capture pipeline (2026-08-19).
+              <span
+                className="tag tag--unmarked"
+                title={`TSS reports you are enrolled in ${course.courseCode} — you unmarked it here. Press “mark booked” to restore.`}
+              >
+                Unmarked
               </span>
             ) : (
               full && (
@@ -168,7 +182,9 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               title={
                 booked
                   ? `Unmark ${course.courseCode} as booked`
-                  : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
+                  : bookedByTss
+                    ? `Restore ${course.courseCode} to booked — TSS reports you are enrolled in it`
+                    : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
               }
             >
               {booked ? 'unmark' : 'mark booked'}

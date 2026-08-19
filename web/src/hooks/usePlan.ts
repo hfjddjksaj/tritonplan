@@ -567,6 +567,21 @@ export function usePlan() {
     return ws ? bookedSet(ws) : new Set<string>();
   }, [termsState, viewPlan.term]);
 
+  /**
+   * What TSS ITSELF reported for the viewed term this session, before any of the
+   * student's own marks and unmarks. Only `bookedIds` decides how a course reads; this
+   * exists so a card can show that an unmark is standing against a live report, rather
+   * than leaving the student to wonder why TSS "forgot" a course they are enrolled in.
+   */
+  const tssBookedIds = useMemo<ReadonlySet<string>>(() => {
+    const t = viewPlan.term;
+    return new Set(
+      bookedRows
+        .filter((r) => r.term.year === t.year && r.term.period === t.period)
+        .map((r) => `${r.courseCode}|${r.term.year}|${r.term.period}`),
+    );
+  }, [bookedRows, viewPlan.term]);
+
   /** Whether TSS has ever reported this term's bookings — drives the sync prompt. */
   const bookedSynced = useMemo<boolean>(() => {
     const ws = termsState.terms[termKey(viewPlan.term)];
@@ -622,6 +637,7 @@ export function usePlan() {
     removeFromPool,
     clearBrowsed,
     bookedIds,
+    tssBookedIds,
     bookedSynced,
     bookedAt,
     bookedRows,

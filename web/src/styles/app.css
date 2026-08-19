@@ -632,6 +632,14 @@ p {
   color: #1b7f4d;
   border-color: transparent;
 }
+/* TSS says enrolled, this plan says not. Deliberately quiet — it marks the student's
+   own standing decision, not a problem — but present, because the alternative was an
+   invisible override that read as TSS losing a course. Dashed = "held open by hand". */
+.tag--unmarked {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--line);
+}
 /* The four actions as two explicit rows. Explicit is what keeps them in the card:
    the old single wrapping row let the fourth button run past the edge, where the
    card's overflow:hidden clipped it. Each row packs left, so a short label never

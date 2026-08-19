@@ -54,7 +54,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
               onClick={ctl.checkBookings}
               title={bookedTitle(
                 ctl.bookedSynced,
-                ctl.bookedIds.size,
+                ctl.bookedIds,
                 ctl.bookedAt,
                 ctl.bookedRows,
                 ctl.viewPlan.term,
@@ -97,6 +97,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                   bookable ? () => ctl.openBookingInTss(entry.course, option) : undefined
                 }
                 booked={ctl.bookedIds.has(entry.course.id)}
+                bookedByTss={ctl.tssBookedIds.has(entry.course.id)}
                 onToggleBooked={readOnly ? undefined : () => ctl.toggleBooked(entry.course)}
               />
             );
@@ -239,9 +240,18 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
  * "book section" goes near it: both deep-link straight into another Fiori app
  * (verified live 2026-08-18). So this button exists, and so does this explanation.
  *
- * The interesting case is "read, but none for this term". The badges key off the term
- * on screen, so bookings TSS reports for a DIFFERENT term look identical to no
- * bookings at all — say which term they are in instead of reporting a flat zero.
+ * Two things get counted here and they are NOT the same number: what TSS reported
+ * (`rows`) and what this plan shows after the student's own marks and unmarks
+ * (`bookedIds`). Conflating them is how this line spent three rounds telling a
+ * student "TSS reports no bookings at all" while TSS was reporting all three of
+ * theirs — they had unmarked each one by hand, and the sentence blamed the feed for
+ * their own edit (found by reading the stored state, 2026-08-19). When the two
+ * disagree, say so, and say which way.
+ *
+ * The other case is "read, but none for this term". The badges key off the term on
+ * screen, so bookings TSS reports for a DIFFERENT term look identical to no bookings
+ * at all — name the term they are in instead of reporting a flat zero. Terms are
+ * matched on year+period, never on the label, which is display text.
  *
  * Only a report received THIS session is spoken for. `synced` is remembered on this
  * device, and a device can outlive the capture it remembers — saying "TSS reports no
@@ -249,7 +259,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
  */
 export function bookedTitle(
   synced: boolean,
-  count: number,
+  bookedIds: ReadonlySet<string>,
   at: string | null,
   rows: readonly BookedModule[],
   viewedTerm: Term,
@@ -257,6 +267,7 @@ export function bookedTitle(
   const how =
     "TSS lists what you're enrolled in on its home page only — opening a course from " +
     'here never passes it along. This opens that page, which hands the list over as it loads.';
+  const count = bookedIds.size;
   if (!synced) return `Booked courses not read yet. ${how}`;
   if (at === null) {
     return count > 0
@@ -265,16 +276,35 @@ export function bookedTitle(
   }
 
   const read = `, read ${relativeTime(at)}`;
-  if (count > 0) return `${count} booked in ${viewedTerm.label}${read}. ${how}`;
+  const isHere = (r: BookedModule): boolean =>
+    r.term.year === viewedTerm.year && r.term.period === viewedTerm.period;
+  const here = rows.filter(isHere);
+  // Reported for this term, yet not booked in the plan = the student unmarked it.
+  const unmarked = here.filter((r) => !bookedIds.has(courseIdOf(r))).length;
 
-  const elsewhere = [...new Set(rows.map((r) => r.term.label))].filter(
-    (label) => label !== viewedTerm.label,
-  );
-  if (rows.length > 0 && elsewhere.length > 0) {
+  if (count > 0) {
+    const also = unmarked > 0 ? ` (TSS reports ${here.length}; ${unmarked} unmarked here)` : '';
+    return `${count} booked in ${viewedTerm.label}${read}${also}. ${how}`;
+  }
+  if (unmarked > 0) {
+    const it = unmarked === 1 ? 'it' : 'them';
+    return (
+      `TSS reports ${unmarked} booked in ${viewedTerm.label}${read} — you unmarked ` +
+      `${it} here. Press “mark booked” on the course to restore. ${how}`
+    );
+  }
+
+  const elsewhere = [...new Set(rows.filter((r) => !isHere(r)).map((r) => r.term.label))];
+  if (elsewhere.length > 0) {
     return (
       `TSS reports ${rows.length} booked, but in ${elsewhere.join(' and ')} — none in ` +
       `${viewedTerm.label}, the term on screen${read}. ${how}`
     );
   }
   return `TSS reports no bookings at all${read}. ${how}`;
+}
+
+/** A feed row's course id, in the same space the plan and the badges use. */
+function courseIdOf(r: BookedModule): string {
+  return `${r.courseCode}|${r.term.year}|${r.term.period}`;
 }
