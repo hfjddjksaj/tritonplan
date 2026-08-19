@@ -39,6 +39,22 @@ export function openApptTimesInTss(): void {
   window.open(TSS_APPT_TIMES_URL, '_blank', 'noopener');
 }
 
+/** The TSS launchpad home page (OVP app `yucsd.ovp.student`, verified 2026-08-11). */
+export const TSS_HOME_URL = 'https://tss.ucsd.edu/fiori#YStudent-Overview';
+
+/**
+ * Open the TSS home page. Its "Booked Courses" card is the ONLY place TSS states
+ * which modules a student is enrolled in, and it fetches that feed on a full page
+ * load only — so a course deep link (tssDeepLink) never brings booked status back
+ * with it. This is the one action that does.
+ *
+ * ⛔ NO-BAN: a plain new tab from a click the student made. The page then fetches
+ * its own data exactly as it would if they had typed the URL; nothing is replayed.
+ */
+export function openTssHome(): void {
+  window.open(TSS_HOME_URL, '_blank', 'noopener');
+}
+
 /** Numeric part of an EventPackage code like "SE00152185" → "152185". */
 function pkgNumber(code: string | undefined): string | null {
   if (!code) return null;

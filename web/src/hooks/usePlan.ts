@@ -11,7 +11,12 @@ import {
 import sampleCourses from '../data/sample-courses.json';
 import { pickHue } from '../lib/colors';
 import { installBridgeListener, mergeCourses, postForgetCourses } from '../lib/bridge';
-import { applyAutoBooked, bookedSet, toggleBooked as toggleBookedIn } from '../lib/booked';
+import {
+  applyAutoBooked,
+  bookedSet,
+  isAutoBookedSynced,
+  toggleBooked as toggleBookedIn,
+} from '../lib/booked';
 import {
   loadPlan,
   loadPlans,
@@ -429,14 +434,21 @@ export function usePlan() {
 
   // True once the extension's bridge has delivered anything this session — used to
   // route "open in TSS" through the extension (which can reuse an open TSS tab).
+  // Mirrored into state because the UI also renders off it (the booked-sync prompt
+  // only makes sense to someone who actually has the extension).
   const bridgeSeen = useRef(false);
+  const [extensionSeen, setExtensionSeen] = useState(false);
+  const markBridgeSeen = useCallback(() => {
+    bridgeSeen.current = true;
+    setExtensionSeen(true);
+  }, []);
 
   // Data bridge: `courses` routes into each course's own term; `plan-add` adds to
   // the course's term (via the picker when that term has several plans).
   useEffect(() => {
     return installBridgeListener({
       onCourses: (incoming) => {
-        bridgeSeen.current = true;
+        markBridgeSeen();
         const prevPool = poolRef.current;
         setPool(mergeCourses(prevPool, incoming));
         setTermsState((s) => {
@@ -453,7 +465,7 @@ export function usePlan() {
         });
       },
       onPlanAdd: (course, optionId) => {
-        bridgeSeen.current = true;
+        markBridgeSeen();
         if (isArchived(course.term, new Date())) return; // defensive: cannot add into an archive
         setPool((prev) => mergeCourses(prev, [course]));
         const ws = termsRef.current.terms[termKey(course.term)];
@@ -466,7 +478,7 @@ export function usePlan() {
         switchViewing('mine');
       },
       onBooked: (rows) => {
-        bridgeSeen.current = true;
+        markBridgeSeen();
         setTermsState((s) => {
           const nowIso = new Date().toISOString();
           const now = new Date();
@@ -497,7 +509,7 @@ export function usePlan() {
         });
       },
     });
-  }, [addIntoTerm, switchViewing]);
+  }, [addIntoTerm, markBridgeSeen, switchViewing]);
 
   /** Jump back to TSS — through the extension when present, else a plain new tab. */
   const openCourseInTss = useCallback((course: CourseOffering) => {
@@ -519,6 +531,12 @@ export function usePlan() {
   const bookedIds = useMemo<ReadonlySet<string>>(() => {
     const ws = termsState.terms[termKey(viewPlan.term)];
     return ws ? bookedSet(ws) : new Set<string>();
+  }, [termsState, viewPlan.term]);
+
+  /** Whether TSS has ever reported this term's bookings — drives the sync prompt. */
+  const bookedSynced = useMemo<boolean>(() => {
+    const ws = termsState.terms[termKey(viewPlan.term)];
+    return ws !== undefined && isAutoBookedSynced(ws);
   }, [termsState, viewPlan.term]);
 
   const selectedCourses = useMemo(() => buildSelectedCourses(viewPlan), [viewPlan]);
@@ -570,6 +588,8 @@ export function usePlan() {
     removeFromPool,
     clearBrowsed,
     bookedIds,
+    bookedSynced,
+    extensionSeen,
     toggleBooked,
     openCourseInTss,
     openBookingInTss,

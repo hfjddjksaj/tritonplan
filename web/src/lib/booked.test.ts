@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { TermWorkspace } from './terms-state';
-import { bookedSet, applyAutoBooked, toggleBooked } from './booked';
+import { bookedSet, applyAutoBooked, isAutoBookedSynced, toggleBooked } from './booked';
 
 const TERM = { year: '2026', period: '2', label: 'Fall 2026' };
 function ws(partial: Partial<TermWorkspace> = {}): TermWorkspace {
@@ -64,5 +64,16 @@ describe('applyAutoBooked (self-healing)', () => {
   it('returns the SAME reference when nothing changes', () => {
     const w = ws({ bookedAuto: [A] });
     expect(applyAutoBooked(w, [A])).toBe(w);
+  });
+});
+
+describe('isAutoBookedSynced', () => {
+  it('is false until a booked push lands — a manual mark is not a sync', () => {
+    expect(isAutoBookedSynced(ws())).toBe(false);
+    expect(isAutoBookedSynced(ws({ bookedOn: [A] }))).toBe(false);
+  });
+  it('is true once the feed has reported, even when the student books nothing', () => {
+    expect(isAutoBookedSynced(applyAutoBooked(ws(), []))).toBe(true);
+    expect(isAutoBookedSynced(ws({ bookedAuto: [A] }))).toBe(true);
   });
 });

@@ -16,6 +16,17 @@ export function bookedSet(ws: TermWorkspace): ReadonlySet<string> {
   return out;
 }
 
+/**
+ * Has TSS ever told us this term's bookings? Every `booked` push writes `bookedAuto`
+ * — as `[]` when the student has none — so `undefined` means the homepage feed has
+ * never reached us. TSS publishes that feed on a full load of its home page only, so
+ * a student who always arrives by course deep link never triggers it, and nothing
+ * gets marked until they open the home page once.
+ */
+export function isAutoBookedSynced(ws: TermWorkspace): boolean {
+  return ws.bookedAuto !== undefined;
+}
+
 function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
@@ -32,7 +43,11 @@ export function applyAutoBooked(ws: TermWorkspace, ids: readonly string[]): Term
   const on = (ws.bookedOn ?? []).filter((id) => !autoSet.has(id));
   const off = (ws.bookedOff ?? []).filter((id) => autoSet.has(id));
   if (
-    sameList(ws.bookedAuto ?? [], auto) &&
+    // `bookedAuto: []` and no `bookedAuto` at all hold the same ids but are not the
+    // same fact: only the first says TSS has reported. A student with zero bookings
+    // must still come out SYNCED, or the sync prompt never goes away for them.
+    ws.bookedAuto !== undefined &&
+    sameList(ws.bookedAuto, auto) &&
     sameList(ws.bookedOn ?? [], on) &&
     sameList(ws.bookedOff ?? [], off)
   ) {

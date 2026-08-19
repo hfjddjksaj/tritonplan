@@ -468,24 +468,31 @@ p {
   color: var(--conflict);
 }
 
-/* "open in TSS" affordance on a course card */
+/* One of the four course-card actions. Each is only as wide as its own label —
+   the grid it sits in decides where the row breaks, not how wide it gets. */
 .course-card__tss {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  height: 18px;
-  padding: 0 7px;
+  min-width: 0;
+  height: 26px;
+  padding: 0 9px;
   font-size: 10.5px;
   font-weight: 600;
   white-space: nowrap;
-  /* quiet accent in the course's own color — reads as an action, not a static tag */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* quiet accent in the course's own color — reads as an action, not a static tag.
+     The border stays neutral: four tinted outlines in a block became a colour slab. */
   color: var(--c-text, var(--text-muted));
   background: var(--surface);
-  border: 1px solid var(--c-border, var(--line));
-  border-radius: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 .course-card__tss:hover {
+  background: var(--surface-2);
   border-color: var(--c-spine, var(--gold));
   box-shadow: 0 0 0 1px var(--c-spine, var(--gold));
 }
@@ -548,7 +555,7 @@ p {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 11px 12px 10px 15px;
+  padding: 11px 12px 0 15px;
 }
 .course-card__code {
   font-size: 14px;
@@ -556,11 +563,12 @@ p {
   letter-spacing: -0.01em;
   color: var(--c-text);
 }
-/* code + optional "Full" badge share one line */
+/* code + every status badge (Booked / Full / Conflict) share one line */
 .course-card__codeline {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 5px 6px;
   min-width: 0;
 }
 .course-card__title {
@@ -577,12 +585,19 @@ p {
   flex: 1;
   min-width: 0;
 }
-.course-card__meta {
+/* Plain facts about the course — units and how old the seat counts are. Deliberately
+   unboxed: chips here made them look like a fifth and sixth thing to click. */
+.course-card__facts {
   display: flex;
-  flex-wrap: wrap; /* whole chips wrap; text inside them never does */
-  align-items: center;
-  gap: 5px 8px;
-  margin-top: 6px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 5px;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.course-card__dot {
+  color: var(--line-strong);
 }
 .tag {
   display: inline-flex;
@@ -596,9 +611,6 @@ p {
   background: var(--surface-2);
   color: var(--text-muted);
   border: 1px solid var(--line);
-}
-.tag--units {
-  font-family: var(--font-mono);
 }
 .tag--conflict {
   background: var(--conflict-soft);
@@ -616,11 +628,17 @@ p {
   color: #1b7f4d;
   border-color: transparent;
 }
-/* "book section" + "prerequisites" wrap as one unit — always on the same line */
-.course-card__pair {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px 8px;
+/* The four actions, two per row. Two content-sized columns rather than a wrapping
+   row: the break is decided by the grid, so the fourth button can no longer run
+   past the card edge and get clipped by overflow:hidden. `justify-items: start`
+   keeps every button its own natural width — the right edge stays ragged. */
+.course-card__actions {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  justify-items: start;
+  gap: 6px;
+  padding: 9px 12px 11px 15px;
 }
 .course-card__side {
   flex: none;
@@ -629,10 +647,24 @@ p {
   align-items: flex-end;
   gap: 3px;
 }
+
+/* "Booked courses aren't synced" prompt — shown until the homepage feed reaches us
+   once. Dashed, unfilled: a standing instruction, not an error to be dismissed. */
+.booksync {
+  margin-bottom: 12px;
+  padding: 11px 12px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+}
+.booksync__text {
+  margin: 0 0 9px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
 /* "seats 2h ago" staleness hint — data is only as fresh as the last TSS browse */
 .course-card__fresh {
-  font-size: 10px;
-  color: var(--text-faint);
   white-space: nowrap;
   cursor: help;
 }

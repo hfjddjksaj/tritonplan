@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { findOption } from '../lib/plan';
-import { tssBookingLink } from '../lib/tss';
+import { openTssHome, tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
 import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { CourseCard } from './CourseCard';
-import { Search, Plus, Cap, X } from './icons';
+import { Search, Plus, Cap, X, External } from './icons';
 
 interface Props {
   ctl: PlanController;
@@ -53,6 +53,23 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
       </div>
 
       <div className="rail__scroll">
+        {/* TSS states your enrolments in exactly one place — the "Booked Courses" card
+            on its home page — and only fetches that list on a full load of it. Opening
+            a course deep link never passes it, so say so and offer the one page that
+            does, instead of leaving people to wonder why nothing ever gets marked. */}
+        {!readOnly && !isMobile && hasEntries && ctl.extensionSeen && !ctl.bookedSynced && (
+          <div className="booksync">
+            <p className="booksync__text">
+              Nothing here is marked as booked. TSS lists your enrolments on its home page
+              only — a course link never carries them. Open it once and {PRODUCT_NAME} picks
+              them up as the page loads.
+            </p>
+            <button type="button" className="btn btn--sm btn--primary" onClick={openTssHome}>
+              <External size={13} /> Open TSS home
+            </button>
+          </div>
+        )}
+
         {hasEntries ? (
           entries.map((entry, i) => {
             const option = findOption(entry.course, entry.selectedOptionId);

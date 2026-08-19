@@ -75,6 +75,8 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
     >
       <div className="course-card__head">
         <div className="course-card__head-main">
+          {/* Line 1 is identity + status: code, then every badge that describes
+              this course's standing. Nothing actionable lives here. */}
           <div className="course-card__codeline">
             <span className="course-card__code">{course.courseCode}</span>
             {booked ? (
@@ -88,57 +90,29 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                 </span>
               )
             )}
+            {conflicted && <span className="tag tag--conflict">Conflict</span>}
           </div>
           <div className="course-card__title">{course.title}</div>
-          <div className="course-card__meta">
-            {course.units !== undefined && (
-              <span className="tag tag--units">{course.units} units</span>
-            )}
-            {conflicted && <span className="tag tag--conflict">Conflict</span>}
-            <button
-              type="button"
-              className="course-card__tss"
-              onClick={onOpenTss}
-              title={`Open ${course.courseCode} in TSS`}
-            >
-              open in TSS <External size={11} strokeWidth={2.2} />
-            </button>
-            {/* Kept as one non-wrapping pair: prerequisites sits right of book section. */}
-            <span className="course-card__pair">
-              {onBook && (
-                <button
-                  type="button"
-                  className="course-card__tss"
-                  onClick={onBook}
-                  title={`Go to booking for the selected ${course.courseCode} section`}
-                >
-                  book section <External size={11} strokeWidth={2.2} />
-                </button>
+          {/* Facts about the course, not controls — units sat in the button row
+              before and read as a fifth thing to click. */}
+          {(course.units !== undefined || freshness) && (
+            <div className="course-card__facts mono">
+              {course.units !== undefined && <span>{course.units} units</span>}
+              {course.units !== undefined && freshness && (
+                <span className="course-card__dot" aria-hidden="true">
+                  ·
+                </span>
               )}
-              <button
-                type="button"
-                className="course-card__tss"
-                onClick={() => setPrereqsOpen(true)}
-                title={`Enrollment requirements for ${course.courseCode}`}
-              >
-                prerequisites
-              </button>
-              {onToggleBooked && (
-                <button
-                  type="button"
-                  className="course-card__tss"
-                  onClick={onToggleBooked}
-                  title={
-                    booked
-                      ? `Unmark ${course.courseCode} as booked`
-                      : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
-                  }
+              {freshness && (
+                <span
+                  className="course-card__fresh"
+                  title={`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`}
                 >
-                  {booked ? 'unmark' : 'mark booked'}
-                </button>
+                  seats {freshness}
+                </span>
               )}
-            </span>
-          </div>
+            </div>
+          )}
         </div>
         <div className="course-card__side">
           {!readOnly && (
@@ -152,15 +126,51 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               <Trash size={15} />
             </button>
           )}
-          {freshness && (
-            <span
-              className="course-card__fresh"
-              title={`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`}
-            >
-              seats {freshness}
-            </span>
-          )}
         </div>
+      </div>
+      {/* Two-by-two: each button fills its cell, so none can ever be pushed past
+          the card edge the way a single wrapping row did. */}
+      <div className="course-card__actions">
+        <button
+          type="button"
+          className="course-card__tss"
+          onClick={onOpenTss}
+          title={`Open ${course.courseCode} in TSS`}
+        >
+          open in TSS <External size={11} strokeWidth={2.2} />
+        </button>
+        {onBook && (
+          <button
+            type="button"
+            className="course-card__tss"
+            onClick={onBook}
+            title={`Go to booking for the selected ${course.courseCode} section`}
+          >
+            book section <External size={11} strokeWidth={2.2} />
+          </button>
+        )}
+        <button
+          type="button"
+          className="course-card__tss"
+          onClick={() => setPrereqsOpen(true)}
+          title={`Enrollment requirements for ${course.courseCode}`}
+        >
+          prerequisites
+        </button>
+        {onToggleBooked && (
+          <button
+            type="button"
+            className="course-card__tss"
+            onClick={onToggleBooked}
+            title={
+              booked
+                ? `Unmark ${course.courseCode} as booked`
+                : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
+            }
+          >
+            {booked ? 'unmark' : 'mark booked'}
+          </button>
+        )}
       </div>
       <OptionPicker
         course={course}
