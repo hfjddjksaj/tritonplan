@@ -177,3 +177,27 @@ export const Compass = (p: P) => (
     <path d="M7.5 12h9L12 21.5 7.5 12Z" fill="none" strokeWidth="1.6" />
   </svg>
 );
+
+/**
+ * Exclamation mark drawn as geometry rather than typed as a character.
+ *
+ * A "!" glyph centres by its line box, not by its ink: the descender space below the
+ * baseline is empty, so the mark rides high inside any box you centre it in, by a
+ * fraction that changes with the font. Drawing it makes the ink itself the thing
+ * being centred. Bar and dot fill the viewBox exactly, top to bottom.
+ */
+export function Bang({ size = 11, ...props }: P) {
+  return (
+    <svg
+      width={(size * 4) / 14}
+      height={size}
+      viewBox="0 0 4 14"
+      fill="currentColor"
+      aria-hidden
+      {...props}
+    >
+      <rect x="0" y="0" width="4" height="9.5" rx="1.6" />
+      <rect x="0" y="11" width="4" height="3" rx="1.4" />
+    </svg>
+  );
+}

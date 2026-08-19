@@ -5,7 +5,8 @@ import { relativeTime } from '../lib/format';
 import { courseFull } from '../lib/seats';
 import { OptionPicker } from './OptionPicker';
 import { PrereqPopover } from './PrereqPopover';
-import { Trash, External } from './icons';
+import { BookedSectionPopover } from './BookedSectionPopover';
+import { Trash, External, Bang } from './icons';
 
 interface Props {
   entry: PlanEntry;
@@ -42,6 +43,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [flash, setFlash] = useState(false);
   const [prereqsOpen, setPrereqsOpen] = useState(false);
+  const [alertOpen, setAlertOpen] = useState(false);
   const rootRef = useRef<HTMLElement | null>(null);
 
   // Re-render once a minute so the "seats Xm ago" staleness label keeps aging
@@ -99,17 +101,19 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             {/* TSS has you in a DIFFERENT package than the one on the grid. Its own
                 mark, beside Booked rather than inside it: a caveat crammed into
                 another badge reads as decoration on that badge, and at 13px it read
-                as a smudge. Nothing here switches the section — that stays the
-                student's own click. */}
+                as a smudge. It opens the explanation rather than only hovering it —
+                one character can't carry the sentence, and a tooltip is mouse-only.
+                Nothing here switches the section: that stays the student's own click. */}
             {booked && bookedOptionCode && (
-              <span
+              <button
+                type="button"
                 className="tag tag--alert"
-                role="img"
+                onClick={() => setAlertOpen(true)}
                 aria-label={`Booked section differs: TSS has ${bookedOptionCode}`}
-                title={`TSS has you in ${bookedOptionCode}. Your plan shows a different section — open the section list below to switch it, if you meant to.`}
+                title={`TSS has you in ${bookedOptionCode}, not the section on this plan. Click for details.`}
               >
-                !
-              </span>
+                <Bang size={11} />
+              </button>
             )}
           </div>
           <div className="course-card__title">{course.title}</div>
@@ -217,6 +221,19 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
           accent={{ text: c.text, spine: c.spine }}
           onOpenTss={onOpenTss}
           onClose={() => setPrereqsOpen(false)}
+        />
+      )}
+      {alertOpen && bookedOptionCode && (
+        <BookedSectionPopover
+          courseCode={course.courseCode}
+          booked={bookedOptionCode}
+          selected={course.options.find((o) => o.id === entry.selectedOptionId)?.code}
+          accent={{ text: c.text, spine: c.spine }}
+          onShowSections={() => {
+            setAlertOpen(false);
+            setSectionsOpen(true);
+          }}
+          onClose={() => setAlertOpen(false)}
         />
       )}
     </section>

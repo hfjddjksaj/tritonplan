@@ -641,6 +641,7 @@ p {
   width: 18px;
   padding: 0;
   justify-content: center;
+  font-family: inherit;
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
@@ -648,7 +649,15 @@ p {
   background: var(--conflict-soft);
   border: 1.5px solid var(--conflict-ink);
   border-radius: 3px;
-  cursor: help;
+  cursor: pointer;
+}
+.tag--alert:hover {
+  color: #fff;
+  background: var(--conflict-ink);
+}
+.tag--alert:focus-visible {
+  outline: 2px solid var(--conflict-ink);
+  outline-offset: 2px;
 }
 /* The four actions as two explicit rows. Explicit is what keeps them in the card:
    the old single wrapping row let the fourth button run past the edge, where the
@@ -1683,6 +1692,51 @@ button.menu__item:hover {
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--gold-ink);
+}
+
+/* ================================= booked-section popover (in-card) */
+/* Same modal shell as the requirements popover. Two rows, one fact each: what TSS
+   has and what the plan shows — the whole point is the comparison, so they are set
+   as a pair rather than as prose. */
+.bookedpop {
+  width: min(380px, calc(100vw - 40px));
+}
+.bookedpop__course {
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--c-text, var(--ink));
+}
+.bookedpop__rows {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+.bookedpop__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.bookedpop__who {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.bookedpop__code {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.bookedpop__code--tss {
+  color: var(--conflict-ink);
 }
 
 /* ================================= enrollment requirements popover (in-card) */

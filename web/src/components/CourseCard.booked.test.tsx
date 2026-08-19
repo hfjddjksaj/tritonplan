@@ -107,8 +107,20 @@ describe('CourseCard booked state', () => {
     it('puts a square alert beside Booked, naming the package TSS actually has', () => {
       render('P-002-004');
       const warn = container.querySelector('.tag--alert');
-      expect(warn?.textContent).toBe('!');
+      expect(warn?.querySelector('svg')).not.toBeNull(); // drawn, not typed — see Bang
+      expect(warn?.tagName).toBe('BUTTON'); // opens the explanation, not hover-only
       expect(warn?.getAttribute('title')).toMatch(/TSS has you in P-002-004/);
+    });
+
+    it('opens a popover naming both packages, and offers only to show the list', () => {
+      render('P-002-004');
+      act(() => (container.querySelector('.tag--alert') as HTMLButtonElement).click());
+      const pop = document.querySelector('.bookedpop');
+      expect(pop?.textContent).toContain('P-002-004'); // what TSS has
+      expect(pop?.textContent).toContain('P-001-001'); // what the plan shows
+      // Nothing in here switches anything: the only action reveals the section list.
+      const actions = [...pop!.querySelectorAll('.mappop__actions button')].map((b) => b.textContent);
+      expect(actions).toEqual(['Show sections']);
     });
 
     it('stays quiet when the two agree — silence is the normal case', () => {
