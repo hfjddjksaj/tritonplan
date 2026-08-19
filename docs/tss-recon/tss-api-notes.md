@@ -272,6 +272,13 @@ The launchpad homepage (`#YStudent-Overview`, OVP app `yucsd.ovp.student`) shows
   于是**批量里的 v2 文档整个看不见**——首页明明发了 feed，store 里却永远是空的。v4 那条路径
   （`extractODataCollections`）一直是会扫 `$batch` 的，只有 v2 漏了。现在两边对称了。
   尚未在真机上确认首页到底走的是裸 GET 还是 `$batch`（2026-08-11 那次抓到的是裸 GET）；两种都能吃了。
+- **⚠ 2026-08-19 归属规则（batch 里的行必须自证出身）**：`$batch` 的每个 response part **不带请求 URL**，
+  所以在 batch 里只能靠**行的形状**认人——而首页同时批了别的服务（已知线索：`EVENT_TIMETABLE_SRV/EventListSet`），
+  邻居的行只要碰巧也有 `ModregId`/`SmShort`/`SmObjid` 就会被当成 booked 行，又因为缺 `AcademicYear`/`AcademicSession`
+  而全部解析失败 → 写成"空列表"，学生的选课就凭空归零。现在用 OData v2 每行都带的
+  `__metadata.type`（`ITED.BC_OVP_BOOKED_MODULES_SRV.Module`）做归属：**有这个字段就以它为准，没有才退回形状判断**（2026-08-11
+  那次裸 GET 是有的）。配套规则：**"读到了行但一行都读不懂" ≠ "你没有选课"** —— 只有"读懂了至少一行"或
+  "权威来源（整包 v2 + URL 指名 ModuleSet）确实返回零行"才允许写入 `booked`/`bookedAt`。
 - Related lead, same page, NOT yet reverse-engineered: `EVENT_TIMETABLE_SRV/EventListSet`
   (`$filter=EventDate ge … le …`) — the student's own dated timetable events.
 

@@ -154,8 +154,26 @@ function extractV2Results(body: string): unknown[] | null {
   return out;
 }
 
+/** `__metadata.type` of a booked row: `ITED.BC_OVP_BOOKED_MODULES_SRV.Module`. */
+const BOOKED_ENTITY_TYPE = /BC_OVP_BOOKED_MODULES_SRV\./;
+
+/**
+ * A row of the homepage booked feed.
+ *
+ * Shape alone is not enough INSIDE a `$batch`. A batch carries several services'
+ * answers in one body with no per-part URL, and the homepage batches more than this
+ * feed — a sibling service whose rows happen to carry the same three keys would be
+ * read as bookings, and (missing the term fields) understood as none, which is how a
+ * student's list can go to zero the moment batches became readable. OData v2 always
+ * names the owning service in `__metadata.type`, so when it is there it decides.
+ * When it is absent — an unusual server, or `$select`ed away — shape decides, as it
+ * did for the plain GET verified on 2026-08-11.
+ */
 function looksLikeBookedRow(v: unknown): v is TssBookedModuleRow {
-  return !!v && typeof v === 'object' && 'ModregId' in v && 'SmShort' in v && 'SmObjid' in v;
+  if (!v || typeof v !== 'object') return false;
+  if (!('ModregId' in v && 'SmShort' in v && 'SmObjid' in v)) return false;
+  const type = (v as TssBookedModuleRow).__metadata?.type;
+  return typeof type === 'string' ? BOOKED_ENTITY_TYPE.test(type) : true;
 }
 
 /** The requirements tree can be EMPTY (course without prereqs), so it's recognized

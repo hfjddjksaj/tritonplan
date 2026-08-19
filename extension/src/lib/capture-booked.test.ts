@@ -152,3 +152,55 @@ describe('CaptureStore booked list survives the round trip honestly', () => {
     expect(revived.getBookedAt()).toBe(store.getBookedAt());
   });
 });
+
+describe('CaptureStore booked list: rows it cannot read are not zero bookings', () => {
+  const BATCH_URL = 'https://tss.ucsd.edu/sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/$batch';
+  const batchOf = (json: string): string =>
+    '--batch_x\r\nContent-Type: application/http\r\n\r\n' +
+    `HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n${json}\r\n--batch_x--\r\n`;
+
+  it('ignores identically-shaped rows another service put in the same batch', () => {
+    // The homepage batches several services at once and a batch part carries no URL,
+    // so shape alone would let a neighbour's rows pass as bookings — and, lacking the
+    // term fields, be understood as none. `__metadata.type` is the attribution.
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    const at = store.getBookedAt();
+    const foreign = {
+      __metadata: { type: 'ITED.EVENT_TIMETABLE_SRV.Event' },
+      ModregId: 'redacted-9', SmShort: 'CHEM-114A', SmObjid: '00002077',
+    };
+    expect(store.ingestBody(batchOf(JSON.stringify({ d: { results: [foreign] } })), BATCH_URL)).toBe(false);
+    expect(store.getBooked()).toEqual([bookedRowToModule(ROW)]);
+    expect(store.getBookedAt()).toBe(at);
+  });
+
+  it('reads rows that name the booked service, wherever they arrive', () => {
+    const store = new CaptureStore();
+    const typed = { __metadata: { type: 'ITED.BC_OVP_BOOKED_MODULES_SRV.Module' }, ...ROW };
+    store.ingestBody(batchOf(JSON.stringify({ d: { results: [typed] } })), BATCH_URL);
+    expect(store.getBooked()).toEqual([bookedRowToModule(ROW)]);
+  });
+
+  it('stays silent when the feed answers with rows it cannot understand', () => {
+    // Rows short of the term fields (a `$select`ed subset, a changed schema) are a
+    // failure to read, not a report of zero. Writing [] here would stamp that failure
+    // with a fresh time and the planner would state it as fact.
+    const store = new CaptureStore();
+    const partial = {
+      __metadata: { type: 'ITED.BC_OVP_BOOKED_MODULES_SRV.Module' },
+      ModregId: 'redacted-1', SmShort: 'CHEM-114A', SmObjid: '00002077',
+    };
+    expect(store.ingestBody(JSON.stringify({ d: { results: [partial] } }), URL)).toBe(false);
+    expect(store.getBooked()).toBeNull();
+    expect(store.getBookedAt()).toBeNull();
+  });
+
+  it('keeps an earlier real list when a later report is unreadable', () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    const partial = { ModregId: 'redacted-2', SmShort: '', SmObjid: '' };
+    store.ingestBody(JSON.stringify({ d: { results: [partial] } }), URL);
+    expect(store.getBooked()).toEqual([bookedRowToModule(ROW)]);
+  });
+});

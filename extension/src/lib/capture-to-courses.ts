@@ -138,10 +138,17 @@ export class CaptureStore {
       isWholeV2Body(body) &&
       (url?.includes('BC_OVP_BOOKED_MODULES_SRV') ?? false) &&
       URL_NAMES_SET.test(url ?? '');
-    if (bookedRows.length || clearsOnEmpty) {
-      this.booked = bookedRows
-        .map(bookedRowToModule)
-        .filter((m): m is BookedModule => m !== null);
+    const understood = bookedRows
+      .map(bookedRowToModule)
+      .filter((m): m is BookedModule => m !== null);
+    // Rows we could not read are not bookings we do not have. Writing them out as an
+    // empty list — stamped with a fresh time, so the planner reports it with full
+    // confidence — turns "this build didn't understand the payload" into "TSS says you
+    // are enrolled in nothing". Only an understood row, or an authoritative report that
+    // genuinely carried no rows at all, may write here; anything else leaves the last
+    // real answer (or "never captured") standing.
+    if (understood.length > 0 || (bookedRows.length === 0 && clearsOnEmpty)) {
+      this.booked = understood;
       this.bookedAt = new Date().toISOString();
       changed = true;
     }

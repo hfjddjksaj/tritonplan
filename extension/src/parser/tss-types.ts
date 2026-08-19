@@ -102,6 +102,10 @@ export interface TssApptPeriodsRow {
  *  ⚠ OData **v2**: the body is `{"d":{"results":[...]}}`, not an
  *  `@odata.context` collection. Verified live 2026-08-11. */
 export interface TssBookedModuleRow {
+  /** OData v2 names the owning service in every row: `ITED.<SERVICE>.<Entity>`. The
+   *  only attribution a `$batch` part carries — its response headers don't repeat the
+   *  request URL, so this is how a row is traced back to the booked feed. */
+  __metadata?: { type?: string };
   ModregId: string;            // booking-record GUID (entity key) — personal
   SmShort: string;             // course code, e.g. "CHEM-114A"
   SmStext?: string;            // course title
