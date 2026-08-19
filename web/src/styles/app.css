@@ -24,6 +24,11 @@ body {
 button {
   font-family: inherit;
   cursor: pointer;
+  /* Chrome's UA sheet ships `padding: 1px 6px` on <button>. Any button here
+     that wants padding sets its own; the leftover only ever showed up as an
+     icon sitting off-centre in a fixed-size box (measured on the map's fold
+     control: a 16 px chevron in a 24 px button came out 6 px | 2 px). */
+  padding: 0;
 }
 input {
   font-family: inherit;
@@ -142,6 +147,13 @@ p {
 .btn {
   display: inline-flex;
   align-items: center;
+  /* A button wider than its label centres it. Width normally comes from the
+     content, so this changes nothing for most buttons — it matters the moment
+     a `width`, `min-width` or `flex: 1` stretches one, and every such rule in
+     this file was already re-declaring `justify-content: center` by hand
+     (.btn--icon, .received__actions .btn, .campusmap__island .tab, …). The one
+     that was not, .campusmap__mode3d, drew "3D" 3.5 px left of centre. */
+  justify-content: center;
   gap: 6px;
   height: 34px;
   padding: 0 13px;
@@ -1336,6 +1348,9 @@ button.menu__item:hover {
   padding: 4px 7px 4px 8px;
   overflow: hidden;
   text-align: left;
+  /* The block's width is set inline (lane maths in CourseBlock.tsx), so it can
+     answer questions about itself — see the @container rule under .block__type. */
+  container-type: inline-size;
   transition: box-shadow 0.14s ease, transform 0.08s ease, filter 0.14s ease;
   animation: block-in 0.18s ease both;
 }
@@ -1378,6 +1393,27 @@ button.menu__item:hover {
   text-transform: uppercase;
   color: var(--b-spine);
 }
+/* Too narrow to hold the code AND the tag: the code wins, the tag goes.
+   `flex: none` means the tag never shrinks, so the code — the only flexible
+   item in the head — absorbed the whole shortfall. On a phone week column
+   (59.6 px block, 40.6 px content box, and "CSE-011" needs ~40 of it) that
+   squeezed the code to width ZERO: the course number, the one thing a student
+   reads a block for, was invisible, and the tag overflowed and hard-clipped
+   against .block's `overflow: hidden` — "LECTURE" rendered as "LECTURI".
+   112 px is where code + 6 px gap + tag + padding stop fitting. The tag is not
+   lost: it is on the card, in the rail, and in the block's own tooltip — the
+   same trade `.block--sm` already makes for blocks too SHORT to hold it. */
+@container (max-width: 112px) {
+  .block__type {
+    display: none;
+  }
+  /* Pull the tracking in rather than the size: the phone calendar already
+     steps the code down to 10 px (.cal--fit/.cal--scroll .block__code), and
+     going smaller than that costs more legibility than the ~2 px it buys. */
+  .block__code {
+    letter-spacing: -0.03em;
+  }
+}
 .block__time {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -1386,6 +1422,11 @@ button.menu__item:hover {
   opacity: 0.82;
   margin-top: 1px;
   white-space: nowrap;
+  /* .block__loc and .block__instr already truncate; this one did not, so on a
+     narrow column "9:30 AM – 10:50 AM" was cut mid-character by the block's
+     own overflow rather than ellipsised. */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .block__loc,
 .block__instr {
@@ -2200,7 +2241,11 @@ button.menu__item:hover {
   }
   .topbar__actions .btn {
     font-size: 0; /* icon-only: hides the text node, svg sizing is attribute-based */
-    gap: 4px;
+    /* …but a zero-WIDTH text node is still a flex item, so the gap kept
+       reserving space to the right of the icon and pushed it 2 px left of
+       centre (measured: 10 px | 14 px inside a 39 px button). No label to
+       separate from, no gap. */
+    gap: 0;
     padding: 0 9px;
   }
   .menu-wrap > .btn > svg:last-child {
@@ -3094,5 +3139,19 @@ button.termsw__cell:hover {
   }
   .campusmap__card {
     max-width: calc(100vw - 24px);
+  }
+  /* A phone week column is ~60 px wide, of which the block's own padding and
+     borders were eating 19 — leaving 40.6 px, enough for "CSE-011" but not for
+     an 8-character code, which truncated to a useless "CSE-…". "CSE-008A" wants
+     51 px at the 10 px the phone calendar uses, so the padding has to give up
+     8 of its 15 for the 8th character — the one that tells CSE-008A from
+     CSE-008B — to survive. The 3 px colour spine is the block's left border and
+     still reads as the left margin. Vertical padding is untouched: that axis
+     was never the tight one.
+     (This cannot live in the @container rule beside .block__type — a container
+     query styles a container's DESCENDANTS, never the container itself.) */
+  .block {
+    padding-left: 4px;
+    padding-right: 3px;
   }
 }
