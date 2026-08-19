@@ -13,6 +13,7 @@ import {
   weekLabel,
   type MapPin,
 } from './map-pins';
+import { unlocatedPins } from './map-labels';
 import { entryHue } from './plan';
 
 /** A course whose lecture meets in a real, matchable UCSD building. */
@@ -139,6 +140,30 @@ describe('meetingPins', () => {
     expect(lec.building).toBe('Computer Science and Engineering Buildin');
     expect(lec.place).toBe('Computer Science and Engineering Building');
     expect(lec.coords).not.toBeNull();
+  });
+
+  it('places a class in a building complex TSS names but the GIS layer only has wings of', () => {
+    // The reported bug: MMW 11's discussion meets in "Asante House Room 123A",
+    // the official layer only carries Asante House East / West / Meeting Rooms,
+    // and the pin fell into the map's "not on the map" list. The wings are one
+    // building 21 m across, so the complex resolves and carries them along for
+    // the footprint outline.
+    const course = courseWithMeetings();
+    const m = course.options[0]!.components[0]!.meetings[0]!;
+    m.building = 'Asante House';
+    m.room = '123A';
+    m.location = 'Asante House Room 123A';
+    const dis = meetingPins(planWith(course))[0]!;
+    expect(dis.coords).not.toBeNull();
+    expect(dis.place).toBe('Asante House');
+    expect(dis.parts).toEqual([
+      'Asante House East',
+      'Asante House Meeting Rooms',
+      'Asante House West',
+    ]);
+    expect(unlocatedPins(meetingPins(planWith(course)))).not.toContainEqual(
+      expect.objectContaining({ building: 'Asante House' }),
+    );
   });
 
   it('marks pins booked only for course ids in the booked set', () => {

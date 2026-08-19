@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchBuilding, googleMapsLink, ambiguousKeyCount } from './buildings';
+import { matchBuilding, googleMapsLink, ambiguousKeyCount, COMPLEX_RADIUS_M } from './buildings';
 import dataset from '../data/ucsd-buildings.json';
 import { BUILDING_ALIASES } from './building-aliases';
 
@@ -42,9 +42,11 @@ describe('matchBuilding', () => {
     );
   });
 
-  it('rejects prefixes shared by different buildings', () => {
-    expect(matchBuilding('Pepper Canyon')).toBeNull(); // Hall vs Apartments vs Lodge…
-    expect(matchBuilding('Price Cent')).toBeNull(); // West vs East Expansion
+  it('rejects prefixes shared by buildings that are different PLACES', () => {
+    // Pepper Canyon Hall / Apartments / Lodge are hundreds of metres apart, so
+    // there is no one place to point at. (A prefix shared by wings of one
+    // building resolves instead — see "building complexes" below.)
+    expect(matchBuilding('Pepper Canyon')).toBeNull();
   });
 
   it('still matches a full name that is also a prefix of longer names', () => {
@@ -89,6 +91,67 @@ describe('dataset sanity', () => {
     const count = ambiguousKeyCount();
     expect(count).toBeGreaterThan(0);
     expect(count).toBeLessThan(60);
+  });
+});
+
+describe('building complexes', () => {
+  // The bug: MMW's discussion sections meet in the ERC houses, TSS names the
+  // house ("Asante House 123A"), and the GIS layer only has its wings — so the
+  // prefix scan found three records, gave up, and every MMW discussion landed
+  // in the map's "not on the map" list.
+  it('resolves a complex TSS names but the GIS layer only has wings of', () => {
+    const hit = matchBuilding('Asante House');
+    expect(hit?.name).toBe('Asante House');
+    expect(hit?.parts).toEqual([
+      'Asante House East',
+      'Asante House Meeting Rooms',
+      'Asante House West',
+    ]);
+  });
+
+  it('places the pin at the centroid of the wings, not on whichever sorts first', () => {
+    const hit = matchBuilding('Asante House')!;
+    const wings = ['Asante House East', 'Asante House Meeting Rooms', 'Asante House West'].map(
+      (n) => matchBuilding(n)!,
+    );
+    expect(hit.lat).toBeCloseTo(wings.reduce((t, w) => t + w.lat, 0) / 3, 6);
+    expect(hit.lng).toBeCloseTo(wings.reduce((t, w) => t + w.lng, 0) / 3, 6);
+    // …and every wing is inside the radius that justified calling it one place.
+    for (const w of wings) {
+      const dLat = (w.lat - hit.lat) * 111_320;
+      const dLng = (w.lng - hit.lng) * 111_320 * Math.cos((hit.lat * Math.PI) / 180);
+      expect(Math.hypot(dLat, dLng)).toBeLessThanOrEqual(COMPLEX_RADIUS_M);
+    }
+  });
+
+  it('covers the other ERC houses MMW uses, all split the same way', () => {
+    for (const house of ['Cuzco House', 'Geneva Hall', 'Kathmandu House']) {
+      expect(matchBuilding(house)?.name, house).toBe(house);
+    }
+  });
+
+  it('repairs a truncation onto a complex too', () => {
+    expect(matchBuilding('Price Cent')?.name).toBe('Price Center'); // West + East Expansion
+  });
+
+  it('refuses compounds whose members are genuinely different places', () => {
+    // Spread out well past COMPLEX_RADIUS_M: Extended Studies is 20 buildings
+    // over ~84 m, Birch Aquarium ~101 m, and "Center for …" spans the campus.
+    expect(matchBuilding('Extended Studies')).toBeNull();
+    expect(matchBuilding('Birch Aquarium')).toBeNull();
+    expect(matchBuilding('Center for')).toBeNull();
+  });
+
+  it('leaves an ordinary one-building match with no parts to outline', () => {
+    const hit = matchBuilding('Galbraith Hall');
+    expect(hit?.name).toBe('Galbraith Hall');
+    expect(hit?.parts).toBeUndefined();
+  });
+
+  it('every wing it names is a real record, so the map can outline it', () => {
+    for (const part of matchBuilding('Asante House')!.parts!) {
+      expect(matchBuilding(part)?.name, part).toBe(part);
+    }
   });
 });
 

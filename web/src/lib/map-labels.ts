@@ -18,6 +18,8 @@ export interface PinGroup {
   building?: string;
   /** Its matched official name — what footprints and the popover key on. */
   place?: string;
+  /** Set only when `place` names a complex: the wings to outline instead. */
+  parts?: readonly string[];
   pins: MapPin[];
 }
 
@@ -38,6 +40,7 @@ export function groupPins(pins: MapPin[]): PinGroup[] {
       lng: p.coords.lng,
       building: p.building,
       place: p.place,
+      parts: p.parts,
       pins: [p],
     });
   }

@@ -2594,7 +2594,7 @@ button.termsw__cell:hover {
   white-space: nowrap;
 }
 
-/* --- the control cluster (top-right): Booked only · compass · close --------- */
+/* --- the control cluster (top-right): Booked only · 3D · compass · close ---- */
 .campusmap__cluster {
   position: absolute;
   top: 10px;
@@ -2608,6 +2608,25 @@ button.termsw__cell:hover {
   box-shadow: var(--shadow-sm);
 }
 .campusmap__bookedtoggle.is-on {
+  color: var(--ink);
+  background: var(--surface-2);
+  border-color: var(--text-faint);
+}
+/* The 3D toggle, which moved here from the 28 px zoom column. Wider and taller
+   than the icon controls beside it because it is now the one control the map can
+   press by itself — a tilt gesture past CAMERA.enter3dPitch turns it on — and a
+   state you did not click has to be readable at a glance. The pill shape and the
+   pressed colours are "Booked only"'s, so a toggle still looks like a toggle. */
+.campusmap__mode3d {
+  min-width: 46px;
+  height: 34px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  border-radius: 999px;
+}
+.campusmap__mode3d[aria-pressed='true'] {
   color: var(--ink);
   background: var(--surface-2);
   border-color: var(--text-faint);
@@ -2846,21 +2865,6 @@ button.termsw__cell:hover {
   line-height: 1;
   color: var(--ink);
   box-shadow: var(--shadow-sm);
-}
-/* The one control in that column that is a word rather than a glyph: smaller and
-   heavier so "3D" occupies the same optical weight as ⊕ / ⊖ / ⟲ at 28 px. */
-.campusmap__zoombtn--3d {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  padding: 0;
-}
-/* Pressed = the map is standing up. Same on/off language as "Booked only", so a
-   toggle looks like a toggle wherever it appears on the map. */
-.campusmap__zoombtn--3d[aria-pressed='true'] {
-  color: var(--ink);
-  background: var(--surface-2);
-  border-color: var(--text-faint);
 }
 .campusmap__zoombtn:disabled {
   color: var(--text-faint);

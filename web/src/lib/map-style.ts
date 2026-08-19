@@ -123,7 +123,33 @@ export const CAMERA = {
   maxPitch: 65,
   mode3d: { pitch: 55, bearing: -25 },
   mode2d: { pitch: 0, bearing: 0 },
+  /**
+   * Pitch (degrees) at which a hand-tilted map becomes 3D on its own, and the
+   * pitch it has to come back down to before it lies flat again.
+   *
+   * UCSD's own map does not let you reach this angle in 2D at all — the tilt
+   * gesture is simply dead until you turn 3D on. Rather than take the gesture
+   * away, the mode follows it: pass 20° and the buildings stand up. The two
+   * numbers differ so a camera parked near the line cannot flap between modes
+   * on the jitter of a single drag; between them, whatever mode you are in
+   * stays. 20° is well past an accidental two-finger nudge and well short of
+   * the 55° the button eases to.
+   */
+  enter3dPitch: 20,
+  exit3dPitch: 8,
 } as const;
+
+/**
+ * The mode a camera at this pitch belongs in — the whole rule for "the tilt
+ * gesture decides the mode", kept as a pure function so it is testable without
+ * a GL context. Returns `current` inside the dead band (see the two pitches
+ * above), which is what makes it hysteresis rather than a threshold.
+ */
+export function modeForPitch(pitch: number, current: MapMode): MapMode {
+  if (pitch >= CAMERA.enter3dPitch) return '3d';
+  if (pitch <= CAMERA.exit3dPitch) return '2d';
+  return current;
+}
 
 /**
  * How much tighter the home view fits than the core box's own
@@ -170,19 +196,30 @@ export const TERRAIN_BOUNDS: [number, number, number, number] = [-117.3, 32.83, 
 export const TERRAIN_MINZOOM = 13;
 export const TERRAIN_MAXZOOM = 14;
 
+/**
+ * The footprint names one group claims. Usually one — its matched building.
+ * A COMPLEX match (matchBuilding's `parts`: Asante House → East / West /
+ * Meeting Rooms) names no polygon of its own, so it claims every wing: the
+ * class is somewhere in there and TSS did not say which, and outlining the
+ * whole complex says exactly that. Outlining one arbitrary wing would not.
+ */
+function hostNames(g: PinGroup): readonly string[] {
+  if (g.parts?.length) return g.parts;
+  const name = g.place ?? g.building;
+  return name ? [name] : [];
+}
+
 /** `['in', ['get','name'], ['literal', names]]` — the host footprints to recolour. */
 export function hostFilter(groups: readonly PinGroup[]): FilterSpecification {
-  const names = [...new Set(groups.map((g) => g.place ?? g.building).filter((n): n is string => !!n))];
+  const names = [...new Set(groups.flatMap(hostNames))];
   return ['in', ['get', 'name'], ['literal', names]] as FilterSpecification;
 }
 
 function hostNamesAndHues(groups: readonly PinGroup[]): [string, number][] {
   const byName = new Map<string, number>();
   for (const g of groups) {
-    const name = g.place ?? g.building;
-    if (!name || byName.has(name)) continue;
     const hue = (g.pins[0] as { hue: number } | undefined)?.hue ?? 0;
-    byName.set(name, hue);
+    for (const name of hostNames(g)) if (!byName.has(name)) byName.set(name, hue);
   }
   return [...byName];
 }
@@ -465,7 +502,88 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
       filter: hostFilter([]),
       paint: { 'line-color': hostLine([]), 'line-width': 1.2 },
     },
-    // 10. buildings-3d, hosts-3d
+    // 10. roads-casing, roads
+    {
+      id: LAYER.roadsCasing,
+      type: 'line',
+      source: LAYER.roads,
+      filter: ROADS_NOT_WALK,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': ['match', ['get', 'kind'], 'hwy', MAP_PALETTE.hwyCasing, MAP_PALETTE.roadCasing] as ExpressionSpecification,
+        'line-width': ROAD_WIDTH_CASING,
+      },
+    },
+    {
+      id: LAYER.roads,
+      type: 'line',
+      source: LAYER.roads,
+      filter: ROADS_NOT_WALK,
+      paint: {
+        'line-color': ['match', ['get', 'kind'], 'hwy', MAP_PALETTE.hwyFill, MAP_PALETTE.roadFill] as ExpressionSpecification,
+        'line-width': ROAD_WIDTH_FILL,
+      },
+    },
+    // 11. trees, trees-3d
+    {
+      id: LAYER.trees,
+      type: 'circle',
+      source: LAYER.trees,
+      minzoom: 15,
+      paint: {
+        'circle-color': MAP_PALETTE.tree,
+        'circle-stroke-color': MAP_PALETTE.treeLine,
+        'circle-stroke-width': 0.5,
+        'circle-blur': 0.15,
+        'circle-opacity': 0.9,
+        'circle-radius': TREE_RADIUS,
+      },
+    },
+    // 11b. trees-3d — the same 2,856 points as the layer above, standing up.
+    // Only 3D shows it (`applyMode`), because a billboard seen from straight
+    // overhead is a sticker; and only from z15, where the flat circles start too.
+    // Viewport alignment on both axes is what makes it a billboard rather than a
+    // decal: it stays upright and facing the camera through pitch and rotation.
+    // Overlap allowed BOTH ways: a canopy hidden because a neighbour claimed the
+    // space is a hole in a wood rather than a decluttered label, and a tree must
+    // not push a building name off the map either (`icon-ignore-placement`) —
+    // these are scenery, and the labels outrank them.
+    {
+      id: LAYER.trees3d,
+      type: 'symbol',
+      source: LAYER.trees,
+      minzoom: 15,
+      layout: {
+        visibility: 'none',
+        'icon-image': TREE_ICON,
+        'icon-anchor': 'bottom',
+        'icon-pitch-alignment': 'viewport',
+        'icon-rotation-alignment': 'viewport',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-size': TREE_ICON_SIZE,
+      },
+    },
+    // 12. buildings-3d, hosts-3d
+    //
+    // LAST of the ground-level layers, and that position is load-bearing rather
+    // than cosmetic. MapLibre gives every layer at or after the first
+    // fill-extrusion `DepthMode.disabled` (painter.opaquePassEnabledForLayer()
+    // is `currentLayer < opaquePassCutoff`, and the cutoff IS the first 3D
+    // layer) — so anything drawn after the extrusions ignores the depth buffer
+    // entirely and paints straight over them. With the trees above this line,
+    // the wood north of Geisel grew out of Geisel's roof; the roads did the
+    // same thing more quietly.
+    //
+    // Putting the flat layers first makes the extrusions win every overlap:
+    // a tree or a road BEHIND a building is correctly hidden. The cost, chosen
+    // deliberately over a custom WebGL layer (2026-08-18), is that one in FRONT
+    // is hidden too — a missing tree rather than a tree standing on a roof.
+    // Symbol labels stay below (after) the extrusions on purpose: a building
+    // name has to stay readable over the block it names.
+    //
+    // 2D is unaffected — these layers are hidden then (`applyMode`), and the
+    // visible order ground → buildings → hosts → roads → trees is unchanged.
     {
       id: LAYER.buildings3d,
       type: 'fill-extrusion',
@@ -489,68 +607,6 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
         'fill-extrusion-height': ['get', 'height'] as ExpressionSpecification,
         'fill-extrusion-base': 0,
         'fill-extrusion-vertical-gradient': true,
-      },
-    },
-    // 11. roads-casing, roads
-    {
-      id: LAYER.roadsCasing,
-      type: 'line',
-      source: LAYER.roads,
-      filter: ROADS_NOT_WALK,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': ['match', ['get', 'kind'], 'hwy', MAP_PALETTE.hwyCasing, MAP_PALETTE.roadCasing] as ExpressionSpecification,
-        'line-width': ROAD_WIDTH_CASING,
-      },
-    },
-    {
-      id: LAYER.roads,
-      type: 'line',
-      source: LAYER.roads,
-      filter: ROADS_NOT_WALK,
-      paint: {
-        'line-color': ['match', ['get', 'kind'], 'hwy', MAP_PALETTE.hwyFill, MAP_PALETTE.roadFill] as ExpressionSpecification,
-        'line-width': ROAD_WIDTH_FILL,
-      },
-    },
-    // 12. trees, trees-3d
-    {
-      id: LAYER.trees,
-      type: 'circle',
-      source: LAYER.trees,
-      minzoom: 15,
-      paint: {
-        'circle-color': MAP_PALETTE.tree,
-        'circle-stroke-color': MAP_PALETTE.treeLine,
-        'circle-stroke-width': 0.5,
-        'circle-blur': 0.15,
-        'circle-opacity': 0.9,
-        'circle-radius': TREE_RADIUS,
-      },
-    },
-    // 12b. trees-3d — the same 2,856 points as the layer above, standing up.
-    // Only 3D shows it (`applyMode`), because a billboard seen from straight
-    // overhead is a sticker; and only from z15, where the flat circles start too.
-    // Viewport alignment on both axes is what makes it a billboard rather than a
-    // decal: it stays upright and facing the camera through pitch and rotation.
-    // Overlap allowed BOTH ways: a canopy hidden because a neighbour claimed the
-    // space is a hole in a wood rather than a decluttered label, and a tree must
-    // not push a building name off the map either (`icon-ignore-placement`) —
-    // these are scenery, and the labels outrank them.
-    {
-      id: LAYER.trees3d,
-      type: 'symbol',
-      source: LAYER.trees,
-      minzoom: 15,
-      layout: {
-        visibility: 'none',
-        'icon-image': TREE_ICON,
-        'icon-anchor': 'bottom',
-        'icon-pitch-alignment': 'viewport',
-        'icon-rotation-alignment': 'viewport',
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
-        'icon-size': TREE_ICON_SIZE,
       },
     },
     // 13. road-names

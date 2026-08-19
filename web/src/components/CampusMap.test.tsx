@@ -500,20 +500,25 @@ describe('CampusMap', () => {
     expect(monAgain.classList.contains('calseg__btn--on')).toBe(true);
   });
 
-  it('puts the compass between Booked only and the close button in the top-right cluster', async () => {
+  it('puts the 3D toggle and compass between Booked only and close in the top-right cluster', async () => {
     render({ plan: planWithMeeting(), booked: new Set(['CSE-8A|2026|2']) });
     await settle();
     const cluster = container.querySelector('.campusmap__cluster')!;
     const kinds = [...cluster.children].map((el) =>
       el.classList.contains('campusmap__bookedtoggle')
         ? 'booked'
-        : el.classList.contains('campusmap__compass')
-          ? 'compass'
-          : el.classList.contains('campusmap__close')
-            ? 'close'
-            : el.className,
+        : el.classList.contains('campusmap__mode3d')
+          ? '3d'
+          : el.classList.contains('campusmap__compass')
+            ? 'compass'
+            : el.classList.contains('campusmap__close')
+              ? 'close'
+              : el.className,
     );
-    expect(kinds).toEqual(['booked', 'compass', 'close']);
+    // 3D sits immediately left of the compass: both describe the camera, and a
+    // tilt gesture can press the toggle by itself, so it belongs where the eye
+    // already is rather than in the 28 px zoom column it used to head.
+    expect(kinds).toEqual(['booked', '3d', 'compass', 'close']);
     const compass = cluster.querySelector('.campusmap__compass') as HTMLButtonElement;
     expect(compass.tagName).toBe('BUTTON');
     // In 2D it still resets bearing AND pitch: a two-finger pitch on a flat map
@@ -971,6 +976,66 @@ describe('CampusMap', () => {
     expect(btn.getAttribute('aria-pressed')).toBe('false');
     expect(map.getPitch()).toBe(0);
     expect(map.getBearing()).toBe(0);
+    expect(map.calls).toContainEqual({ method: 'setLayoutProperty', args: ['buildings', 'visibility', 'visible'] });
+  });
+
+  it('a hand-tilt past the entry pitch stands the buildings up on its own', async () => {
+    // The camera could always be tilted in 2D, which parked the map in a pose
+    // UCSD's own map does not allow at all: flat buildings under a horizon.
+    // Rather than take the gesture away, the mode follows it.
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const btn = container.querySelector('button[aria-label="3D view"]') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+
+    // Inside the dead band: nothing moves, so a camera parked on the line cannot flap.
+    await act(async () => void map.simulateUserTilt((CAMERA.enter3dPitch + CAMERA.exit3dPitch) / 2));
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => void map.simulateUserTilt(CAMERA.enter3dPitch + 5));
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    expect(map.calls).toContainEqual({ method: 'setLayoutProperty', args: ['buildings-3d', 'visibility', 'visible'] });
+    // The camera is left exactly where the hand put it — the layers follow the
+    // gesture, not the other way round.
+    expect(map.getPitch()).toBe(CAMERA.enter3dPitch + 5);
+    expect(map.easeRequests.some((r) => r.pitch === CAMERA.mode3d.pitch)).toBe(false);
+
+    // …and laying it back down flattens it again.
+    await act(async () => void map.simulateUserTilt(CAMERA.exit3dPitch - 1));
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    expect(map.calls).toContainEqual({ method: 'setLayoutProperty', args: ['buildings', 'visibility', 'visible'] });
+  });
+
+  it("the 3D button's own tilt sweep cannot trip the pitch rule on its way past it", async () => {
+    // easeTo fires the same `pitch` events a drag does, minus `originalEvent`.
+    // Without that discriminator the button's 0 → 55 sweep would cross
+    // exit3dPitch first and flip the mode straight back off under itself.
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const btn = container.querySelector('button[aria-label="3D view"]') as HTMLButtonElement;
+    await act(async () => btn.click());
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    // A camera event with no hand behind it, at a pitch that would mean "flat".
+    await act(async () => void map.fire('pitch', {}));
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('Reset view lies the map flat AND turns 3D off, leaving no lit toggle over a flat map', async () => {
+    // It already zeroed the pitch. Now that pitch decides the mode, a pressed
+    // 3D toggle over a flattened camera is the one contradiction left.
+    render({ plan: planWithMeeting() });
+    await settle();
+    const map = FakeMap.instances[0]!;
+    const btn = container.querySelector('button[aria-label="3D view"]') as HTMLButtonElement;
+    await act(async () => btn.click());
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+
+    const reset = container.querySelector('button[aria-label="Reset view"]') as HTMLButtonElement;
+    await act(async () => reset.click());
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    expect(map.getPitch()).toBe(0);
     expect(map.calls).toContainEqual({ method: 'setLayoutProperty', args: ['buildings', 'visibility', 'visible'] });
   });
 

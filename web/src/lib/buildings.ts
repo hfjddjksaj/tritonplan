@@ -8,8 +8,10 @@
  * Matching repairs names TSS truncates mid-word ("…Engineering Buildin" —
  * the source field caps at 40 chars) via unique-prefix lookup, and absorbs
  * cosmetic differences between TSS and official names: case/whitespace,
- * "&" vs "and", roman numerals, an optional trailing "Building". Anything
- * unmatched falls back to the raw text — never worse than before.
+ * "&" vs "and", roman numerals, an optional trailing "Building". A prefix
+ * that lands on SEVERAL official records still resolves when those records
+ * are one building complex (see COMPLEX_RADIUS_M). Anything unmatched falls
+ * back to the raw text — never worse than before.
  */
 import dataset from '../data/ucsd-buildings.json';
 import { BUILDING_ALIASES, EXTRA_BUILDINGS, type BuildingRow } from './building-aliases';
@@ -19,6 +21,13 @@ export interface BuildingMatch {
   name: string;
   lat: number;
   lng: number;
+  /**
+   * Present only on a COMPLEX match: the official names of the wings this
+   * stands for, so the map can outline all of them instead of picking one.
+   * `name` is then their shared prefix ("Asante House"), which is a label —
+   * not a footprint — and matches no polygon on its own.
+   */
+  parts?: readonly string[];
 }
 
 const ROMAN: Record<string, string> = { i: '1', ii: '2', iii: '3', iv: '4', v: '5' };
@@ -83,10 +92,71 @@ for (const [alias, target] of Object.entries(BUILDING_ALIASES)) {
 }
 
 /**
+ * How far apart two official records may sit and still be called one complex.
+ *
+ * TSS names the complex ("Asante House 123A"); the GIS layer only has its
+ * wings ("Asante House East / West / Meeting Rooms"), so the prefix scan below
+ * finds three records and used to give up — MMW's discussion sections, which
+ * meet in exactly these ERC houses, all landed in "not on the map". Measured
+ * over the whole dataset, the 131 prefixes that hit several records split
+ * cleanly by how tightly those records cluster: 75 sit inside 50 m (wings of
+ * one building — the four ERC houses at 13–21 m, Student Center A at 43 m,
+ * Visual Arts Facility at 44 m, Price Center at 46 m), while the ones that
+ * mean genuinely different places are hundreds of metres to kilometres apart
+ * ("Center for …" spans the campus).
+ *
+ * 60 m is set at the top of the tight cluster and below the next one up
+ * (Matthews Apartments, 78 m; the 20-building Extended Studies compound, 84 m;
+ * Birch Aquarium, 101 m). It is also about the width of one large building,
+ * which is the claim being made — and at the map's home framing (1.85 m/px,
+ * measured) it is ~32 px, so the ambiguity is smaller than the pin drawn over
+ * it. Anything looser and the pin would point at a different building, which
+ * is worse than saying nothing.
+ */
+export const COMPLEX_RADIUS_M = 60;
+
+/** Metres between two points, flat-earth — fine at these distances. */
+function metresApart(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const dLat = (a.lat - b.lat) * 111_320;
+  const dLng = (a.lng - b.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+}
+
+/**
+ * The label a set of wings share: their longest common run of leading words,
+ * in the official casing, stripped of the punctuation a split leaves dangling
+ * ("Extended Studies and Public Programs -" → "… Programs"). Empty when they
+ * share nothing, which is the signal not to invent a complex.
+ */
+function sharedName(names: readonly string[]): string {
+  const words = names.map((n) => n.split(' '));
+  const first = words[0]!;
+  let n = 0;
+  while (n < first.length && words.every((w) => w[n]?.toLowerCase() === first[n]!.toLowerCase())) n++;
+  return first.slice(0, n).join(' ').replace(/[s-–—,:]+$/, '');
+}
+
+/**
+ * Fold several official records into one complex, or null if they are too far
+ * apart (different places) or share no name (unrelated hits off one prefix).
+ * The coordinates are the centroid, so the pin sits in the middle of the
+ * complex rather than on whichever wing happened to sort first.
+ */
+function asComplex(hits: readonly BuildingMatch[]): BuildingMatch | null {
+  const lat = hits.reduce((t, h) => t + h.lat, 0) / hits.length;
+  const lng = hits.reduce((t, h) => t + h.lng, 0) / hits.length;
+  if (hits.some((h) => metresApart(h, { lat, lng }) > COMPLEX_RADIUS_M)) return null;
+  const parts = hits.map((h) => h.name).sort();
+  const name = sharedName(parts);
+  return name ? { name, lat, lng, parts } : null;
+}
+
+/**
  * Resolve a (possibly truncated) TSS building name to its official record.
- * Exact match on any key variant wins; otherwise a unique prefix match
- * repairs a TSS truncation. Null when unknown or ambiguous — callers keep
- * the raw text then.
+ * Exact match on any key variant wins; otherwise a prefix match repairs a TSS
+ * truncation — landing on one record, or on several that turn out to be wings
+ * of one complex (see COMPLEX_RADIUS_M). Null when unknown or genuinely
+ * ambiguous — callers keep the raw text then.
  */
 export function matchBuilding(raw: string | undefined): BuildingMatch | null {
   if (!raw) return null;
@@ -97,13 +167,17 @@ export function matchBuilding(raw: string | undefined): BuildingMatch | null {
     const hit = index.get(v);
     if (hit && hit !== 'ambiguous') return hit;
   }
-  let candidate: BuildingMatch | null = null;
+  const hits = new Set<BuildingMatch>();
   for (const [key, entry] of index) {
     if (!key.startsWith(norm)) continue;
-    if (entry === 'ambiguous' || (candidate !== null && candidate !== entry)) return null;
-    candidate = entry;
+    // A poisoned key is two UNRELATED buildings on one string; there is
+    // nothing to reason about, unlike several records of one complex.
+    if (entry === 'ambiguous') return null;
+    hits.add(entry);
   }
-  return candidate;
+  if (hits.size === 0) return null;
+  if (hits.size === 1) return [...hits][0]!;
+  return asComplex([...hits]);
 }
 
 /**

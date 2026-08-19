@@ -46,6 +46,12 @@ export interface MapPin {
    * so this, not `building`, is what footprints and popovers key on.
    */
   place?: string;
+  /**
+   * When `place` is a COMPLEX label (Asante House) rather than one footprint,
+   * the official names of its wings — the polygons the map should outline.
+   * Absent for an ordinary one-building match, where `place` IS the polygon.
+   */
+  parts?: readonly string[];
   room?: string;
   rawLocation?: string;
   /** null = no confident building match; shown in a list, never guessed onto the map. */
@@ -76,9 +82,10 @@ export function hasNoLocation(pin: MapPin): boolean {
   return pin.coords === null && !pin.building && !pin.rawLocation && !isOnlineModality(pin.modality);
 }
 
-function located(building: string | undefined): Pick<MapPin, 'place' | 'coords'> {
+function located(building: string | undefined): Pick<MapPin, 'place' | 'parts' | 'coords'> {
   const hit = matchBuilding(building);
-  return hit ? { place: hit.name, coords: { lat: hit.lat, lng: hit.lng } } : { coords: null };
+  if (!hit) return { coords: null };
+  return { place: hit.name, parts: hit.parts, coords: { lat: hit.lat, lng: hit.lng } };
 }
 
 /** Weekly class meetings of every selected section. */

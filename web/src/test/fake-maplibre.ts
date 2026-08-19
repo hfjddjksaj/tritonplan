@@ -134,6 +134,17 @@ export class FakeMap {
   simulateUserPan(dLng: number, dLat: number) {
     return this.move({ center: [this.cam.center[0] + dLng, this.cam.center[1] + dLat] }, { originalEvent: new Event('pointermove') });
   }
+  /**
+   * What a right-drag / two-finger tilt looks like from the outside: the pitch
+   * moves AND the events carry an originalEvent, which is the only thing that
+   * separates a hand from an easeTo (see the mode rule in CampusMap).
+   */
+  simulateUserTilt(pitch: number) {
+    this.cam = { ...this.cam, pitch };
+    const ev = { originalEvent: new Event('pointermove') };
+    this.fire('pitch', ev); this.fire('move', ev); this.fire('moveend', ev);
+    return this;
+  }
   getZoom() { return this.cam.zoom; }
   getCenter() { return { lng: this.cam.center[0], lat: this.cam.center[1] }; }
   getBearing() { return this.cam.bearing; }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildStyle, hostFilter, hostFill, hostFill3d, hostLine, applyHosts, applyMode, GROUND_COLORS, LAYER, MAP_PALETTE, MAP_FONT_REGULAR, MAP_FONT_BOLD, assetBase, TREE_ICON, TERRAIN_SOURCE, HILLSHADE_SOURCE, TERRAIN_BOUNDS, TERRAIN_MINZOOM, TERRAIN_MAXZOOM, type StyleTarget } from './map-style';
+import { buildStyle, hostFilter, hostFill, hostFill3d, hostLine, applyHosts, applyMode, modeForPitch, CAMERA, GROUND_COLORS, LAYER, MAP_PALETTE, MAP_FONT_REGULAR, MAP_FONT_BOLD, assetBase, TREE_ICON, TERRAIN_SOURCE, HILLSHADE_SOURCE, TERRAIN_BOUNDS, TERRAIN_MINZOOM, TERRAIN_MAXZOOM, type StyleTarget } from './map-style';
 import { buildSources } from './map-data';
 import { loadCampusGeo, loadCampusMap } from './campus-geo';
 import { colorsForHue } from './colors';
@@ -25,6 +25,31 @@ describe('buildStyle', () => {
     expect((json.match(/https:\/\/[^"]+/g) ?? []).every((u) => u.startsWith('https://example.test/app/'))).toBe(true);
     expect(s.sprite).toBeUndefined();
   });
+  it('keeps every flat layer BELOW the extrusions, which is what gives 3D its depth', async () => {
+    // MapLibre hands every layer at or after the first fill-extrusion
+    // `DepthMode.disabled` (painter: `currentLayer < opaquePassCutoff`, and the
+    // cutoff IS that first 3D layer), so anything ordered after the extrusions
+    // ignores the depth buffer and paints over them. That is literally what the
+    // 3D trees did — the wood behind Geisel drew on Geisel's roof — and the
+    // roads did it too, more quietly. Order is the whole fix, so it is asserted
+    // rather than left to the comment.
+    const s = buildStyle({ sources: buildSources(await loadCampusGeo(), await loadCampusMap()), assetBase: 'https://example.test/app/' });
+    const ids = s.layers.map((l) => l.id);
+    const firstExtrusion = Math.min(ids.indexOf(LAYER.buildings3d), ids.indexOf(LAYER.hosts3d));
+    expect(firstExtrusion).toBeGreaterThan(-1);
+    for (const flat of [LAYER.ground, LAYER.buildings, LAYER.hosts, LAYER.roadsCasing, LAYER.roads, LAYER.trees, LAYER.trees3d]) {
+      expect(ids.indexOf(flat), flat).toBeLessThan(firstExtrusion);
+    }
+    // Labels stay ABOVE on purpose: a building's name has to survive its own block.
+    for (const label of [LAYER.roadNames, LAYER.districtNames, LAYER.landmarkNames, LAYER.buildingNames]) {
+      expect(ids.indexOf(label), label).toBeGreaterThan(firstExtrusion);
+    }
+    // 2D's visible stacking is unchanged by the move.
+    expect(ids.indexOf(LAYER.buildings)).toBeLessThan(ids.indexOf(LAYER.hosts));
+    expect(ids.indexOf(LAYER.hosts)).toBeLessThan(ids.indexOf(LAYER.roads));
+    expect(ids.indexOf(LAYER.roads)).toBeLessThan(ids.indexOf(LAYER.trees));
+  });
+
   it('adds the hillshade layer and the DEM source only when terrain is asked for — and still points nowhere but our own origin', async () => {
     const sources = buildSources(await loadCampusGeo(), await loadCampusMap());
     const flat = buildStyle({ sources, assetBase: 'https://example.test/app/' });
@@ -239,5 +264,69 @@ describe('assetBase', () => {
     const b = assetBase();
     expect(b.startsWith(window.location.origin)).toBe(true);
     expect(b.endsWith('/')).toBe(true);
+  });
+});
+
+describe('modeForPitch', () => {
+  // The camera could always be dragged onto its edge in 2D, which left the map
+  // in a pose UCSD's own map does not allow at all: flat buildings under a
+  // horizon. The tilt gesture now decides the mode instead of being ignored.
+  it('stands the map up once a drag passes the entry pitch', () => {
+    expect(modeForPitch(CAMERA.enter3dPitch, '2d')).toBe('3d');
+    expect(modeForPitch(CAMERA.mode3d.pitch, '2d')).toBe('3d');
+  });
+
+  it('lays it flat again once the drag comes back down', () => {
+    expect(modeForPitch(CAMERA.exit3dPitch, '3d')).toBe('2d');
+    expect(modeForPitch(0, '3d')).toBe('2d');
+  });
+
+  it('holds the current mode between the two, so a camera parked on the line cannot flap', () => {
+    const mid = (CAMERA.enter3dPitch + CAMERA.exit3dPitch) / 2;
+    expect(modeForPitch(mid, '2d')).toBe('2d');
+    expect(modeForPitch(mid, '3d')).toBe('3d');
+    expect(CAMERA.exit3dPitch).toBeLessThan(CAMERA.enter3dPitch);
+  });
+
+  it('sets the entry pitch clear of an accidental nudge and short of the button target', () => {
+    expect(CAMERA.enter3dPitch).toBeGreaterThan(10);
+    expect(CAMERA.enter3dPitch).toBeLessThan(CAMERA.mode3d.pitch);
+  });
+});
+
+describe('hosts of a building complex', () => {
+  // matchBuilding resolves "Asante House" to a LABEL over three wings — no
+  // polygon carries that name, so keying the outline on it would light nothing
+  // up. TSS did not say which wing, so the honest answer is all of them.
+  const complex = (): PinGroup => ({
+    key: 'asante',
+    lat: 32.88423,
+    lng: -117.242,
+    place: 'Asante House',
+    parts: ['Asante House East', 'Asante House Meeting Rooms', 'Asante House West'],
+    pins: [{ hue: 231 } as never],
+  });
+
+  it('outlines every wing rather than the label, which matches no footprint', () => {
+    expect(hostFilter([complex()])).toEqual([
+      'in',
+      ['get', 'name'],
+      ['literal', ['Asante House East', 'Asante House Meeting Rooms', 'Asante House West']],
+    ]);
+  });
+
+  it('paints every wing in the course colour, in 2D and in 3D', () => {
+    const gs = [complex()];
+    const valueAfter = (arr: unknown[], name: string) => arr[arr.indexOf(name) + 1];
+    for (const wing of gs[0]!.parts!) {
+      expect(valueAfter(hostFill(gs) as unknown[], wing), wing).toBe(colorsForHue(231).fill);
+      expect(valueAfter(hostLine(gs) as unknown[], wing), wing).toBe(colorsForHue(231).spine);
+      expect(valueAfter(hostFill3d(gs) as unknown[], wing), wing).toBe(colorsForHue(231).spine);
+    }
+    expect(JSON.stringify(hostFill(gs))).not.toContain('"Asante House"');
+  });
+
+  it('leaves an ordinary one-building group exactly as it was', () => {
+    expect(hostFilter([group('Center Hall', 231)])).toEqual(['in', ['get', 'name'], ['literal', ['Center Hall']]]);
   });
 });

@@ -11,7 +11,7 @@ import {
   type CampusMapData,
 } from '../lib/campus-geo';
 import { buildSources } from '../lib/map-data';
-import { applyHosts, applyMode, assetBase, buildStyle, CAMERA, TREE_ICON, type MapMode } from '../lib/map-style';
+import { applyHosts, applyMode, assetBase, buildStyle, CAMERA, modeForPitch, TREE_ICON, type MapMode } from '../lib/map-style';
 import { treeSprite } from '../lib/tree-sprite';
 import {
   ALL_SLICE_ID,
@@ -230,6 +230,32 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // points with, and the only thing on screen that reports a drag-rotate.
   const bearing = gl.map?.getBearing() ?? 0;
   const compassLabel = mode === '3d' ? 'Reset north' : 'Reset north and tilt';
+
+  // The tilt gesture owns the mode.
+  //
+  // The camera could always be dragged onto its edge in 2D, and doing so left
+  // the map in a pose it had no business being in: buildings still flat, a
+  // horizon made of nothing. UCSD's own map forbids the pose — tilt does not
+  // respond at all until you turn 3D on. Rather than take the gesture away, the
+  // mode follows it: drag past `CAMERA.enter3dPitch` and the buildings stand up
+  // where the hand already is; lay it back down and they lie flat again.
+  //
+  // Only a HAND does this, which is what `originalEvent` distinguishes. An
+  // `easeTo` fires the same `pitch` events without one, so the button's own
+  // 0 → 55 sweep cannot trip the rule on its way past the threshold and flip
+  // the mode out from under itself.
+  useEffect(() => {
+    const map = gl.map;
+    if (!map) return;
+    const onPitch = (e: { originalEvent?: unknown }) => {
+      if (!e.originalEvent) return;
+      setMode((cur) => modeForPitch(map.getPitch(), cur));
+    };
+    map.on('pitch', onPitch);
+    return () => {
+      map.off('pitch', onPitch);
+    };
+  }, [gl.map]);
 
   // Both read-only defences, side by side. §5.4 hides the toggle because the plan on
   // screen is someone else's; the same reasoning kills the solid/hollow booked dots,
@@ -517,6 +543,30 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
           <span className="campusmap__bookedtoggle-label">Booked only</span>
         </button>
       )}
+      {/* Flat ⇄ standing up. It sits next to the compass because the two now say
+          the same kind of thing about the camera — which way it faces, and
+          whether it is standing up — and because the tilt gesture can flip this
+          toggle on its own (see the pitch effect above), which is only legible
+          if the toggle is somewhere the eye already rests. It left the 28 px
+          zoom column for that: a control the map can press by itself should not
+          be the smallest thing on screen.
+          The camera move and the layer swap are one gesture from here: the
+          effect above applies `mode` to the style, this eases the pitch and
+          bearing the mode implies. */}
+      <button
+        type="button"
+        className="btn btn--sm campusmap__mode3d"
+        aria-pressed={mode === '3d'}
+        aria-label="3D view"
+        title="3D view"
+        onClick={() => {
+          const next: MapMode = mode === '3d' ? '2d' : '3d';
+          setMode(next);
+          gl.easeCamera(next === '3d' ? CAMERA.mode3d : CAMERA.mode2d);
+        }}
+      >
+        3D
+      </button>
       {/* The GL camera can be rotated AND tilted (drag with the right button / two
           fingers), so the needle both REPORTS north and is the button that puts it
           back. The needle turns against the bearing, re-read on every `gl.tick`, so
@@ -680,27 +730,6 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
               }
             />
             <div className="campusmap__zoom" role="group" aria-label="Map view">
-              {/* Flat ⇄ standing up. It heads the same 28 px column as the zoom
-                  buttons because it is the same kind of thing — a control over how
-                  the map is drawn, not over the plan — and because the corner it
-                  shares is the one the eye already goes to for the camera. The
-                  camera move and the layer swap are one gesture from here: the
-                  effect above applies `mode` to the style, this eases the pitch and
-                  bearing the mode implies. */}
-              <button
-                type="button"
-                className="btn btn--sm campusmap__zoombtn campusmap__zoombtn--3d"
-                aria-pressed={mode === '3d'}
-                aria-label="3D view"
-                title="3D view"
-                onClick={() => {
-                  const next: MapMode = mode === '3d' ? '2d' : '3d';
-                  setMode(next);
-                  gl.easeCamera(next === '3d' ? CAMERA.mode3d : CAMERA.mode2d);
-                }}
-              >
-                3D
-              </button>
               <button type="button" className="btn btn--sm btn--icon campusmap__zoombtn" onClick={gl.zoomIn} aria-label="Zoom in">
                 <Plus size={14} />
               </button>
@@ -710,7 +739,13 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
               <button
                 type="button"
                 className="btn btn--sm btn--icon campusmap__zoombtn campusmap__zoombtn--home"
-                onClick={gl.goHome}
+                /* Reset view already zeroes the pitch, so it has to reset the
+                   mode too: now that pitch decides the mode, leaving 3D lit over
+                   a flattened camera is the one contradictory state left. */
+                onClick={() => {
+                  setMode('2d');
+                  gl.goHome();
+                }}
                 disabled={gl.atHome}
                 aria-label="Reset view"
                 title="Reset view"
