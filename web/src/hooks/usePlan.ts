@@ -438,6 +438,9 @@ export function usePlan() {
   // only makes sense to someone who actually has the extension).
   const bridgeSeen = useRef(false);
   const [extensionSeen, setExtensionSeen] = useState(false);
+  // When TSS last reported the booked list. Session state, not persisted: the bridge
+  // re-pushes it on every planner load, so there is nothing to remember across one.
+  const [bookedAt, setBookedAt] = useState<string | null>(null);
   const markBridgeSeen = useCallback(() => {
     bridgeSeen.current = true;
     setExtensionSeen(true);
@@ -477,8 +480,9 @@ export function usePlan() {
         // Adds always land in MY plans — surface them, even if a received plan was up.
         switchViewing('mine');
       },
-      onBooked: (rows) => {
+      onBooked: (rows, capturedAt) => {
         markBridgeSeen();
+        setBookedAt(capturedAt ?? null);
         setTermsState((s) => {
           const nowIso = new Date().toISOString();
           const now = new Date();
@@ -589,6 +593,7 @@ export function usePlan() {
     clearBrowsed,
     bookedIds,
     bookedSynced,
+    bookedAt,
     extensionSeen,
     toggleBooked,
     openCourseInTss,

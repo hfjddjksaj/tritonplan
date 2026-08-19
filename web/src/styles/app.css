@@ -581,19 +581,14 @@ p {
   flex: 1;
   min-width: 0;
 }
-/* Plain facts about the course — units and how old the seat counts are. Deliberately
-   unboxed: chips here made them look like a fifth and sixth thing to click. */
+/* Facts about the course. Its own line, above the actions — the units chip used to
+   sit among the buttons, where it read as a fifth thing to click. */
 .course-card__facts {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 5px;
-  margin-top: 5px;
-  font-size: 10.5px;
-  color: var(--text-faint);
-}
-.course-card__dot {
-  color: var(--line-strong);
+  align-items: center;
+  gap: 5px 6px;
+  margin-top: 6px;
 }
 .tag {
   display: inline-flex;
@@ -607,6 +602,12 @@ p {
   background: var(--surface-2);
   color: var(--text-muted);
   border: 1px solid var(--line);
+}
+/* Units carries the course's own accent, border and text both — at 10.5px a neutral
+   grey chip disappeared into the title above it. */
+.tag--units {
+  color: var(--c-text, var(--text-muted));
+  border-color: var(--c-border, var(--line));
 }
 .tag--conflict {
   background: var(--conflict-soft);
@@ -647,14 +648,24 @@ p {
   gap: 3px;
 }
 
-/* "Booked courses aren't synced" prompt — shown until the homepage feed reaches us
-   once. Dashed, unfilled: a standing instruction, not an error to be dismissed. */
+/* Booked status + the only control that refreshes it. Permanent, because opening a
+   course in TSS never brings the booked list with it — see BookedSync. Dashed while
+   nothing has been read (a standing instruction), solid and quiet once it has. */
 .booksync {
   margin-bottom: 12px;
-  padding: 11px 12px;
+  padding: 10px 12px;
   background: var(--surface-2);
   border: 1px dashed var(--line-strong);
   border-radius: var(--r-md);
+}
+.booksync--ok {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-style: solid;
+  border-color: var(--line);
+  padding: 8px 10px 8px 12px;
 }
 .booksync__text {
   margin: 0 0 9px;
@@ -662,8 +673,17 @@ p {
   line-height: 1.45;
   color: var(--text-muted);
 }
+.booksync--ok .booksync__text {
+  margin: 0;
+  min-width: 0;
+}
+.booksync__when {
+  color: var(--text-faint);
+}
 /* "seats 2h ago" staleness hint — data is only as fresh as the last TSS browse */
 .course-card__fresh {
+  font-size: 10px;
+  color: var(--text-faint);
   white-space: nowrap;
   cursor: help;
 }

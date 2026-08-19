@@ -79,6 +79,9 @@ export interface BookedMessage {
   type: 'booked';
   version: 1;
   payload: BookedModule[];
+  /** When TSS last reported this list. Optional: extensions before 1.1.1 don't send
+   *  it, and the page must keep working (just without a freshness reading). */
+  capturedAt?: string;
 }
 
 function isBookedModule(v: unknown): v is BookedModule {
@@ -218,8 +221,9 @@ export interface BridgeHandlers {
   onCourses: (courses: CourseOffering[]) => void;
   /** A `plan-add` message: add this course to the plan with the given option selected. */
   onPlanAdd: (course: CourseOffering, selectedOptionId: string) => void;
-  /** A `booked` message: update the student's enrolled modules. */
-  onBooked?: (rows: BookedModule[]) => void;
+  /** A `booked` message: update the student's enrolled modules. `capturedAt` is
+   *  absent on pushes from extensions that predate it. */
+  onBooked?: (rows: BookedModule[], capturedAt?: string) => void;
 }
 
 /**
@@ -236,7 +240,7 @@ export function installBridgeListener(handlers: BridgeHandlers): () => void {
     } else if (isCoursesMessage(event.data)) {
       handlers.onCourses(event.data.payload);
     } else if (isBookedMessage(event.data)) {
-      handlers.onBooked?.(event.data.payload);
+      handlers.onBooked?.(event.data.payload, event.data.capturedAt);
     }
   };
   window.addEventListener('message', handler);

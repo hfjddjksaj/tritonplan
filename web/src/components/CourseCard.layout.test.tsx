@@ -64,11 +64,19 @@ describe('CourseCard head/action split', () => {
     expect(container.querySelector('.course-card__facts')!.textContent).toContain('4 units');
   });
 
-  it('shows Conflict as a status badge beside the course code', () => {
+  it('shows Conflict on the facts line, next to units and out of the action rows', () => {
     render({ conflicted: true });
-    const codeline = container.querySelector('.course-card__codeline')!;
-    expect(codeline.querySelector('.tag--conflict')?.textContent).toBe('Conflict');
+    const facts = container.querySelector('.course-card__facts')!;
+    expect(facts.querySelector('.tag--conflict')?.textContent).toBe('Conflict');
+    expect(facts.querySelector('.tag--units')?.textContent).toBe('4 units');
     expect(container.querySelector('.course-card__actions .tag--conflict')).toBeNull();
+  });
+
+  it('keeps the facts line for a conflicted course that has no unit count', () => {
+    const e = entry();
+    delete (e.course as { units?: number }).units;
+    render({ entry: e, conflicted: true });
+    expect(container.querySelector('.course-card__facts .tag--conflict')).not.toBeNull();
   });
 
   it('drops the buttons it has no callback for instead of leaving a hole', () => {
@@ -76,10 +84,19 @@ describe('CourseCard head/action split', () => {
     expect(actionLabels()).toEqual(['open in TSS', 'prerequisites']);
   });
 
-  it('omits the facts line entirely when the course carries neither units nor a capture time', () => {
+  it('omits the facts line when the course carries no unit count', () => {
     const e = entry();
     delete (e.course as { units?: number }).units;
     render({ entry: e });
     expect(container.querySelector('.course-card__facts')).toBeNull();
+  });
+
+  it('keeps the seat-count age in the corner column, out of the reading flow', () => {
+    const e = entry();
+    e.course = { ...e.course, capturedAt: new Date(Date.now() - 3 * 3600_000).toISOString() };
+    render({ entry: e });
+    const fresh = container.querySelector('.course-card__side .course-card__fresh');
+    expect(fresh?.textContent).toMatch(/^seats /);
+    expect(container.querySelector('.course-card__facts')!.textContent).not.toContain('seats');
   });
 });

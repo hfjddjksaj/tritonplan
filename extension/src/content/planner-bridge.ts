@@ -73,10 +73,18 @@ async function pushApptTimes(): Promise<void> {
  *  pushed — a captured feed with zero bookings must clear stale marks. */
 async function pushBooked(): Promise<void> {
   try {
-    const booked = await chrome.runtime.sendMessage({ type: MSG.GET_BOOKED });
+    const status = await chrome.runtime.sendMessage({ type: MSG.GET_BOOKED_STATUS });
+    const booked = (status as { list?: unknown })?.list;
     if (!Array.isArray(booked)) return;
+    const at = (status as { at?: unknown })?.at;
     window.postMessage(
-      { source: BRIDGE_SOURCE, type: 'booked', version: BRIDGE_VERSION, payload: booked },
+      {
+        source: BRIDGE_SOURCE,
+        type: 'booked',
+        version: BRIDGE_VERSION,
+        payload: booked,
+        ...(typeof at === 'string' ? { capturedAt: at } : {}),
+      },
       TARGET_ORIGIN,
     );
   } catch {

@@ -90,27 +90,17 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                 </span>
               )
             )}
-            {conflicted && <span className="tag tag--conflict">Conflict</span>}
           </div>
           <div className="course-card__title">{course.title}</div>
-          {/* Facts about the course, not controls — units sat in the button row
-              before and read as a fifth thing to click. */}
-          {(course.units !== undefined || freshness) && (
-            <div className="course-card__facts mono">
-              {course.units !== undefined && <span>{course.units} units</span>}
-              {course.units !== undefined && freshness && (
-                <span className="course-card__dot" aria-hidden="true">
-                  ·
-                </span>
+          {/* Facts about the course, not controls — units used to sit in the button row
+              and read as a fifth thing to click. Conflict stays down here with it rather
+              than up on the code line, where a third badge wrapped and shoved the title. */}
+          {(course.units !== undefined || conflicted) && (
+            <div className="course-card__facts">
+              {course.units !== undefined && (
+                <span className="tag tag--units mono">{course.units} units</span>
               )}
-              {freshness && (
-                <span
-                  className="course-card__fresh"
-                  title={`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`}
-                >
-                  seats {freshness}
-                </span>
-              )}
+              {conflicted && <span className="tag tag--conflict">Conflict</span>}
             </div>
           )}
         </div>
@@ -125,6 +115,14 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             >
               <Trash size={15} />
             </button>
+          )}
+          {freshness && (
+            <span
+              className="course-card__fresh"
+              title={`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`}
+            >
+              seats {freshness}
+            </span>
           )}
         </div>
       </div>

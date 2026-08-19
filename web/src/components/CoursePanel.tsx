@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { findOption } from '../lib/plan';
+import { relativeTime } from '../lib/format';
 import { openTssHome, tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
 import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
@@ -53,21 +54,8 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
       </div>
 
       <div className="rail__scroll">
-        {/* TSS states your enrolments in exactly one place — the "Booked Courses" card
-            on its home page — and only fetches that list on a full load of it. Opening
-            a course deep link never passes it, so say so and offer the one page that
-            does, instead of leaving people to wonder why nothing ever gets marked. */}
-        {!readOnly && !isMobile && hasEntries && ctl.extensionSeen && !ctl.bookedSynced && (
-          <div className="booksync">
-            <p className="booksync__text">
-              Nothing here is marked as booked. TSS lists your enrolments on its home page
-              only — a course link never carries them. Open it once and {PRODUCT_NAME} picks
-              them up as the page loads.
-            </p>
-            <button type="button" className="btn btn--sm btn--primary" onClick={openTssHome}>
-              <External size={13} /> Open TSS home
-            </button>
-          </div>
+        {!readOnly && !isMobile && ctl.extensionSeen && (
+          <BookedSync synced={ctl.bookedSynced} at={ctl.bookedAt} count={ctl.bookedIds.size} />
         )}
 
         {hasEntries ? (
@@ -219,5 +207,55 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
         </div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Booked status, and the one control that can change it.
+ *
+ * TSS names your enrolments in exactly one place — the Booked Courses card on its
+ * home page — and fetches that list only when the home page loads in full. Neither
+ * "open in TSS" nor "book section" goes near it: both deep-link straight into another
+ * Fiori app. So this stays on screen permanently rather than appearing once: it is the
+ * only way to see whether the list ever arrived, how old it is, and to ask for it again.
+ */
+function BookedSync({
+  synced,
+  at,
+  count,
+}: {
+  synced: boolean;
+  at: string | null;
+  count: number;
+}) {
+  const fresh = at ? relativeTime(at) : '';
+  return (
+    <div className={`booksync${synced ? ' booksync--ok' : ''}`}>
+      <div className="booksync__text">
+        {synced ? (
+          <>
+            <strong>{count === 0 ? 'None booked' : `${count} booked`}</strong>
+            {fresh && <span className="booksync__when"> · read {fresh}</span>}
+          </>
+        ) : (
+          <>
+            <strong>Booked courses not read yet.</strong> TSS lists what you’re enrolled in
+            on its home page only — opening a course from here never passes it along.
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        className={`btn btn--sm${synced ? '' : ' btn--primary'}`}
+        onClick={openTssHome}
+        title={
+          'Open the TSS home page. Its Booked Courses card is the only place TSS lists your ' +
+          'enrolments, and it hands the list over as the page loads — opening a single course ' +
+          'from here never does.'
+        }
+      >
+        <External size={13} /> {synced ? 'Refresh' : 'Open TSS home'}
+      </button>
+    </div>
   );
 }
