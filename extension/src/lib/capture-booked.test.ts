@@ -101,18 +101,54 @@ describe('CaptureStore booked list is not wiped by neighbours', () => {
     expect(store.getBooked()).toHaveLength(1);
   });
 
-  it('still clears when the ModuleSet itself reports zero, plain or batched', () => {
+  it('clears only from the whole-body ModuleSet report — the shape verified live', () => {
     const plain = new CaptureStore();
     plain.ingestBody(BODY, URL);
     plain.ingestBody(JSON.stringify({ d: { results: [] } }), URL);
     expect(plain.getBooked()).toEqual([]);
+  });
 
+  it('will not clear from a $batch, however much it looks like the feed', () => {
+    // A student's captured bookings went to zero this way. A batch is a bag of other
+    // people's responses: we cannot tell which part reported nothing, so a batch that
+    // yields no booked rows means "learned nothing here", never "you have none".
     const batched = new CaptureStore();
     batched.ingestBody(BODY, URL);
     const body =
       '--batch_x\r\nContent-Type: application/http\r\n\r\nGET ModuleSet HTTP/1.1\r\n\r\n' +
       'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{"d":{"results":[]}}\r\n--batch_x--\r\n';
     batched.ingestBody(body, 'https://tss.ucsd.edu/sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/$batch');
-    expect(batched.getBooked()).toEqual([]);
+    expect(batched.getBooked()).toHaveLength(1);
+  });
+
+  it('a batch carrying real rows still replaces the list — batches only ever add', () => {
+    const store = new CaptureStore();
+    store.ingestBody(JSON.stringify({ d: { results: [] } }), URL); // captured, none
+    const body =
+      '--batch_x\r\nContent-Type: application/http\r\n\r\n' +
+      `HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n${BODY}\r\n--batch_x--\r\n`;
+    store.ingestBody(body, 'https://tss.ucsd.edu/sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/$batch');
+    expect(store.getBooked()).toEqual([bookedRowToModule(ROW)]);
+  });
+});
+
+describe('CaptureStore booked list survives the round trip honestly', () => {
+  it('does not load an empty stored list — it reads as never captured, not as zero', () => {
+    const store = new CaptureStore();
+    store.ingestBody(JSON.stringify({ d: { results: [] } }), URL);
+    expect(store.getBooked()).toEqual([]);
+    // An empty list written before the clear rule was narrowed may be one no student
+    // earned, and it cannot be told apart from an honest zero. Ask again instead.
+    const revived = CaptureStore.deserialize(store.serialize());
+    expect(revived.getBooked()).toBeNull();
+    expect(revived.getBookedAt()).toBeNull();
+  });
+
+  it('a non-empty list round-trips with its timestamp intact', () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    const revived = CaptureStore.deserialize(store.serialize());
+    expect(revived.getBooked()).toEqual(store.getBooked());
+    expect(revived.getBookedAt()).toBe(store.getBookedAt());
   });
 });

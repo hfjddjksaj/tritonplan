@@ -52,10 +52,14 @@ function fillMap<V>(map: Map<string, V>, record: Record<string, V> | undefined):
   for (const [k, v] of Object.entries(record)) map.set(k, v);
 }
 
-/** The booked feed's one entity set. Named in the URL on a plain GET, and in the
- *  embedded request line when the launchpad batches the read. */
+/** The booked feed's one entity set, as it appears in a plain GET's URL. */
 const URL_NAMES_SET = /ModuleSet/;
-const BODY_NAMES_SET = /ModuleSet/;
+
+/** Is the WHOLE body one OData v2 document, rather than a document found inside a
+ *  multipart $batch? Only the whole-body shape is trusted to report zero bookings. */
+function isWholeV2Body(body: string): boolean {
+  return body.trimStart().startsWith('{');
+}
 
 export class CaptureStore {
   private modules = new Map<string, TssModuleRow>();
@@ -119,21 +123,22 @@ export class CaptureStore {
         changed = true;
       }
     }
-    // An empty v2 body from the booked feed itself CLEARS (zero bookings is real news);
-    // an empty body from any other feed must not touch a list it has nothing to do with.
-    // The same feed URL also serves a $metadata XML doc (and can serve error/HTML
-    // bodies) — only a REAL v2 JSON document (isV2Doc) counts as "the feed reported
-    // its list", even when that report is zero rows.
+    // Rows always replace the list. A report of ZERO rows is the dangerous case: it is
+    // real news when a student has dropped everything, and it destroys good data when
+    // we read it out of something that wasn't the booked list at all.
     //
-    // Naming the service is NOT enough on its own. Since v2 documents began being read
-    // out of $batch bodies too, any other v2 payload riding that service's endpoint
-    // would satisfy "the feed reported" and wipe a good list to empty. So the capture
-    // must also be about ModuleSet — named in the URL for a plain GET, or in the
-    // embedded request line of a batch. Anything less keeps what we already had.
-    const namesFeed = url?.includes('BC_OVP_BOOKED_MODULES_SRV') ?? false;
-        const reportsModuleSet =
-      namesFeed && (URL_NAMES_SET.test(url ?? '') || BODY_NAMES_SET.test(body));
-    if (bookedRows.length || (reportsModuleSet && isV2Doc)) {
+    // So an empty report only counts in the exact shape verified live on 2026-08-11: a
+    // whole-body OData v2 document, fetched from a URL naming this service's ModuleSet.
+    // Anything else — a $batch body, another entity set riding the same endpoint, a
+    // $metadata XML doc, an HTML error page — leaves the list alone. Reading v2 out of
+    // batches (added 2026-08-19) made those bodies eligible to clear, and a student's
+    // captured bookings went to zero; batched captures now only ever ADD.
+    const clearsOnEmpty =
+      isV2Doc &&
+      isWholeV2Body(body) &&
+      (url?.includes('BC_OVP_BOOKED_MODULES_SRV') ?? false) &&
+      URL_NAMES_SET.test(url ?? '');
+    if (bookedRows.length || clearsOnEmpty) {
       this.booked = bookedRows
         .map(bookedRowToModule)
         .filter((m): m is BookedModule => m !== null);
@@ -240,8 +245,16 @@ export class CaptureStore {
     fillMap(store.capturedAt, shape.capturedAt);
     fillMap(store.prereqs, shape.prereqs);
     fillMap(store.apptTimes, shape.apptTimes);
-    if (Array.isArray(shape.booked)) store.booked = shape.booked;
-    if (typeof shape.bookedAt === 'string') store.bookedAt = shape.bookedAt;
+    // A stored EMPTY list is dropped rather than loaded, so it reads as "never
+    // captured" instead of "TSS says you have none". Stores written before the clear
+    // rule was narrowed can hold an empty list that no student ever earned, and that
+    // one is indistinguishable from an honest zero. Nothing is lost by re-reading:
+    // the next home-page load reports zero again in a single step, and meanwhile the
+    // planner asks to be checked instead of stating something it can't stand behind.
+    if (Array.isArray(shape.booked) && shape.booked.length > 0) store.booked = shape.booked;
+    if (store.booked !== null && typeof shape.bookedAt === 'string') {
+      store.bookedAt = shape.bookedAt;
+    }
     return store;
   }
 }

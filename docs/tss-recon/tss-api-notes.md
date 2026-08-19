@@ -248,6 +248,9 @@ The launchpad homepage (`#YStudent-Overview`, OVP app `yucsd.ovp.student`) shows
 
 - Fired on every **full page load** of the homepage only (UI5 SPA — in-page navigation
   re-renders from the cached model; same staleness model as `_sections`).
+- **URL 确认（2026-08-19，用户实测）**：首页就是 `https://tss.ucsd.edu/fiori#YStudent-Overview`。
+  裸域名 `https://tss.ucsd.edu/` **打不开**。planner 的 "Check bookings" 按钮跳的就是这个 URL；
+  一度被改成裸域名（把用户说的"直接打开 tss"误读成裸域名），已改回。**别再动它。**
 - URL contains `/odata` → **our passive interceptor already receives it**; the classifier
   discards it today (rows lack `EventPkgOtjid`/`Sched`).
 - $metadata: single entity set `ModuleSet`, entity `Module`, key `ModregId`, 15 flat

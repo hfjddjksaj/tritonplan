@@ -108,8 +108,9 @@ describe('openTssHome', () => {
     open.mockRestore();
   });
 
-  it('points at the bare TSS origin — the landing a student is known to capture from', () => {
-    expect(TSS_HOME_URL).toBe('https://tss.ucsd.edu/');
-    expect(TSS_HOME_URL).not.toContain('#'); // no app route: any hash lands elsewhere
+  // Confirmed by a student 2026-08-19: this is the page the booked feed was captured
+  // from, and the bare origin https://tss.ucsd.edu/ does not resolve at all.
+  it('points at the launchpad overview route, not the bare origin', () => {
+    expect(TSS_HOME_URL).toBe('https://tss.ucsd.edu/fiori#YStudent-Overview');
   });
 });
