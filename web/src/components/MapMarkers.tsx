@@ -98,13 +98,32 @@ export function MapMarkers({
   }, [map, selectedKey]);
 
   // Once per commit (a marker that just mounted has no transform yet), and then
-  // once per camera change, in MapLibre's own event so the two move as one.
+  // on every event that can change where a pin belongs on screen.
+  //
+  // `move` is the camera, and it has to stay: writing inside MapLibre's own move
+  // event is what puts the dot on the same frame as the GL canvas instead of a
+  // frame behind it.
+  //
+  // But the camera is not the only input to `project()`. With terrain on, a
+  // pin's screen position depends on the DEM elevation UNDER it, and that
+  // elevation arrives late — the tiles are still loading when the 2D → 3D ease
+  // ends. When it lands, the ground moves and NO move event fires, so a
+  // move-only writer leaves every pin frozen at the position it computed for
+  // flat ground. Measured on this map: toggle terrain off and back on without
+  // touching the camera and the pins do not budge while `project()` answers
+  // 342 px away — the pin floating beside the building it is marking.
+  // MapLibre's own Marker has the same three subscriptions for the same reason.
   useLayoutEffect(writePositions);
   useEffect(() => {
     if (!map) return;
-    map.on('move', writePositions);
+    // `render` is the belt to `terrain`'s braces: setTerrain fires `terrain`, but a
+    // DEM tile finishing its download only repaints, and a repaint is exactly
+    // when the ground under a pin can have moved. Writing the same transform
+    // twice costs a string assignment.
+    const events = ['move', 'terrain', 'render'] as const;
+    for (const e of events) map.on(e, writePositions);
     return () => {
-      map.off('move', writePositions);
+      for (const e of events) map.off(e, writePositions);
     };
   }, [map, writePositions]);
 

@@ -12,6 +12,7 @@ import {
 } from '../lib/campus-geo';
 import { buildSources } from '../lib/map-data';
 import { applyHosts, applyMode, assetBase, buildStyle, CAMERA, modeForPitch, TREE_ICON, type MapMode } from '../lib/map-style';
+import { anchorOnFootprint, footprintAnchors } from '../lib/map-anchor';
 import { treeSprite } from '../lib/tree-sprite';
 import {
   ALL_SLICE_ID,
@@ -267,7 +268,19 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const showBookedToggle = !readOnly && booked.size > 0;
   const effectiveBookedOnly = showBookedToggle && bookedOnly;
 
-  const allPins = useMemo(() => MAP_VIEWS[mapView].pins(plan, effectiveBooked), [mapView, plan, effectiveBooked]);
+  // Where a pin sits on its building. matchBuilding answers with UCSD's building
+  // POINT record, but the map draws the FOOTPRINT polygon — two datasets that
+  // disagree by 45 m on Center Hall, which is 60 px of daylight between the pin
+  // and its own 3D block once the map stands up. See map-anchor.ts.
+  const anchors = useMemo(() => (data ? footprintAnchors(data.geo.footprints) : null), [data]);
+  const allPins = useMemo(() => {
+    const pins = MAP_VIEWS[mapView].pins(plan, effectiveBooked);
+    if (!anchors) return pins;
+    return pins.map((p) => {
+      const coords = anchorOnFootprint(p, anchors);
+      return coords === p.coords ? p : { ...p, coords };
+    });
+  }, [mapView, plan, effectiveBooked, anchors]);
   const scoped = useMemo(
     () => (effectiveBookedOnly ? allPins.filter((p) => p.booked) : allPins),
     [allPins, effectiveBookedOnly],

@@ -79,9 +79,28 @@ export class FakeMap {
 
   /* camera */
   private pxPerDeg() { return (256 * 2 ** this.cam.zoom) / 360; }
+  /**
+   * How far terrain currently lifts a projected point up the screen. Real
+   * MapLibre folds the DEM elevation under a coordinate into `project()`; the
+   * only property that matters to a caller is that the SAME camera can answer
+   * differently once the DEM has loaded. See {@link simulateTerrainLoad}.
+   */
+  private lift = 0;
   project(p: [number, number]) {
     const s = this.pxPerDeg();
-    return { x: (p[0] - this.cam.center[0]) * s + FakeMap.size.w / 2, y: (this.cam.center[1] - p[1]) * s + FakeMap.size.h / 2 };
+    return { x: (p[0] - this.cam.center[0]) * s + FakeMap.size.w / 2, y: (this.cam.center[1] - p[1]) * s + FakeMap.size.h / 2 - this.lift };
+  }
+  /**
+   * What a DEM tile finishing its download looks like from the outside: the
+   * ground under everything rises, so `project()` answers `px` higher for an
+   * unchanged camera, and the map repaints. It fires `terrain` and `render` and
+   * deliberately NOT `move` — that combination is the whole failure mode, and a
+   * marker overlay that only listens to `move` freezes at the old position.
+   */
+  simulateTerrainLoad(px: number) {
+    this.lift = px;
+    this.fire('terrain', {}); this.fire('render', {});
+    return this;
   }
   unproject(p: { x: number; y: number }): [number, number] {
     const s = this.pxPerDeg();

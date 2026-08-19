@@ -152,6 +152,26 @@ describe('MapMarkers', () => {
     expect(marker().style.transform).toBe(`translate(${after.x}px, ${after.y}px)`);
   });
 
+  // The 3D companion to the anti-lag test above. With terrain on, a pin's screen
+  // position depends on the DEM elevation UNDER it, and that elevation arrives
+  // late — the tiles are still downloading when the 2D to 3D ease has finished.
+  // When it lands the ground moves, the map repaints, and NO move event fires:
+  // a move-only writer leaves every pin frozen where it computed it for flat
+  // ground. Measured in a real browser before this fix: toggling terrain with
+  // the camera untouched left the dots 342 px from where `project()` put them —
+  // the pin floating beside the building it was marking. MapLibre's own Marker
+  // subscribes to `terrain` for the same reason.
+  it('re-projects when the ground moves under it, with no camera change at all', async () => {
+    const marker = () => container.querySelector('.campusmap__marker') as HTMLElement;
+    await render({ tick: 0, groups: [CENTER_HALL, YORK, HILLCREST] });
+    const flat = expectedProject(CENTER_HALL.lng, CENTER_HALL.lat, [-117.235, 32.88], 15);
+    expect(marker().style.transform).toBe(`translate(${flat.x}px, ${flat.y}px)`);
+
+    // The DEM lands. Same camera, same props, same tick — nothing re-renders.
+    await act(async () => { map.simulateTerrainLoad(120); });
+    expect(marker().style.transform).toBe(`translate(${flat.x}px, ${flat.y - 120}px)`);
+  });
+
   it('carries the open marker’s card in its own layer, pinned to that marker’s dot', async () => {
     // Its own layer, not a child of the marker: inside the marker, a press on
     // anything in the card bubbled into the marker's toggle, so "Directions"
