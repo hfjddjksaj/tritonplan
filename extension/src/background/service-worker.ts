@@ -250,6 +250,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return true;
     }
 
+    case MSG.GET_BOOKED_STATUS: {
+      (async () => {
+        try {
+          const store = await getStore();
+          sendResponse({ list: store.getBooked(), at: store.getBookedAt() });
+        } catch {
+          sendResponse({ list: null, at: null });
+        }
+      })();
+      return true;
+    }
+
     case MSG.PLAN_ADD: {
       const course = msg.course as CourseOffering | undefined;
       const selectedOptionId = typeof msg.selectedOptionId === 'string' ? msg.selectedOptionId : '';

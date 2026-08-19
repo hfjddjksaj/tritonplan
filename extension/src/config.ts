@@ -58,6 +58,9 @@ export const MSG = {
   GET_APPT_TIMES: 'tp:get-appt-times',
   /** any → SW: return the captured booked-modules list (null = never captured). */
   GET_BOOKED: 'tp:get-booked',
+  /** popup → SW: the booked list PLUS when TSS last reported it, so a student can
+   *  see whether the homepage feed has ever reached us and how stale it is. */
+  GET_BOOKED_STATUS: 'tp:get-booked-status',
   /** tss-inject → SW: student clicked "+ TritonPlan" on a section. */
   PLAN_ADD: 'tp:plan-add',
   /** popup → SW: open/focus the planner tab. */

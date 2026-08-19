@@ -264,6 +264,11 @@ The launchpad homepage (`#YStudent-Overview`, OVP app `yucsd.ovp.student`) shows
     `"CRH"`), `ConditionalBooking` (bool — semantics unverified, do not interpret),
     `ScObjid`/`AssignedCg`/`AssignedCgTop` (program/course-group ids — ignore).
 - Waitlisted-vs-booked distinction unverified (this student had plain bookings only).
+- **⚠ 2026-08-18 发现的分类器盲区（已修）**：这条 feed 是 v2，而 `extractV2Results` 原来只认"整个 body 就是那份 v2 文档"。
+  SAP Fiori launchpad 默认把 v2 读操作打包进 **`$batch`**（multipart），那种 body 以 `--batch_…` 开头，
+  于是**批量里的 v2 文档整个看不见**——首页明明发了 feed，store 里却永远是空的。v4 那条路径
+  （`extractODataCollections`）一直是会扫 `$batch` 的，只有 v2 漏了。现在两边对称了。
+  尚未在真机上确认首页到底走的是裸 GET 还是 `$batch`（2026-08-11 那次抓到的是裸 GET）；两种都能吃了。
 - Related lead, same page, NOT yet reverse-engineered: `EVENT_TIMETABLE_SRV/EventListSet`
   (`$filter=EventDate ge … le …`) — the student's own dated timetable events.
 

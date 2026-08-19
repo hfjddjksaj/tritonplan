@@ -128,49 +128,55 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
           )}
         </div>
       </div>
-      {/* Two-by-two: each button fills its cell, so none can ever be pushed past
-          the card edge the way a single wrapping row did. */}
+      {/* Two rows of two, each row its own flex line. Written as rows rather than a
+          two-column grid so the pair always sits shoulder to shoulder: a grid column
+          is as wide as the widest button in it, which left a hole beside the short
+          ones. Leaving TSS is the top row, working on the plan is the bottom. */}
       <div className="course-card__actions">
-        <button
-          type="button"
-          className="course-card__tss"
-          onClick={onOpenTss}
-          title={`Open ${course.courseCode} in TSS`}
-        >
-          open in TSS <External size={11} strokeWidth={2.2} />
-        </button>
-        {onBook && (
+        <div className="course-card__actionrow">
           <button
             type="button"
             className="course-card__tss"
-            onClick={onBook}
-            title={`Go to booking for the selected ${course.courseCode} section`}
+            onClick={onOpenTss}
+            title={`Open ${course.courseCode} in TSS`}
           >
-            book section <External size={11} strokeWidth={2.2} />
+            open in TSS <External size={11} strokeWidth={2.2} />
           </button>
-        )}
-        <button
-          type="button"
-          className="course-card__tss"
-          onClick={() => setPrereqsOpen(true)}
-          title={`Enrollment requirements for ${course.courseCode}`}
-        >
-          prerequisites
-        </button>
-        {onToggleBooked && (
+          {onBook && (
+            <button
+              type="button"
+              className="course-card__tss"
+              onClick={onBook}
+              title={`Go to booking for the selected ${course.courseCode} section`}
+            >
+              book section <External size={11} strokeWidth={2.2} />
+            </button>
+          )}
+        </div>
+        <div className="course-card__actionrow">
           <button
             type="button"
             className="course-card__tss"
-            onClick={onToggleBooked}
-            title={
-              booked
-                ? `Unmark ${course.courseCode} as booked`
-                : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
-            }
+            onClick={() => setPrereqsOpen(true)}
+            title={`Enrollment requirements for ${course.courseCode}`}
           >
-            {booked ? 'unmark' : 'mark booked'}
+            prerequisites
           </button>
-        )}
+          {onToggleBooked && (
+            <button
+              type="button"
+              className="course-card__tss"
+              onClick={onToggleBooked}
+              title={
+                booked
+                  ? `Unmark ${course.courseCode} as booked`
+                  : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
+              }
+            >
+              {booked ? 'unmark' : 'mark booked'}
+            </button>
+          )}
+        </div>
       </div>
       <OptionPicker
         course={course}

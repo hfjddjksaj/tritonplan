@@ -468,31 +468,27 @@ p {
   color: var(--conflict);
 }
 
-/* One of the four course-card actions. Each is only as wide as its own label —
-   the grid it sits in decides where the row breaks, not how wide it gets. */
+/* One of the four course-card actions. Only as wide and as tall as its own label —
+   the row it sits in decides where things break, not how big the button gets. */
 .course-card__tss {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   min-width: 0;
-  height: 26px;
-  padding: 0 9px;
+  height: 18px;
+  padding: 0 7px;
   font-size: 10.5px;
   font-weight: 600;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* quiet accent in the course's own color — reads as an action, not a static tag.
-     The border stays neutral: four tinted outlines in a block became a colour slab. */
+  /* quiet accent in the course's own color — reads as an action, not a static tag */
   color: var(--c-text, var(--text-muted));
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
+  border: 1px solid var(--c-border, var(--line));
+  border-radius: 4px;
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 .course-card__tss:hover {
-  background: var(--surface-2);
   border-color: var(--c-spine, var(--gold));
   box-shadow: 0 0 0 1px var(--c-spine, var(--gold));
 }
@@ -628,17 +624,20 @@ p {
   color: #1b7f4d;
   border-color: transparent;
 }
-/* The four actions, two per row. Two content-sized columns rather than a wrapping
-   row: the break is decided by the grid, so the fourth button can no longer run
-   past the card edge and get clipped by overflow:hidden. `justify-items: start`
-   keeps every button its own natural width — the right edge stays ragged. */
+/* The four actions as two explicit rows. Explicit is what keeps them in the card:
+   the old single wrapping row let the fourth button run past the edge, where the
+   card's overflow:hidden clipped it. Each row packs left, so a short label never
+   leaves a hole beside it, and the right edge is ragged by design. */
 .course-card__actions {
-  display: grid;
-  grid-template-columns: auto auto;
-  justify-content: start;
-  justify-items: start;
-  gap: 6px;
-  padding: 9px 12px 11px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 12px 11px 15px;
+}
+.course-card__actionrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 6px;
 }
 .course-card__side {
   flex: none;

@@ -59,3 +59,33 @@ describe('CaptureStore booked list', () => {
     expect(CaptureStore.deserialize({}).getBooked()).toBeNull();
   });
 });
+
+describe('CaptureStore booked freshness', () => {
+  it('stamps when TSS reported the list, and keeps it across serialize', () => {
+    const store = new CaptureStore();
+    expect(store.getBookedAt()).toBeNull();
+    store.ingestBody(BODY, URL);
+    const at = store.getBookedAt();
+    expect(at).not.toBeNull();
+    expect(Date.now() - new Date(at!).getTime()).toBeLessThan(5_000);
+    expect(CaptureStore.deserialize(store.serialize()).getBookedAt()).toBe(at);
+  });
+
+  it('re-stamps on a later report, including one with zero bookings', async () => {
+    const store = new CaptureStore();
+    store.ingestBody(BODY, URL);
+    const first = store.getBookedAt()!;
+    await new Promise((r) => setTimeout(r, 2));
+    store.ingestBody(JSON.stringify({ d: { results: [] } }), URL);
+    expect(new Date(store.getBookedAt()!).getTime()).toBeGreaterThanOrEqual(new Date(first).getTime());
+  });
+
+  it('reads the booked list out of a batched homepage response', () => {
+    const store = new CaptureStore();
+    const batch =
+      '--batch_x\r\nContent-Type: application/http\r\n\r\nHTTP/1.1 200 OK\r\n' +
+      `Content-Type: application/json\r\n\r\n${BODY}\r\n--batch_x--\r\n`;
+    expect(store.ingestBody(batch, 'https://tss.ucsd.edu/sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/$batch')).toBe(true);
+    expect(store.getBooked()).toEqual([bookedRowToModule(ROW)]);
+  });
+});

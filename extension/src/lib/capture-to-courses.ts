@@ -16,6 +16,7 @@ interface StoreShape {
   prereqs?: Record<string, TssPrereqRow[]>;            // by ModuleID; absent in old stores
   apptTimes?: Record<string, ApptTimes>;               // by "<year>|<session>"; absent in old stores
   booked?: BookedModule[];                             // homepage feed; absent in old stores
+  bookedAt?: string;                                   // ISO time of that capture; absent in old stores
 }
 
 function creditsToUnits(s: string | undefined): number | undefined {
@@ -63,6 +64,8 @@ export class CaptureStore {
   /** Student's booked modules (homepage feed). null = never captured; [] = captured,
    *  zero bookings. PERSONAL — never merged into course data. */
   private booked: BookedModule[] | null = null;
+  /** ISO time the booked list above was last reported. null whenever booked is null. */
+  private bookedAt: string | null = null;
 
   /**
    * Ingest one captured OData response body (plain or $batch). Returns true if anything
@@ -121,6 +124,7 @@ export class CaptureStore {
       this.booked = bookedRows
         .map(bookedRowToModule)
         .filter((m): m is BookedModule => m !== null);
+      this.bookedAt = new Date().toISOString();
       changed = true;
     }
     return changed;
@@ -198,6 +202,11 @@ export class CaptureStore {
     return this.booked;
   }
 
+  /** When that list was last reported by TSS. null whenever getBooked() is null. */
+  getBookedAt(): string | null {
+    return this.bookedAt;
+  }
+
   serialize(): StoreShape {
     return {
       modules: Object.fromEntries(this.modules),
@@ -206,6 +215,7 @@ export class CaptureStore {
       prereqs: Object.fromEntries(this.prereqs),
       apptTimes: Object.fromEntries(this.apptTimes),
       ...(this.booked !== null ? { booked: this.booked } : {}),
+      ...(this.bookedAt !== null ? { bookedAt: this.bookedAt } : {}),
     };
   }
 
@@ -218,6 +228,7 @@ export class CaptureStore {
     fillMap(store.prereqs, shape.prereqs);
     fillMap(store.apptTimes, shape.apptTimes);
     if (Array.isArray(shape.booked)) store.booked = shape.booked;
+    if (typeof shape.bookedAt === 'string') store.bookedAt = shape.bookedAt;
     return store;
   }
 }

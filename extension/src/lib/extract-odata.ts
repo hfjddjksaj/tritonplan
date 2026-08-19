@@ -110,22 +110,48 @@ function looksLikeApptPeriodsRow(v: unknown): v is TssApptPeriodsRow {
   );
 }
 
-/** OData v2 wraps rows in {"d":{"results":[...]}} (the booked feed is v2).
- *  Returns null when the body isn't a real v2 document at all (not JSON, JSON
- *  but not `{`-rooted, or missing/malformed `d.results`) — as opposed to a
- *  genuine v2 document reporting zero rows (`d.results: []`), which returns
- *  `[]`. Callers need to tell these apart: the same service URL also serves a
- *  `$metadata` XML document and can serve error/HTML bodies, and those must
- *  never be read as "captured, zero rows". */
-function extractV2Results(body: string): unknown[] | null {
-  const trimmed = body.trimStart();
-  if (!trimmed.startsWith('{')) return null;
+/** Read one text as an OData v2 document, returning its rows or null if it isn't one. */
+function readV2Document(text: string): unknown[] | null {
   try {
-    const parsed = JSON.parse(body) as { d?: { results?: unknown[] } };
+    const parsed = JSON.parse(text) as { d?: { results?: unknown[] } };
     return Array.isArray(parsed.d?.results) ? parsed.d.results : null;
   } catch {
     return null;
   }
+}
+
+/** Start of an object whose first key is `d` — the v2 envelope, `{"d":{"results":…}}`. */
+const V2_ENVELOPE_RE = /\{\s*"d"\s*:/g;
+
+/** OData v2 wraps rows in {"d":{"results":[...]}} (the booked feed is v2).
+ *  Returns null when the body carries no real v2 document at all (not JSON, or
+ *  missing/malformed `d.results`) — as opposed to a genuine v2 document reporting
+ *  zero rows (`d.results: []`), which returns `[]`. Callers need to tell these
+ *  apart: the same service URL also serves a `$metadata` XML document and can
+ *  serve error/HTML bodies, and those must never be read as "captured, zero rows".
+ *
+ *  Scans multipart `$batch` bodies too, like extractODataCollections does for v4.
+ *  SAP Fiori's launchpad batches its v2 reads by default, and reading only a
+ *  whole-body document made every batched v2 payload invisible — which is exactly
+ *  how the homepage booked feed could fire on TSS and still never reach the store. */
+function extractV2Results(body: string): unknown[] | null {
+  // Fast path: the whole body IS the v2 document.
+  if (body.trimStart().startsWith('{')) {
+    const whole = readV2Document(body);
+    if (whole !== null) return whole;
+  }
+  // $batch / multipart: brace-match each embedded v2 envelope. Several parts of one
+  // batch can each carry rows, so merge rather than take the first.
+  let out: unknown[] | null = null;
+  V2_ENVELOPE_RE.lastIndex = 0;
+  for (let m = V2_ENVELOPE_RE.exec(body); m !== null; m = V2_ENVELOPE_RE.exec(body)) {
+    const end = matchBrace(body, m.index);
+    if (end === -1) break;
+    const rows = readV2Document(body.slice(m.index, end + 1));
+    if (rows !== null) out = out === null ? [...rows] : [...out, ...rows];
+    V2_ENVELOPE_RE.lastIndex = end + 1;
+  }
+  return out;
 }
 
 function looksLikeBookedRow(v: unknown): v is TssBookedModuleRow {
