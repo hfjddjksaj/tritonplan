@@ -217,9 +217,16 @@ p {
 }
 .rail__title-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 10px;
+}
+/* Booked status has no other way in, so it takes the slot the added-count had —
+   the count is already in the top bar's unit pill. */
+.rail__check {
+  flex: none;
+  white-space: nowrap;
 }
 .rail__title {
   font-size: 13px;
@@ -648,46 +655,6 @@ p {
   gap: 3px;
 }
 
-/* Booked status + the only control that refreshes it. Permanent, because opening a
-   course in TSS never brings the booked list with it — see BookedSync. Dashed while
-   nothing has been read (a standing instruction), solid and quiet once it has. */
-.booksync {
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  background: var(--surface-2);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--r-md);
-}
-.booksync--ok {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  border-style: solid;
-  border-color: var(--line);
-  padding: 8px 10px 8px 12px;
-}
-/* Button keeps its full label and hugs the right edge — if the pair won't fit on one
-   line in a narrow rail, it drops to its own line rather than breaking mid-label. */
-.booksync .btn {
-  flex: none;
-  margin-left: auto;
-  white-space: nowrap;
-}
-.booksync__text {
-  margin: 0 0 9px;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--text-muted);
-}
-.booksync--ok .booksync__text {
-  margin: 0;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.booksync__when {
-  color: var(--text-faint);
-}
 /* "seats 2h ago" staleness hint — data is only as fresh as the last TSS browse */
 .course-card__fresh {
   font-size: 10px;

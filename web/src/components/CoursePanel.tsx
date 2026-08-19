@@ -32,17 +32,34 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
   }, [filter, ctl.browsedNotAdded]);
 
   const hasEntries = entries.length > 0;
+  // Only worth offering where it can work: an editable plan, on a machine whose
+  // extension has actually spoken to us. Phones can't run it at all.
+  const canCheckBookings = !readOnly && !isMobile && ctl.extensionSeen;
 
   return (
     <aside className={`rail${hidden ? ' rail--hidden' : ''}`}>
       <div className="rail__head">
         <div className="rail__title-row">
           <span className="rail__title">
-            {readOnly ? 'Courses in this plan' : 'Browsed & Added Courses'}
+            {readOnly ? 'Courses in this plan' : 'Added Courses'}
           </span>
-          <span className="rail__count mono">
-            {entries.length} added<span className="rail__units"> · {ctl.units} units</span>
-          </span>
+          {/* The right-hand slot carries the check when there is one to carry: booked
+              status has no other entry point, while the count is also in the top bar.
+              Read-only plans and phones (no extension, so nothing to check) keep it. */}
+          {canCheckBookings ? (
+            <button
+              type="button"
+              className="btn btn--sm rail__check"
+              onClick={ctl.checkBookings}
+              title={bookedTitle(ctl.bookedSynced, ctl.bookedIds.size, ctl.bookedAt)}
+            >
+              <External size={13} /> Check bookings
+            </button>
+          ) : (
+            <span className="rail__count mono">
+              {entries.length} added<span className="rail__units"> · {ctl.units} units</span>
+            </span>
+          )}
         </div>
         <p className="rail__lede">
           {readOnly
@@ -54,15 +71,6 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
       </div>
 
       <div className="rail__scroll">
-        {!readOnly && !isMobile && ctl.extensionSeen && (
-          <BookedSync
-            synced={ctl.bookedSynced}
-            at={ctl.bookedAt}
-            count={ctl.bookedIds.size}
-            onCheck={ctl.checkBookings}
-          />
-        )}
-
         {hasEntries ? (
           entries.map((entry, i) => {
             const option = findOption(entry.course, entry.selectedOptionId);
@@ -216,53 +224,20 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
 }
 
 /**
- * Booked status, and the one control that can change it.
+ * What the check button says on hover — the booked state itself, since it no longer
+ * has a line of its own.
  *
- * TSS names your enrolments in exactly one place — the Booked Courses card on its
- * home page — and fetches that list only when the home page loads in full. Neither
- * "open in TSS" nor "book section" goes near it: both deep-link straight into another
- * Fiori app. So this stays on screen permanently rather than appearing once: it is the
- * only way to see whether the list ever arrived, how old it is, and to ask for it again.
+ * TSS names your enrolments in exactly one place, the Booked Courses card on its home
+ * page, and hands the list over only as that page loads. Neither "open in TSS" nor
+ * "book section" goes near it: both deep-link straight into another Fiori app
+ * (verified live 2026-08-18). So this button exists, and so does this explanation.
  */
-function BookedSync({
-  synced,
-  at,
-  count,
-  onCheck,
-}: {
-  synced: boolean;
-  at: string | null;
-  count: number;
-  onCheck: () => void;
-}) {
-  const fresh = at ? relativeTime(at) : '';
+function bookedTitle(synced: boolean, count: number, at: string | null): string {
+  const head = !synced
+    ? 'Booked courses not read yet.'
+    : `${count === 0 ? 'No booked courses' : `${count} booked`}${at ? `, read ${relativeTime(at)}` : ''}.`;
   return (
-    <div className={`booksync${synced ? ' booksync--ok' : ''}`}>
-      <div className="booksync__text">
-        {synced ? (
-          <>
-            <strong>{count === 0 ? 'None booked' : `${count} booked`}</strong>
-            {fresh && <span className="booksync__when"> · read {fresh}</span>}
-          </>
-        ) : (
-          <>
-            <strong>Booked courses not read yet.</strong> TSS lists what you’re enrolled in
-            on its home page only — opening a course from here never passes it along.
-          </>
-        )}
-      </div>
-      <button
-        type="button"
-        className={`btn btn--sm${synced ? '' : ' btn--primary'}`}
-        onClick={onCheck}
-        title={
-          'Open the TSS home page. Its Booked Courses card is the only place TSS lists your ' +
-          'enrolments, and it hands the list over as the page loads — opening a single course ' +
-          'from here never does.'
-        }
-      >
-        <External size={13} /> Check bookings
-      </button>
-    </div>
+    `${head} TSS lists what you're enrolled in on its home page only — opening a course ` +
+    'from here never passes it along. This opens that page, which hands the list over as it loads.'
   );
 }
