@@ -339,3 +339,40 @@ describe('postOpenTssHome', () => {
     }
   });
 });
+
+/**
+ * An extension holding nothing used to say nothing, so a planner that had once been
+ * pushed to went on claiming TSS had reported — forever, and wrongly. `captured` is
+ * the sentence that was missing.
+ */
+describe('booked captured flag', () => {
+  const good: BookedMessage = { source: BRIDGE_SOURCE, type: 'booked', version: 1, payload: [BOOKED_ROW] };
+
+  function seen(data: unknown): { rows: number; captured?: boolean }[] {
+    const got: { rows: number; captured?: boolean }[] = [];
+    const off = installBridgeListener({
+      onCourses: () => {}, onPlanAdd: () => {},
+      onBooked: (rows, _at, captured) => got.push({ rows: rows.length, captured }),
+    });
+    try {
+      window.dispatchEvent(new MessageEvent('message', {
+        data, source: window, origin: window.location.origin,
+      }));
+    } finally {
+      off();
+    }
+    return got;
+  }
+
+  it('passes captured:false through, so the page can drop a sync it can no longer back', () => {
+    expect(seen({ ...good, payload: [], captured: false })).toEqual([{ rows: 0, captured: false }]);
+  });
+
+  it('leaves it undefined for older extensions, which only spoke when they had one', () => {
+    expect(seen(good)).toEqual([{ rows: 1, captured: undefined }]);
+  });
+
+  it('an empty payload WITH captured:true is still a real report of zero bookings', () => {
+    expect(seen({ ...good, payload: [], captured: true })).toEqual([{ rows: 0, captured: true }]);
+  });
+});

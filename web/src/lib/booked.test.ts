@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { TermWorkspace } from './terms-state';
-import { bookedSet, applyAutoBooked, isAutoBookedSynced, toggleBooked } from './booked';
+import {
+  bookedSet,
+  applyAutoBooked,
+  forgetAutoBooked,
+  isAutoBookedSynced,
+  toggleBooked,
+} from './booked';
 
 const TERM = { year: '2026', period: '2', label: 'Fall 2026' };
 function ws(partial: Partial<TermWorkspace> = {}): TermWorkspace {
@@ -75,5 +81,19 @@ describe('isAutoBookedSynced', () => {
   it('is true once the feed has reported, even when the student books nothing', () => {
     expect(isAutoBookedSynced(applyAutoBooked(ws(), []))).toBe(true);
     expect(isAutoBookedSynced(ws({ bookedAuto: [A] }))).toBe(true);
+  });
+});
+
+describe('forgetAutoBooked', () => {
+  it('drops the captured half and leaves hand marks alone', () => {
+    const next = forgetAutoBooked(ws({ bookedAuto: [A], bookedOn: [B], bookedOff: [A] }));
+    expect(isAutoBookedSynced(next)).toBe(false);
+    expect(next.bookedOn).toEqual([B]);
+    expect(next.bookedOff).toEqual([A]);
+    expect([...bookedSet(next)]).toEqual([B]);
+  });
+  it('is a no-op when nothing was ever captured', () => {
+    const before = ws({ bookedOn: [A] });
+    expect(forgetAutoBooked(before)).toBe(before);
   });
 });

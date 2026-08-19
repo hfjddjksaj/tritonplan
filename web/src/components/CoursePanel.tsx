@@ -242,6 +242,10 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
  * The interesting case is "read, but none for this term". The badges key off the term
  * on screen, so bookings TSS reports for a DIFFERENT term look identical to no
  * bookings at all — say which term they are in instead of reporting a flat zero.
+ *
+ * Only a report received THIS session is spoken for. `synced` is remembered on this
+ * device, and a device can outlive the capture it remembers — saying "TSS reports no
+ * bookings" on the strength of a memory is how this told a student something false.
  */
 export function bookedTitle(
   synced: boolean,
@@ -254,8 +258,13 @@ export function bookedTitle(
     "TSS lists what you're enrolled in on its home page only — opening a course from " +
     'here never passes it along. This opens that page, which hands the list over as it loads.';
   if (!synced) return `Booked courses not read yet. ${how}`;
+  if (at === null) {
+    return count > 0
+      ? `${count} booked in ${viewedTerm.label}, from an earlier read. ${how}`
+      : `Nothing read from TSS this session. ${how}`;
+  }
 
-  const read = at ? `, read ${relativeTime(at)}` : '';
+  const read = `, read ${relativeTime(at)}`;
   if (count > 0) return `${count} booked in ${viewedTerm.label}${read}. ${how}`;
 
   const elsewhere = [...new Set(rows.map((r) => r.term.label))].filter(

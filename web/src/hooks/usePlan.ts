@@ -15,6 +15,7 @@ import { installBridgeListener, mergeCourses, postForgetCourses } from '../lib/b
 import {
   applyAutoBooked,
   bookedSet,
+  forgetAutoBooked,
   isAutoBookedSynced,
   toggleBooked as toggleBookedIn,
 } from '../lib/booked';
@@ -485,8 +486,26 @@ export function usePlan() {
         // Adds always land in MY plans — surface them, even if a received plan was up.
         switchViewing('mine');
       },
-      onBooked: (rows, capturedAt) => {
+      onBooked: (rows, capturedAt, captured) => {
         markBridgeSeen();
+        // The extension holds no capture. Anything this device remembers about a sync
+        // came from a push it can no longer stand behind, so drop that memory rather
+        // than go on asserting it — the student's own marks are untouched.
+        if (captured === false) {
+          setBookedAt(null);
+          setBookedRows([]);
+          setTermsState((s) => {
+            let changed = false;
+            const terms: typeof s.terms = {};
+            for (const [key, ws] of Object.entries(s.terms)) {
+              const next = forgetAutoBooked(ws);
+              if (next !== ws) changed = true;
+              terms[key] = next;
+            }
+            return changed ? { ...s, terms } : s;
+          });
+          return;
+        }
         setBookedAt(capturedAt ?? null);
         setBookedRows(rows);
         setTermsState((s) => {

@@ -82,6 +82,14 @@ export interface BookedMessage {
   /** When TSS last reported this list. Optional: extensions before 1.1.1 don't send
    *  it, and the page must keep working (just without a freshness reading). */
   capturedAt?: string;
+  /**
+   * Whether the extension holds a capture at all. `false` means TSS has never reported
+   * to it, and the page must forget any sync it remembers rather than keep asserting
+   * one — the two sides drifted apart precisely because an extension with nothing to
+   * say used to stay silent. Absent on extensions before 1.1.1, which only ever spoke
+   * when they did hold a capture, so absent reads as `true`.
+   */
+  captured?: boolean;
 }
 
 function isBookedModule(v: unknown): v is BookedModule {
@@ -243,9 +251,10 @@ export interface BridgeHandlers {
   onCourses: (courses: CourseOffering[]) => void;
   /** A `plan-add` message: add this course to the plan with the given option selected. */
   onPlanAdd: (course: CourseOffering, selectedOptionId: string) => void;
-  /** A `booked` message: update the student's enrolled modules. `capturedAt` is
-   *  absent on pushes from extensions that predate it. */
-  onBooked?: (rows: BookedModule[], capturedAt?: string) => void;
+  /** A `booked` message: update the student's enrolled modules. `capturedAt` is absent
+   *  on pushes from extensions that predate it; `captured` false means the extension
+   *  holds no capture, so any remembered sync is stale and must go. */
+  onBooked?: (rows: BookedModule[], capturedAt?: string, captured?: boolean) => void;
 }
 
 /**
@@ -262,7 +271,7 @@ export function installBridgeListener(handlers: BridgeHandlers): () => void {
     } else if (isCoursesMessage(event.data)) {
       handlers.onCourses(event.data.payload);
     } else if (isBookedMessage(event.data)) {
-      handlers.onBooked?.(event.data.payload, event.data.capturedAt);
+      handlers.onBooked?.(event.data.payload, event.data.capturedAt, event.data.captured);
     }
   };
   window.addEventListener('message', handler);

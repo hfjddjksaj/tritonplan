@@ -27,6 +27,21 @@ export function isAutoBookedSynced(ws: TermWorkspace): boolean {
   return ws.bookedAuto !== undefined;
 }
 
+/**
+ * Forget the captured half, keeping every mark the student made by hand.
+ *
+ * Used when the extension reports that it holds no capture at all. Without this the
+ * two sides can disagree forever: a workspace that once received a push keeps
+ * `bookedAuto` — and so keeps claiming TSS has reported — even after the extension's
+ * own copy is gone, and nothing in a later push ever contradicts it, because an
+ * extension with nothing to say used to say nothing.
+ */
+export function forgetAutoBooked(ws: TermWorkspace): TermWorkspace {
+  if (ws.bookedAuto === undefined) return ws;
+  const { bookedAuto: _dropped, ...rest } = ws;
+  return rest;
+}
+
 function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }

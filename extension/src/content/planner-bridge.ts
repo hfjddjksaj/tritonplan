@@ -68,22 +68,28 @@ async function pushApptTimes(): Promise<void> {
   }
 }
 
-/** Post the student's own booked modules. null = homepage never captured →
- *  push nothing (a manual-only planner stays untouched). An EMPTY list IS
- *  pushed — a captured feed with zero bookings must clear stale marks. */
+/**
+ * Post the student's own booked modules, ALWAYS — including "I hold nothing".
+ *
+ * Staying silent when the store was empty is what let the two sides drift: a planner
+ * that once received a push kept claiming TSS had reported, and no later push ever
+ * said otherwise. `captured: false` is that missing sentence. An empty list with
+ * `captured: true` still means the real thing — TSS reported zero bookings.
+ */
 async function pushBooked(): Promise<void> {
   try {
     const status = await chrome.runtime.sendMessage({ type: MSG.GET_BOOKED_STATUS });
     const booked = (status as { list?: unknown })?.list;
-    if (!Array.isArray(booked)) return;
+    const captured = Array.isArray(booked);
     const at = (status as { at?: unknown })?.at;
     window.postMessage(
       {
         source: BRIDGE_SOURCE,
         type: 'booked',
         version: BRIDGE_VERSION,
-        payload: booked,
-        ...(typeof at === 'string' ? { capturedAt: at } : {}),
+        payload: captured ? booked : [],
+        captured,
+        ...(captured && typeof at === 'string' ? { capturedAt: at } : {}),
       },
       TARGET_ORIGIN,
     );
