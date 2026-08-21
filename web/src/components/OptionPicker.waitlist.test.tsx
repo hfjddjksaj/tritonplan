@@ -82,6 +82,17 @@ describe('OptionPicker · waitlist-only sections', () => {
     expect(row('P-002-004').querySelector('.opt__wl')).toBeNull();
   });
 
+  it('the row itself is flagged, so the hairline knows which rows to mark', () => {
+    // `.opt--wl` is what draws the left edge; it must follow the same rule as the
+    // chip, and it must NOT be the thing that survives on the selected row —
+    // there the CSS suppresses it in favour of the selection ring.
+    render('SE-P-001-001');
+    expect(row('P-002-002').classList.contains('opt--wl')).toBe(true);
+    expect(row('P-003-001').classList.contains('opt--wl')).toBe(true);
+    expect(row('P-001-001').classList.contains('opt--wl')).toBe(false);
+    expect(row('P-002-004').classList.contains('opt--wl')).toBe(false);
+  });
+
   it('the hover wording names the seats that are out of reach', () => {
     // Only worth explaining when the number beside it says the opposite: five
     // open seats read as "go enroll", zero seats explain themselves.

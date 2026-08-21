@@ -46,6 +46,10 @@
   --wl-ink: #8a6a2b;
   --wl-soft: #fdf7e8;
   --wl-line: #f0e5c9;
+  /* The hairline down the left edge of a waitlist-only row. Lighter than --gold
+     on purpose: at 13 rows out of 21 it is a texture running down the whole
+     list, not an alarm on one row, and full gold at that frequency shouts. */
+  --wl-spine: #f0c469;
 
   --conflict: #e5484d;
   --conflict-soft: #fdecec;

@@ -111,7 +111,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
               role="radio"
               aria-checked={active}
               aria-disabled={readOnly}
-              className={`opt${active ? ' opt--active' : ''}${seatsFull ? ' opt--full' : ''}${readOnly ? ' opt--readonly' : ''}`}
+              className={`opt${active ? ' opt--active' : ''}${waitlistOnly ? ' opt--wl' : ''}${seatsFull ? ' opt--full' : ''}${readOnly ? ' opt--readonly' : ''}`}
               onClick={readOnly ? undefined : () => onSelect(opt.id)}
               {...tip(readOnly && 'Read-only plan — sections can’t be changed')}
             >
