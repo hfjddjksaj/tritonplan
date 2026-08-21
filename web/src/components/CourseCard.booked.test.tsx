@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import type { PlanEntry } from '@triton/shared';
 import { makeCourse } from '../lib/fixtures';
 import { CourseCard } from './CourseCard';
+import { TooltipLayer, TIP_DELAY } from './Tooltip';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -180,20 +181,35 @@ describe('CourseCard waitlisted state', () => {
     expect(container.querySelector('.tag--waitlisted')).toBeNull();
   });
 
-  it('says THAT the student is queued and nowhere says where in the queue', () => {
-    // The position is not a prop any more, so the guard is on the rendered card: no
-    // digit may appear in the badge, its label, or its tooltip. A number that moves as
-    // others drop, next to a page TSS never prints one on, can only be believed wrong.
-    render({ waitlisted: true });
-    const badge = container.querySelector('.tag--waitlisted')!;
-    expect(badge.textContent).toBe('Waitlisted');
-    const spoken = [
-      badge.getAttribute('aria-label'),
-      badge.getAttribute('data-tip'),
-      badge.getAttribute('title'),
-    ].filter(Boolean).join(' ');
-    expect(spoken).not.toMatch(/\d/);
-    expect(spoken.toLowerCase()).not.toContain('position');
+  it('says THAT the student is queued, and nowhere says where in the queue', () => {
+    // The position is not a prop any more, so the guard is on what the card actually
+    // says — badge, label, and the hover wording, which is the one place it used to
+    // print. A number that moves as others drop, on a page TSS never prints one on,
+    // can only ever be believed and be wrong.
+    vi.useFakeTimers();
+    const layerHost = document.createElement('div');
+    document.body.appendChild(layerHost);
+    const layer = createRoot(layerHost);
+    act(() => layer.render(<TooltipLayer />));
+    try {
+      render({ waitlisted: true });
+      const badge = container.querySelector('.tag--waitlisted')!;
+      expect(badge.textContent).toBe('Waitlisted');
+      expect(badge.getAttribute('aria-label')).toBeNull();
+      // jsdom has no PointerEvent, and React delivers onPointerEnter off `pointerover`;
+      // a MouseEvent carrying pointerType is indistinguishable to the code.
+      const enter = new MouseEvent('pointerover', { bubbles: true });
+      Object.defineProperty(enter, 'pointerType', { value: 'mouse' });
+      act(() => { badge.dispatchEvent(enter); });
+      act(() => { vi.advanceTimersByTime(TIP_DELAY + 10); });
+      const bubble = document.querySelector('[role="tooltip"]');
+      expect(bubble?.textContent).toBe("TSS has you on this course's waitlist. You are not enrolled.");
+      expect(bubble?.textContent).not.toMatch(/\d|position/i);
+    } finally {
+      act(() => layer.unmount());
+      layerHost.remove();
+      vi.useRealTimers();
+    }
   });
 
   it('hides the manual mark toggle — the queue is TSS\'s fact, not a preference', () => {
