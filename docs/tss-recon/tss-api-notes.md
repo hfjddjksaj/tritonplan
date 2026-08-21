@@ -266,7 +266,16 @@ The launchpad homepage (`#YStudent-Overview`, OVP app `yucsd.ovp.student`) shows
   - `ModregId` = booking-record GUID (row key). Also `Credits`/`CreditUnit` (`"4.00"`/
     `"CRH"`), `ConditionalBooking` (bool — semantics unverified, do not interpret),
     `ScObjid`/`AssignedCg`/`AssignedCgTop` (program/course-group ids — ignore).
-- Waitlisted-vs-booked distinction unverified (this student had plain bookings only).
+- **⚠ 这条 feed 只报"已选"，而且一个状态字段都没有（2026-08-21 实测确认）**：同一个学生当时 3 门已选 + 2 门候补
+  （CHEM-043A、POLI-130B），`ModuleSet` 回来的**正好只有那 3 行**，候补两门一行都没有。
+  所以"这条 feed 里没有这门课"= **没选上**，**永远不等于**"没在候补"。
+  两个直接后果：① 它不会把候补错标成已选（不会点亮绿徽章）；
+  ② 拿它整包覆盖 `booked` 会把 My Courses 报过的候补**清空** —— 学生下次登录一进首页，琥珀徽章就灭了。
+  修法见 `CaptureStore.queuePlacesOutside`：这条 feed 只替换**已选**那一半，候补原样留着，
+  除非它把同一门课（同 moduleId + 同学期）报成了已选 —— 那是候补转正，一门课只有一种身份。
+- **走的是裸 GET，不是 `$batch`（2026-08-21 实测）**：首页冷启动的请求序列里这条是
+  `GET …/BC_OVP_BOOKED_MODULES_SRV/ModuleSet`（另外两条是它的 `$metadata`）。
+  下面 2026-08-18 那条留的"尚未确认裸 GET 还是 batch"到此有答案：**裸 GET**（两种都能吃，规则不用改）。
 - **⚠ 2026-08-18 发现的分类器盲区（已修）**：这条 feed 是 v2，而 `extractV2Results` 原来只认"整个 body 就是那份 v2 文档"。
   SAP Fiori launchpad 默认把 v2 读操作打包进 **`$batch`**（multipart），那种 body 以 `--batch_…` 开头，
   于是**批量里的 v2 文档整个看不见**——首页明明发了 feed，store 里却永远是空的。v4 那条路径
@@ -315,13 +324,30 @@ section/package/enrollCode)。这条给的是学生**真正选上的 event**:
   · `WaitlistBooking` / `WaitlistPosition` / `Credits` / `SemanticState`。
 - `__metadata.type` = `ITUS.PR_MY_MODULES_V2_SRV.ModuleHeader`。**注意它也带 `ModregId`/`SmShort`/`SmObjid`** ——
   跟 booked feed 的形状撞车,只有归属字段能区分。这正是 `looksLikeBookedRow` 必须查 `__metadata.type` 的原因。
-- **状态怎么读(2026-08-20 改)**:`SmStatus === '01'`(Booked)= 选上了,仍然是唯一实测过的状态码。
-  **waitlist 不靠 `SmStatus` 认** —— 它用哪个码**至今没抓到过**,所以不猜;改看语义没有歧义的字段:
-  `WaitlistBooking === true`,或 `SmStatusText` 匹配 `/wait\s*list/i`。命中就当**候补**(`BookedModule.waitlisted`),
-  `WaitlistPosition > 0` 时一并带上名次(0 是 TSS 的空值,不是第一名)。两条都不命中、`SmStatus` 又不是 `'01'`
-  (例如 withdrawal)→ 照旧**整行丢掉**。
-  ⚠ **这条规则还没有对过真实的 waitlist 数据** —— second pass 开了、有人真候补上一门课之后,要被动取证核对
-  `SmStatus` / `SmStatusText` / `WaitlistBooking` / `WaitlistPosition` 的实际取值,并回来更新这一节。
+- **状态怎么读(2026-08-20 定规则,2026-08-21 对上真实候补数据 ✅)**:`SmStatus === '01'`(Booked)= 选上了。
+  **waitlist 不靠 `SmStatus` 认**,改看语义没有歧义的字段:`WaitlistBooking === true`,
+  或 `SmStatusText` 匹配 `/wait\s*list/i`。命中就当**候补**(`BookedModule.waitlisted`),
+  `WaitlistPosition > 0` 时一并带上名次。两条都不命中、`SmStatus` 又不是 `'01'`(例如 withdrawal)→ **整行丢掉**。
+- **真实取值(2026-08-21 被动取证,同一学生 3 门已选 + 2 门候补;fixture 里是原文)**:
+
+  | 字段 | 候补 | 已选 |
+  |---|---|---|
+  | `SmStatus` | `'00'` | `'01'` |
+  | `SmStatusText` | `'Waitlisted'` | `'Booked'` |
+  | `WaitlistBooking` | `true` | `false` |
+  | `WaitlistPosition` | `2`(CHEM-043A) / `11`(POLI-130B) | `0` |
+  | `SemanticState` | `'Warning'` | `'Information'` |
+  | `ScShort` / `ScStext` | 空串 | `'CHEM-U-002'` / `'Chemistry'` |
+  | `AssignedCgTop` | `'00000000'` | `'00000492'` |
+
+  **规则一行没改就对了**:两个候补行 `WaitlistBooking` 和 `SmStatusText` 双双命中,
+  `SmStatus !== '01'` 那条丢弃分支被候补判定挡在前面,所以没丢行。
+  **`'00'` 知道了也仍然不用它判定**:它只在同时写着 `WaitlistBooking: true` 的行上出现过,加了不多认一种情况,
+  却把没抓到过的状态码(withdrawal、pending)全放进来跟它抢。
+  **名次的起点仍未证实**:已选行一律 `0`(空值),候补行是 2 和 11 —— "真有人排第 1 时写不写 1"要等一个真排第一的学生,
+  所以 `0` 照旧不显示。
+  ⚠ **TSS 自己的 My Courses 列表页从不显示名次**(只显示 `Waitlisted` 字样,2026-08-21 页面实测),
+  这个数字是 planner 独有的信息 —— 起点要是搞错了就没有第二处能对照。
 - ⚠ **冷启动这一页只发它自己这条 feed**:`BC_OVP_BOOKED_MODULES_SRV/ModuleSet` 和 `EVENT_TIMETABLE_SRV/EventListSet`
   **一条都不发**(实测)。所以把 `Check bookings` 改到这一页之前,扩展**必须**先会读这条 —— 否则 Booked 徽章会整个消失。
 - 抓取难点(记录一下,免得下次再踩):模块列表**只在 app 冷启动时请求一次**,之后走缓存 —— 页面内 hash 跳转、
