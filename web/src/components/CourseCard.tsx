@@ -144,7 +144,9 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                 aria-label={`Booked section differs: TSS has ${bookedOptionCode}`}
                 {...tip(`TSS has you in ${bookedOptionCode}, not the section on this plan. Click for details.`)}
               >
-                <Bang size={11} />
+                {/* 14, not 11: an even size in the badge's even content box is what
+                    puts whole pixels on both sides of it — see the note on Bang. */}
+                <Bang size={14} />
               </button>
             )}
           </div>

@@ -205,18 +205,31 @@ export function WarnTriangle({ size = 13, ...props }: P) {
   );
 }
 
-export function Bang({ size = 11, ...props }: P) {
+/**
+ * The alert bang, in the shape a warning bang has had since long before any of
+ * us: a broad flat top, sides that draw in with a slight hollow, a squared-off
+ * base, and a square dot under it. Drawn here rather than borrowed — the game
+ * mark people know this silhouette from is the whole composition (hex ground,
+ * heavy outline, its own palette), and none of that is here.
+ *
+ * The geometry is not free-hand. The artwork is symmetric about x = 12 of a
+ * 24×24 box, and the badge renders it at an EVEN pixel size inside an even
+ * content box, so both side margins are whole pixels. The bang this replaced
+ * was `size * 4 / 14` wide — 3.14px at its call size — which lands on no pixel
+ * boundary at all: at 1× its left edge covered 23% of a pixel and its right
+ * 91%, and it read as shifted right no matter how it was centred. Zooming in
+ * re-rasterises and hides exactly that, which is why it looked fine magnified.
+ *
+ * If this ever reads as too aggressive, the runner-up from the same round was
+ * the straight taper with a softened dot — same silhouette, less bite:
+ *   <path d="M8.8 1.6H15.2L13.8 16.2H10.2Z" />
+ *   <rect x="9.4" y="18.6" width="5.2" height="5.2" rx="1.1" />
+ */
+export function Bang({ size = 14, ...props }: P) {
   return (
-    <svg
-      width={(size * 4) / 14}
-      height={size}
-      viewBox="0 0 4 14"
-      fill="currentColor"
-      aria-hidden
-      {...props}
-    >
-      <rect x="0" y="0" width="4" height="9.5" rx="1.6" />
-      <rect x="0" y="11" width="4" height="3" rx="1.4" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+      <path d="M8.2 1H15.8C15 6 14.1 11.5 13.65 16.6H10.35C9.9 11.5 9 6 8.2 1Z" />
+      <path d="M9.6 19.2H14.4V24H9.6Z" />
     </svg>
   );
 }
