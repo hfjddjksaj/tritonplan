@@ -574,6 +574,14 @@ p {
   gap: 5px 6px;
   min-width: 0;
 }
+/* DO NOT "fix" the badge alignment here. Twice now (2026-08-19, 2026-08-20) the
+   badges have read as sitting high at 1×, and twice the answer has been that they
+   are not. The numbers, measured live: the 14px/800 code's baseline lands 2.55px
+   BELOW the 10.5px badge text's, which is simply what box-centring two type sizes
+   on one line does — and the drawn bang is centred in its 18px square to 0.00.
+   Both times, blown up 4–6× against a guide drawn at the code's baseline, plain
+   box-centring won: nudging the badges down onto the code's baseline aligns the
+   WORDS but drops the pill, and the eye reads the pill. Nothing to add. */
 .course-card__title {
   font-size: 11.5px;
   color: var(--text-muted);
@@ -3321,15 +3329,20 @@ button.termsw__cell:hover {
    is a portal onto <body> in viewport coordinates, because the cards these live
    in are `overflow: hidden` and would clip a bubble drawn inside them.
    z-index above the modal shell (95): a tooltip on a control inside a popover
-   still has to clear the popover. */
+   still has to clear the popover.
+   The bubble is a sheet of the planner's own paper, not a dark chip: recessed
+   grey so it separates from the white cards and the near-white course blocks it
+   is most often drawn over, the card radius, and `--shadow-md` — the shadow is
+   what lifts it off the canvas, whose grey is only a shade away, so it stays. */
 .tip {
   position: fixed;
   z-index: 200;
   max-width: 260px;
-  padding: 6px 9px;
-  border-radius: var(--r-sm);
-  background: var(--ink);
-  color: #fff;
+  padding: 7px 10px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
   font-size: 11.5px;
   font-weight: 500;
   line-height: 1.4;
