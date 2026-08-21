@@ -214,4 +214,24 @@ describe('MapMarkers', () => {
     expect(unbooked).not.toBeNull();
     expect((unbooked.querySelector('.campusmap__dot') as HTMLElement).style.background).toBe(cssColor('#fff'));
   });
+
+  it('mirrors a chip that had to sit left of its dot, so the swatch faces the dot', async () => {
+    // This group projects ~20px from the right edge, so a chip on the usual side
+    // would run off the canvas and placeLabels falls back to 'left'. Left is
+    // where the bug lived: the swatch reads as the location mark, and on the far
+    // edge of a left-hand chip it points at ground the class is nowhere near.
+    const EDGE = group('e', -117.212255, 32.88, 'Revelle', [pin('PHYS-002CL', 'LEC', 38)]);
+    await render({ groups: [CENTER_HALL, EDGE] });
+
+    const chips = [...container.querySelectorAll('.campusmap__chip')] as HTMLElement[];
+    const left = chips.find((c) => c.textContent === 'PHYS-002CL')!;
+    const right = chips.find((c) => c.textContent === 'CSE-8A')!;
+    // Which side each one actually landed on, read off the geometry rather than
+    // off the class the assertion is about.
+    expect(parseFloat(left.style.left)).toBeLessThan(0);
+    expect(parseFloat(right.style.left)).toBeGreaterThan(0);
+
+    expect(left.classList.contains('campusmap__chip--mirror')).toBe(true);
+    expect(right.classList.contains('campusmap__chip--mirror')).toBe(false);
+  });
 });

@@ -166,8 +166,18 @@ export function MapMarkers({
             {/* Hidden while the card is open: the card stands in for it, and grows
                 out of the very box the chip was holding (the card layer below). */}
             {!open && (
+              /* A chip placed to the LEFT of its dot mirrors its rows, so the
+                 colour swatch is on the edge facing the dot rather than on the
+                 far one. Read the other way round it lies about where the class
+                 is: the eye takes the swatch for the location mark, and a chip
+                 sitting left of its pin with the swatch on its own left edge
+                 points at empty ground. Only `left` needs it — `above` and
+                 `below` straddle the dot, and the swatch column being left of
+                 centre there reads as part of a chip that is plainly attached. */
               <span
-                className={`campusmap__chip${rows.length > 1 ? ' campusmap__chip--stack' : ''}`}
+                className={`campusmap__chip${rows.length > 1 ? ' campusmap__chip--stack' : ''}${
+                  chip.side === 'left' ? ' campusmap__chip--mirror' : ''
+                }`}
                 style={{ left: chip.x - x, top: chip.y - y }}
               >
                 {rows.map((r) => (

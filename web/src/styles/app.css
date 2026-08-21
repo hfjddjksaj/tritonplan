@@ -3060,6 +3060,15 @@ button.termsw__cell:hover {
 .campusmap__chiprow + .campusmap__chiprow {
   border-top: 1px solid var(--line);
 }
+/* Chip sitting to the LEFT of its dot: turn each row around so the colour
+   swatch ends up on the edge facing the dot. The padding turns with it — the
+   row is tighter on the swatch side than on the code side — which is also why
+   the box does not change size, so nothing in the collision layout or the hit
+   test has to know this happened. */
+.campusmap__chip--mirror .campusmap__chiprow {
+  flex-direction: row-reverse;
+  padding: 0 8px 0 10px;
+}
 /* Hover comes from the same hit test the click does — :hover cannot match on a
    pointer-transparent element. */
 .campusmap__marker--hover .campusmap__chip {
