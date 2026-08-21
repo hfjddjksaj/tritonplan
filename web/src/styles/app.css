@@ -917,18 +917,10 @@ p {
   font-weight: 700;
   letter-spacing: 0.03em;
   white-space: nowrap;
-  gap: 3px;
   color: var(--wl-ink);
   background: var(--wl-soft);
   border: 1px solid var(--wl-line);
   border-radius: 3px;
-}
-/* The sign itself stays full gold while the words stay quiet: at 10px a muted
-   amber triangle reads as a smudge, and the yellow is the half that carries
-   across a list without being read. */
-.opt__wl-icon {
-  flex: none;
-  color: var(--gold);
 }
 /* A greyed-out full row must not grey this out with it — "full" and "waitlist
    only" are different facts, and the second one is the reason for the first. */
@@ -943,6 +935,18 @@ p {
   align-items: center;
   margin-left: 5px;
   color: var(--gold);
+  /* An <svg> has no baseline of its own, so what the inline box holding it hands
+     to the line is a replaced element's baseline — the BOTTOM of the box. Left
+     alone, this 13px triangle therefore STANDS ON the code's baseline: measured
+     live at 1×, it poked 3.70px above digits whose caps are 8.00px tall, putting
+     its centre 2.47px above the centre of the cap band, and stretching the row
+     from 13.08px to 16px to make room. That is the "floating" everyone sees.
+     Drop it by half the difference between the two heights so the two centres
+     meet. Cap height measured 8.00px at 11px (0.727em, Cascadia Code); a Consolas
+     fallback is 0.644em, so 0.72em splits them and never misses by half a pixel.
+     After: centre off by 0.06px, and the triangle fits INSIDE the line box the
+     text already made instead of stretching it. */
+  vertical-align: calc((0.72em - 13px) / 2);
 }
 
 /* ======================================================== topbar dropdown menus */

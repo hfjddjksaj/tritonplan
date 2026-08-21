@@ -14,19 +14,22 @@ export function waitlistOnlyTitle(seatsAvailable?: number): string {
     : "TSS will only let you join this section's waitlist.";
 }
 
-/** What TSS's own UI shows: "⚠ Waitlist Only". In the expanded list there is room
- *  for both halves — the road sign carries at a glance, the words say which sign. */
+/** What TSS's own UI calls it: "Waitlist Only". Words only — the expanded list
+ *  has room for them, and a triangle in front of a label that already reads at a
+ *  glance only adds a second thing to look at. The road sign is kept for the
+ *  collapsed row, where there is no room for words at all. */
 function WaitlistOnlyChip({ seatsAvailable }: { seatsAvailable?: number }) {
   return (
     <span className="opt__wl" {...tip(waitlistOnlyTitle(seatsAvailable))}>
-      <WarnTriangle size={10} className="opt__wl-icon" />
       Waitlist only
     </span>
   );
 }
 
 /** Folded away there is no room for the words — the road sign says the same
- *  thing in 13px, in the shape everyone already reads. */
+ *  thing in 13px, in the shape everyone already reads. The 13 is repeated in
+ *  `.picker__wl`'s vertical-align, which drops the mark onto the code's cap
+ *  band; change one and the other stops holding the line. */
 function WaitlistOnlyMark({ seatsAvailable }: { seatsAvailable?: number }) {
   return (
     <span
