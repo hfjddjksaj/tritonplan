@@ -822,8 +822,8 @@ p {
    top of the chip that names the fact. It marks the row rather than tinting it:
    13 of 21 packages carried the status in a real capture, and a ground colour on
    two rows in three stops separating anything — the eight rows you CAN take end
-   up being the ones that stand out. A 1.5px line has no such problem; a column
-   of them reads as texture you can run down.
+   up being the ones that stand out. A 2px line has no such problem; a column of
+   them reads as texture you can run down.
 
    It is drawn as the row's own BACKGROUND, not as a positioned strip over it. A
    strip is a rectangle and the row's corners are 6px arcs, so its two ends stood
@@ -834,12 +834,13 @@ p {
    the 1px it would otherwise sit behind.
 
    Why not simply widen the left border? Chrome snaps border widths to whole
-   device pixels — `border-left: 1.5px` computes to 1px — so the border route
-   silently changes the width. A gradient is not snapped and stays at 1.5. */
+   device pixels — a fractional `border-left` quietly becomes something else, as
+   1.5px did when this line was that wide. A gradient is never snapped, so the
+   width here is always the width that was chosen. */
 .opt--wl,
 .opt--wl:hover {
   border-left-color: transparent;
-  background-image: linear-gradient(to right, var(--wl-spine) 0 1.5px, transparent 1.5px);
+  background-image: linear-gradient(to right, var(--wl-spine) 0 2px, transparent 2px);
   background-origin: border-box;
 }
 .opt--active {
@@ -2881,14 +2882,15 @@ button.termsw__cell:hover {
   background: var(--surface-2);
   border-color: var(--text-faint);
 }
-/* The 3D toggle, which moved here from the 28 px zoom column. Wider and taller
-   than the icon controls beside it because it is now the one control the map can
-   press by itself — a tilt gesture past CAMERA.enter3dPitch turns it on — and a
-   state you did not click has to be readable at a glance. The pill shape and the
-   pressed colours are "Booked only"'s, so a toggle still looks like a toggle. */
+/* The 3D toggle, which moved here from the 28 px zoom column. It is the one
+   control the map can press by itself — a tilt gesture past CAMERA.enter3dPitch
+   turns it on — so a state you did not click has to be readable at a glance.
+   That reading comes from the width, the weight and the pressed colours, which
+   are "Booked only"'s so a toggle still looks like a toggle. NOT from the height:
+   it stood 34px in a row of 28px controls and simply read as the odd one out,
+   so it now sits at the row's height like everything else in the cluster. */
 .campusmap__mode3d {
   min-width: 46px;
-  height: 34px;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.04em;
