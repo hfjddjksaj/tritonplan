@@ -3355,6 +3355,258 @@ button.termsw__cell:hover {
   letter-spacing: 0.01em;
 }
 
+/* --- Distance: the island's footer, below the day slices, behind a hairline ---
+   The hairline is load-bearing. Everything above it chooses WHICH PINS to show;
+   everything below it performs an action on two of them. Making the two look
+   like one stack is what the separate row was meant to avoid. */
+.campusmap__rule {
+  align-self: stretch;
+  height: 1px;
+  background: var(--line);
+  margin: 1px 0 0;
+}
+.campusmap__dist {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.campusmap__dist-barrow {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+/* Collapsed and never measured: recessed grey, and the whole row is the toggle
+   — 30 px of island for a feature nobody has asked for yet. */
+.campusmap__dist-bar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+/* Measured: gold, because a gold line is now drawn on the map and the bar is
+   the only thing tying the two together while the panel is shut. */
+.campusmap__dist--has .campusmap__dist-bar {
+  background: var(--gold-soft);
+  border-color: var(--wl-line);
+}
+/* A degraded answer is deliberately NOT gold: nothing is drawn on the map, so
+   the bar must not promise a line the reader will go looking for (spec §6). */
+.campusmap__dist--vague .campusmap__dist-bar {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+.campusmap__dist--open .campusmap__dist-bar {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+}
+.campusmap__dist-mark {
+  flex: none;
+  color: var(--gold);
+  line-height: 1;
+}
+.campusmap__dist-label {
+  flex: none;
+  font-weight: 600;
+}
+.campusmap__dist-hint {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+/* The summary carries a qualified distance ("910 m on paths"), so it is the
+   longest thing in a 340 px island — it gets the slack and truncates last. */
+.campusmap__dist-sum {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--gold-ink);
+  font-variant-numeric: tabular-nums;
+}
+.campusmap__dist--vague .campusmap__dist-sum {
+  color: var(--text-muted);
+}
+.campusmap__dist-chev {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+/* Sits between the summary and the chevron, at the row's height. Smaller and
+   quieter than the cluster's "Close map" ✕ so the two never read as the same
+   control — one clears a route, the other shuts the map. */
+.campusmap__dist-clear {
+  flex: none;
+  width: 26px;
+  border: 1px solid var(--wl-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--gold-ink);
+  font-size: 11px;
+  cursor: pointer;
+}
+.campusmap__dist-clear:hover {
+  background: var(--gold-soft);
+}
+.campusmap__dist--vague .campusmap__dist-clear,
+.campusmap__dist:not(.campusmap__dist--has) .campusmap__dist-clear {
+  border-color: var(--line-strong);
+  color: var(--text-muted);
+}
+.campusmap__dist-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--wl-line);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  background: var(--gold-soft);
+}
+.campusmap__dist--vague .campusmap__dist-panel,
+.campusmap__dist:not(.campusmap__dist--has) .campusmap__dist-panel {
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+.campusmap__dist-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.campusmap__dist-lab {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.campusmap__dist-select {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+}
+.campusmap__dist-swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.campusmap__dist-swap {
+  align-self: center;
+  padding: 1px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.campusmap__dist-read {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+/* Whole minutes only — tabular figures so switching modes does not reflow the
+   line, and no room for a seconds field anyone might be tempted to add. */
+.campusmap__dist-big {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.campusmap__dist-sub {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--gold-ink);
+}
+.campusmap__dist--vague .campusmap__dist-sub {
+  color: var(--text-muted);
+}
+.campusmap__dist-modes {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.campusmap__dist-mode {
+  padding: 3px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.campusmap__dist-mode.is-on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.campusmap__dist-mode:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+/* "est" rides along with the time on the bike and scooter chips: their numbers
+   come from a 7% `bicycle=*` tagging rate and cannot claim walking's footing. */
+.campusmap__dist-est {
+  font-weight: 500;
+  font-size: 9.5px;
+  opacity: 0.75;
+}
+.campusmap__dist-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--gold-ink);
+}
+.campusmap__dist--vague .campusmap__dist-foot {
+  color: var(--text-muted);
+}
+.campusmap__dist-link {
+  margin-left: auto;
+  flex: none;
+  color: inherit;
+  text-underline-offset: 2px;
+}
+.campusmap__dist-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
 @media (max-width: 760px) {
   /* The island spans the screen; the control cluster joins its title row. */
   .campusmap__island {
@@ -3375,6 +3627,14 @@ button.termsw__cell:hover {
   }
   .campusmap__count {
     display: none;
+  }
+  /* Expanded this panel stands ~268 px tall — most of a phone screen. That is
+     why it is collapsed by default and never remembered (spec §7.2); once open
+     it scrolls inside itself rather than pushing the rest of the island off the
+     bottom of the screen. */
+  .campusmap__dist-panel {
+    max-height: 46vh;
+    overflow-y: auto;
   }
   .campusmap__card {
     max-width: calc(100vw - 24px);
