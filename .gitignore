@@ -49,3 +49,6 @@ secrets.*
 
 # superpowers brainstorm sessions
 .superpowers/
+
+# local Codex working files — not for GitHub
+codex/
