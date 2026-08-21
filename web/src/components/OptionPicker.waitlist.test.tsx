@@ -94,15 +94,20 @@ describe('OptionPicker · waitlist-only sections', () => {
     );
   });
 
-  it('leaves the seat column alone — the count and its label are untouched', () => {
+  it('leaves the seat column alone — every row is labelled "seats"', () => {
     // The mark lives beside the code; the right-hand column stays one thing, so
-    // the eye can still run down a single column of seat numbers.
+    // the eye can still run down a single column of seat numbers. That includes
+    // the label: P-002-004 has none left, and it is still counting seats.
     render('SE-P-001-001');
     const wl = row('P-002-002');
     expect(wl.querySelector('.opt__seats-n')?.textContent).toBe('5/23');
     expect(wl.querySelector('.opt__seats-label')?.textContent).toBe('seats');
     expect(row('P-001-001').querySelector('.opt__seats-label')?.textContent).toBe('seats');
-    expect(row('P-002-004').querySelector('.opt__seats-label')?.textContent).toBe('waitlist');
+    expect(row('P-002-004').querySelector('.opt__seats-label')?.textContent).toBe('seats');
+    // The count itself still carries the fact, in red.
+    expect(
+      row('P-002-004').querySelector('.opt__seats-n')?.classList.contains('opt__seats-n--full'),
+    ).toBe(true);
   });
 
   it('a waitlist-only row is not treated as full', () => {

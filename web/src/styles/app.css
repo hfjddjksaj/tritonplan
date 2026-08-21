@@ -1222,8 +1222,8 @@ button.menu__item:hover {
 }
 
 /* Out of seats: the row recedes, but a selected row keeps its accent ring —
-   grey must never swallow "this is the one you picked". The red seat count
-   and its "waitlist" label are styled above and stay as they are. */
+   grey must never swallow "this is the one you picked". The seat count is styled
+   above and stays as it is — red on a full row, under an unchanging "seats". */
 .opt--full .opt__code,
 .opt--full .opt__instructor,
 .opt--full .opt__summary {

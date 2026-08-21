@@ -141,7 +141,13 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
                     {opt.seatsAvailable}
                     {opt.limit !== undefined ? `/${opt.limit}` : ''}
                   </span>
-                  <span className="opt__seats-label">{seatsFull ? 'waitlist' : 'seats'}</span>
+                  {/* Always "seats". The number above it counts seats in every
+                      row — swapping the word underneath on the full ones relabels
+                      a measurement that never changed, and made the reader stop to
+                      work out what `0/45` was counting. The count going red already
+                      says there is nothing left; what TSS will let you do about it
+                      is the Waitlist-only chip's job, up beside the code. */}
+                  <span className="opt__seats-label">seats</span>
                 </span>
               )}
             </button>
