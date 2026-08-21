@@ -583,20 +583,6 @@ export function usePlan() {
     return ws ? waitlistedSet(ws) : new Set<string>();
   }, [termsState, viewPlan.term]);
 
-  /** Per course id, the place in that queue TSS last reported. Session state, from
-   *  the raw push: a position ages the moment it is read, so it is not persisted and
-   *  replayed as though it were still true. */
-  const waitlistPositions = useMemo<ReadonlyMap<string, number>>(() => {
-    const t = viewPlan.term;
-    const out = new Map<string, number>();
-    for (const r of bookedRows) {
-      if (r.term.year !== t.year || r.term.period !== t.period) continue;
-      if (r.waitlisted && r.waitlistPosition !== undefined) {
-        out.set(`${r.courseCode}|${r.term.year}|${r.term.period}`, r.waitlistPosition);
-      }
-    }
-    return out;
-  }, [bookedRows, viewPlan.term]);
 
   /**
    * What TSS ITSELF reported for the viewed term this session, before any of the
@@ -698,7 +684,6 @@ export function usePlan() {
     clearBrowsed,
     bookedIds,
     waitlistedIds,
-    waitlistPositions,
     tssBookedIds,
     enrolledEventIds,
     bookedOptionCodes,

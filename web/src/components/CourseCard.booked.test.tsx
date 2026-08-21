@@ -147,14 +147,13 @@ describe('CourseCard waitlisted state', () => {
     container.remove();
   });
 
-  function render(props: { booked?: boolean; waitlisted?: boolean; waitlistPosition?: number }) {
+  function render(props: { booked?: boolean; waitlisted?: boolean }) {
     act(() => {
       root.render(
         <CourseCard
           entry={fullEntry()} index={0} conflicted={false}
           booked={props.booked ?? false}
           waitlisted={props.waitlisted}
-          waitlistPosition={props.waitlistPosition}
           onSelect={() => {}} onRemove={() => {}} onOpenTss={() => {}}
         />,
       );
@@ -181,10 +180,20 @@ describe('CourseCard waitlisted state', () => {
     expect(container.querySelector('.tag--waitlisted')).toBeNull();
   });
 
-  it('keeps the queue position out of the badge, where it would go stale loudest', () => {
-    render({ waitlisted: true, waitlistPosition: 3 });
-    expect(container.querySelector('.tag--waitlisted')?.textContent).toBe('Waitlisted');
-    expect(container.querySelector('.tag--waitlisted')?.getAttribute('aria-label')).toMatch(/3/);
+  it('says THAT the student is queued and nowhere says where in the queue', () => {
+    // The position is not a prop any more, so the guard is on the rendered card: no
+    // digit may appear in the badge, its label, or its tooltip. A number that moves as
+    // others drop, next to a page TSS never prints one on, can only be believed wrong.
+    render({ waitlisted: true });
+    const badge = container.querySelector('.tag--waitlisted')!;
+    expect(badge.textContent).toBe('Waitlisted');
+    const spoken = [
+      badge.getAttribute('aria-label'),
+      badge.getAttribute('data-tip'),
+      badge.getAttribute('title'),
+    ].filter(Boolean).join(' ');
+    expect(spoken).not.toMatch(/\d/);
+    expect(spoken.toLowerCase()).not.toContain('position');
   });
 
   it('hides the manual mark toggle — the queue is TSS\'s fact, not a preference', () => {

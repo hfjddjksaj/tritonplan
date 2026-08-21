@@ -190,9 +190,11 @@ export interface BookedModule {
    * enrolled — or that the feed we read could not tell: the home page's booked
    * feed carries no status field at all, so only a "My Courses" capture can ever
    * set this. Absent is therefore "no reason to think otherwise", never a denial.
+   *
+   * WHICH PLACE in the queue is deliberately not modelled, though the feed states one
+   * (`WaitlistPosition`, seen live as 2 and 11): the number moves as other students
+   * drop, TSS's own My Courses page never prints it — so nothing on screen could ever
+   * contradict a wrong one — and the fact a student acts on is "not in yet".
    */
   waitlisted?: boolean;
-  /** Place in that queue, when TSS states one (`WaitlistPosition`). A snapshot of
-   *  the moment it was read — it moves as other students drop. */
-  waitlistPosition?: number;
 }

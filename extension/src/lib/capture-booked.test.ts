@@ -198,7 +198,7 @@ describe('CaptureStore: the My Courses feed', () => {
       {
         courseCode: 'CHEM-043A', moduleId: '2117',
         term: { year: '2026', period: '2', label: 'Fall 2026' },
-        optionCode: 'P-003-004', waitlisted: true, waitlistPosition: 2,
+        optionCode: 'P-003-004', waitlisted: true,
       },
     ]);
   });
@@ -232,9 +232,13 @@ describe('CaptureStore: the My Courses feed', () => {
     expect(store.getBooked()).toBeNull();
   });
 
-  it('no position is better than a made-up one', () => {
+  it('leaves the queue POSITION on the wire, real value and all', () => {
+    // The planner says that a student is queued, never where in the queue: the number
+    // moves as others drop and TSS's own pages never print it, so nothing on screen
+    // could contradict a stale one. It must not even reach the planner to be shown.
     const store = new CaptureStore();
-    store.ingestBody(batched([myRow({ WaitlistBooking: true, WaitlistPosition: 0 })]), MY_URL);
+    store.ingestBody(batched([myRow({ WaitlistBooking: true, WaitlistPosition: 2 })]), MY_URL);
+    expect(store.getBooked()?.[0]?.waitlisted).toBe(true);
     expect(store.getBooked()?.[0]).not.toHaveProperty('waitlistPosition');
   });
 
@@ -270,7 +274,7 @@ describe('CaptureStore: a home-page capture cannot un-waitlist a student', () =>
   const QUEUE_PLACE = {
     courseCode: 'CHEM-043A', moduleId: '2117',
     term: { year: '2026', period: '2', label: 'Fall 2026' },
-    optionCode: 'P-003-004', waitlisted: true, waitlistPosition: 2,
+    optionCode: 'P-003-004', waitlisted: true,
   };
   /** The home feed's own shape: identity fields, no status, queued courses absent. */
   const HOME_BOOKED = {

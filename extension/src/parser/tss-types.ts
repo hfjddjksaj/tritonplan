@@ -152,7 +152,9 @@ export interface TssMyModuleRow {
   SmStatus?: string;
   SmStatusText?: string;     // "Booked" | "Waitlisted"
   WaitlistBooking?: boolean; // true on a waitlist row, false on a booked one
-  WaitlistPosition?: number; // place in the queue (2, 11 seen live); 0 on every booked row
+  /** Place in the queue (2 and 11 seen live); 0 on every booked row. Declared because
+   *  the wire carries it — the parser reads past it on purpose (see `BookedModule`). */
+  WaitlistPosition?: number;
   Credits?: string;
   CreditUnit?: string;
 }

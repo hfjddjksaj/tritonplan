@@ -284,18 +284,15 @@ export function myModuleRowToBooked(
   const year = row.AcademicYear?.trim();
   const period = stripLeadingZeros(row.AcademicSession ?? '');
   if (!courseCode || !moduleId || !year || !period) return null;
-  // A position of 0 is TSS's empty value, not first in line: every BOOKED row carries 0,
-  // and the queued rows carried 2 and 11 (2026-08-21). Whether a real queue starts at 1
-  // can only be settled by a student who is actually first, so 0 stays unprintable.
-  const position = row.WaitlistPosition;
-  const hasPosition = waitlisted && typeof position === 'number' && position > 0;
+  // `WaitlistPosition` is read past, not read out. The row states one (2 and 11 on the
+  // real queued rows; 0 on every booked one), but the planner deliberately says only
+  // THAT the student is queued — see `BookedModule.waitlisted`.
   return {
     module: {
       courseCode,
       moduleId,
       term: termFromRow(year, period),
       ...(waitlisted ? { waitlisted: true } : {}),
-      ...(hasPosition ? { waitlistPosition: position } : {}),
     },
     optionCode: row.EventPackageAbbr?.trim() ?? '',
   };

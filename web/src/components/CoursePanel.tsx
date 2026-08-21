@@ -110,9 +110,6 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                 }
                 booked={ctl.bookedIds.has(entry.course.id)}
                 waitlisted={ctl.waitlistedIds.has(entry.course.id)}
-                {...(ctl.waitlistPositions.has(entry.course.id)
-                  ? { waitlistPosition: ctl.waitlistPositions.get(entry.course.id) }
-                  : {})}
                 bookedByTss={ctl.tssBookedIds.has(entry.course.id)}
                 {...(elsewhere ? { bookedOptionCode: elsewhere.code } : {})}
                 onToggleBooked={readOnly ? undefined : () => ctl.toggleBooked(entry.course)}

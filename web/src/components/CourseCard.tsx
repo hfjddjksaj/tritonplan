@@ -27,9 +27,6 @@ interface Props {
   /** TSS has the student in this course's WAITLIST queue, not enrolled. Mutually
    *  exclusive with `booked` in practice; if both arrive, enrolled wins. */
   waitlisted?: boolean;
-  /** Place in that queue, when TSS stated one. Kept out of the badge — it moves as
-   *  others drop, and a stale number in the loudest spot on the card misleads. */
-  waitlistPosition?: number;
   /** TSS itself reported this course as booked, whatever the student marked here.
    *  Only used to surface the disagreement; `booked` alone decides how the card reads. */
   bookedByTss?: boolean;
@@ -39,7 +36,7 @@ interface Props {
   onToggleBooked?: () => void;
 }
 
-export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, waitlisted = false, waitlistPosition, bookedByTss = false, bookedOptionCode, onToggleBooked }: Props) {
+export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, waitlisted = false, bookedByTss = false, bookedOptionCode, onToggleBooked }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
@@ -105,21 +102,13 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             ) : queued ? (
               /* Not enrolled, but holding a place — its own word and its own colour,
                  because "Full" says the door is shut and "Booked" says you are through
-                 it, and this is neither. The position stays out of the badge: it moves
-                 as other students drop, and a stale number in the loudest spot on the
-                 card is worse than no number. */
+                 it, and this is neither. Which PLACE in the queue is deliberately not
+                 said anywhere, badge or tooltip: TSS states a number, but it moves as
+                 other students drop, TSS's own My Courses page never prints it, and
+                 what the student can act on is "you are not in yet". */
               <span
                 className="tag tag--waitlisted"
-                aria-label={
-                  waitlistPosition !== undefined
-                    ? `Waitlisted, position ${waitlistPosition}`
-                    : 'Waitlisted'
-                }
-                {...tip(
-                  waitlistPosition !== undefined
-                    ? `TSS has you on this course's waitlist at position ${waitlistPosition}, as last read. You are not enrolled.`
-                    : "TSS has you on this course's waitlist. You are not enrolled.",
-                )}
+                {...tip("TSS has you on this course's waitlist. You are not enrolled.")}
               >
                 Waitlisted
               </span>
