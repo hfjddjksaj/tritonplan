@@ -13,6 +13,7 @@
     "fetch:buildings": "node scripts/fetch-buildings.mjs",
     "fetch:campus-map": "node scripts/fetch-campus-map.mjs",
     "fetch:terrain": "node scripts/fetch-terrain.mjs",
+    "fetch:walk-graph": "node scripts/fetch-walk-graph.mjs",
     "build:map-glyphs": "node scripts/build-map-glyphs.mjs",
     "fetch:ui-font": "node scripts/fetch-ui-font.mjs"
   },
@@ -32,6 +33,7 @@
     "jsdom": "^25.0.1",
     "opentype.js": "^2.0.0",
     "pbf": "^5.1.2",
+    "pngjs": "^7.0.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"
