@@ -940,13 +940,14 @@ p {
      alone, this 13px triangle therefore STANDS ON the code's baseline: measured
      live at 1×, it poked 3.70px above digits whose caps are 8.00px tall, putting
      its centre 2.47px above the centre of the cap band, and stretching the row
-     from 13.08px to 16px to make room. That is the "floating" everyone sees.
-     Drop it by half the difference between the two heights so the two centres
-     meet. Cap height measured 8.00px at 11px (0.727em, Cascadia Code); a Consolas
-     fallback is 0.644em, so 0.72em splits them and never misses by half a pixel.
-     After: centre off by 0.06px, and the triangle fits INSIDE the line box the
-     text already made instead of stretching it. */
-  vertical-align: calc((0.72em - 13px) / 2);
+     from 13.08px to 16px to make room. That is the "floating" everyone saw.
+
+     -1.7px, not the -2.5px that would put the two centres together. Geometric
+     centring reads LOW on a triangle: its area is all down at the base, so the
+     eye finds its middle above the box's. The value was picked from a 1× ladder
+     of five steps (0.4px apart, in a real card row) — the same rule the badge
+     nudge above landed on: measure to find the problem, choose at 1×. */
+  vertical-align: -1.7px;
 }
 
 /* ======================================================== topbar dropdown menus */
