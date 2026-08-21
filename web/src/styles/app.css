@@ -574,14 +574,23 @@ p {
   gap: 5px 6px;
   min-width: 0;
 }
-/* DO NOT "fix" the badge alignment here. Twice now (2026-08-19, 2026-08-20) the
-   badges have read as sitting high at 1×, and twice the answer has been that they
-   are not. The numbers, measured live: the 14px/800 code's baseline lands 2.55px
-   BELOW the 10.5px badge text's, which is simply what box-centring two type sizes
-   on one line does — and the drawn bang is centred in its 18px square to 0.00.
-   Both times, blown up 4–6× against a guide drawn at the code's baseline, plain
-   box-centring won: nudging the badges down onto the code's baseline aligns the
-   WORDS but drops the pill, and the eye reads the pill. Nothing to add. */
+/* Badges nudged down 1.5px, and the number is not arbitrary.
+   Box-centring two type sizes on one line does not give them a shared baseline:
+   measured live, the 14px/800 code's baseline lands 2.55px BELOW the 10.5px badge
+   text's, so the badge floats. (The drawn bang is centred in its own 18px square
+   to 0.00 — that half was never the problem.) `align-items: baseline` cannot fix
+   it either: `.tag` is inline-flex, and an inline-flex box exports its own flex
+   baseline rather than its text's — switching measured 2px WORSE.
+   Full 2.55px aligns the WORDS but drops the pill, and the eye reads the pill;
+   1.5px is where both look settled. Chosen at 1×, deliberately: a 4–6× blow-up
+   rasterises differently and argued for 0, and 1× is the size that ships.
+   Layout-neutral, so nothing reflows, and the icon-only alert square rides along
+   with Booked — which is what keeps the two badges locked to each other. Scoped
+   to this line: the units/conflict chips below have no big type to align to. */
+.course-card__codeline .tag {
+  position: relative;
+  top: 1.5px;
+}
 .course-card__title {
   font-size: 11.5px;
   color: var(--text-muted);
