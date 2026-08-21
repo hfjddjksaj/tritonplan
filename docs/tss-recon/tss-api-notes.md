@@ -353,7 +353,11 @@ section/package/enrollCode)。这条给的是学生**真正选上的 event**:
 - 抓取难点(记录一下,免得下次再踩):模块列表**只在 app 冷启动时请求一次**,之后走缓存 —— 页面内 hash 跳转、
   点详情都不再发;而注入探针抢不到 document_start(工具会等 load 完)。**最后是从页面内存里的 UI5 model 读出来的**
   (`sap.ui.core.Element.registry` → `oModels` → `oData` 里找带 `EventPackageAbbr` 的行)。
-- Fixture:`fixtures/my-modules-fall2026.json`(GUID 已脱敏)。
+- **课号 < 100 会补零,而且两边补得一样(2026-08-21 结案)**:这条 feed 写 `SmShort: "CHEM-043A"` / `"PHYS-002CL"`,
+  课程侧 `YUCSD_CON_MODULE.CourseAbbr` 对同一门 PHYS-002CL(ModuleID 14502)写的也是 `"PHYS-002CL"`
+  (2026-08-10 实录,见 `capture.test.ts` 的 `phys2clEntity`)。**两边同款补零 → auto-booked 的课程 id 不会静默对不上**,
+  之前担心的那种"只有一边补零"没有发生。
+- Fixture:`fixtures/my-modules-fall2026.json` —— 5 行全是实录(3 已选 + 2 候补),GUID 已脱敏。
 
 ## Day-abbreviation → Weekday map
 `M`→Mon, `Tu`→Tue, `W`→Wed, `Th`→Thu, `F`→Fri, `Sa`→Sat, `Su`→Sun.
