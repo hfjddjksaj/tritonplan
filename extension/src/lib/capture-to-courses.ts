@@ -187,7 +187,8 @@ export class CaptureStore {
         changed = true;
       }
     }
-    // Rows always replace the list. A report of ZERO rows is the dangerous case: it is
+    // Rows replace the ENROLMENT half of the list (see `queuePlacesOutside` for why the
+    // waitlist half survives). A report of ZERO rows is the dangerous case: it is
     // real news when a student has dropped everything, and it destroys good data when
     // we read it out of something that wasn't the booked list at all.
     //
@@ -212,11 +213,37 @@ export class CaptureStore {
     // genuinely carried no rows at all, may write here; anything else leaves the last
     // real answer (or "never captured") standing.
     if (understood.length > 0 || (bookedRows.length === 0 && clearsOnEmpty)) {
-      this.booked = understood;
+      this.booked = [...understood, ...this.queuePlacesOutside(understood)];
       this.bookedAt = new Date().toISOString();
       changed = true;
     }
     return changed;
+  }
+
+  /**
+   * The waitlist places already held that an ENROLMENT-ONLY report cannot speak to.
+   *
+   * The home page's feed lists enrolments and nothing else — verified live 2026-08-21 on
+   * a student with 3 bookings and 2 waitlist places: `ModuleSet` came back with exactly
+   * the 3, both queued courses absent, and no status field anywhere in the row. So
+   * "missing from this feed" means "not enrolled"; it can never mean "not waitlisted".
+   *
+   * Letting it write the whole list is what made the queue places disappear: My Courses
+   * reported them, then the student's next TSS visit landed on the home page — the page
+   * every login opens — and the amber badges silently went out.
+   *
+   * A course this report now names as an enrolment is NOT carried over: the student came
+   * off the queue and into the class, and no course is ever both at once.
+   *
+   * ⚠ The carried-over rows keep the position TSS stated when My Courses was read, while
+   * `bookedAt` moves to now — the enrolment half of the answer really is that fresh. A
+   * queue place ages the moment it is read anyway (others drop, the line moves), which is
+   * why the badge says "as last read" rather than claiming to be live.
+   */
+  private queuePlacesOutside(enrolled: BookedModule[]): BookedModule[] {
+    const key = (m: BookedModule) => `${m.moduleId}|${m.term.year}|${m.term.period}`;
+    const nowEnrolled = new Set(enrolled.map(key));
+    return (this.booked ?? []).filter((m) => m.waitlisted === true && !nowEnrolled.has(key(m)));
   }
 
   /**

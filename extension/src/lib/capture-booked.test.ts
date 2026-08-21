@@ -186,24 +186,27 @@ describe('CaptureStore: the My Courses feed', () => {
   });
 
   it('a waitlist booking comes through as one, never as an enrolment', () => {
+    // Field values verbatim from the first real waitlisted capture (2026-08-21):
+    // CHEM-043A, queued at 2 — see fixtures/my-modules-fall2026.json.
     const store = new CaptureStore();
     const row = myRow({
-      SmStatus: '02', SmStatusText: 'Waitlisted', WaitlistBooking: true, WaitlistPosition: 3,
+      SmShort: 'CHEM-043A', SmObjid: '00002117', EventPackageAbbr: 'P-003-004',
+      SmStatus: '00', SmStatusText: 'Waitlisted', WaitlistBooking: true, WaitlistPosition: 2,
     });
     expect(store.ingestBody(batched([row]), MY_URL)).toBe(true);
     expect(store.getBooked()).toEqual([
       {
-        courseCode: 'CHEM-114A', moduleId: '2077',
+        courseCode: 'CHEM-043A', moduleId: '2117',
         term: { year: '2026', period: '2', label: 'Fall 2026' },
-        optionCode: 'P-002-004', waitlisted: true, waitlistPosition: 3,
+        optionCode: 'P-003-004', waitlisted: true, waitlistPosition: 2,
       },
     ]);
   });
 
   it('believes the waitlist flag over any code SmStatus happens to carry', () => {
-    // Which code SmStatus uses for a waitlist has never been seen live, so it is
-    // not guessed at. `WaitlistBooking` states the same thing in a field whose
-    // meaning is not in doubt, and that is what decides.
+    // Live waitlist rows read SmStatus '00', but the parser still does not go by the
+    // code: the statuses nobody has captured are free to collide with it. The fields
+    // that SAY waitlist decide, whatever number rides along — here an invented '07'.
     const store = new CaptureStore();
     store.ingestBody(batched([myRow({ SmStatus: '07', SmStatusText: '', WaitlistBooking: true })]), MY_URL);
     expect(store.getBooked()?.[0]?.waitlisted).toBe(true);
@@ -211,7 +214,7 @@ describe('CaptureStore: the My Courses feed', () => {
 
   it('reads the words too, for a feed that fills in only the text', () => {
     const store = new CaptureStore();
-    store.ingestBody(batched([myRow({ SmStatus: '02', SmStatusText: 'Wait Listed' })]), MY_URL);
+    store.ingestBody(batched([myRow({ SmStatus: '00', SmStatusText: 'Wait Listed' })]), MY_URL);
     expect(store.getBooked()?.[0]?.waitlisted).toBe(true);
   });
 
@@ -238,6 +241,92 @@ describe('CaptureStore: the My Courses feed', () => {
   it('survives serialize/deserialize', () => {
     const store = new CaptureStore();
     store.ingestBody(batched([myRow()]), MY_URL);
+    expect(CaptureStore.deserialize(store.serialize()).getBooked()).toEqual(store.getBooked());
+  });
+});
+
+describe('CaptureStore: a home-page capture cannot un-waitlist a student', () => {
+  // The home feed lists ENROLMENTS ONLY — verified live 2026-08-21 on a student with 3
+  // bookings and 2 queue places: ModuleSet came back with exactly the 3, and the rows
+  // carry no status field at all. Reading it as the whole standing is what put the
+  // amber badges out: My Courses reported the queues, then the next TSS visit landed on
+  // the home page — the page every login opens — and they silently vanished.
+  const MY_URL = 'https://tss.ucsd.edu/sap/opu/odata/ITUS/PR_MY_MODULES_V2_SRV/$batch?sap-client=500';
+  const myBatch = (rows: unknown[]): string =>
+    '--batch_x\r\nContent-Type: application/http\r\n\r\nHTTP/1.1 200 OK\r\n' +
+    `Content-Type: application/json\r\n\r\n${JSON.stringify({ d: { results: rows } })}\r\n--batch_x--\r\n`;
+  const MY_BOOKED = {
+    __metadata: { type: 'ITUS.PR_MY_MODULES_V2_SRV.ModuleHeader' },
+    SmShort: 'CHEM-114A', SmObjid: '00002077', AcademicYear: '2026', AcademicSession: '002',
+    EventPackageAbbr: 'P-002-004', SmStatus: '01', SmStatusText: 'Booked',
+    WaitlistBooking: false, WaitlistPosition: 0,
+  };
+  const MY_QUEUED = {
+    __metadata: { type: 'ITUS.PR_MY_MODULES_V2_SRV.ModuleHeader' },
+    SmShort: 'CHEM-043A', SmObjid: '00002117', AcademicYear: '2026', AcademicSession: '002',
+    EventPackageAbbr: 'P-003-004', SmStatus: '00', SmStatusText: 'Waitlisted',
+    WaitlistBooking: true, WaitlistPosition: 2,
+  };
+  const QUEUE_PLACE = {
+    courseCode: 'CHEM-043A', moduleId: '2117',
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    optionCode: 'P-003-004', waitlisted: true, waitlistPosition: 2,
+  };
+  /** The home feed's own shape: identity fields, no status, queued courses absent. */
+  const HOME_BOOKED = {
+    ModregId: 'redacted-1', SmShort: 'CHEM-114A', SmObjid: '00002077',
+    AcademicYear: '2026', AcademicSession: '002',
+  };
+  const homeBody = (rows: Record<string, unknown>[]): string => JSON.stringify({ d: { results: rows } });
+  /** A student who is enrolled in one course and queued for another. */
+  const afterMyCourses = (): CaptureStore => {
+    const store = new CaptureStore();
+    store.ingestBody(myBatch([MY_BOOKED, MY_QUEUED]), MY_URL);
+    return store;
+  };
+
+  it('keeps the queue place a feed that only knows enrolments never mentioned', () => {
+    const store = afterMyCourses();
+    expect(store.ingestBody(homeBody([HOME_BOOKED]), URL)).toBe(true);
+    const booked = store.getBooked() ?? [];
+    expect(booked.filter((m) => !m.waitlisted).map((m) => m.courseCode)).toEqual(['CHEM-114A']);
+    expect(booked.filter((m) => m.waitlisted)).toEqual([QUEUE_PLACE]);
+  });
+
+  it('an empty home report clears the enrolments and still keeps the queue', () => {
+    // "I dropped everything" is real news about bookings, and no news at all about
+    // queues — that feed cannot see them to report them gone.
+    const store = afterMyCourses();
+    expect(store.ingestBody(homeBody([]), URL)).toBe(true);
+    expect(store.getBooked()).toEqual([QUEUE_PLACE]);
+  });
+
+  it('drops the queue place when the same course comes back as an enrolment', () => {
+    // Off the waitlist and into the class. One course, one standing — never both.
+    const store = afterMyCourses();
+    store.ingestBody(
+      homeBody([HOME_BOOKED, { ...HOME_BOOKED, SmShort: 'CHEM-043A', SmObjid: '00002117' }]),
+      URL,
+    );
+    const booked = store.getBooked() ?? [];
+    expect(booked.map((m) => m.courseCode).sort()).toEqual(['CHEM-043A', 'CHEM-114A']);
+    expect(booked.some((m) => m.waitlisted)).toBe(false);
+  });
+
+  it('an enrolment in ANOTHER term leaves this term\'s queue place standing', () => {
+    // The carry-over is keyed by term as well as module: getting into the Winter
+    // offering says nothing about the Fall queue the student is still in.
+    const store = afterMyCourses();
+    store.ingestBody(
+      homeBody([{ ...HOME_BOOKED, SmShort: 'CHEM-043A', SmObjid: '00002117', AcademicSession: '001' }]),
+      URL,
+    );
+    expect(store.getBooked()?.filter((m) => m.waitlisted)).toEqual([QUEUE_PLACE]);
+  });
+
+  it('the merged list survives serialize/deserialize', () => {
+    const store = afterMyCourses();
+    store.ingestBody(homeBody([HOME_BOOKED]), URL);
     expect(CaptureStore.deserialize(store.serialize()).getBooked()).toEqual(store.getBooked());
   });
 });

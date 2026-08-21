@@ -1,5 +1,5 @@
 {
-  "__comment": "BC_OVP_BOOKED_MODULES_SRV/ModuleSet response (homepage 'Booked Courses' card), OData v2, live passive capture verified 2026-08-11 — see docs/tss-recon/tss-api-notes.md §BC_OVP_BOOKED_MODULES_SRV. ModregId GUIDs are PII (booking-record keys) and are REDACTED to 'redacted-N'. CAVEAT: the recon session recorded 3 booked courses but only fully transcribed ONE row's concrete field values into the notes (row 1, CHEM-114A) before the session ended; rows 2 and 3 below are SYNTHETIC placeholders built to the same verified schema/shape (not live-captured values) so this fixture has the real 3-row cardinality the feed returns. ScObjid/AssignedCg/AssignedCgTop are carried over unchanged from row 1 on the assumption they are per-student program/curriculum-group ids rather than per-course (per the notes: 'ignore' for our purposes either way). Replace rows 2-3 with real transcribed values if a future recon session captures this feed again.",
+  "__comment": "BC_OVP_BOOKED_MODULES_SRV/ModuleSet response (homepage 'Booked Courses' card), OData v2 — see docs/tss-recon/tss-api-notes.md §BC_OVP_BOOKED_MODULES_SRV. Feed shape verified live 2026-08-11; ALL THREE ROWS re-captured verbatim 2026-08-21 from the same student's TSS home page (read out of the page's own UI5 model — the rows that arrived in the GET the page fired at load; nothing was requested by us). The 2026-08-11 session had only ever transcribed row 1, so rows 2-3 used to be synthetic placeholders; they are now real. ModregId GUIDs are booking-record keys (PII) and stay REDACTED to 'redacted-N'. ⚠ THE CARDINALITY IS THE POINT: at capture time the student was ALSO waitlisted for CHEM-043A and POLI-130B (see my-modules-fall2026.json), and this feed returned neither — it lists enrolments only, and carries no status field of any kind. A course missing here is a course not BOOKED; it is never evidence about a waitlist.",
   "d": {
     "results": [
       {
@@ -19,8 +19,8 @@
         "AcademicYearText": "2026/2027", "AssignedCg": "00000492",
         "AssignedCgTop": "00000492", "ConditionalBooking": false,
         "CreditUnit": "CRH", "Credits": "4.00", "ModregId": "redacted-2",
-        "SmObjid": "00001842", "SmShort": "MATH-20C",
-        "SmStext": "Calculus and Analytic Geometry for Science and Engineering"
+        "SmObjid": "00002127", "SmShort": "CHEM-152",
+        "SmStext": "Synthetic Methods/Organic Chem"
       },
       {
         "__metadata": { "type": "ITED.BC_OVP_BOOKED_MODULES_SRV.Module" },
@@ -28,9 +28,9 @@
         "AcademicSessionText": "Fall Quarter", "AcademicYear": "2026",
         "AcademicYearText": "2026/2027", "AssignedCg": "00000492",
         "AssignedCgTop": "00000492", "ConditionalBooking": false,
-        "CreditUnit": "CRH", "Credits": "4.00", "ModregId": "redacted-3",
-        "SmObjid": "00003190", "SmShort": "LIGN-101",
-        "SmStext": "Introduction to the Study of Language"
+        "CreditUnit": "CRH", "Credits": "2.00", "ModregId": "redacted-3",
+        "SmObjid": "00014502", "SmShort": "PHYS-002CL",
+        "SmStext": "Phys Lab-Elec&Magnetism"
       }
     ]
   }

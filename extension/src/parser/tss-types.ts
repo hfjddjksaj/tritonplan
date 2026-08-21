@@ -100,7 +100,13 @@ export interface TssApptPeriodsRow {
 /** One row of the homepage "Booked Courses" feed —
  *  GET /sap/opu/odata/ited/BC_OVP_BOOKED_MODULES_SRV/ModuleSet.
  *  ⚠ OData **v2**: the body is `{"d":{"results":[...]}}`, not an
- *  `@odata.context` collection. Verified live 2026-08-11. */
+ *  `@odata.context` collection. Verified live 2026-08-11.
+ *
+ *  ⚠ **ENROLMENTS ONLY, and no status field of any kind.** Re-verified 2026-08-21 on a
+ *  student with 3 bookings + 2 waitlist places: the feed returned exactly the 3. A course
+ *  missing here is a course not BOOKED — it says nothing about queues, which is why a
+ *  capture of it may never clear the waitlist places `PR_MY_MODULES_V2_SRV` reported
+ *  (`CaptureStore.queuePlacesOutside`). */
 export interface TssBookedModuleRow {
   /** OData v2 names the owning service in every row: `ITED.<SERVICE>.<Entity>`. The
    *  only attribution a `$batch` part carries — its response headers don't repeat the
@@ -140,12 +146,13 @@ export interface TssMyModuleRow {
   EventPackageAbbr: string;  // "P-002-004" — same string as SectionOption.code
   EventPackageId?: string;   // "00152206" — SectionOption.id without its "SE" prefix
   EventPackageName?: string; // "CHEM-114A (P-002-004)"
-  /** "01" = Booked (the only value seen live). Other statuses are UNVERIFIED, so
-   *  anything else is left alone rather than guessed at. */
+  /** "01" = Booked, "00" = Waitlisted — both verified live 2026-08-21. Any OTHER value
+   *  is still UNVERIFIED, so a row carrying one is left alone rather than guessed at.
+   *  The parser reads the semantic fields below, not this code (see `myModuleRowToBooked`). */
   SmStatus?: string;
-  SmStatusText?: string;     // "Booked"
-  WaitlistBooking?: boolean;
-  WaitlistPosition?: number;
+  SmStatusText?: string;     // "Booked" | "Waitlisted"
+  WaitlistBooking?: boolean; // true on a waitlist row, false on a booked one
+  WaitlistPosition?: number; // place in the queue (2, 11 seen live); 0 on every booked row
   Credits?: string;
   CreditUnit?: string;
 }

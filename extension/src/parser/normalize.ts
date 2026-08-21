@@ -254,11 +254,25 @@ const stripLeadingZeros = (s: string): string => s.replace(/^0+(?=.)/, '');
  * This one feed says what the home page needs two feeds and a deduction to say.
  *
  * Two kinds of row are read, and only two. An enrolment is `SmStatus === '01'`
- * ("Booked"), still the only status code seen live. A waitlist booking is whatever
- * row says so in a field whose meaning is not in doubt — `WaitlistBooking`, or the
- * display text — because which CODE `SmStatus` uses for a waitlist has never been
- * captured, and a guess there would either drop the row or paint a course the
- * student has not got. Everything else (a withdrawal, say) is still refused.
+ * ("Booked"). A waitlist booking is whatever row says so in a field whose meaning is
+ * not in doubt — `WaitlistBooking`, or the display text. Everything else (a withdrawal,
+ * say) is still refused.
+ *
+ * Both halves are now confirmed against a real waitlisted student (2026-08-21, two
+ * queued courses beside three booked ones):
+ *
+ * | field              | waitlisted        | booked        |
+ * |--------------------|-------------------|---------------|
+ * | `SmStatus`         | `'00'`            | `'01'`        |
+ * | `SmStatusText`     | `'Waitlisted'`    | `'Booked'`    |
+ * | `WaitlistBooking`  | `true`            | `false`       |
+ * | `WaitlistPosition` | `2` / `11`        | `0`           |
+ * | `SemanticState`    | `'Warning'`       | `'Information'` |
+ *
+ * The rule still does NOT read `SmStatus === '00'`, now that the code is known: `'00'`
+ * has only ever been seen on rows that also said `WaitlistBooking: true`, so it adds no
+ * case, while the statuses nobody has captured (a withdrawal, a pending request) would
+ * be free to collide with it. The semantic fields say what they mean; the code does not.
  */
 export function myModuleRowToBooked(
   row: TssMyModuleRow,
@@ -270,7 +284,9 @@ export function myModuleRowToBooked(
   const year = row.AcademicYear?.trim();
   const period = stripLeadingZeros(row.AcademicSession ?? '');
   if (!courseCode || !moduleId || !year || !period) return null;
-  // A position of 0 is TSS's empty value, not first in line.
+  // A position of 0 is TSS's empty value, not first in line: every BOOKED row carries 0,
+  // and the queued rows carried 2 and 11 (2026-08-21). Whether a real queue starts at 1
+  // can only be settled by a student who is actually first, so 0 stays unprintable.
   const position = row.WaitlistPosition;
   const hasPosition = waitlisted && typeof position === 'number' && position > 0;
   return {
