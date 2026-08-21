@@ -315,7 +315,13 @@ section/package/enrollCode)。这条给的是学生**真正选上的 event**:
   · `WaitlistBooking` / `WaitlistPosition` / `Credits` / `SemanticState`。
 - `__metadata.type` = `ITUS.PR_MY_MODULES_V2_SRV.ModuleHeader`。**注意它也带 `ModregId`/`SmShort`/`SmObjid`** ——
   跟 booked feed 的形状撞车,只有归属字段能区分。这正是 `looksLikeBookedRow` 必须查 `__metadata.type` 的原因。
-- **只读 `SmStatus === '01'`(Booked)**。waitlist / withdrawal 长什么样**未验证**,宁可不认也不要给一门可能没选上的课挂绿标。
+- **状态怎么读(2026-08-20 改)**:`SmStatus === '01'`(Booked)= 选上了,仍然是唯一实测过的状态码。
+  **waitlist 不靠 `SmStatus` 认** —— 它用哪个码**至今没抓到过**,所以不猜;改看语义没有歧义的字段:
+  `WaitlistBooking === true`,或 `SmStatusText` 匹配 `/wait\s*list/i`。命中就当**候补**(`BookedModule.waitlisted`),
+  `WaitlistPosition > 0` 时一并带上名次(0 是 TSS 的空值,不是第一名)。两条都不命中、`SmStatus` 又不是 `'01'`
+  (例如 withdrawal)→ 照旧**整行丢掉**。
+  ⚠ **这条规则还没有对过真实的 waitlist 数据** —— second pass 开了、有人真候补上一门课之后,要被动取证核对
+  `SmStatus` / `SmStatusText` / `WaitlistBooking` / `WaitlistPosition` 的实际取值,并回来更新这一节。
 - ⚠ **冷启动这一页只发它自己这条 feed**:`BC_OVP_BOOKED_MODULES_SRV/ModuleSet` 和 `EVENT_TIMETABLE_SRV/EventListSet`
   **一条都不发**(实测)。所以把 `Check bookings` 改到这一页之前,扩展**必须**先会读这条 —— 否则 Booked 徽章会整个消失。
 - 抓取难点(记录一下,免得下次再踩):模块列表**只在 app 冷启动时请求一次**,之后走缓存 —— 页面内 hash 跳转、
