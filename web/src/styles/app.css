@@ -618,7 +618,16 @@ p {
   display: inline-flex;
   align-items: center;
   height: 18px;
-  padding: 0 7px;
+  /* The top padding is an optical correction, not spacing. `align-items: center`
+     centres the LINE box, and a line box reserves the font's full descent — 3px
+     of it at 10.5px Inter. Not one of the words that goes in here has a descender
+     (Booked, Full, Waitlisted, Conflict, "4 units"), so that 3px is empty and
+     shows up as a strip of plate below the letters: measured at 1×, every tag had
+     3.656px above its ink and 5.344px below, the ink sitting 0.844px high. Half
+     the imbalance as padding pushes the centred line box down by the other half
+     and the letters land in the middle of their own plate. Overridden to 0 on
+     .tag--alert, which holds a symmetric glyph and needs none of this. */
+  padding: 1.7px 7px 0;
   font-size: 10.5px;
   font-weight: 600;
   white-space: nowrap;
