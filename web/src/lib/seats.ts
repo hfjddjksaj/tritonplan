@@ -19,6 +19,21 @@ export function optionFull(option: SectionOption): boolean {
 }
 
 /**
+ * TSS will only let the student join this package's waitlist — a state that has
+ * nothing to do with seats. A "Waitlist Only" package can show `Available: 5`
+ * and still refuse to enroll anyone (13 of CHEM-043A's 21 packages, 2026-08-10),
+ * so `optionFull` can never stand in for it.
+ *
+ * Matched against the one wording seen live (`EventPkgStatusText: "Waitlist Only"`,
+ * carried through as `SectionOption.status`), case and padding aside. A near-miss
+ * like "Waitlist Closed" would mean the opposite, and marking a section the student
+ * could actually take costs them the section — so unverified wordings earn nothing.
+ */
+export function optionWaitlistOnly(option: SectionOption): boolean {
+  return /^waitlist\s+only$/i.test(option.status?.trim() ?? '');
+}
+
+/**
  * Every one of this course's sections is full. A course with no sections, or
  * with any section whose seat count is unknown, is not full — conservative on
  * purpose, for the same reason as above.

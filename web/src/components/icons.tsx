@@ -186,6 +186,25 @@ export const Compass = (p: P) => (
  * fraction that changes with the font. Drawing it makes the ink itself the thing
  * being centred. Bar and dot fill the viewBox exactly, top to bottom.
  */
+/**
+ * The road-sign warning mark: a bang inside a triangular frame, all one colour.
+ * Drawn rather than typed for the reason `Bang` below exists — a "!" is a
+ * character, so it aligns to a line box and sits high in whatever you centre it
+ * in. The bar and dot here are geometry inside the same viewBox as the frame,
+ * so they cannot drift when the font changes.
+ */
+export function WarnTriangle({ size = 13, ...props }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M10.32 3.1a1.94 1.94 0 0 1 3.36 0l9.06 15.7a1.94 1.94 0 0 1-1.68 2.9H2.94a1.94 1.94 0 0 1-1.68-2.9zM12 8.15a1.3 1.3 0 0 0-1.3 1.37l.26 4.62a1.04 1.04 0 0 0 2.08 0l.26-4.62A1.3 1.3 0 0 0 12 8.15m0 7.75a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6"
+      />
+    </svg>
+  );
+}
+
 export function Bang({ size = 11, ...props }: P) {
   return (
     <svg

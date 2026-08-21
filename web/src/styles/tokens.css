@@ -39,6 +39,14 @@
   --gold-soft: #fff4d6;
 
   /* Semantic */
+  /* Waitlist-only sections — TSS bars enrolment even when seats are left. Its own
+     amber, deliberately lighter than --gold-ink: this mark sits in a list where a
+     real capture had 13 of 21 packages carrying it, and a column of loud chips
+     says nothing at all. Still 4.5:1 on --wl-soft, because it is set at 9px. */
+  --wl-ink: #8a6a2b;
+  --wl-soft: #fdf7e8;
+  --wl-line: #f0e5c9;
+
   --conflict: #e5484d;
   --conflict-soft: #fdecec;
   --conflict-ink: #a01820;

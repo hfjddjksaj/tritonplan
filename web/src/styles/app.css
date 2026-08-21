@@ -808,6 +808,16 @@ p {
 .opt__main {
   min-width: 0;
 }
+/* The code shrinks and ellipsizes; anything beside it keeps its full width.
+   Box centres, not `align-items: baseline` — an inline-flex chip exports its
+   own flex baseline, not the baseline of the words inside it, and switching
+   measured 2px WORSE (chip baseline 2px under the code's). The remaining
+   half-pixel is corrected on the chip itself. */
+.opt__codeline {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
 .opt__code {
   display: block;
   font-size: 12px;
@@ -865,6 +875,47 @@ p {
 .opt__seats-label {
   color: var(--text-faint);
   font-size: 10px;
+}
+/* Waitlist Only, in the same soft-fill badge language as Full and Booked, one
+   step quieter: a hairline instead of a solid tint, because in a real capture
+   13 of 21 packages carried it and a column of loud chips says nothing at all. */
+.opt__wl {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 14px;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  gap: 3px;
+  color: var(--wl-ink);
+  background: var(--wl-soft);
+  border: 1px solid var(--wl-line);
+  border-radius: 3px;
+}
+/* The sign itself stays full gold while the words stay quiet: at 10px a muted
+   amber triangle reads as a smudge, and the yellow is the half that carries
+   across a list without being read. */
+.opt__wl-icon {
+  flex: none;
+  color: var(--gold);
+}
+/* A greyed-out full row must not grey this out with it — "full" and "waitlist
+   only" are different facts, and the second one is the reason for the first. */
+.opt--full .opt__wl {
+  color: var(--wl-ink);
+}
+/* Collapsed, the words don't fit, so the warning triangle stands in for them.
+   Full gold rather than --wl-ink: a 13px outline is thin enough that the quieter
+   amber reads as a smudge, and here it is the only mark on the row. */
+.picker__wl {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  color: var(--gold);
 }
 
 /* ======================================================== topbar dropdown menus */

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { CourseOffering, SectionOption } from '@triton/shared';
-import { optionFull, courseFull } from './seats';
+import { optionFull, courseFull, optionWaitlistOnly } from './seats';
 
 /** A section option carrying only what the seat rule looks at. */
 function opt(seatsAvailable?: number): SectionOption {
@@ -41,6 +41,50 @@ describe('optionFull', () => {
     // Older captures and some decoded links carry no seat count. Painting
     // "we don't know" as "no seats left" would be a claim the user acts on.
     expect(optionFull(opt(undefined))).toBe(false);
+  });
+});
+
+/** A section option carrying only what the waitlist-only rule looks at. */
+function statusOpt(status?: string, seatsAvailable?: number): SectionOption {
+  return {
+    id: 'SE1',
+    code: 'P-001-001',
+    enrollCode: 'SE1',
+    components: [],
+    ...(status === undefined ? {} : { status }),
+    ...(seatsAvailable === undefined ? {} : { seatsAvailable }),
+  };
+}
+
+describe('optionWaitlistOnly', () => {
+  it('reads the status TSS actually writes', () => {
+    expect(optionWaitlistOnly(statusOpt('Waitlist Only'))).toBe(true);
+  });
+
+  it('is true WITH seats left — that is the whole point', () => {
+    // TSS gates 13 of CHEM-043A's 21 packages this way. Seats remain and the
+    // student still cannot enroll, so fullness can never express this state.
+    expect(optionWaitlistOnly(statusOpt('Waitlist Only', 5))).toBe(true);
+  });
+
+  it('ignores case and surrounding space', () => {
+    expect(optionWaitlistOnly(statusOpt('waitlist only'))).toBe(true);
+    expect(optionWaitlistOnly(statusOpt('  Waitlist Only  '))).toBe(true);
+  });
+
+  it('is false when TSS said nothing', () => {
+    // "" is what a merely-full package carries; older captures have no field.
+    expect(optionWaitlistOnly(statusOpt(undefined))).toBe(false);
+    expect(optionWaitlistOnly(statusOpt(''))).toBe(false);
+  });
+
+  it('is false for any wording we have not verified', () => {
+    // Only the one string seen live earns the mark. A near-miss like
+    // "Waitlist Closed" means the opposite, and guessing costs the student a
+    // section they could have taken.
+    expect(optionWaitlistOnly(statusOpt('Scheduled'))).toBe(false);
+    expect(optionWaitlistOnly(statusOpt('Waitlist Closed'))).toBe(false);
+    expect(optionWaitlistOnly(statusOpt('Waitlist'))).toBe(false);
   });
 });
 

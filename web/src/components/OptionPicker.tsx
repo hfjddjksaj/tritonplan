@@ -2,8 +2,42 @@ import { Fragment } from 'react';
 import type { CourseOffering } from '@triton/shared';
 import { findOption, optionSummaryParts } from '../lib/plan';
 import { pluralize } from '../lib/format';
-import { optionFull } from '../lib/seats';
-import { ChevronDown } from './icons';
+import { optionFull, optionWaitlistOnly } from '../lib/seats';
+import { ChevronDown, WarnTriangle } from './icons';
+
+/** Said the same way in both places the mark appears — open seats are the part
+ *  that needs explaining, since the number beside it reads as "go enroll". */
+function waitlistOnlyTitle(seatsAvailable?: number): string {
+  return seatsAvailable !== undefined && seatsAvailable > 0
+    ? `${seatsAvailable} seats are open, but TSS will only let you join this section's waitlist.`
+    : "TSS will only let you join this section's waitlist.";
+}
+
+/** What TSS's own UI shows: "⚠ Waitlist Only". In the expanded list there is room
+ *  for both halves — the road sign carries at a glance, the words say which sign. */
+function WaitlistOnlyChip({ seatsAvailable }: { seatsAvailable?: number }) {
+  return (
+    <span className="opt__wl" title={waitlistOnlyTitle(seatsAvailable)}>
+      <WarnTriangle size={10} className="opt__wl-icon" />
+      Waitlist only
+    </span>
+  );
+}
+
+/** Folded away there is no room for the words — the road sign says the same
+ *  thing in 13px, in the shape everyone already reads. */
+function WaitlistOnlyMark({ seatsAvailable }: { seatsAvailable?: number }) {
+  return (
+    <span
+      className="picker__wl"
+      role="img"
+      aria-label="Waitlist only"
+      title={waitlistOnlyTitle(seatsAvailable)}
+    >
+      <WarnTriangle size={13} />
+    </span>
+  );
+}
 
 interface Props {
   course: CourseOffering;
@@ -25,6 +59,10 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
   // grey it too, or a full pick shows up nowhere but the calendar. Not when booked,
   // though: a 0-seat count doesn't apply to a section the user already has.
   const selectedFull = !booked && (selected ? optionFull(selected) : false);
+  // Suppressed once booked for the same reason as the seat count above: the gate
+  // is behind a student TSS already let in. The expanded list still marks every
+  // waitlist-only package, because that list is for choosing a different one.
+  const selectedWaitlistOnly = !booked && (selected ? optionWaitlistOnly(selected) : false);
   const hasSeats = course.options.some((o) => o.seatsAvailable !== undefined);
   const optionCount = course.options.length;
   return (
@@ -49,6 +87,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
           {collapsed && selected && (
             <span className={`picker__selected mono${selectedFull ? ' picker__selected--full' : ''}`}>
               {selected.code}
+              {selectedWaitlistOnly && <WaitlistOnlyMark seatsAvailable={selected.seatsAvailable} />}
             </span>
           )}
         </span>
@@ -58,6 +97,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
         {course.options.map((opt) => {
           const active = opt.id === selectedOptionId;
           const seatsFull = optionFull(opt);
+          const waitlistOnly = optionWaitlistOnly(opt);
           const instructor = opt.components.find((c) => c.instructors[0])?.instructors[0];
           const parts = optionSummaryParts(opt);
           return (
@@ -73,7 +113,12 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
             >
               <span className="opt__radio" aria-hidden />
               <span className="opt__main">
-                <span className="opt__code mono">{opt.code}</span>
+                {/* The code can ellipsize; the chip beside it never does — a mark
+                    that disappears on a long package code is worse than no mark. */}
+                <span className="opt__codeline">
+                  <span className="opt__code mono">{opt.code}</span>
+                  {waitlistOnly && <WaitlistOnlyChip seatsAvailable={opt.seatsAvailable} />}
+                </span>
                 {instructor && <span className="opt__instructor">{instructor}</span>}
                 <span className="opt__summary">
                   {parts.length === 0
