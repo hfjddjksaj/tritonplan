@@ -104,9 +104,12 @@ function buildGraph(elements) {
     return n;
   };
   const edges = [];
+  // Counted once per staircase, not once per segment — see the guard in main().
+  let stepsWays = 0;
   for (const w of elements) {
     if (w.type !== 'way' || !w.geometry) continue;
     const isSteps = w.tags?.highway === 'steps';
+    if (isSteps) stepsWays++;
     const g = w.geometry.filter(Boolean);
     for (let i = 1; i < g.length; i++) {
       const a = nodeOf(g[i - 1]);
@@ -117,7 +120,7 @@ function buildGraph(elements) {
       adj[b].push(edges.length - 1);
     }
   }
-  return { lat, lon, adj, edges };
+  return { lat, lon, adj, edges, stepsWays };
 }
 
 /** Connected components; returns the size of the largest and the count. */
@@ -204,11 +207,13 @@ async function main() {
   const json = await queryOverpass();
   const g = buildGraph(json.elements);
   const stats = componentStats(g.adj, g.edges);
-  const stepsCount = g.edges.filter((e) => e.steps).length;
+  const stepsEdges = g.edges.filter((e) => e.steps).length;
 
   console.log(`nodes ${g.lat.length}  edges ${g.edges.length}`);
   console.log(`components ${stats.count}  largest ${stats.largest} (${((100 * stats.largest) / g.lat.length).toFixed(1)}%)`);
-  console.log(`steps edges ${stepsCount}`);
+  // Both numbers, always: they differ by ~35% and confusing them is exactly how
+  // the guard below got miscalibrated the first time.
+  console.log(`steps ways ${g.stepsWays} (${stepsEdges} edges)`);
 
   // Loud failure, not a silent bad graph: a fragmented source would ship a map
   // that fails to route between buildings that are plainly next to each other.
@@ -217,8 +222,16 @@ async function main() {
     console.error(`FATAL: largest component ${(100 * share).toFixed(1)}% < 90%`);
     process.exit(1);
   }
-  if (stepsCount < 250 || stepsCount > 400) {
-    console.error(`FATAL: steps edge count ${stepsCount} outside 250–400 — query or bbox drifted`);
+  // WAYS, not edges, and the distinction is load-bearing: a mapper re-drawing
+  // one staircase with more geometry points changes the segment count without
+  // changing anything real, so an edge-based band fails spuriously. The way
+  // count only moves when staircases are actually added or removed. 250–400 is
+  // calibrated on ways, against the 322 measured 2026-08-21 (which is also
+  // where spec §2.3's 33/322 `step_count` and 145/322 `incline` come from —
+  // tag counts, hence per-way). The wire `steps` array still indexes EDGES;
+  // only this health check counts ways.
+  if (g.stepsWays < 250 || g.stepsWays > 400) {
+    console.error(`FATAL: steps way count ${g.stepsWays} outside 250–400 — query or bbox drifted`);
     process.exit(1);
   }
 
