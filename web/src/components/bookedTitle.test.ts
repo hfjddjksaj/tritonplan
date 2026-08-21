@@ -44,3 +44,34 @@ describe('bookedTitle: what TSS said vs what this plan shows', () => {
     );
   });
 });
+
+describe('bookedTitle: waitlist places are not bookings', () => {
+  const queued = (courseCode: string, term: Term = FALL): BookedModule => ({
+    ...row(courseCode, term),
+    waitlisted: true,
+  });
+
+  it('does not call a term with only waitlist places "no bookings at all"', () => {
+    // The card next to it says Waitlisted in so many words. A tooltip flatly
+    // denying TSS reported anything is the exact shape of lie that cost three
+    // rounds of misdiagnosis in 2026-08.
+    const rows = [queued('CHEM-114A'), queued('CHEM-152')];
+    const t = bookedTitle(true, new Set<string>(), NOW, rows, FALL);
+    expect(t).not.toMatch(/no bookings at all/);
+    expect(t).toMatch(/2 waitlisted/);
+  });
+
+  it('counts them separately when there are bookings too', () => {
+    const enrolled = [row('CHEM-114A')];
+    const rows = [...enrolled, queued('CHEM-152')];
+    const t = bookedTitle(true, idsOf(enrolled), NOW, rows, FALL);
+    expect(t).toMatch(/^1 booked in Fall 2026/);
+    expect(t).toMatch(/1 waitlisted/);
+  });
+
+  it('does not let a waitlist place inflate the count of bookings elsewhere', () => {
+    const rows = [row('CHEM-114A', WINTER), queued('CHEM-152', WINTER)];
+    const t = bookedTitle(true, new Set<string>(), NOW, rows, FALL);
+    expect(t).toMatch(/TSS reports 1 booked, but in Winter 2027/);
+  });
+});

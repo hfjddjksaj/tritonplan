@@ -632,6 +632,16 @@ p {
   color: #1b7f4d;
   border-color: transparent;
 }
+/* Waitlisted: the third state in the same slot, and the reason it needs its own
+   colour is that it is neither of the other two — Full says the door is shut,
+   Booked says you are through it, this says you are in the queue. Amber, the same
+   family as the Waitlist Only section mark, at full strength: unlike that one it
+   appears once per card, not thirteen times down a list. */
+.tag--waitlisted {
+  background: var(--gold-soft);
+  color: var(--gold-ink);
+  border-color: transparent;
+}
 /* "…but not the section you have." A square plate beside Booked — the standard
    warning shape, and square because a 13px circle with a glyph in it read as a
    smudge at this size. Same box metrics as its neighbours (18px tall) so the row of

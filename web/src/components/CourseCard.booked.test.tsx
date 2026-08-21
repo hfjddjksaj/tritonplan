@@ -133,3 +133,62 @@ describe('CourseCard booked state', () => {
     });
   });
 });
+
+describe('CourseCard waitlisted state', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  function render(props: { booked?: boolean; waitlisted?: boolean; waitlistPosition?: number }) {
+    act(() => {
+      root.render(
+        <CourseCard
+          entry={fullEntry()} index={0} conflicted={false}
+          booked={props.booked ?? false}
+          waitlisted={props.waitlisted}
+          waitlistPosition={props.waitlistPosition}
+          onSelect={() => {}} onRemove={() => {}} onOpenTss={() => {}}
+        />,
+      );
+    });
+  }
+
+  it('takes the badge slot from Full — a place in the queue is the better news', () => {
+    render({ waitlisted: true });
+    expect(container.querySelector('.tag--waitlisted')?.textContent).toBe('Waitlisted');
+    expect(container.querySelector('.tag--full')).toBeNull();
+    expect(container.querySelector('.tag--booked')).toBeNull();
+  });
+
+  it('does not grey the card out: the student has a place in this course', () => {
+    render({ waitlisted: true });
+    expect(container.querySelector('.course-card')!.classList.contains('course-card--full')).toBe(false);
+  });
+
+  it('never shows next to Booked — enrolled beats queued', () => {
+    // Both at once would be TSS contradicting itself; the enrolment is the one
+    // that decides what the student should do next.
+    render({ booked: true, waitlisted: true });
+    expect(container.querySelector('.tag--booked')?.textContent).toBe('Booked');
+    expect(container.querySelector('.tag--waitlisted')).toBeNull();
+  });
+
+  it('keeps the queue position out of the badge, where it would go stale loudest', () => {
+    render({ waitlisted: true, waitlistPosition: 3 });
+    expect(container.querySelector('.tag--waitlisted')?.textContent).toBe('Waitlisted');
+    expect(container.querySelector('.tag--waitlisted')?.getAttribute('aria-label')).toMatch(/3/);
+  });
+
+  it('hides the manual mark toggle — the queue is TSS\'s fact, not a preference', () => {
+    render({ waitlisted: true });
+    expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'mark booked')).toBe(false);
+  });
+});

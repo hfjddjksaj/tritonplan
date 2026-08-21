@@ -14,10 +14,12 @@ import { pickHue } from '../lib/colors';
 import { installBridgeListener, mergeCourses, postForgetCourses } from '../lib/bridge';
 import {
   applyAutoBooked,
+  applyAutoWaitlisted,
   bookedSet,
   forgetAutoBooked,
   isAutoBookedSynced,
   toggleBooked as toggleBookedIn,
+  waitlistedSet,
 } from '../lib/booked';
 import {
   loadPlan,
@@ -511,12 +513,16 @@ export function usePlan() {
         setTermsState((s) => {
           const nowIso = new Date().toISOString();
           const now = new Date();
-          // The payload is the FULL current booking list across terms.
+          // The payload is the FULL current standing across terms — enrolments and
+          // waitlist places kept apart, because a queue position is not an enrolment
+          // and must never light the green badge.
           const idsByKey = new Map<string, string[]>();
+          const waitByKey = new Map<string, string[]>();
           for (const r of rows) {
             const key = termKey(r.term);
             const id = `${r.courseCode}|${r.term.year}|${r.term.period}`;
-            idsByKey.set(key, [...(idsByKey.get(key) ?? []), id]);
+            const into = r.waitlisted ? waitByKey : idsByKey;
+            into.set(key, [...(into.get(key) ?? []), id]);
           }
           // Terms with bookings the student never browsed get a workspace
           // (background data — never auto-switch the active term).
@@ -530,7 +536,10 @@ export function usePlan() {
           const terms: typeof next.terms = {};
           for (const [key, ws] of Object.entries(next.terms)) {
             if (isArchived(ws.term, now)) { terms[key] = ws; continue; }
-            const applied = applyAutoBooked(ws, idsByKey.get(key) ?? []);
+            const applied = applyAutoWaitlisted(
+              applyAutoBooked(ws, idsByKey.get(key) ?? []),
+              waitByKey.get(key) ?? [],
+            );
             if (applied !== ws) changed = true;
             terms[key] = applied;
           }
@@ -566,6 +575,28 @@ export function usePlan() {
     const ws = termsState.terms[termKey(viewPlan.term)];
     return ws ? bookedSet(ws) : new Set<string>();
   }, [termsState, viewPlan.term]);
+
+  /** Courses of the viewed term the student is WAITLISTED for. Disjoint from
+   *  `bookedIds` by construction — the push sorts each row into one or the other. */
+  const waitlistedIds = useMemo<ReadonlySet<string>>(() => {
+    const ws = termsState.terms[termKey(viewPlan.term)];
+    return ws ? waitlistedSet(ws) : new Set<string>();
+  }, [termsState, viewPlan.term]);
+
+  /** Per course id, the place in that queue TSS last reported. Session state, from
+   *  the raw push: a position ages the moment it is read, so it is not persisted and
+   *  replayed as though it were still true. */
+  const waitlistPositions = useMemo<ReadonlyMap<string, number>>(() => {
+    const t = viewPlan.term;
+    const out = new Map<string, number>();
+    for (const r of bookedRows) {
+      if (r.term.year !== t.year || r.term.period !== t.period) continue;
+      if (r.waitlisted && r.waitlistPosition !== undefined) {
+        out.set(`${r.courseCode}|${r.term.year}|${r.term.period}`, r.waitlistPosition);
+      }
+    }
+    return out;
+  }, [bookedRows, viewPlan.term]);
 
   /**
    * What TSS ITSELF reported for the viewed term this session, before any of the
@@ -666,6 +697,8 @@ export function usePlan() {
     removeFromPool,
     clearBrowsed,
     bookedIds,
+    waitlistedIds,
+    waitlistPositions,
     tssBookedIds,
     enrolledEventIds,
     bookedOptionCodes,

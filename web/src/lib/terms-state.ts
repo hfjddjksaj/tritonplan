@@ -21,6 +21,10 @@ export interface TermWorkspace {
   bookedAuto?: string[];
   bookedOn?: string[];
   bookedOff?: string[];
+  /** Courses TSS says the student is WAITLISTED for — a separate list because a
+   *  place in a queue is not an enrolment. No manual counterpart: there is nothing
+   *  to override, the queue is entirely TSS's fact. */
+  waitlistedAuto?: string[];
 }
 
 export interface TermsState {

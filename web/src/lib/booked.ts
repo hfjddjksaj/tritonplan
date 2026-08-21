@@ -37,9 +37,28 @@ export function isAutoBookedSynced(ws: TermWorkspace): boolean {
  * extension with nothing to say used to say nothing.
  */
 export function forgetAutoBooked(ws: TermWorkspace): TermWorkspace {
-  if (ws.bookedAuto === undefined) return ws;
-  const { bookedAuto: _dropped, ...rest } = ws;
+  if (ws.bookedAuto === undefined && ws.waitlistedAuto === undefined) return ws;
+  const { bookedAuto: _dropped, waitlistedAuto: _alsoDropped, ...rest } = ws;
   return rest;
+}
+
+/** Courses TSS reports the student is WAITLISTED for. Purely the capture's — there
+ *  are no manual marks to fold in, because a place in a queue is not an opinion. */
+export function waitlistedSet(ws: TermWorkspace): ReadonlySet<string> {
+  return new Set(ws.waitlistedAuto ?? []);
+}
+
+/**
+ * Apply a fresh capture's waitlist half. Replaced wholesale, exactly like
+ * `applyAutoBooked`: the feed reports the student's whole current standing, so a
+ * course that stops appearing is a course they got into or dropped, and its badge
+ * clears itself.
+ */
+export function applyAutoWaitlisted(ws: TermWorkspace, ids: readonly string[]): TermWorkspace {
+  const next = [...new Set(ids)];
+  if (ws.waitlistedAuto !== undefined && sameList(ws.waitlistedAuto, next)) return ws;
+  if (ws.waitlistedAuto === undefined && next.length === 0) return ws;
+  return { ...ws, waitlistedAuto: next };
 }
 
 function sameList(a: readonly string[], b: readonly string[]): boolean {

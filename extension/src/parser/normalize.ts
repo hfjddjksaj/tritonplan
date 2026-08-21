@@ -251,22 +251,36 @@ const stripLeadingZeros = (s: string): string => s.replace(/^0+(?=.)/, '');
 /**
  * A "My Courses" row → the same BookedModule, plus the package it was booked on.
  *
- * This one feed says what the home page needs two feeds and a deduction to say. Only
- * `SmStatus === '01'` ("Booked") is read as a booking: it is the only value seen live,
- * and guessing at what a waitlist or a withdrawal looks like would put a green badge
- * on a course the student may not have.
+ * This one feed says what the home page needs two feeds and a deduction to say.
+ *
+ * Two kinds of row are read, and only two. An enrolment is `SmStatus === '01'`
+ * ("Booked"), still the only status code seen live. A waitlist booking is whatever
+ * row says so in a field whose meaning is not in doubt — `WaitlistBooking`, or the
+ * display text — because which CODE `SmStatus` uses for a waitlist has never been
+ * captured, and a guess there would either drop the row or paint a course the
+ * student has not got. Everything else (a withdrawal, say) is still refused.
  */
 export function myModuleRowToBooked(
   row: TssMyModuleRow,
 ): { module: BookedModule; optionCode: string } | null {
-  if (row.SmStatus !== undefined && row.SmStatus !== '01') return null;
+  const waitlisted = row.WaitlistBooking === true || /wait\s*list/i.test(row.SmStatusText ?? '');
+  if (!waitlisted && row.SmStatus !== undefined && row.SmStatus !== '01') return null;
   const courseCode = row.SmShort?.trim();
   const moduleId = stripLeadingZeros(row.SmObjid ?? '');
   const year = row.AcademicYear?.trim();
   const period = stripLeadingZeros(row.AcademicSession ?? '');
   if (!courseCode || !moduleId || !year || !period) return null;
+  // A position of 0 is TSS's empty value, not first in line.
+  const position = row.WaitlistPosition;
+  const hasPosition = waitlisted && typeof position === 'number' && position > 0;
   return {
-    module: { courseCode, moduleId, term: termFromRow(year, period) },
+    module: {
+      courseCode,
+      moduleId,
+      term: termFromRow(year, period),
+      ...(waitlisted ? { waitlisted: true } : {}),
+      ...(hasPosition ? { waitlistPosition: position } : {}),
+    },
     optionCode: row.EventPackageAbbr?.trim() ?? '',
   };
 }

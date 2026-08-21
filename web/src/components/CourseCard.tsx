@@ -24,6 +24,12 @@ interface Props {
   onBook?: () => void;
   /** User has confirmed enrollment — supersedes the "Full" seat-count treatment. */
   booked: boolean;
+  /** TSS has the student in this course's WAITLIST queue, not enrolled. Mutually
+   *  exclusive with `booked` in practice; if both arrive, enrolled wins. */
+  waitlisted?: boolean;
+  /** Place in that queue, when TSS stated one. Kept out of the badge — it moves as
+   *  others drop, and a stale number in the loudest spot on the card misleads. */
+  waitlistPosition?: number;
   /** TSS itself reported this course as booked, whatever the student marked here.
    *  Only used to surface the disagreement; `booked` alone decides how the card reads. */
   bookedByTss?: boolean;
@@ -33,13 +39,17 @@ interface Props {
   onToggleBooked?: () => void;
 }
 
-export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, bookedByTss = false, bookedOptionCode, onToggleBooked }: Props) {
+export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, waitlisted = false, waitlistPosition, bookedByTss = false, bookedOptionCode, onToggleBooked }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
+  // Enrolled beats queued: if TSS somehow reports both, the enrolment is the one
+  // that tells the student what to do next.
+  const queued = waitlisted && !booked;
   // Every section is taken. Says so next to the code, where the eye lands first —
-  // unless the user is booked, in which case a 0-seat count doesn't apply to them.
-  const full = !booked && courseFull(course);
+  // unless the user is booked or holding a place in the queue, in which case a
+  // 0-seat count is not news to them.
+  const full = !booked && !queued && courseFull(course);
   // Section list starts tucked away — long option lists otherwise dominate the rail.
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -91,6 +101,27 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             {booked ? (
               <span className="tag tag--booked" {...tip('You are enrolled in this course')}>
                 Booked
+              </span>
+            ) : queued ? (
+              /* Not enrolled, but holding a place — its own word and its own colour,
+                 because "Full" says the door is shut and "Booked" says you are through
+                 it, and this is neither. The position stays out of the badge: it moves
+                 as other students drop, and a stale number in the loudest spot on the
+                 card is worse than no number. */
+              <span
+                className="tag tag--waitlisted"
+                aria-label={
+                  waitlistPosition !== undefined
+                    ? `Waitlisted, position ${waitlistPosition}`
+                    : 'Waitlisted'
+                }
+                {...tip(
+                  waitlistPosition !== undefined
+                    ? `TSS has you on this course's waitlist at position ${waitlistPosition}, as last read. You are not enrolled.`
+                    : "TSS has you on this course's waitlist. You are not enrolled.",
+                )}
+              >
+                Waitlisted
               </span>
             ) : (
               full && (
@@ -191,7 +222,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               a preference — and the toggle only offered a way to contradict it that no
               enrolled student wants. One student unmarked all three of theirs and spent
               days wondering why the badges were dark (2026-08-19). */}
-          {onToggleBooked && !bookedByTss && (
+          {onToggleBooked && !bookedByTss && !queued && (
             <button
               type="button"
               className="course-card__tss"

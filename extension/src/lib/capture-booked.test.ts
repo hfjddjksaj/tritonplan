@@ -185,10 +185,54 @@ describe('CaptureStore: the My Courses feed', () => {
     expect(store.getBooked()?.[0]?.optionCode).toBe('P-002-004');
   });
 
-  it('reads only the status verified live — a booking, not a guess at the others', () => {
+  it('a waitlist booking comes through as one, never as an enrolment', () => {
     const store = new CaptureStore();
-    expect(store.ingestBody(batched([myRow({ SmStatus: '02', SmStatusText: 'Waitlisted' })]), MY_URL)).toBe(false);
+    const row = myRow({
+      SmStatus: '02', SmStatusText: 'Waitlisted', WaitlistBooking: true, WaitlistPosition: 3,
+    });
+    expect(store.ingestBody(batched([row]), MY_URL)).toBe(true);
+    expect(store.getBooked()).toEqual([
+      {
+        courseCode: 'CHEM-114A', moduleId: '2077',
+        term: { year: '2026', period: '2', label: 'Fall 2026' },
+        optionCode: 'P-002-004', waitlisted: true, waitlistPosition: 3,
+      },
+    ]);
+  });
+
+  it('believes the waitlist flag over any code SmStatus happens to carry', () => {
+    // Which code SmStatus uses for a waitlist has never been seen live, so it is
+    // not guessed at. `WaitlistBooking` states the same thing in a field whose
+    // meaning is not in doubt, and that is what decides.
+    const store = new CaptureStore();
+    store.ingestBody(batched([myRow({ SmStatus: '07', SmStatusText: '', WaitlistBooking: true })]), MY_URL);
+    expect(store.getBooked()?.[0]?.waitlisted).toBe(true);
+  });
+
+  it('reads the words too, for a feed that fills in only the text', () => {
+    const store = new CaptureStore();
+    store.ingestBody(batched([myRow({ SmStatus: '02', SmStatusText: 'Wait Listed' })]), MY_URL);
+    expect(store.getBooked()?.[0]?.waitlisted).toBe(true);
+  });
+
+  it('a plain booking says nothing about waitlists', () => {
+    const store = new CaptureStore();
+    store.ingestBody(batched([myRow()]), MY_URL);
+    expect(store.getBooked()?.[0]?.waitlisted).toBeUndefined();
+  });
+
+  it('still refuses a status it cannot read at all', () => {
+    // A withdrawal is neither an enrolment nor a waitlist, and a green badge on a
+    // course the student dropped is worse than no badge.
+    const store = new CaptureStore();
+    expect(store.ingestBody(batched([myRow({ SmStatus: '03', SmStatusText: 'Withdrawn' })]), MY_URL)).toBe(false);
     expect(store.getBooked()).toBeNull();
+  });
+
+  it('no position is better than a made-up one', () => {
+    const store = new CaptureStore();
+    store.ingestBody(batched([myRow({ WaitlistBooking: true, WaitlistPosition: 0 })]), MY_URL);
+    expect(store.getBooked()?.[0]).not.toHaveProperty('waitlistPosition');
   });
 
   it('survives serialize/deserialize', () => {

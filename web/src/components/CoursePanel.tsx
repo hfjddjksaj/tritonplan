@@ -109,6 +109,10 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                   bookable ? () => ctl.openBookingInTss(entry.course, option) : undefined
                 }
                 booked={ctl.bookedIds.has(entry.course.id)}
+                waitlisted={ctl.waitlistedIds.has(entry.course.id)}
+                {...(ctl.waitlistPositions.has(entry.course.id)
+                  ? { waitlistPosition: ctl.waitlistPositions.get(entry.course.id) }
+                  : {})}
                 bookedByTss={ctl.tssBookedIds.has(entry.course.id)}
                 {...(elsewhere ? { bookedOptionCode: elsewhere.code } : {})}
                 onToggleBooked={readOnly ? undefined : () => ctl.toggleBooked(entry.course)}
@@ -291,12 +295,24 @@ export function bookedTitle(
   const read = `, read ${relativeTime(at)}`;
   const isHere = (r: BookedModule): boolean =>
     r.term.year === viewedTerm.year && r.term.period === viewedTerm.period;
-  if (count > 0) return `${count} booked in ${viewedTerm.label}${read}. ${how}`;
+  // A queue place is not a booking, and must not be counted as one — nor denied.
+  // "TSS reports no bookings at all" printed beside two Waitlisted badges is the
+  // same class of lie that took three rounds to find in 2026-08.
+  const enrolled = rows.filter((r) => !r.waitlisted);
+  const queuedHere = rows.filter((r) => r.waitlisted && isHere(r)).length;
+  const alsoQueued = queuedHere > 0 ? `, plus ${queuedHere} waitlisted` : '';
+  if (count > 0) return `${count} booked in ${viewedTerm.label}${alsoQueued}${read}. ${how}`;
+  if (queuedHere > 0) {
+    return (
+      `No bookings in ${viewedTerm.label} — ${queuedHere} waitlisted${read}. ` +
+      `A place in a queue is not an enrolment. ${how}`
+    );
+  }
 
-  const elsewhere = [...new Set(rows.filter((r) => !isHere(r)).map((r) => r.term.label))];
+  const elsewhere = [...new Set(enrolled.filter((r) => !isHere(r)).map((r) => r.term.label))];
   if (elsewhere.length > 0) {
     return (
-      `TSS reports ${rows.length} booked, but in ${elsewhere.join(' and ')} — none in ` +
+      `TSS reports ${enrolled.length} booked, but in ${elsewhere.join(' and ')} — none in ` +
       `${viewedTerm.label}, the term on screen${read}. ${how}`
     );
   }

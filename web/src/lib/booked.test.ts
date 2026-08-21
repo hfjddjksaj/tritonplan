@@ -6,6 +6,8 @@ import {
   forgetAutoBooked,
   isAutoBookedSynced,
   toggleBooked,
+  applyAutoWaitlisted,
+  waitlistedSet,
 } from './booked';
 
 const TERM = { year: '2026', period: '2', label: 'Fall 2026' };
@@ -97,5 +99,38 @@ describe('forgetAutoBooked', () => {
   it('is a no-op when nothing was ever captured', () => {
     const before = ws({ bookedOn: [A] });
     expect(forgetAutoBooked(before)).toBe(before);
+  });
+});
+
+describe('waitlisted courses', () => {
+  it('are their own list, and never leak into the booked one', () => {
+    // A place in the queue is not an enrolment. Painting it green would tell a
+    // student to stop worrying about a course they have not got.
+    const w = applyAutoWaitlisted(ws({ bookedAuto: [A] }), [B]);
+    expect([...bookedSet(w)]).toEqual([A]);
+    expect([...waitlistedSet(w)]).toEqual([B]);
+  });
+
+  it('are empty when TSS has said nothing about them', () => {
+    expect([...waitlistedSet(ws())]).toEqual([]);
+  });
+
+  it('are replaced wholesale, like the booked list — a drop clears itself', () => {
+    const w = applyAutoWaitlisted(ws({ waitlistedAuto: [A, B] }), [B]);
+    expect([...waitlistedSet(w)]).toEqual([B]);
+  });
+
+  it('leave the workspace object alone when nothing changed', () => {
+    const before = ws({ waitlistedAuto: [A] });
+    expect(applyAutoWaitlisted(before, [A])).toBe(before);
+  });
+
+  it('are forgotten with the rest of the capture', () => {
+    // Same push wrote both; an extension that no longer holds a capture cannot
+    // stand behind either half.
+    const w = forgetAutoBooked(ws({ bookedAuto: [A], waitlistedAuto: [B], bookedOn: [A] }));
+    expect(w.bookedAuto).toBeUndefined();
+    expect(w.waitlistedAuto).toBeUndefined();
+    expect(w.bookedOn).toEqual([A]); // the student's own marks are not the capture
   });
 });

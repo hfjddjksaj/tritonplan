@@ -185,4 +185,14 @@ export interface BookedModule {
    * which case `eventIds` is the way to work it out.
    */
   optionCode?: string;
+  /**
+   * The student is on this course's WAITLIST, not enrolled in it. Absent means
+   * enrolled — or that the feed we read could not tell: the home page's booked
+   * feed carries no status field at all, so only a "My Courses" capture can ever
+   * set this. Absent is therefore "no reason to think otherwise", never a denial.
+   */
+  waitlisted?: boolean;
+  /** Place in that queue, when TSS states one (`WaitlistPosition`). A snapshot of
+   *  the moment it was read — it moves as other students drop. */
+  waitlistPosition?: number;
 }
