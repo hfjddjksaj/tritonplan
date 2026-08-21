@@ -104,10 +104,10 @@ describe('CourseCard booked state', () => {
       });
     }
 
-    it('puts a square alert beside Booked, naming the package TSS actually has', () => {
+    it('puts an alert chip beside Booked, naming the package TSS actually has', () => {
       render('P-002-004');
       const warn = container.querySelector('.tag--alert');
-      expect(warn?.querySelector('svg')).not.toBeNull(); // drawn, not typed — see Bang
+      expect(warn?.querySelector('svg')).not.toBeNull(); // drawn, not typed — see WarnCircle
       expect(warn?.tagName).toBe('BUTTON'); // opens the explanation, not hover-only
       // The hover wording lives in the tooltip layer now, not a `title`; the
       // package still has to be named to a screen reader either way.

@@ -6,7 +6,7 @@ import { courseFull } from '../lib/seats';
 import { OptionPicker } from './OptionPicker';
 import { PrereqPopover } from './PrereqPopover';
 import { BookedSectionPopover } from './BookedSectionPopover';
-import { Trash, External, Bang } from './icons';
+import { Trash, External, WarnCircle } from './icons';
 import { tip } from './Tooltip';
 
 interface Props {
@@ -144,9 +144,9 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                 aria-label={`Booked section differs: TSS has ${bookedOptionCode}`}
                 {...tip(`TSS has you in ${bookedOptionCode}, not the section on this plan. Click for details.`)}
               >
-                {/* 14, not 11: an even size in the badge's even content box is what
-                    puts whole pixels on both sides of it — see the note on Bang. */}
-                <Bang size={14} />
+                {/* 14, not 13: an even size in the badge's even content box is what
+                    puts whole pixels on both sides of it — see the note on WarnCircle. */}
+                <WarnCircle size={14} />
               </button>
             )}
           </div>

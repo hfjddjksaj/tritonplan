@@ -206,30 +206,47 @@ export function WarnTriangle({ size = 13, ...props }: P) {
 }
 
 /**
- * The alert bang, in the shape a warning bang has had since long before any of
- * us: a broad flat top, sides that draw in with a slight hollow, a squared-off
- * base, and a square dot under it. Drawn here rather than borrowed — the game
- * mark people know this silhouette from is the whole composition (hex ground,
- * heavy outline, its own palette), and none of that is here.
+ * A bang inside a circle — the mark beside Booked when TSS has you in a
+ * different package than the plan shows.
  *
- * The geometry is not free-hand. The artwork is symmetric about x = 12 of a
- * 24×24 box, and the badge renders it at an EVEN pixel size inside an even
- * content box, so both side margins are whole pixels. The bang this replaced
- * was `size * 4 / 14` wide — 3.14px at its call size — which lands on no pixel
- * boundary at all: at 1× its left edge covered 23% of a pixel and its right
- * 91%, and it read as shifted right no matter how it was centred. Zooming in
- * re-rasterises and hides exactly that, which is why it looked fine magnified.
+ * Two shapes were rejected before this one, both for belonging to no family.
+ * A solid free-drawn bang was the only filled bespoke glyph in the app, where
+ * every other warning is a 2px stroke (`Warning` on conflicts, blocks, finals);
+ * and a triangle — the obvious alternative — is already taken by `WarnTriangle`
+ * for waitlist-only sections, which would have put one silhouette on two
+ * unrelated meanings. A circle is the shape left that says "read this" without
+ * claiming either. `r=9` is `Clock`'s circle, deliberately.
  *
- * If this ever reads as too aggressive, the runner-up from the same round was
- * the straight taper with a softened dot — same silhouette, less bite:
- *   <path d="M8.8 1.6H15.2L13.8 16.2H10.2Z" />
- *   <rect x="9.4" y="18.6" width="5.2" height="5.2" rx="1.1" />
+ * Two numbers here are measured, not chosen. The ink runs from y=6.45 (the
+ * bar's round cap above 7.6) to y=17.55 (the dot's cap below 16.4), centring
+ * on exactly 12.00 — a "!" typed as a character cannot do that, because it
+ * aligns to a line box whose descent below the baseline is empty, so it rides
+ * high by a fraction that moves with the font. And the badge renders this at
+ * an EVEN size inside an even content box, so both side margins are whole
+ * pixels: the glyph this replaced was 3.14px wide, landing on no pixel
+ * boundary at all, and read as shifted right however it was centred.
+ *
+ * `strokeWidth` 2.3 rather than the shared 2: at 14px that is a 1.34px stroke,
+ * which is what `base()`'s 2 gives at its own 16px call size. Same ink, one
+ * size down.
  */
-export function Bang({ size = 14, ...props }: P) {
+export function WarnCircle({ size = 14, ...props }: P) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
-      <path d="M8.2 1H15.8C15 6 14.1 11.5 13.65 16.6H10.35C9.9 11.5 9 6 8.2 1Z" />
-      <path d="M9.6 19.2H14.4V24H9.6Z" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...props}
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.6v5" />
+      <path d="M12 16.4h.01" />
     </svg>
   );
 }

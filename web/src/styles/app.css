@@ -584,7 +584,7 @@ p {
    Full 2.55px aligns the WORDS but drops the pill, and the eye reads the pill;
    1.5px is where both look settled. Chosen at 1×, deliberately: a 4–6× blow-up
    rasterises differently and argued for 0, and 1× is the size that ships.
-   Layout-neutral, so nothing reflows, and the icon-only alert square rides along
+   Layout-neutral, so nothing reflows, and the icon-only alert plate rides along
    with Booked — which is what keeps the two badges locked to each other. Scoped
    to this line: the units/conflict chips below have no big type to align to. */
 .course-card__codeline .tag {
@@ -673,18 +673,22 @@ p {
    smudge at this size. Same box metrics as its neighbours (18px tall) so the row of
    badges keeps one baseline; the glyph is centred by flex, not by line-height,
    which is what had it sitting off-centre. */
+/* The one badge on this line that is a glyph instead of a word. It is drawn as
+   a chip and nothing else: tinted fill, transparent border, the family's 4px
+   corner — exactly how Booked / Full / Waitlisted are built. The 1.5px solid
+   --conflict-ink outline it used to carry made it the only hard-edged object on
+   the card, and it read as a sticker from someone else's icon set.
+   Still --conflict, not the waitlist amber: the plan and TSS disagreeing about
+   which section you are in is the loudest thing this card can say.
+   The 18px width holds through the border-box: 1px of transparent border plus
+   1px of slack around a 14px glyph puts a whole 2px on all four sides. */
 .tag--alert {
   width: 18px;
   padding: 0;
   justify-content: center;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
   color: var(--conflict-ink);
   background: var(--conflict-soft);
-  border: 1.5px solid var(--conflict-ink);
-  border-radius: 3px;
+  border-color: transparent;
   cursor: pointer;
 }
 .tag--alert:hover {
