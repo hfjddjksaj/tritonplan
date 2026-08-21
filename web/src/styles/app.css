@@ -3395,9 +3395,11 @@ button.termsw__cell:hover {
 }
 /* Measured: gold, because a gold line is now drawn on the map and the bar is
    the only thing tying the two together while the panel is shut. */
+/* #f0d99f is --gold-soft one step darker: the gold family has an ink, a fill
+   and an accent but no line, and --wl-line is the waitlist rows' own. */
 .campusmap__dist--has .campusmap__dist-bar {
   background: var(--gold-soft);
-  border-color: var(--wl-line);
+  border-color: #f0d99f;
 }
 /* A degraded answer is deliberately NOT gold: nothing is drawn on the map, so
    the bar must not promise a line the reader will go looking for (spec §6). */
@@ -3454,7 +3456,7 @@ button.termsw__cell:hover {
 .campusmap__dist-clear {
   flex: none;
   width: 26px;
-  border: 1px solid var(--wl-line);
+  border: 1px solid #f0d99f;
   border-radius: 8px;
   background: var(--surface);
   color: var(--gold-ink);
@@ -3474,7 +3476,7 @@ button.termsw__cell:hover {
   flex-direction: column;
   gap: 8px;
   padding: 9px;
-  border: 1px solid var(--wl-line);
+  border: 1px solid #f0d99f;
   border-top: none;
   border-radius: 0 0 8px 8px;
   background: var(--gold-soft);
