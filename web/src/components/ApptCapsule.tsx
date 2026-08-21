@@ -10,6 +10,7 @@ import {
 import { useIsMobile } from '../hooks/useIsMobile';
 import { ApptPopover } from './ApptPopover';
 import { Clock } from './icons';
+import { tip } from './Tooltip';
 
 interface Props {
   appt: ApptTimes[];
@@ -59,7 +60,7 @@ export function ApptCapsule({ appt }: Props) {
           (term && status === 'open' ? ' appt-capsule--open' : '') +
           (term && !next ? ' appt-capsule--ended' : '')
         }
-        title="Your enrollment appointment times"
+        {...tip('Your enrollment appointment times')}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}

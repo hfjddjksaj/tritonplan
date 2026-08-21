@@ -1,4 +1,5 @@
 import { Calendar, Cap, PenLine } from './icons';
+import { tip } from './Tooltip';
 
 /** The three ways of looking at a plan — the calendar's tabs and, later, the map's. */
 export type PlannerView = 'calendar' | 'midterms' | 'finals';
@@ -36,7 +37,7 @@ export function ViewTabs({
         aria-selected={value === id}
         className={`tab${value === id ? ' tab--active' : ''}`}
         disabled={off}
-        title={off ? 'Coming soon' : undefined}
+        {...tip(off && 'Coming soon')}
         onClick={() => {
           if (!off) onChange(id);
         }}

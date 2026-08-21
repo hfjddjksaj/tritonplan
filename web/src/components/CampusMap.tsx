@@ -47,6 +47,7 @@ import { MarkerCard } from './MarkerCard';
 import { BuildingPopover } from './BuildingPopover';
 import { ViewTabs, type PlannerView } from './ViewTabs';
 import { Check, ChevronDown, Compass, MapPinIcon, Minus, Plus, X } from './icons';
+import { tip } from './Tooltip';
 
 interface Props {
   /** The plan on screen — yours, or a received one. */
@@ -545,7 +546,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
           type="button"
           className={`btn btn--sm campusmap__bookedtoggle${bookedOnly ? ' is-on' : ''}`}
           aria-pressed={bookedOnly}
-          title="Show only the classes you are booked into"
+          {...tip('Show only the classes you are booked into')}
           onClick={() => {
             const next = !bookedOnly;
             setBookedOnly(next);
@@ -571,7 +572,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
         className="btn btn--sm campusmap__mode3d"
         aria-pressed={mode === '3d'}
         aria-label="3D view"
-        title="3D view"
+        {...tip('3D view')}
         onClick={() => {
           const next: MapMode = mode === '3d' ? '2d' : '3d';
           setMode(next);
@@ -594,7 +595,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
         type="button"
         className="btn btn--sm btn--icon campusmap__compass"
         aria-label={compassLabel}
-        title={compassLabel}
+        {...tip(compassLabel)}
         onClick={() => gl.easeCamera(mode === '3d' ? { bearing: 0 } : { bearing: 0, pitch: 0 })}
       >
         <Compass size={18} style={{ transform: `rotate(${-bearing}deg)` }} />
@@ -761,7 +762,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
                 }}
                 disabled={gl.atHome}
                 aria-label="Reset view"
-                title="Reset view"
+                {...tip('Reset view')}
               >
                 ⟲
               </button>

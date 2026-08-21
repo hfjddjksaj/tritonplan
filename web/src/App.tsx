@@ -20,6 +20,7 @@ import { BlockSheet } from './components/BlockSheet';
 import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
 import { Check } from './components/icons';
 import { ViewTabs, type PlannerView } from './components/ViewTabs';
+import { TooltipLayer } from './components/Tooltip';
 import { countConflictPairs } from './lib/plan';
 import { displayTermLabel } from './lib/terms';
 import { pluralize } from './lib/format';
@@ -319,6 +320,10 @@ export default function App() {
           />
         </Suspense>
       )}
+
+      {/* One bubble for the whole app — every `tip(...)` in the tree renders here.
+          Last, so it portals out from above everything else that mounted. */}
+      <TooltipLayer />
     </div>
   );
 }

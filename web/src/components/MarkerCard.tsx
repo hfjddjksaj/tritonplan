@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { colorsForHue } from '../lib/colors';
 import { cardDate, cardPlaceName, cardPlacement, cardSections, estimateCardSize, rowText, type Point, type Size } from '../lib/map-card';
 import type { PinGroup } from '../lib/map-labels';
+import { tip } from './Tooltip';
 
 interface Props {
   group: PinGroup;
@@ -62,7 +63,7 @@ export function MarkerCard({ group, anchor, chip, canvas, insetTop, onDirections
       aria-label={`${where}: classes here`}
     >
       <div className="campusmap__card-head">
-        <span className="eyebrow campusmap__card-place" title={where}>
+        <span className="eyebrow campusmap__card-place" {...tip(where)}>
           {shownWhere}
         </span>
         {onDirections && (

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { CourseOffering, SectionOption } from '@triton/shared';
-import { OptionPicker } from './OptionPicker';
+import { OptionPicker, waitlistOnlyTitle } from './OptionPicker';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -82,12 +82,14 @@ describe('OptionPicker · waitlist-only sections', () => {
     expect(row('P-002-004').querySelector('.opt__wl')).toBeNull();
   });
 
-  it('the mark names the seats that are out of reach, since the count contradicts it', () => {
-    render('SE-P-001-001');
-    expect(row('P-002-002').querySelector('.opt__wl')?.getAttribute('title')).toBe(
+  it('the hover wording names the seats that are out of reach', () => {
+    // Only worth explaining when the number beside it says the opposite: five
+    // open seats read as "go enroll", zero seats explain themselves.
+    expect(waitlistOnlyTitle(5)).toBe(
       "5 seats are open, but TSS will only let you join this section's waitlist.",
     );
-    expect(row('P-003-001')?.querySelector('.opt__wl')?.getAttribute('title')).toBe(
+    expect(waitlistOnlyTitle(0)).toBe("TSS will only let you join this section's waitlist.");
+    expect(waitlistOnlyTitle(undefined)).toBe(
       "TSS will only let you join this section's waitlist.",
     );
   });

@@ -3304,3 +3304,38 @@ button.termsw__cell:hover {
     padding-right: 3px;
   }
 }
+
+/* ============================================================ hover bubbles */
+/* The planner's own `title`. Native ones render in OS chrome — the one thing on
+   the page not set in Inter — wait a fixed ~1s, and never appear on touch. This
+   is a portal onto <body> in viewport coordinates, because the cards these live
+   in are `overflow: hidden` and would clip a bubble drawn inside them.
+   z-index above the modal shell (95): a tooltip on a control inside a popover
+   still has to clear the popover. */
+.tip {
+  position: fixed;
+  z-index: 200;
+  max-width: 260px;
+  padding: 6px 9px;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.005em;
+  box-shadow: var(--shadow-md);
+  pointer-events: none; /* never stand between the cursor and what it describes */
+  animation: tip-in 0.11s ease both;
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tip {
+    animation: none;
+  }
+}

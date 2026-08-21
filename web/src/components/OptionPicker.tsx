@@ -4,10 +4,11 @@ import { findOption, optionSummaryParts } from '../lib/plan';
 import { pluralize } from '../lib/format';
 import { optionFull, optionWaitlistOnly } from '../lib/seats';
 import { ChevronDown, WarnTriangle } from './icons';
+import { tip } from './Tooltip';
 
 /** Said the same way in both places the mark appears — open seats are the part
  *  that needs explaining, since the number beside it reads as "go enroll". */
-function waitlistOnlyTitle(seatsAvailable?: number): string {
+export function waitlistOnlyTitle(seatsAvailable?: number): string {
   return seatsAvailable !== undefined && seatsAvailable > 0
     ? `${seatsAvailable} seats are open, but TSS will only let you join this section's waitlist.`
     : "TSS will only let you join this section's waitlist.";
@@ -17,7 +18,7 @@ function waitlistOnlyTitle(seatsAvailable?: number): string {
  *  for both halves — the road sign carries at a glance, the words say which sign. */
 function WaitlistOnlyChip({ seatsAvailable }: { seatsAvailable?: number }) {
   return (
-    <span className="opt__wl" title={waitlistOnlyTitle(seatsAvailable)}>
+    <span className="opt__wl" {...tip(waitlistOnlyTitle(seatsAvailable))}>
       <WarnTriangle size={10} className="opt__wl-icon" />
       Waitlist only
     </span>
@@ -32,7 +33,7 @@ function WaitlistOnlyMark({ seatsAvailable }: { seatsAvailable?: number }) {
       className="picker__wl"
       role="img"
       aria-label="Waitlist only"
-      title={waitlistOnlyTitle(seatsAvailable)}
+      {...tip(waitlistOnlyTitle(seatsAvailable))}
     >
       <WarnTriangle size={13} />
     </span>
@@ -72,7 +73,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
         className="picker__toggle"
         onClick={onToggle}
         aria-expanded={!collapsed}
-        title={collapsed ? 'Show all sections' : 'Hide sections'}
+        {...tip(collapsed ? 'Show all sections' : 'Hide sections')}
       >
         <span className="eyebrow picker__label">Section</span>
         <ChevronDown
@@ -109,7 +110,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
               aria-disabled={readOnly}
               className={`opt${active ? ' opt--active' : ''}${seatsFull ? ' opt--full' : ''}${readOnly ? ' opt--readonly' : ''}`}
               onClick={readOnly ? undefined : () => onSelect(opt.id)}
-              title={readOnly ? 'Read-only plan — sections can’t be changed' : undefined}
+              {...tip(readOnly && 'Read-only plan — sections can’t be changed')}
             >
               <span className="opt__radio" aria-hidden />
               <span className="opt__main">

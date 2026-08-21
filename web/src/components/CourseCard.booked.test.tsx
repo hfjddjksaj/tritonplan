@@ -109,7 +109,10 @@ describe('CourseCard booked state', () => {
       const warn = container.querySelector('.tag--alert');
       expect(warn?.querySelector('svg')).not.toBeNull(); // drawn, not typed — see Bang
       expect(warn?.tagName).toBe('BUTTON'); // opens the explanation, not hover-only
-      expect(warn?.getAttribute('title')).toMatch(/TSS has you in P-002-004/);
+      // The hover wording lives in the tooltip layer now, not a `title`; the
+      // package still has to be named to a screen reader either way.
+      expect(warn?.getAttribute('title')).toBeNull();
+      expect(warn?.getAttribute('aria-label')).toMatch(/TSS has P-002-004/);
     });
 
     it('opens a popover naming both packages, and offers only to show the list', () => {

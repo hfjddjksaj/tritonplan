@@ -5,6 +5,7 @@ import type { FinalItem } from '../lib/plan';
 import { FinalsCalendar } from './FinalsCalendar';
 import { Warning, Calendar } from './icons';
 import type { PositionedBlock } from '../lib/layout';
+import { tip } from './Tooltip';
 
 interface Props {
   finals: FinalItem[];
@@ -88,7 +89,7 @@ export function FinalsView({
                       type="button"
                       className="final-row__loc"
                       onClick={() => onOpenLocation({ building: loc.building!, room: loc.room })}
-                      title={`Where is ${loc.building}?`}
+                      {...tip(`Where is ${loc.building}?`)}
                     >
                       {loc.location}
                     </button>

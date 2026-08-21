@@ -7,6 +7,7 @@ import { OptionPicker } from './OptionPicker';
 import { PrereqPopover } from './PrereqPopover';
 import { BookedSectionPopover } from './BookedSectionPopover';
 import { Trash, External, Bang } from './icons';
+import { tip } from './Tooltip';
 
 interface Props {
   entry: PlanEntry;
@@ -88,12 +89,12 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
           <div className="course-card__codeline">
             <span className="course-card__code">{course.courseCode}</span>
             {booked ? (
-              <span className="tag tag--booked" title="You are enrolled in this course">
+              <span className="tag tag--booked" {...tip('You are enrolled in this course')}>
                 Booked
               </span>
             ) : (
               full && (
-                <span className="tag tag--full" title="Every section of this course is full">
+                <span className="tag tag--full" {...tip('Every section of this course is full')}>
                   Full
                 </span>
               )
@@ -110,7 +111,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                 className="tag tag--alert"
                 onClick={() => setAlertOpen(true)}
                 aria-label={`Booked section differs: TSS has ${bookedOptionCode}`}
-                title={`TSS has you in ${bookedOptionCode}, not the section on this plan. Click for details.`}
+                {...tip(`TSS has you in ${bookedOptionCode}, not the section on this plan. Click for details.`)}
               >
                 <Bang size={11} />
               </button>
@@ -136,7 +137,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               className="course-card__remove"
               onClick={onRemove}
               aria-label={`Remove ${course.courseCode}`}
-              title={`Remove ${course.courseCode}`}
+              {...tip(`Remove ${course.courseCode}`)}
             >
               <Trash size={15} />
             </button>
@@ -144,7 +145,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
           {freshness && (
             <span
               className="course-card__fresh"
-              title={`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`}
+              {...tip(`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`)}
             >
               seats {freshness}
             </span>
@@ -161,7 +162,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             type="button"
             className="course-card__tss"
             onClick={onOpenTss}
-            title={`Open ${course.courseCode} in TSS`}
+            {...tip(`Open ${course.courseCode} in TSS`)}
           >
             open in TSS <External size={11} strokeWidth={2.2} />
           </button>
@@ -170,7 +171,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               type="button"
               className="course-card__tss"
               onClick={onBook}
-              title={`Go to booking for the selected ${course.courseCode} section`}
+              {...tip(`Go to booking for the selected ${course.courseCode} section`)}
             >
               book section <External size={11} strokeWidth={2.2} />
             </button>
@@ -181,7 +182,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             type="button"
             className="course-card__tss"
             onClick={() => setPrereqsOpen(true)}
-            title={`Enrollment requirements for ${course.courseCode}`}
+            {...tip(`Enrollment requirements for ${course.courseCode}`)}
           >
             prerequisites
           </button>
@@ -195,11 +196,11 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               type="button"
               className="course-card__tss"
               onClick={onToggleBooked}
-              title={
+              {...tip(
                 booked
                   ? `Unmark ${course.courseCode} as booked`
-                  : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`
-              }
+                  : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`,
+              )}
             >
               {booked ? 'unmark' : 'mark booked'}
             </button>

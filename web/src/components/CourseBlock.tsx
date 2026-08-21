@@ -2,6 +2,7 @@ import { formatDisplay } from '@triton/shared';
 import { colorsForHue } from '../lib/colors';
 import type { PositionedBlock } from '../lib/layout';
 import { Warning } from './icons';
+import { tip } from './Tooltip';
 
 const GAP = 3; // px between side-by-side lanes
 
@@ -45,7 +46,7 @@ export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse, onDe
         ['--b-border' as string]: c.border,
         ['--b-text' as string]: c.text,
       }}
-      title={`${block.courseCode} · ${block.typeText}\n${formatDisplay(block.start)} – ${formatDisplay(block.end)}${block.location ? `\n${block.location}` : ''}${block.instructor ? `\n${block.instructor}` : ''}${block.conflict ? '\n⚠ Time conflict' : ''}${block.full ? '\nNo seats left in this section' : ''}`}
+      {...tip(`${block.courseCode} · ${block.typeText}\n${formatDisplay(block.start)} – ${formatDisplay(block.end)}${block.location ? `\n${block.location}` : ''}${block.instructor ? `\n${block.instructor}` : ''}${block.conflict ? '\n⚠ Time conflict' : ''}${block.full ? '\nNo seats left in this section' : ''}`)}
     >
       {block.conflict && (
         <span className="block__warn" aria-hidden>
@@ -67,7 +68,7 @@ export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse, onDe
               e.stopPropagation();
               onOpen(block.courseId);
             }}
-            title={`Open ${block.courseCode} in TSS`}
+            {...tip(`Open ${block.courseCode} in TSS`)}
           >
             {block.courseCode}
           </button>
@@ -89,7 +90,7 @@ export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse, onDe
               e.stopPropagation();
               onOpenLocation(block);
             }}
-            title={`Where is ${block.building}?`}
+            {...tip(`Where is ${block.building}?`)}
           >
             {block.location}
           </button>

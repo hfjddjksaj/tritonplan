@@ -3,6 +3,7 @@ import type { PlanState } from '@triton/shared';
 import { PRODUCT_NAME } from '../lib/brand';
 import { ShareMenu } from './ShareMenu';
 import { Trident, Trash, MapPinIcon } from './icons';
+import { tip } from './Tooltip';
 
 interface Props {
   /** The term chip / switcher, rendered after the plan switcher. */
@@ -48,7 +49,7 @@ export function Topbar({
 
       {apptSlot}
 
-      <div className="unit-pill" title="Total units of added courses">
+      <div className="unit-pill" {...tip('Total units of added courses')}>
         <span className="unit-pill__n mono">{units}</span>
         <span className="unit-pill__label">units</span>
       </div>
@@ -59,7 +60,7 @@ export function Topbar({
             type="button"
             className="btn btn--sm"
             onClick={onReset}
-            title="Remove every course from the plan"
+            {...tip('Remove every course from the plan')}
           >
             <Trash size={15} /> Clear
           </button>
@@ -69,7 +70,7 @@ export function Topbar({
           type="button"
           className="btn btn--sm"
           onClick={onOpenMap}
-          title="See where this term's classes meet on a campus map"
+          {...tip("See where this term's classes meet on a campus map")}
         >
           <MapPinIcon size={15} /> Map
         </button>

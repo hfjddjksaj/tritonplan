@@ -1,5 +1,6 @@
 import type { ReceivedPlan } from '../lib/storage';
 import { Eye, X, Check } from './icons';
+import { tip } from './Tooltip';
 
 interface Props {
   received: ReceivedPlan;
@@ -55,7 +56,7 @@ export function ReceivedBanner({
           className="received__discard"
           onClick={onDiscard}
           aria-label={`Discard this ${noun}`}
-          title={`Discard this ${noun}`}
+          {...tip(`Discard this ${noun}`)}
         >
           <X size={14} />
         </button>
@@ -77,7 +78,7 @@ export function ReceivedBanner({
         className="received__discard"
         onClick={onDiscard}
         aria-label={`Discard the ${noun}`}
-        title={`Discard the ${noun}`}
+        {...tip(`Discard the ${noun}`)}
       >
         <X size={14} />
       </button>

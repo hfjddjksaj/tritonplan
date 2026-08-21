@@ -9,6 +9,7 @@ import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { CourseCard } from './CourseCard';
 import { Search, Plus, Cap, X, External } from './icons';
+import { tip } from './Tooltip';
 
 interface Props {
   ctl: PlanController;
@@ -53,12 +54,14 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
               type="button"
               className="btn btn--sm rail__check"
               onClick={ctl.checkBookings}
-              title={bookedTitle(
-                ctl.bookedSynced,
-                ctl.bookedIds,
-                ctl.bookedAt,
-                ctl.bookedRows,
-                ctl.viewPlan.term,
+              {...tip(
+                bookedTitle(
+                  ctl.bookedSynced,
+                  ctl.bookedIds,
+                  ctl.bookedAt,
+                  ctl.bookedRows,
+                  ctl.viewPlan.term,
+                ),
               )}
             >
               <External size={13} /> Check bookings
@@ -136,7 +139,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                   ctl.clearBrowsed();
                 }
               }}
-              title="Remove all browsed courses that aren’t in your plan"
+              {...tip('Remove all browsed courses that aren’t in your plan')}
             >
               Clear all
             </button>
@@ -197,7 +200,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                       type="button"
                       className="browse-row"
                       onClick={() => ctl.addCourse(c)}
-                      title={`Bring ${c.courseCode} into your plan`}
+                      {...tip(`Bring ${c.courseCode} into your plan`)}
                     >
                       <span className="browse-row__main">
                         <span className="browse-row__code mono">{c.courseCode}</span>
@@ -212,7 +215,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                       className="browse-item__remove"
                       onClick={() => ctl.removeFromPool(c.id)}
                       aria-label={`Remove ${c.courseCode} from browsed courses`}
-                      title={`Remove ${c.courseCode} from browsed courses`}
+                      {...tip(`Remove ${c.courseCode} from browsed courses`)}
                     >
                       <X size={13} strokeWidth={2.2} />
                     </button>

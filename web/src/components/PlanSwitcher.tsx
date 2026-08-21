@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useClickAway } from '../hooks/useClickAway';
 import { Check, ChevronDown, Copy, Pencil, Plus, Trash } from './icons';
+import { tip } from './Tooltip';
 
 export interface PlanRow {
   id: string;
@@ -58,7 +59,7 @@ export function PlanSwitcher({
         className="planswitch__btn"
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Switch, create, or manage plans"
+        {...tip('Switch, create, or manage plans')}
         onClick={() => setOpen((v) => !v)}
       >
         <span className="planswitch__name">{activeName}</span>
@@ -93,7 +94,7 @@ export function PlanSwitcher({
                     className="planmenu__act"
                     onClick={() => rename(p.id, p.name)}
                     aria-label={`Rename ${p.name}`}
-                    title="Rename"
+                    {...tip('Rename')}
                   >
                     <Pencil size={13} />
                   </button>
@@ -105,7 +106,7 @@ export function PlanSwitcher({
                       setOpen(false);
                     }}
                     aria-label={`Duplicate ${p.name}`}
-                    title="Duplicate — try another arrangement"
+                    {...tip('Duplicate — try another arrangement')}
                   >
                     <Copy size={13} />
                   </button>
@@ -115,7 +116,7 @@ export function PlanSwitcher({
                     onClick={() => remove(p.id, p.name)}
                     disabled={lastOne}
                     aria-label={`Delete ${p.name}`}
-                    title={lastOne ? 'Keep at least one plan' : 'Delete'}
+                    {...tip(lastOne ? 'Keep at least one plan' : 'Delete')}
                   >
                     <Trash size={13} />
                   </button>
