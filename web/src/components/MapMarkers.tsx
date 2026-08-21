@@ -47,8 +47,27 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { colorsForHue } from '../lib/colors';
-import { chipRows, markerLabel, type PinGroup, type PlacedMarker } from '../lib/map-labels';
+import { chipRows, markerLabel, DOT_GAP, type LabelSide, type PinGroup, type PlacedMarker } from '../lib/map-labels';
 import { useMarkerLayout } from '../hooks/useMarkerLayout';
+
+/**
+ * Where the chip is drawn, in the marker's own pixels — anchored to the DOT,
+ * not to the box the layout pass computed for it.
+ *
+ * The two differ because that box comes from `chipSize`, which estimates a code's
+ * width from its character count and cannot be exact. On the right the error is
+ * invisible: the box is pinned at the dot and grows away from it. On the left it
+ * is not — the box is pinned at `dot - gap - width`, so it grows TOWARD the dot,
+ * and a chip several pixels wider than estimated walks straight over the pin it
+ * belongs to. Anchoring the near edge here makes the gap exact on every side and
+ * leaves the estimate to do the one job it is fit for, which is reserving space.
+ */
+function chipAnchor(side: LabelSide, top: number) {
+  if (side === 'left') return { right: DOT_GAP, top };
+  if (side === 'right') return { left: DOT_GAP, top };
+  // Above and below straddle the dot: centre on it by the chip's real width.
+  return { left: 0, top, transform: 'translateX(-50%)' };
+}
 
 interface Props {
   map: MapLibreMap | null;
@@ -178,7 +197,7 @@ export function MapMarkers({
                 className={`campusmap__chip${rows.length > 1 ? ' campusmap__chip--stack' : ''}${
                   chip.side === 'left' ? ' campusmap__chip--mirror' : ''
                 }`}
-                style={{ left: chip.x - x, top: chip.y - y }}
+                style={chipAnchor(chip.side, chip.y - y)}
               >
                 {rows.map((r) => (
                   <span key={r.courseId} className="campusmap__chiprow">

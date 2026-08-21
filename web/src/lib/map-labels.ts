@@ -89,8 +89,22 @@ export function chipRows(pins: readonly MapPin[]): ChipRow[] {
   return out;
 }
 
-/** Rough chip width per character — good enough for collision avoidance. */
-const CHAR_W = 7.1; // 12 px bold, tracked tight
+/**
+ * Chip width per character, and deliberately an UPPER bound rather than an
+ * average. This number feeds the box the collision pass and the hit test both
+ * work from, and underestimating it fails in the same direction twice: labels
+ * get packed closer than they really sit, and the last few pixels of a chip are
+ * drawn where nothing answers a click.
+ *
+ * Measured live at 12px/700 Inter with the chip's tracking, over the alphabet
+ * course codes are made of: 'W' is 12.33px and 'M' 11.06 against about 7 for a
+ * digit, so the old 7.1 average ran "MMW-121" and "CHEM-100A" 7.3px short each.
+ * 8.2 covers the code shapes UCSD issues — a subject of two to four letters,
+ * then digits and at most a suffix letter. A code that was all M's and W's
+ * would still overrun it; overrunning an upper bound costs a little slack in
+ * the layout, which is the cheap direction to be wrong in.
+ */
+const CHAR_W = 8.2;
 /** One course line, and the hairline between two of them (mirrors app.css). */
 export const CHIP_ROW_H = 22;
 const CHIP_RULE_H = 1;
@@ -220,8 +234,19 @@ export interface PlacedLabel {
   side: LabelSide;
 }
 
-const DOT_GAP = 12;
+/** Clear space between the dot's centre and the near edge of its chip. Exported
+ *  because MapMarkers anchors the drawn chip to the dot with it rather than to
+ *  the box computed here — see boxFor. */
+export const DOT_GAP = 12;
 
+/**
+ * The box a chip is ASSUMED to occupy on a given side, from the estimated size.
+ * Used for collision avoidance and for the hit test, both of which only need it
+ * to contain the chip. What is actually drawn is anchored to the dot instead
+ * (MapMarkers), so a chip's near edge is exactly DOT_GAP away whatever the
+ * estimate does — the width error used to be spent walking a left-hand chip on
+ * top of the pin it belongs to.
+ */
 function boxFor(a: LabelAnchor, side: LabelSide): { x: number; y: number } {
   switch (side) {
     case 'right':

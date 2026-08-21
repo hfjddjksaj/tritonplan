@@ -227,11 +227,30 @@ describe('MapMarkers', () => {
     const left = chips.find((c) => c.textContent === 'PHYS-002CL')!;
     const right = chips.find((c) => c.textContent === 'CSE-8A')!;
     // Which side each one actually landed on, read off the geometry rather than
-    // off the class the assertion is about.
-    expect(parseFloat(left.style.left)).toBeLessThan(0);
-    expect(parseFloat(right.style.left)).toBeGreaterThan(0);
+    // off the class the assertion is about. Each is anchored to its dot by the
+    // edge facing it, so the far edge — the one whose position depends on how
+    // wide the code turns out to be — cannot walk over the pin.
+    expect(left.style.right).toBe('12px');
+    expect(left.style.left).toBe('');
+    expect(right.style.left).toBe('12px');
 
     expect(left.classList.contains('campusmap__chip--mirror')).toBe(true);
     expect(right.classList.contains('campusmap__chip--mirror')).toBe(false);
+  });
+
+  it('centres an above/below chip on the dot by its real width, not the estimate', async () => {
+    // A canvas too narrow for a chip on either flank, so placeLabels falls
+    // through to above/below — where the chip straddles the dot. Positioning
+    // that from the estimated width would offset it by half of whatever the
+    // estimate got wrong; translateX(-50%) is measured by the browser instead.
+    const NARROW = { w: 120, h: FakeMap.size.h };
+    const MIDDLE = group('f', -117.256028, 32.88, 'Peterson Hall', [pin('MMW-121', 'LEC', 12)]);
+    await render({ groups: [MIDDLE], bounds: NARROW });
+
+    const stacked = [...container.querySelectorAll('.campusmap__chip')].find(
+      (c) => c.textContent === 'MMW-121',
+    ) as HTMLElement;
+    expect(stacked.style.transform).toBe('translateX(-50%)');
+    expect(stacked.style.left).toBe('0px');
   });
 });
