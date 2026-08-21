@@ -794,7 +794,6 @@ p {
   gap: 6px;
 }
 .opt {
-  position: relative; /* for the waitlist-only hairline below */
   display: grid;
   grid-template-columns: 16px 1fr auto;
   align-items: start;
@@ -815,28 +814,39 @@ p {
    13 of 21 packages carried the status in a real capture, and a ground colour on
    two rows in three stops separating anything — the eight rows you CAN take end
    up being the ones that stand out. A 1.5px line has no such problem; a column
-   of them reads as texture you can run down. */
-.opt--wl::before {
-  content: '';
-  position: absolute;
-  left: -1px;
-  top: -1px;
-  bottom: -1px;
-  width: 1.5px;
-  border-radius: var(--r-sm) 0 0 var(--r-sm);
-  background: var(--wl-spine);
-}
-/* Not on the selected row. That row is already spoken for — white ground, the
-   course's own colour on the border AND a ring outside it — and a 1.5px amber
-   line threaded between those two blue strokes only muddies the ring. The chip
-   beside the code still says the row is waitlist-only, so nothing is lost. */
-.opt--active::before {
-  display: none;
+   of them reads as texture you can run down.
+
+   It is drawn as the row's own BACKGROUND, not as a positioned strip over it. A
+   strip is a rectangle and the row's corners are 6px arcs, so its two ends stood
+   out past the curve. A background is clipped by that same radius, so the line
+   ends where the corner turns. Two details make it work: `background-origin` is
+   moved to the border box so the line starts at the outer edge rather than inside
+   the border, and the left border is made transparent so the line shows through
+   the 1px it would otherwise sit behind.
+
+   Why not simply widen the left border? Chrome snaps border widths to whole
+   device pixels — `border-left: 1.5px` computes to 1px — so the border route
+   silently changes the width. A gradient is not snapped and stays at 1.5. */
+.opt--wl,
+.opt--wl:hover {
+  border-left-color: transparent;
+  background-image: linear-gradient(to right, var(--wl-spine) 0 1.5px, transparent 1.5px);
+  background-origin: border-box;
 }
 .opt--active {
   background: var(--surface);
   border-color: var(--c-spine);
   box-shadow: 0 0 0 1px var(--c-spine);
+}
+/* The selected row hands its left edge back to the course's colour. That row is
+   already spoken for — white ground, the course's colour on the border AND a ring
+   outside it — and an amber line threaded between the two blue strokes only
+   muddies the ring. The chip beside the code still says the row is waitlist-only,
+   so nothing is lost. */
+.opt--wl.opt--active,
+.opt--wl.opt--active:hover {
+  border-left-color: var(--c-spine);
+  background-image: none;
 }
 .opt__radio {
   width: 14px;
