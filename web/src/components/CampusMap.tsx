@@ -11,7 +11,18 @@ import {
   type CampusMapData,
 } from '../lib/campus-geo';
 import { buildSources } from '../lib/map-data';
-import { applyHosts, applyMode, assetBase, buildStyle, CAMERA, modeForPitch, TREE_ICON, type MapMode } from '../lib/map-style';
+import {
+  applyHosts,
+  applyMode,
+  assetBase,
+  buildStyle,
+  CAMERA,
+  LAYER,
+  modeForPitch,
+  ROUTE_SOURCE,
+  TREE_ICON,
+  type MapMode,
+} from '../lib/map-style';
 import { anchorOnFootprint, footprintAnchors } from '../lib/map-anchor';
 import { treeSprite } from '../lib/tree-sprite';
 import {
@@ -36,12 +47,16 @@ import {
 } from '../lib/map-labels';
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
 import { pluralize } from '../lib/format';
+import type { Profile } from '../lib/walk-cost';
+import { walkPlaces, type WalkPlace } from '../lib/walk-places';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useMapLibre } from '../hooks/useMapLibre';
+import { useWalkRoute } from '../hooks/useWalkRoute';
 import { useMarkerLayout } from '../hooks/useMarkerLayout';
 import { useElementHeight, useStageSize } from '../hooks/useStageSize';
 import { useWheelToHorizontal } from '../hooks/useWheelToHorizontal';
+import { DistanceBar } from './DistanceBar';
 import { MapMarkers } from './MapMarkers';
 import { MarkerCard } from './MarkerCard';
 import { BuildingPopover } from './BuildingPopover';
@@ -475,6 +490,94 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     };
   }, [gl.map]);
 
+  // ---- Distance: the state lives here, every decision lives elsewhere. ----
+  //
+  // `useWalkRoute` does the loading, snapping and routing; `DistanceBar` does
+  // the reading and the copy. This file only holds which two places are picked
+  // and which mode is showing, and draws the answer — CampusMap.tsx is already
+  // the largest file in the app and the one real regression risk this feature
+  // carries (spec §7.6), so anything that could be a decision is not made here.
+  //
+  // Deliberately NOT reset when `mapView` or the slice changes, unlike `picked`
+  // and `openKey` in the ViewTabs handler below. A distance is a distance: the
+  // reader who switched to Finals did not ask to forget which two buildings
+  // they were measuring, and the picker is not sliced by weekday anyway
+  // (spec §8). Only the clear button, a new pick, and closing the map end it.
+  const [distA, setDistA] = useState<WalkPlace | null>(null);
+  const [distB, setDistB] = useState<WalkPlace | null>(null);
+  const [distProfile, setDistProfile] = useState<Profile>('walk');
+  const places = useMemo(() => walkPlaces(plan), [plan]);
+  const walk = useWalkRoute(distA, distB);
+  const route = walk.results?.[distProfile] ?? null;
+
+  /**
+   * The route line: added and removed, never merely emptied.
+   *
+   * With nothing measured, the layer stack has to be exactly what it was
+   * before this feature existed — that is the promise that opening the map
+   * costs no more than it used to (spec §7.6). So the cleanup drops both
+   * layers AND the source, and there is no in-place update path: React runs
+   * that cleanup before it re-runs this effect, in the same synchronous turn,
+   * so the map never paints a frame between the removal and the re-add.
+   *
+   * Two answers that must draw NOTHING, both of them real rather than
+   * hypothetical:
+   *
+   *  - A DEGRADED answer carries `path: null`. A straight line across a canyon
+   *    would be a confident lie, and the readout already says the route is
+   *    unclear.
+   *  - A SINGLE-POINT path. Mayer Hall and York Hall reach the network at the
+   *    same node, so their cheapest route never touches it; a LineString needs
+   *    two positions, and MapLibre would reject the geometry.
+   */
+  useEffect(() => {
+    const map = gl.map;
+    if (!map || !gl.ready) return;
+    const path = route && !route.degraded ? route.path : null;
+
+    const drop = () => {
+      for (const id of [LAYER.route, LAYER.routeCasing]) if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(ROUTE_SOURCE)) map.removeSource(ROUTE_SOURCE);
+    };
+
+    if (!path || path.length < 2) {
+      drop();
+      return;
+    }
+
+    drop();
+    map.addSource(ROUTE_SOURCE, {
+      type: 'geojson',
+      data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: path } },
+    });
+    // Under the labels, over everything else: a route that hid the building
+    // names would cost more than it gives. `roadNames` is the first label
+    // layer in the stack (map-style.ts), so inserting before it puts the line
+    // over the ground, the buildings and the roads and under every name.
+    const before = map.getLayer(LAYER.roadNames) ? LAYER.roadNames : undefined;
+    map.addLayer(
+      {
+        id: LAYER.routeCasing,
+        type: 'line',
+        source: ROUTE_SOURCE,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.9 },
+      },
+      before,
+    );
+    map.addLayer(
+      {
+        id: LAYER.route,
+        type: 'line',
+        source: ROUTE_SOURCE,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#e8a200', 'line-width': 5 },
+      },
+      before,
+    );
+    return drop;
+  }, [gl.map, gl.ready, route]);
+
   // The generic "nothing to place" copy is false only when a LOCATABLE class exists that
   // booked-only is hiding — an unbooked pin with no coords was never going on the map
   // either way, and turning the toggle off wouldn't change that.
@@ -682,6 +785,28 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
                 </button>
               ))}
             </div>
+            {/* Above the hairline: which pins to show. Below it: measure between
+                two of them. Two different jobs, so not a fourth tab (§7.1). */}
+            <div className="campusmap__rule" />
+            <DistanceBar
+              places={places}
+              a={distA}
+              b={distB}
+              onPick={(end, p) => (end === 'a' ? setDistA(p) : setDistB(p))}
+              onSwap={() => {
+                setDistA(distB);
+                setDistB(distA);
+              }}
+              onClear={() => {
+                setDistA(null);
+                setDistB(null);
+              }}
+              route={route}
+              profile={distProfile}
+              onProfile={setDistProfile}
+              results={walk.results}
+              loading={walk.loading}
+            />
           </>
         )}
       </section>

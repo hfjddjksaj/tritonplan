@@ -111,11 +111,26 @@ export const LAYER = {
   roads: 'roads',
   trees: 'trees',
   trees3d: 'trees-3d',
+  // The Distance bar's route line, and the white casing that keeps it legible
+  // over the pale ground surfaces. Named here so the layer order is documented
+  // in one place, but NOT built by `buildStyle` — see ROUTE_SOURCE.
+  routeCasing: 'route-casing',
+  route: 'route',
   roadNames: 'road-names',
   districtNames: 'district-names',
   landmarkNames: 'landmark-names',
   buildingNames: 'building-names',
 } as const;
+
+/**
+ * GeoJSON source id for the Distance bar's route line.
+ *
+ * Added and removed at runtime rather than declared in the style: with no
+ * route picked, the layer stack must be byte-identical to what it was before
+ * this feature existed (spec §7.6). An empty source left permanently in place
+ * would be cheap, but "cheap" is not the promise — "unchanged" is.
+ */
+export const ROUTE_SOURCE = 'route';
 
 export const CAMERA = {
   minZoom: 13.5,

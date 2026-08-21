@@ -49,6 +49,18 @@ export class FakeMap {
   readonly opts: Record<string, unknown>;
   calls: { method: string; args: unknown[] }[] = [];
   removed = false;
+  /**
+   * The layer ids the style holds, IN DRAW ORDER, seeded from the style the
+   * map was built with and then maintained by `addLayer`/`removeLayer`.
+   *
+   * Modelled rather than stubbed because layer ORDER is the thing a caller
+   * adding a layer at runtime is actually asserting — the route line has to
+   * land under the building labels, and a `getLayer` that answered `{ id }`
+   * for every string could not tell a test whether it did.
+   */
+  layerIds: string[] = [];
+  /** Source ids present, seeded and maintained the same way. */
+  sourceIds = new Set<string>();
   private handlers = new Map<string, Handler[]>();
   private cam: FakeCamera = { center: [0, 0], zoom: 0, bearing: 0, pitch: 0 };
   private terrain: unknown = null;
@@ -56,6 +68,9 @@ export class FakeMap {
 
   constructor(opts: Record<string, unknown>) {
     this.opts = opts;
+    const style = opts.style as { layers?: { id: string }[]; sources?: Record<string, unknown> } | undefined;
+    this.layerIds = (style?.layers ?? []).map((l) => l.id);
+    for (const id of Object.keys(style?.sources ?? {})) this.sourceIds.add(id);
     if (opts.center) this.cam.center = opts.center as [number, number];
     if (typeof opts.zoom === 'number') this.cam.zoom = opts.zoom;
     FakeMap.instances.push(this);
@@ -184,8 +199,24 @@ export class FakeMap {
   setPaintProperty(...a: unknown[]) { return this.rec('setPaintProperty', ...a); }
   setLayoutProperty(...a: unknown[]) { return this.rec('setLayoutProperty', ...a); }
   setFilter(...a: unknown[]) { return this.rec('setFilter', ...a); }
-  getLayer(id: string) { return { id }; }
-  getSource(id: string) { return { id, setData: (d: unknown) => this.rec('setData', id, d) }; }
+  getLayer(id: string) { return this.layerIds.includes(id) ? { id } : undefined; }
+  getSource(id: string) {
+    return this.sourceIds.has(id) ? { id, setData: (d: unknown) => this.rec('setData', id, d) } : undefined;
+  }
+  addSource(id: string, def: unknown) { this.sourceIds.add(id); return this.rec('addSource', id, def); }
+  removeSource(id: string) { this.sourceIds.delete(id); return this.rec('removeSource', id); }
+  /** `before` inserts ahead of that layer, exactly like the real signature. */
+  addLayer(def: { id: string }, before?: string) {
+    const at = before === undefined ? -1 : this.layerIds.indexOf(before);
+    if (at === -1) this.layerIds.push(def.id);
+    else this.layerIds.splice(at, 0, def.id);
+    return this.rec('addLayer', def, before);
+  }
+  removeLayer(id: string) {
+    const at = this.layerIds.indexOf(id);
+    if (at !== -1) this.layerIds.splice(at, 1);
+    return this.rec('removeLayer', id);
+  }
   addImage(id: string, ...rest: unknown[]) { this.images.add(id); return this.rec('addImage', id, ...rest); }
   hasImage(id: string) { return this.images.has(id); }
   setTerrain(t: unknown) { this.terrain = t; return this.rec('setTerrain', t); }
