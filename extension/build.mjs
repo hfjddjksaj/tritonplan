@@ -12,7 +12,11 @@
  * Content scripts are bundled as self-contained IIFEs (no import/export — Chrome loads
  * them as classic scripts). The background service worker is bundled as an ES module
  * (manifest declares `"type": "module"`). Static files (manifest, popup.html) are copied
- * and simple placeholder PNG icons are generated with no network access.
+ * and the PNG icons are rasterised here, with no image library and no network.
+ *
+ * `iconPng` is exported so brand assets (a store icon, anything bigger) come out of the
+ * same rasteriser the shipped extension uses, rather than a second copy that can drift.
+ * The build only runs when this file is the entry point.
  */
 
 import * as esbuild from 'esbuild';
@@ -112,7 +116,7 @@ function inRoundRect(px, py, x, y, w, h, r) {
  * blocks", so its corners inherit the blocks' radii and can never drift out of
  * register with them the way a hand-written path would.
  */
-function iconPng(size) {
+export function iconPng(size) {
   const S = size;
   const N = 4; // samples per axis
   const SS = N * N;
@@ -229,7 +233,15 @@ async function run() {
   }
 }
 
-run().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Importing this file (for `iconPng`) must not kick off a build, so the entry point
+// is guarded rather than run on load.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+
+if (invokedDirectly) {
+  run().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
