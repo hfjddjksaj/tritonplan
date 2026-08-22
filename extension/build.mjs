@@ -49,7 +49,16 @@ const common = {
   },
 };
 
-/* ---- placeholder icons (a white "+" on the brand blue, no network) -------- */
+/* ---- brand icons, rasterised here (no image library, no network) ----------
+ *
+ * The mark is `docs/brand/icon-collision.svg`: two class blocks that overlap,
+ * and the overlap is the same red the calendar paints a conflict in. Keep the
+ * two in sync — the SVG is what a designer would open, this is what ships.
+ *
+ * Deliberately NOT the old placeholder (a gold trident on navy): that borrows
+ * UCSD Tritons' athletic mark, which contradicts the listing's own "not
+ * affiliated with UCSD" line. Do not put the trident back.
+ * -------------------------------------------------------------------------- */
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -72,57 +81,76 @@ function pngChunk(type, data) {
   crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
   return Buffer.concat([len, typeBuf, data, crcBuf]);
 }
+// The planner's own tokens (web/src/styles/tokens.css), so the icon and the
+// calendar it opens are literally the same four colours.
+const INK = [0x0b, 0x1f, 0x3a]; // --ink       the rounded-square ground
+const GOLD = [0xff, 0xc7, 0x2c]; // gold        the first class block
+const PALE = [0xee, 0xf2, 0xf7]; // --canvas    the second class block
+const CLASH = [0xe5, 0x48, 0x4d]; // --conflict  where the two overlap
+
+/**
+ * Point-in-rounded-rectangle. `dx`/`dy` measure how far the point sticks out of
+ * the inner (un-rounded) box, so they are 0 everywhere except in a corner —
+ * which reduces the whole test to one circle check, in the corner only.
+ */
+function inRoundRect(px, py, x, y, w, h, r) {
+  if (px < x || px > x + w || py < y || py > y + h) return false;
+  const dx = Math.max(x + r - px, 0, px - (x + w - r));
+  const dy = Math.max(y + r - py, 0, py - (y + h - r));
+  return dx * dx + dy * dy <= r * r;
+}
+
+/**
+ * Rasterise the mark at `size`, 4x4 supersampled.
+ *
+ * The old generator sampled one point per pixel, so every edge was a staircase
+ * and 16px was mush. Here each pixel averages 16 samples: colour is the mean of
+ * the covered samples and alpha is the coverage itself, which is ordinary
+ * (un-premultiplied) RGBA and antialiases the rounded corners for free.
+ *
+ * The conflict wedge is not drawn as its own shape — it is simply "in both
+ * blocks", so its corners inherit the blocks' radii and can never drift out of
+ * register with them the way a hand-written path would.
+ */
 function iconPng(size) {
-  const NAVY = [0x0b, 0x1f, 0x3a, 0xff]; // deep navy hexagon (the planner's --ink token)
-  const GOLD = [0xff, 0xc7, 0x2c, 0xff]; // gold trident
-  const CLEAR = [0, 0, 0, 0];
   const S = size;
-  const cx = S / 2;
-  const cy = S / 2;
-  const f = (v) => v * S;
-  // deep-purple pointy-top hexagon (point-in-polygon)
-  const R = S * 0.49;
-  const verts = [];
-  for (let i = 0; i < 6; i++) {
-    const a = (Math.PI / 3) * i - Math.PI / 2;
-    verts.push([cx + R * Math.cos(a), cy + R * Math.sin(a)]);
-  }
-  const inHex = (x, y) => {
-    let inside = false;
-    for (let i = 0, j = 5; i < 6; j = i++) {
-      const [xi, yi] = verts[i];
-      const [xj, yj] = verts[j];
-      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-    }
-    return inside;
-  };
-  // gold trident: 3 pointed prongs + crossbar + shaft + base foot
-  const spike = (x, y, sx, tipY, baseY, half) => {
-    if (y < tipY || y > baseY) return false;
-    return Math.abs(x - sx) <= (half * (y - tipY)) / (baseY - tipY);
-  };
-  const rect = (x, y, x0, x1, y0, y1) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
-  const off = f(0.185);
-  const sh = f(0.04);
-  const inTrident = (x, y) =>
-    spike(x, y, cx, f(0.14), f(0.44), f(0.055)) ||
-    spike(x, y, cx - off, f(0.22), f(0.44), f(0.052)) ||
-    spike(x, y, cx + off, f(0.22), f(0.44), f(0.052)) ||
-    rect(x, y, cx - f(0.235), cx + f(0.235), f(0.42), f(0.485)) ||
-    rect(x, y, cx - sh, cx + sh, f(0.485), f(0.8)) ||
-    rect(x, y, cx - f(0.1), cx + f(0.1), f(0.8), f(0.855));
+  const N = 4; // samples per axis
+  const SS = N * N;
+  const u = 128 / S; // design units per device pixel
   const raw = Buffer.alloc((S * 4 + 1) * S);
   let p = 0;
   for (let y = 0; y < S; y++) {
     raw[p++] = 0; // filter: none
     for (let x = 0; x < S; x++) {
-      const px = x + 0.5;
-      const py = y + 0.5;
-      const col = !inHex(px, py) ? CLEAR : inTrident(px, py) ? GOLD : NAVY;
-      raw[p++] = col[0];
-      raw[p++] = col[1];
-      raw[p++] = col[2];
-      raw[p++] = col[3];
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let hits = 0;
+      for (let sy = 0; sy < N; sy++) {
+        for (let sx = 0; sx < N; sx++) {
+          const px = (x + (sx + 0.5) / N) * u;
+          const py = (y + (sy + 0.5) / N) * u;
+          if (!inRoundRect(px, py, 0, 0, 128, 128, 28)) continue; // outside the tile
+          const gold = inRoundRect(px, py, 22, 28, 52, 52, 10);
+          const pale = inRoundRect(px, py, 54, 48, 52, 52, 10);
+          const col = gold && pale ? CLASH : pale ? PALE : gold ? GOLD : INK;
+          r += col[0];
+          g += col[1];
+          b += col[2];
+          hits++;
+        }
+      }
+      if (hits === 0) {
+        raw[p++] = 0;
+        raw[p++] = 0;
+        raw[p++] = 0;
+        raw[p++] = 0;
+      } else {
+        raw[p++] = Math.round(r / hits);
+        raw[p++] = Math.round(g / hits);
+        raw[p++] = Math.round(b / hits);
+        raw[p++] = Math.round((hits / SS) * 255);
+      }
     }
   }
   const ihdr = Buffer.alloc(13);
