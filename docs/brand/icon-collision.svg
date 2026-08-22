@@ -1,0 +1,21 @@
+<!--
+  TritonPlan store/toolbar icon — direction B ("Collision"), chosen 2026-08-21.
+
+  Two class blocks that overlap, and the overlap is the conflict red the planner
+  itself uses. It says what the product does without borrowing UCSD's trident,
+  which the old placeholder icon (generated in extension/build.mjs) did.
+
+  Colours are the planner's own tokens (web/src/styles/tokens.css):
+    #0b1f3a --ink   #ffc72c gold   #eef2f7 --canvas   #e5484d --conflict
+
+  Known trade-off: red in the toolbar can read like an error/unread badge.
+
+  Not wired into the extension yet — icons still come from iconPng() in
+  extension/build.mjs. Rasterise to 16/48/128 PNG when that changes.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="TritonPlan">
+  <rect x="0" y="0" width="128" height="128" rx="28" fill="#0b1f3a"/>
+  <rect x="22" y="28" width="52" height="52" rx="10" fill="#ffc72c"/>
+  <rect x="54" y="48" width="52" height="52" rx="10" fill="#eef2f7"/>
+  <path d="M64 48 H74 V80 H54 V58 A10 10 0 0 1 64 48 Z" fill="#e5484d"/>
+</svg>
