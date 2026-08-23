@@ -534,6 +534,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     const map = gl.map;
     if (!map || !gl.ready) return;
     const path = route && !route.degraded ? route.path : null;
+    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__tpRoute = route;
 
     const drop = () => {
       for (const id of [LAYER.route, LAYER.routeCasing]) if (map.getLayer(id)) map.removeLayer(id);
