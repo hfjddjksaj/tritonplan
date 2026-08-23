@@ -75,7 +75,27 @@ const grid4 = (steps: number[] = [], elev = [0, 0, 0, 0]) =>
     elev,
   );
 
-const at = (node: number, seedCost = 0): Portal[] => [{ node, seedCost }];
+/** NODES decoded, so a fixture door can be placed exactly on its own node. */
+const POS: [number, number][] = (() => {
+  const out: [number, number][] = [];
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < NODES.length / 2; i++) {
+    x += NODES[2 * i]!;
+    y += NODES[2 * i + 1]!;
+    out.push([y / 1e6, x / 1e6]);
+  }
+  return out;
+})();
+
+/**
+ * A door standing exactly ON its node: zero hop, so these fixtures measure
+ * routing and nothing else. Hop pricing belongs to `walk-snap.test.ts`, and
+ * what a hop does to a real route belongs to `walk-graph.data.test.ts`; the
+ * one test here that cares owns its own portals.
+ */
+const door = (node: number, seedCost = 0): Portal => ({ node, seedCost, at: POS[node]! });
+const at = (node: number, seedCost = 0): Portal[] => [door(node, seedCost)];
 
 /**
  * The optimum by exhaustive enumeration of every simple path, seeds included
@@ -137,10 +157,7 @@ describe('routeBetween', () => {
     // inside; the door at node 0 costs 1. The engine must take node 0.
     const r = routeBetween(
       g,
-      [
-        { node: 3, seedCost: 500 },
-        { node: 0, seedCost: 1 },
-      ],
+      [door(3, 500), door(0, 1)],
       at(2),
       'walk',
     )!;
@@ -232,12 +249,12 @@ describe('routeBetween', () => {
     // or a missed relaxation would show up.
     const g = grid4([1], [0, 10, 4, 0]);
     const from: Portal[] = [
-      { node: 0, seedCost: 12 },
-      { node: 3, seedCost: 40 },
+      door(0, 12),
+      door(3, 40),
     ];
     const to: Portal[] = [
-      { node: 2, seedCost: 5 },
-      { node: 1, seedCost: 60 },
+      door(2, 5),
+      door(1, 60),
     ];
     for (const profile of ['walk', 'bike', 'scooter'] as const) {
       const r = routeBetween(g, from, to, profile)!;
@@ -250,10 +267,11 @@ describe('routeBetween', () => {
   });
 
   it('returns a bare indoor walk when both buildings share a door', () => {
-    // Not a contrived case: Mayer Hall and York Hall both reach node 4255 of
-    // the real graph, so the cheapest route never touches the network. The
-    // network leg is honestly 0 m and the path is one point — the drawing code
-    // has to cope, so the engine must not pretend otherwise.
+    // Rare since the 2026-08-23 door-pricing fix but still real: two footprints
+    // that TOUCH can share a node with no hop at either end, and then the
+    // cheapest route never reaches the network. The outdoor leg is honestly
+    // 0 m and the path is one point — the drawing code has to cope, so the
+    // engine must not pretend otherwise.
     const g = grid4();
     const r = routeBetween(g, at(1, 60), at(1, 45), 'walk')!;
     expect(r).not.toBeNull();
@@ -262,6 +280,42 @@ describe('routeBetween', () => {
     expect(r.fromNode).toBe(1);
     expect(r.toNode).toBe(1);
     expect(r.seconds).toBeCloseTo(105 / PROFILES.walk.flat, 6);
+  });
+
+  /**
+   * The regression guard for the bug reported 2026-08-23: the gold line began
+   * and ended at network NODES, so it floated tens of metres from the very
+   * buildings it claimed to join. The hop from the wall to the node is
+   * ordinary outdoor walking and is charged in seedCost, so it belongs on the
+   * line and in `metres` — draw what you charge for.
+   */
+  it('starts on the wall it left, not on the node it snapped to', () => {
+    const g = grid4();
+    // Doors 30 m south of nodes 0 and 2 — a wall set back from the pavement.
+    const SOUTH = 30 / 111_320;
+    const from: Portal[] = [{ node: 0, seedCost: 40, at: [POS[0]![0] - SOUTH, POS[0]![1]] }];
+    const to: Portal[] = [{ node: 2, seedCost: 40, at: [POS[2]![0] - SOUTH, POS[2]![1]] }];
+
+    const r = routeBetween(g, from, to, 'walk')!;
+    expect(r).not.toBeNull();
+    // Two extra positions, one at each end, ahead of and behind the 3 nodes.
+    expect(r.path).toHaveLength(5);
+    expect(r.path[0]).toEqual([from[0]!.at[1], from[0]!.at[0]]);
+    expect(r.path[4]).toEqual([to[0]!.at[1], to[0]!.at[0]]);
+    // 200 m of network plus 30 m of hop at each end.
+    expect(r.metres).toBeCloseTo(260, 0);
+    // The badges still name the NODES, which is what the router settled on.
+    expect(r.fromNode).toBe(0);
+    expect(r.toNode).toBe(2);
+  });
+
+  it('leaves a hop under half a metre off the line rather than doubling a point', () => {
+    const g = grid4();
+    // 10 cm of quantisation noise is not a step anybody takes.
+    const from: Portal[] = [{ node: 0, seedCost: 1, at: [POS[0]![0] - 0.1 / 111_320, POS[0]![1]] }];
+    const r = routeBetween(g, from, at(2), 'walk')!;
+    expect(r.path).toHaveLength(3);
+    expect(r.metres).toBeCloseTo(200, 0);
   });
 
   it('returns null when the target is unreachable', () => {

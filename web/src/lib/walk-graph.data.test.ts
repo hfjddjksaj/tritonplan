@@ -23,7 +23,7 @@ import { type CampusShape, loadCampusGeo } from './campus-geo';
 import { PROFILES } from './walk-cost';
 import { type WalkGraphWire, decodeWalkGraph, metresBetween } from './walk-graph';
 import { routeBetween } from './walk-route';
-import { type Portal, buildPortals, resampleOutline } from './walk-snap';
+import { FACE_RESCUE_M, type Portal, buildPortals, resampleOutline } from './walk-snap';
 
 const g = decodeWalkGraph(wire as WalkGraphWire);
 
@@ -87,11 +87,24 @@ function doorsFor(name: string, shapes: Map<string, CampusShape>): Portal[] {
   const hit = matchBuilding(name);
   expect(hit, `no building record for ${name}`).not.toBeNull();
   const centroid = { lat: hit!.lat, lon: hit!.lng };
+  centroids.set(name, centroid);
   // A COMPLEX match names its wings in `parts`; its own `name` is a shared
   // label with no polygon of its own (see `buildings.ts`).
   const rings = (hit!.parts ?? [hit!.name]).flatMap((n) => shapes.get(n)?.rings ?? []);
-  if (rings.length === 0) return buildPortals(g, [[centroid.lat, centroid.lon]], centroid);
-  return buildPortals(g, resampleOutline(rings), centroid);
+  const outline: [number, number][] =
+    rings.length === 0 ? [[centroid.lat, centroid.lon]] : resampleOutline(rings);
+  outlines.set(name, outline);
+  return buildPortals(g, outline, centroid);
+}
+
+/** Metres from a point to the nearest sample on that building's outline. */
+function toOutline(name: string, lat: number, lon: number): number {
+  let best = Infinity;
+  for (const [la, lo] of outlines.get(name)!) {
+    const d = metresBetween(lat, lon, la, lo);
+    if (d < best) best = d;
+  }
+  return best;
 }
 
 /** Share of nodes in the largest connected component, by flood fill. */
@@ -119,7 +132,15 @@ function largestComponentShare(): number {
   return largest / g.n;
 }
 
+/**
+ * How close two footprints must be for "Next door" to be an honest thing to
+ * say. Wall to wall — a reader stepping out of one and into the other.
+ */
+const NEXT_DOOR_M = 25;
+
 const doors = new Map<string, Portal[]>();
+const outlines = new Map<string, [number, number][]>();
+const centroids = new Map<string, { lat: number; lon: number }>();
 
 beforeAll(async () => {
   const geo = await loadCampusGeo();
@@ -191,6 +212,102 @@ describe('the shipped walk graph', () => {
     expect(failures).toEqual([]);
   }, 120_000);
 
+  /**
+   * The line a reader sees has to START AT THE BUILDING. This is the guard for
+   * the door-pricing bug fixed 2026-08-23: `hop` — the straight jump from the
+   * footprint out to a network node — used to be charged at 1.0, i.e. free,
+   * while the indoor leg beside it was charged at INDOOR. A free 45 m jump
+   * buys more than 45 m: it lets a route SKIP a real detour, so the router
+   * preferred a door 32 m out in a field (median over these same pairs) to one
+   * against the wall, and drew a gold line starting nowhere near the building.
+   *
+   * Two bounds, because they fail for different reasons:
+   *  - the hard one catches the reach constants being widened again;
+   *  - the median catches OFFPATH being dropped back to 1.0, which leaves the
+   *    reach intact but goes back to preferring the far door inside it
+   *    (measured: p50 2.6 m at OFFPATH 4, 5.1 m at OFFPATH 1).
+   */
+  it('draws a line that starts and ends AT the buildings', () => {
+    const detached: string[] = [];
+    const hops: number[] = [];
+    const longHops: string[] = [];
+
+    for (let i = 0; i < TEACHING.length; i++) {
+      for (let j = 0; j < TEACHING.length; j++) {
+        if (i === j) continue;
+        const a = TEACHING[i]!;
+        const b = TEACHING[j]!;
+        const r = routeBetween(g, doors.get(a)!, doors.get(b)!, 'walk');
+        if (!r) continue; // the all-pairs test above owns routing failures
+        const first = r.path[0]!;
+        const last = r.path[r.path.length - 1]!;
+
+        // (1) STRUCTURAL. The ends of the line are outline samples, so this is
+        // 0 — or, when the hop rounded away, the node it collapsed onto, which
+        // is under half a metre from one. Nothing else may reach this array.
+        const gapA = toOutline(a, first[1], first[0]);
+        const gapB = toOutline(b, last[1], last[0]);
+        if (gapA > 0.6) detached.push(`${a} → ${b} starts ${gapA.toFixed(1)} m off the wall`);
+        if (gapB > 0.6) detached.push(`${a} → ${b} ends ${gapB.toFixed(1)} m off the wall`);
+
+        // (2) THE HOP ITSELF, which is what OFFPATH prices. The line reaching
+        // the wall is not enough: with the hop free again the door drifts back
+        // out into the field and the first segment becomes a long straight
+        // stroke over a lawn — the same lie, now drawn instead of hidden.
+        const hopA = metresBetween(first[1], first[0], g.lat[r.fromNode]!, g.lon[r.fromNode]!);
+        const hopB = metresBetween(last[1], last[0], g.lat[r.toNode]!, g.lon[r.toNode]!);
+        hops.push(hopA, hopB);
+        if (hopA > FACE_RESCUE_M + 0.5) longHops.push(`${a} → ${b} hops ${hopA.toFixed(0)} m out`);
+        if (hopB > FACE_RESCUE_M + 0.5) longHops.push(`${a} → ${b} hops ${hopB.toFixed(0)} m in`);
+      }
+    }
+
+    expect(detached).toEqual([]);
+    // No teaching building needs the whole-building RESCUE_REACH_M (measured
+    // 2026-08-23), so FACE_RESCUE_M is the ceiling: a wall with no pavement
+    // inside PORTAL_REACH_M may reach twice as far, and nothing further.
+    expect(longHops).toEqual([]);
+
+    hops.sort((x, y) => x - y);
+    const p50 = hops[Math.floor(hops.length / 2)]!;
+    // Measured 2.6 m across all 462 ordered pairs. The door sat 30.1 m out
+    // before the fix, and 5.1 m with the reach tightened but OFFPATH left at
+    // 1.0 — so 4 m passes ordinary OSM churn and fails a re-freed hop.
+    expect(p50).toBeLessThan(4);
+  }, 120_000);
+
+  /**
+   * "Next door" is a real answer — Mayer Hall and York Hall genuinely share a
+   * network node — but it used to fire for buildings a long walk apart, because
+   * two 45 m door bubbles could overlap across a whole courtyard. 17 of these
+   * 231 pairs read "0 m / Next door" on 2026-08-21; Geisel Library ↔ Price
+   * Center West, 208 m apart, was the worst of them.
+   */
+  it('only says "next door" about buildings that really are next door', () => {
+    const liars: string[] = [];
+    const seen: string[] = [];
+    for (let i = 0; i < TEACHING.length; i++) {
+      for (let j = i + 1; j < TEACHING.length; j++) {
+        const a = TEACHING[i]!;
+        const b = TEACHING[j]!;
+        const r = routeBetween(g, doors.get(a)!, doors.get(b)!, 'walk');
+        if (!r || r.metres >= 1) continue; // NEAR_M in DistanceBar.tsx
+        // Wall to wall, not centre to centre: Mayer Hall and York Hall are 95 m
+        // apart by centroid and yet their footprints very nearly touch, which
+        // is exactly the case the copy is FOR.
+        let apart = Infinity;
+        for (const [la, lo] of outlines.get(a)!) {
+          const d = toOutline(b, la, lo);
+          if (d < apart) apart = d;
+        }
+        seen.push(`${a} ↔ ${b}: walls ${apart.toFixed(0)} m`);
+        if (apart > NEXT_DOOR_M) liars.push(`${a} ↔ ${b} (walls ${apart.toFixed(0)} m apart)`);
+      }
+    }
+    console.log(`"next door" pairs:\n  ${seen.join('\n  ')}`);
+    expect(liars).toEqual([]);
+  }, 120_000);
+
   it('reads Center Hall → Geisel as a real cross-campus walk', () => {
     const a = matchBuilding('Center Hall')!;
     const b = matchBuilding('Geisel Library')!;
@@ -198,19 +315,21 @@ describe('the shipped walk graph', () => {
     const r = routeBetween(g, doors.get('Center Hall')!, doors.get('Geisel Library')!, 'walk');
     expect(r).not.toBeNull();
 
-    // Measured 268 m of network against a 355 m centroid-to-centroid straight
-    // line — 0.76×, i.e. SHORTER than the crow flies. That is correct and not a
-    // shortcut through a building: `metres` is the door-to-door leg alone
-    // (walk-route.ts), and Geisel's south doors are much closer to Center Hall
-    // than Geisel's centre is. Do not "fix" this bound back above 1.0× — the
-    // failure worth catching is the opposite one, a network leg far LONGER than
-    // the straight line, which is what leaving by the wrong face looks like.
+    // Measured 338 m of outdoor leg against a 355 m centroid-to-centroid
+    // straight line — 0.95×, i.e. slightly SHORTER than the crow flies. That is
+    // correct and not a shortcut through a building: `metres` is the wall-to-
+    // wall leg alone (walk-route.ts), and Geisel's south doors are much closer
+    // to Center Hall than Geisel's centre is. Do not "fix" this bound back
+    // above 1.0× — the failure worth catching is the opposite one, a leg far
+    // LONGER than the straight line, which is what leaving by the wrong face
+    // looks like. (It read 268 m / 0.76× until 2026-08-23, when the two hops
+    // out to the pavement stopped being counted as zero distance.)
     expect(r!.metres).toBeGreaterThan(straight * 0.5);
     expect(r!.metres).toBeLessThan(straight * 1.5);
 
     // `seconds`, unlike `metres`, is the whole trip including both indoor legs,
-    // so crow-flies pace is a hard-ish ceiling on it: measured 307 s over a
-    // 355 m straight line is 1.16 m/s, under the profile's 1.30 m/s flat speed.
+    // so crow-flies pace is a hard-ish ceiling on it: measured 341 s over a
+    // 355 m straight line is 1.04 m/s, under the profile's 1.30 m/s flat speed.
     // A reading that beat it would mean the indoor cost stopped being charged.
     const pace = straight / r!.seconds;
     expect(pace).toBeLessThan(PROFILES.walk.flat);

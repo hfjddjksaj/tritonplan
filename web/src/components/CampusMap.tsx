@@ -526,9 +526,11 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
    *  - A DEGRADED answer carries `path: null`. A straight line across a canyon
    *    would be a confident lie, and the readout already says the route is
    *    unclear.
-   *  - A SINGLE-POINT path. Mayer Hall and York Hall reach the network at the
-   *    same node, so their cheapest route never touches it; a LineString needs
-   *    two positions, and MapLibre would reject the geometry.
+   *  - A SINGLE-POINT path. Rare since the 2026-08-23 door-pricing fix, since
+   *    the line now starts on the wall rather than at the node it snapped to,
+   *    but two footprints that TOUCH can still share a door with no hop at
+   *    either end; a LineString needs two positions, and MapLibre would reject
+   *    the geometry.
    */
   useEffect(() => {
     const map = gl.map;

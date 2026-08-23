@@ -198,9 +198,38 @@ export function ambiguousKeyCount(): number {
  * for a matched building, or a campus-scoped text search as fallback.
  */
 export function googleMapsLink(target: { lat: number; lng: number } | string): string {
-  const query =
-    typeof target === 'string' ? `${target}, UC San Diego` : `${target.lat},${target.lng}`;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeQuery(target))}`;
+}
+
+type MapsTarget = { lat: number; lng: number } | string;
+
+/** Exact coordinates when we have them; a campus-scoped text search otherwise. */
+const placeQuery = (t: MapsTarget): string =>
+  typeof t === 'string' ? `${t}, UC San Diego` : `${t.lat},${t.lng}`;
+
+/** Google's own name for a travel mode. It has no scooter, and walking is the honest stand-in. */
+export type MapsTravelMode = 'walking' | 'bicycling';
+
+/**
+ * Directions from one place to another (user-initiated navigation only).
+ *
+ * ⚠ Not `googleMapsLink(destination)`. The Distance bar linked to a SEARCH for
+ * the far building until 2026-08-23, which dropped the half a reader came for
+ * — they are looking at a route and asking to take it with them, not asking
+ * where the building is.
+ */
+export function googleMapsDirections(
+  origin: MapsTarget,
+  destination: MapsTarget,
+  travelmode: MapsTravelMode = 'walking',
+): string {
+  const params = new URLSearchParams({
+    api: '1',
+    origin: placeQuery(origin),
+    destination: placeQuery(destination),
+    travelmode,
+  });
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
 /**

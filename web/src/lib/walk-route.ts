@@ -21,9 +21,17 @@ import type { Portal } from './walk-snap';
 export interface WalkRoute {
   profile: Profile;
   /**
-   * Length of the NETWORK leg only — deliberately EXCLUDING the indoor seed
-   * cost. The gold line drawn on the map is exactly this leg, so "910 m" has
-   * to match the line a reader can see.
+   * Length of the whole OUTDOOR leg — the network path plus the two hops from
+   * the walls out to it — and deliberately EXCLUDING the indoor legs. The gold
+   * line drawn on the map is exactly this, so "910 m" has to match the line a
+   * reader can see.
+   *
+   * ⚠ The hops belong in here, and leaving them out was a bug (fixed
+   * 2026-08-23). A hop is ordinary outdoor walking: you step out of the
+   * building and cross up to FACE_RESCUE_M of ground to the nearest path. It
+   * is charged in `seedCost`, so counting it as zero distance while charging
+   * it as time made the two readings disagree with each other AND made the
+   * line start away from the building.
    *
    * ⚠ `metres` and `seconds` are on different bases on purpose. See `seconds`.
    */
@@ -51,11 +59,15 @@ export interface WalkRoute {
   /**
    * `[lon, lat]` pairs, GeoJSON order, fed straight to MapLibre.
    *
-   * ⚠ Can hold a SINGLE point, and that is a real answer rather than a
-   * failure: two neighbours can share a door. Mayer Hall and York Hall both
-   * reach the same network node, so their cheapest route never touches the
-   * network at all — 0 m of line, 81 s of indoor walking. Whatever draws this
-   * has to survive a one-point path (a LineString needs two positions).
+   * Starts on the wall of A and ends on the wall of B: the first and last
+   * positions are the outline samples the two doors were priced from, not the
+   * network nodes. That is what makes the line reach the buildings it claims
+   * to join.
+   *
+   * ⚠ Can still collapse to a SINGLE point, and that is a real answer rather
+   * than a failure: two footprints that touch can share a door node with no
+   * hop at either end — 0 m of line, all of the trip indoors. Whatever draws
+   * this has to survive a one-point path (a LineString needs two positions).
    */
   path: [number, number][];
   /** The door the route actually left by, for the A badge. */
@@ -179,7 +191,11 @@ export function routeBetween(
   // Seed costs are EQUIVALENT METRES (walk-snap.ts): the indoor leg inflated by
   // INDOOR, plus the hop out to the node. Dividing by the profile's flat speed
   // puts them in seconds, the same units the edge weights carry.
+  // Kept so the back-walk can recover WHICH door it started from, and with it
+  // the point on the wall the route stepped out of.
+  const fromByNode = new Map<number, Portal>();
   for (const p of from) {
+    fromByNode.set(p.node, p);
     const t = p.seedCost / spec.flat;
     if (t < dist[p.node]!) {
       dist[p.node] = t;
@@ -214,14 +230,16 @@ export function routeBetween(
   // included — not the nearest one on the network.
   let bestNode = -1;
   let bestTotal = Infinity;
+  let toPortal: Portal | null = null;
   for (const p of to) {
     const total = dist[p.node]! + p.seedCost / spec.flat;
     if (total < bestTotal) {
       bestTotal = total;
       bestNode = p.node;
+      toPortal = p;
     }
   }
-  if (bestNode < 0 || !Number.isFinite(bestTotal)) return null;
+  if (bestNode < 0 || !toPortal || !Number.isFinite(bestTotal)) return null;
 
   // Walk `prev` back to whichever seeded door the route really started from.
   const nodes: number[] = [];
@@ -250,13 +268,34 @@ export function routeBetween(
     onStairs = stair;
   }
 
+  // The two hops: wall → first node, last node → wall. Real outdoor walking,
+  // already charged in seedCost, so they join both the line and `metres`.
+  // Anything under half a metre is the quantisation grid rather than a step,
+  // and repeating a position would only put a degenerate segment in the
+  // LineString.
+  const path: [number, number][] = nodes.map((i) => [g.lon[i]!, g.lat[i]!] as [number, number]);
+  const fromPortal = fromByNode.get(nodes[0]!);
+  for (const [portal, end] of [
+    [fromPortal, 'start'],
+    [toPortal, 'end'],
+  ] as const) {
+    if (!portal) continue;
+    const [la, lo] = portal.at;
+    const node = end === 'start' ? nodes[0]! : bestNode;
+    const hop = metresBetween(la, lo, g.lat[node]!, g.lon[node]!);
+    if (hop < 0.5) continue;
+    metres += hop;
+    if (end === 'start') path.unshift([lo, la]);
+    else path.push([lo, la]);
+  }
+
   return {
     profile,
     metres,
     seconds: bestTotal + spec.fixedSeconds,
     stepsRuns,
     ascent,
-    path: nodes.map((i) => [g.lon[i]!, g.lat[i]!] as [number, number]),
+    path,
     fromNode: nodes[0]!,
     toNode: bestNode,
     degraded: false,

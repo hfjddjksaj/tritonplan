@@ -20,23 +20,25 @@
  * ⚠ Two readings the copy has to keep honest, both forced by real pairs
  * measured against the engine on 2026-08-21:
  *
- *  1. `metres` counts the OUTDOOR NETWORK LEG only, while `seconds` covers the
- *     whole door-to-door trip, walking inside the buildings included. The two
- *     bases are deliberate and walk-route.ts explains at length why neither may
- *     be "fixed" into the other. Center Hall → Conrad Prebys Music Center reads
- *     160 m and 5 min, because 227 equivalent metres of that trip is indoors
- *     between two wide buildings. Set as a bare "160 m" over "5 min" a reader
- *     divides them, gets 0.5 m/s, and concludes the feature is broken. So the
- *     distance is always LABELLED as the on-path distance — "160 m on paths" —
- *     the length of the gold line they can see, never the length of the trip.
+ *  1. `metres` counts the OUTDOOR leg only, while `seconds` covers the whole
+ *     door-to-door trip, walking inside the buildings included. The two bases
+ *     are deliberate and walk-route.ts explains at length why neither may be
+ *     "fixed" into the other. Center Hall → Conrad Prebys Music Center reads
+ *     364 m and 6 min, because 140 equivalent metres of that trip is indoors
+ *     between two wide buildings. Set as a bare "364 m" over "6 min" a reader
+ *     divides them, gets 1.0 m/s, and concludes the feature is slow or broken.
+ *     So the distance is always LABELLED as the on-path distance — "364 m on
+ *     paths" — the length of the gold line they can see, never the trip.
  *  2. A route can be a single point with `metres === 0`, and that is a real
- *     answer rather than a failure: Mayer Hall and York Hall reach the same
- *     network node, so their cheapest route never touches the network. "0 m"
- *     would read as broken, so under a metre the distance slot says "Next door"
- *     and the readout explains that there is no outdoor leg to draw.
+ *     answer rather than a failure. Rare since the 2026-08-23 door-pricing fix
+ *     — no two teaching buildings do it any more — but two footprints that
+ *     TOUCH can still share a door node with no hop at either end, and then the
+ *     whole trip is indoors. "0 m" would read as broken, so under a metre the
+ *     distance slot says "Next door" and the readout explains that there is no
+ *     outdoor leg to draw.
  */
 import { useId, useState } from 'react';
-import { googleMapsLink } from '../lib/buildings';
+import { googleMapsDirections } from '../lib/buildings';
 import { colorsForHue } from '../lib/colors';
 import { PROFILES, PROFILE_ORDER, type Profile } from '../lib/walk-cost';
 import type { WalkPlace } from '../lib/walk-places';
@@ -311,13 +313,19 @@ export function DistanceBar({
                     ? 'Route unclear — straight-line estimate, no line drawn'
                     : 'Door to door, along real walking paths'}
                 </span>
-                {b?.place && (
+                {a?.coords && b?.coords && (
                   <a
                     className="campusmap__dist-link"
-                    href={googleMapsLink(b.place)}
+                    href={googleMapsDirections(
+                      a.coords,
+                      b.coords,
+                      profile === 'bike' ? 'bicycling' : 'walking',
+                    )}
                     target="_blank"
                     rel="noreferrer noopener"
-                    aria-label={`Open ${b.place} in Google Maps`}
+                    aria-label={`Open directions from ${a.place ?? a.courseCode} to ${
+                      b.place ?? b.courseCode
+                    } in Google Maps`}
                   >
                     Open in Google Maps ↗
                   </a>

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { matchBuilding, googleMapsLink, ambiguousKeyCount, COMPLEX_RADIUS_M } from './buildings';
+import {
+  matchBuilding,
+  googleMapsLink,
+  googleMapsDirections,
+  ambiguousKeyCount,
+  COMPLEX_RADIUS_M,
+} from './buildings';
 import dataset from '../data/ucsd-buildings.json';
 import { BUILDING_ALIASES } from './building-aliases';
 
@@ -166,6 +172,27 @@ describe('googleMapsLink', () => {
     expect(googleMapsLink('Galbraith Hall')).toBe(
       'https://www.google.com/maps/search/?api=1&query=Galbraith%20Hall%2C%20UC%20San%20Diego',
     );
+  });
+});
+
+describe('googleMapsDirections', () => {
+  it('carries BOTH ends, not just the destination', () => {
+    // The Distance bar used to link to a search for B alone, which threw away
+    // the half the reader was looking at.
+    const url = googleMapsDirections({ lat: 32.8753, lng: -117.2402 }, { lat: 32.8745, lng: -117.24 });
+    const q = new URL(url).searchParams;
+    expect(new URL(url).pathname).toBe('/maps/dir/');
+    expect(q.get('origin')).toBe('32.8753,-117.2402');
+    expect(q.get('destination')).toBe('32.8745,-117.24');
+    expect(q.get('travelmode')).toBe('walking');
+  });
+
+  it('takes the travel mode the reader is looking at', () => {
+    const url = googleMapsDirections('Mayer Hall', 'York Hall', 'bicycling');
+    const q = new URL(url).searchParams;
+    expect(q.get('origin')).toBe('Mayer Hall, UC San Diego');
+    expect(q.get('destination')).toBe('York Hall, UC San Diego');
+    expect(q.get('travelmode')).toBe('bicycling');
   });
 });
 
