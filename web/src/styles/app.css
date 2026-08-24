@@ -3370,10 +3370,11 @@ button.termsw__cell:hover {
   display: flex;
   flex-direction: column;
 }
+/* No gap: the bar and its ✕ are one box split by a hairline (below), not two
+   controls parked next to each other. */
 .campusmap__dist-barrow {
   display: flex;
   align-items: stretch;
-  gap: 4px;
 }
 /* Collapsed and never measured: recessed grey, and the whole row is the toggle
    — 30 px of island for a feature nobody has asked for yet. */
@@ -3393,16 +3394,20 @@ button.termsw__cell:hover {
   cursor: pointer;
   text-align: left;
 }
-/* Measured: gold, because a gold line is now drawn on the map and the bar is
-   the only thing tying the two together while the panel is shut. */
-/* #f0d99f is --gold-soft one step darker: the gold family has an ink, a fill
-   and an accent but no line, and --wl-line is the waitlist rows' own. */
+/* Measured: white like the island it sits in, and the gold moves onto the
+   summary chip instead of a slab (user's call, 2026-08-24). A gold line is
+   drawn on the map and while the panel is shut this bar is the only thing
+   tying the two together — but one gold pill around the number carries that
+   as well as a whole yellow panel did, without a second surface colour inside
+   a white island. The stronger hairline is what keeps the bar visible now the
+   fill no longer does it. */
 .campusmap__dist--has .campusmap__dist-bar {
-  background: var(--gold-soft);
-  border-color: #f0d99f;
+  background: var(--surface);
+  border-color: var(--line-strong);
 }
-/* A degraded answer is deliberately NOT gold: nothing is drawn on the map, so
-   the bar must not promise a line the reader will go looking for (spec §6). */
+/* A degraded answer is deliberately NOT gold — no chip, recessed grey fill:
+   nothing is drawn on the map, so the bar must not promise a line the reader
+   will go looking for (spec §6). */
 .campusmap__dist--vague .campusmap__dist-bar {
   background: var(--surface-2);
   border-color: var(--line-strong);
@@ -3442,6 +3447,14 @@ button.termsw__cell:hover {
   color: var(--gold-ink);
   font-variant-numeric: tabular-nums;
 }
+/* The one piece of gold left in a white bar, and it sits on the NUMBER — the
+   thing the drawn line is about — rather than on the furniture around it. Only
+   on a real measurement: a degraded answer has no line to point at. */
+.campusmap__dist--has .campusmap__dist-sum {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--gold-soft);
+}
 .campusmap__dist--vague .campusmap__dist-sum {
   color: var(--text-muted);
 }
@@ -3450,36 +3463,54 @@ button.termsw__cell:hover {
   color: var(--text-faint);
   font-size: 10px;
 }
-/* Sits between the summary and the chevron, at the row's height. Smaller and
-   quieter than the cluster's "Close map" ✕ so the two never read as the same
-   control — one clears a route, the other shuts the map. */
+/* Welded onto the right end of the bar: same box, same border, a hairline
+   between them. As its own rounded box it read as a sticker someone had put
+   on the row (user, 2026-08-24) — worst on the old gold fill, where a white
+   button punched a hole in it. Still smaller and quieter than the cluster's
+   "Close map" ✕ so the two never read as the same control — one clears a
+   route, the other shuts the map. */
 .campusmap__dist-clear {
   flex: none;
-  width: 26px;
-  border: 1px solid #f0d99f;
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--gold-ink);
+  width: 28px;
+  border: 1px solid var(--line-strong);
+  border-left-color: var(--line);
+  border-radius: 0 8px 8px 0;
+  background: transparent;
+  color: var(--text-muted);
   font-size: 11px;
   cursor: pointer;
 }
 .campusmap__dist-clear:hover {
   background: var(--gold-soft);
+  color: var(--gold-ink);
 }
-.campusmap__dist--vague .campusmap__dist-clear,
-.campusmap__dist:not(.campusmap__dist--has) .campusmap__dist-clear {
-  border-color: var(--line-strong);
-  color: var(--text-muted);
+/* The bar gives up its right edge to the ✕ — but only when there is one. */
+.campusmap__dist--clearable .campusmap__dist-bar {
+  border-right: none;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
+/* Open: the whole row hands its bottom edge to the panel, ✕ included. */
+.campusmap__dist--open .campusmap__dist-clear {
+  border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+}
+/* Half-set (an A with no B): the bar is the untouched grey, so the ✕ matches
+   its lighter hairline instead of the measured bar's. */
+.campusmap__dist:not(.campusmap__dist--has):not(.campusmap__dist--vague) .campusmap__dist-clear {
+  border-color: var(--line);
+}
+/* White, continuing the bar's box downward — the island is white and a second
+   surface colour inside it was the thing that looked bolted on. */
 .campusmap__dist-panel {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 9px;
-  border: 1px solid #f0d99f;
+  border: 1px solid var(--line-strong);
   border-top: none;
   border-radius: 0 0 8px 8px;
-  background: var(--gold-soft);
+  background: var(--surface);
 }
 .campusmap__dist--vague .campusmap__dist-panel,
 .campusmap__dist:not(.campusmap__dist--has) .campusmap__dist-panel {
@@ -3552,6 +3583,13 @@ button.termsw__cell:hover {
   font-size: 11.5px;
   font-weight: 600;
   color: var(--gold-ink);
+}
+/* Same chip as the collapsed summary, on the same qualified distance — the two
+   are the same sentence in two places, so they get the same mark. */
+.campusmap__dist--has .campusmap__dist-sub {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--gold-soft);
 }
 .campusmap__dist--vague .campusmap__dist-sub {
   color: var(--text-muted);
