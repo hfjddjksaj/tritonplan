@@ -196,9 +196,6 @@ export function DistanceBar({
     route && !route.degraded ? 'campusmap__dist--has' : '',
     route?.degraded ? 'campusmap__dist--vague' : '',
     open ? 'campusmap__dist--open' : '',
-    // The ✕ is welded onto the bar's right end, so the bar drops that edge —
-    // but only while there is a ✕ there to close the box again.
-    canClear ? 'campusmap__dist--clearable' : '',
   ]
     .filter(Boolean)
     .join(' ');

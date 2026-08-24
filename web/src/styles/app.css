@@ -3370,14 +3370,21 @@ button.termsw__cell:hover {
   display: flex;
   flex-direction: column;
 }
-/* No gap: the bar and its ✕ are one box split by a hairline (below), not two
-   controls parked next to each other. */
+/* THE ROW'S BOX LIVES HERE, not on the toggle inside it (user's call,
+   2026-08-24). The ✕ used to be its own bordered button parked beside the
+   bar, which left the row as two shapes with a seam down the middle and,
+   once open, a panel whose right edge lined up with nothing. Border, fill and
+   radius belong to the container so the ✕ is *inside* the box in every state,
+   and the panel below continues the same box downward.
+   Collapsed and never measured: recessed grey — 30 px of island for a feature
+   nobody has asked for yet. */
 .campusmap__dist-barrow {
   display: flex;
   align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
 }
-/* Collapsed and never measured: recessed grey, and the whole row is the toggle
-   — 30 px of island for a feature nobody has asked for yet. */
 .campusmap__dist-bar {
   flex: 1;
   min-width: 0;
@@ -3385,9 +3392,8 @@ button.termsw__cell:hover {
   align-items: center;
   gap: 8px;
   padding: 6px 9px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
+  border: none;
+  background: transparent;
   font: inherit;
   font-size: 12px;
   color: var(--ink);
@@ -3401,18 +3407,20 @@ button.termsw__cell:hover {
    as well as a whole yellow panel did, without a second surface colour inside
    a white island. The stronger hairline is what keeps the bar visible now the
    fill no longer does it. */
-.campusmap__dist--has .campusmap__dist-bar {
+.campusmap__dist--has .campusmap__dist-barrow {
   background: var(--surface);
   border-color: var(--line-strong);
 }
 /* A degraded answer is deliberately NOT gold — no chip, recessed grey fill:
    nothing is drawn on the map, so the bar must not promise a line the reader
    will go looking for (spec §6). */
-.campusmap__dist--vague .campusmap__dist-bar {
+.campusmap__dist--vague .campusmap__dist-barrow {
   background: var(--surface-2);
   border-color: var(--line-strong);
 }
-.campusmap__dist--open .campusmap__dist-bar {
+/* Open: the row hands its bottom edge to the panel and the two become one
+   box. The ✕ is inside that box, so it needs no rule of its own. */
+.campusmap__dist--open .campusmap__dist-barrow {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   border-bottom-color: transparent;
@@ -3463,42 +3471,32 @@ button.termsw__cell:hover {
   color: var(--text-faint);
   font-size: 10px;
 }
-/* Welded onto the right end of the bar: same box, same border, a hairline
-   between them. As its own rounded box it read as a sticker someone had put
-   on the row (user, 2026-08-24) — worst on the old gold fill, where a white
-   button punched a hole in it. Still smaller and quieter than the cluster's
-   "Close map" ✕ so the two never read as the same control — one clears a
-   route, the other shuts the map. */
+/* Rides INSIDE the row's box with no border and no fill of its own — the box
+   around it is the barrow's. As its own bordered button it read as a sticker
+   stuck on the row (user, 2026-08-24). Its 3 px of inset keeps the hover tint
+   clear of the box's hairline; smaller and quieter than the cluster's "Close
+   map" ✕ so the two never read as the same control — one clears a route, the
+   other shuts the map. */
 .campusmap__dist-clear {
   flex: none;
-  width: 28px;
-  border: 1px solid var(--line-strong);
-  border-left-color: var(--line);
-  border-radius: 0 8px 8px 0;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 3px;
+  border: none;
+  border-radius: 6px;
   background: transparent;
+  /* Muted, not faint: ✕ is a text glyph, and --text-faint on the recessed grey
+     is 2.9:1. A touch darker than the ▾ beside it, which is fair — one is an
+     action, the other is a state. */
   color: var(--text-muted);
   font-size: 11px;
+  line-height: 1;
   cursor: pointer;
 }
 .campusmap__dist-clear:hover {
   background: var(--gold-soft);
   color: var(--gold-ink);
-}
-/* The bar gives up its right edge to the ✕ — but only when there is one. */
-.campusmap__dist--clearable .campusmap__dist-bar {
-  border-right: none;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-/* Open: the whole row hands its bottom edge to the panel, ✕ included. */
-.campusmap__dist--open .campusmap__dist-clear {
-  border-bottom-right-radius: 0;
-  border-bottom-color: transparent;
-}
-/* Half-set (an A with no B): the bar is the untouched grey, so the ✕ matches
-   its lighter hairline instead of the measured bar's. */
-.campusmap__dist:not(.campusmap__dist--has):not(.campusmap__dist--vague) .campusmap__dist-clear {
-  border-color: var(--line);
 }
 /* White, continuing the bar's box downward — the island is white and a second
    surface colour inside it was the thing that looked bolted on. */
@@ -3512,8 +3510,14 @@ button.termsw__cell:hover {
   border-radius: 0 0 8px 8px;
   background: var(--surface);
 }
-.campusmap__dist--vague .campusmap__dist-panel,
-.campusmap__dist:not(.campusmap__dist--has) .campusmap__dist-panel {
+/* Both unmeasured states keep the recessed grey — but each takes the SAME
+   hairline as the row above it, or the seam between the two shows up as a
+   step in the box's outline. */
+.campusmap__dist--vague .campusmap__dist-panel {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+.campusmap__dist:not(.campusmap__dist--has):not(.campusmap__dist--vague) .campusmap__dist-panel {
   border-color: var(--line);
   background: var(--surface-2);
 }
