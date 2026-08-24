@@ -182,6 +182,8 @@ export function DistanceBar({
   const panelId = useId();
 
   const near = route !== null && !route.degraded && route.metres < NEAR_M;
+  /** Both pickers on one place: picked, but not a pair. */
+  const sameEnds = a !== null && b !== null && a.id === b.id;
   const summary = route ? `${distanceText(route)} · ${minutes(route.seconds)}` : null;
 
   // The clear button exists because the summary survives collapsing: a gold
@@ -218,7 +220,9 @@ export function DistanceBar({
             <span className="campusmap__dist-sum">{summary}</span>
           ) : (
             <span className="campusmap__dist-hint">
-              {loading ? 'measuring…' : 'between two places'}
+              {/* Shut, this row is all there is, so it cannot read as untouched
+                  when the student has picked twice — see the panel's note. */}
+              {loading ? 'measuring…' : sameEnds ? 'same place at both ends' : 'between two places'}
             </span>
           )}
           <span className="campusmap__dist-chev" aria-hidden="true">
@@ -256,7 +260,16 @@ export function DistanceBar({
           {loading && <div className="campusmap__dist-note">Working out the route…</div>}
 
           {!loading && !route && (
-            <div className="campusmap__dist-note">Pick both ends to measure.</div>
+            <div className="campusmap__dist-note">
+              {/* One place at both ends is not a trip, so useWalkRoute returns
+                  nothing for it (`from.id === to.id`, spec §7.6) and it lands
+                  on this same empty branch as an untouched bar. Saying "pick
+                  both ends" there asks for something the student has already
+                  done — twice — and leaves them hunting for what went wrong. */}
+              {sameEnds
+                ? 'Both ends are the same place — pick a different one.'
+                : 'Pick both ends to measure.'}
+            </div>
           )}
 
           {!loading && route && (

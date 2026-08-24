@@ -306,6 +306,22 @@ describe('DistanceBar', () => {
     expect(panel()!.textContent).toMatch(/working out the route/i);
   });
 
+  it('names the one place at both ends instead of asking for picks already made', () => {
+    // useWalkRoute returns IDLE for `from.id === to.id` (spec §7.6), so this
+    // lands on the same empty-route branch as an untouched bar — where "pick
+    // both ends" is a lie, because both ends ARE picked.
+    render(props({ a: PLACES[0]!, b: PLACES[0]!, route: null }));
+    // Shut, the bar is all there is: it must not read as untouched either.
+    expect(toggle().textContent).toMatch(/same place/i);
+    expand();
+    expect(panel()!.textContent).toMatch(/same place/i);
+    expect(panel()!.textContent).not.toMatch(/pick both ends/i);
+
+    // Two different ends with no result yet still get the original prompt.
+    render(props({ a: PLACES[0]!, b: null, route: null }));
+    expect(panel()!.textContent).toMatch(/pick both ends/i);
+  });
+
   it('never remembers being open — it starts collapsed every time', () => {
     render(props());
     expand();
