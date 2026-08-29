@@ -13,6 +13,9 @@ export interface TssPrereqRow {
 }
 
 /**
+ * One row of the `_sections` navigation response: a (Event × EventPackage) pair
+ * (DENORMALIZED).
+ *
  * Which fields a row carries depends on the requesting page's `$select` — e.g. the
  * 2026-08-10 live feed has `locationText` (lowercase) but no `EventKey` / `BeginDate` /
  * `EndDate` / `LocationText`, while the 2026-07-21 fixtures are the other way around.

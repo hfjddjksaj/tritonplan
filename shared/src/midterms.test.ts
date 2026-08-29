@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { midtermsFromSched, optionMidterms } from './midterms.js';
 import type { Component, SectionOption } from './types.js';
 
-// The real CHEM-043A lecture Sched (user TSS screenshot, 2026-07-24).
+// The real CHEM-043A lecture Sched (captured live from TSS, 2026-07-24).
 const CHEM_43A_SCHED =
   'F 09:00 AM - 09:50 AM In Person @ York Hall Room 2622\n' +
   'Midterm Examination 10/31/2026 10:00 AM - 11:50 AM In Person\n' +

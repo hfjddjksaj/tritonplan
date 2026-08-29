@@ -811,9 +811,9 @@ describe('CampusMap', () => {
   });
 
   it('hides the open card once its dot pans off the canvas, and brings it back when the dot returns', async () => {
-    // QA I2: the card used to outlive its marker — `project()` kept answering
-    // off-screen coordinates and `cardPlacement` clamped them back inside, so it
-    // parked in a corner over open ocean with no dot and no way to relate it to
+    // Without the cull the card outlives its marker — `project()` keeps answering
+    // off-screen coordinates and `cardPlacement` clamps them back inside, so it
+    // parks in a corner over open ocean with no dot and no way to relate it to
     // anything. Hidden rather than closed: the card IS the marker's chip, so
     // panning past it and back must not have thrown the selection away.
     render({ plan: planWithMeeting() });
@@ -836,10 +836,10 @@ describe('CampusMap', () => {
   });
 
   it('falls back to the building list when the map never finishes starting, error or no error', async () => {
-    // QA C3. Neither a 404'd worker chunk nor a container the CSS cascade
-    // collapsed to zero height produces a MapLibre `error`, so `gl.error` stays
-    // null and the WebGL fallback never fires — the student watched
-    // "Loading campus…" forever with a clean console. This is the other way in.
+    // Neither a 404'd worker chunk nor a container the CSS cascade collapsed
+    // to zero height produces a MapLibre `error`, so `gl.error` stays null and
+    // the WebGL fallback never fires — the student watches "Loading campus…"
+    // forever with a clean console. This is the other way in.
     // The suite's own fake clock only fakes Date (so the "today" slice is
     // stable); the load timer needs setTimeout faked too, and its own pump.
     vi.useRealTimers();
@@ -870,9 +870,9 @@ describe('CampusMap', () => {
 
   it('falls back to the building list when the campus data itself never arrives', async () => {
     // The third silent hang, and the nastiest: with no geometry there is no style
-    // and no home frame, so `new MapLibreMap()` never runs — which means C3's load
-    // timeout never even starts. Same class of cause as C1 (an asset the build was
-    // supposed to emit), so it needs the same exit.
+    // and no home frame, so `new MapLibreMap()` never runs — which means the load
+    // timeout never even starts. Same class of cause as the stall above (an asset
+    // the build was supposed to emit), so it needs the same exit.
     chunks.fail = true;
     render({ plan: planWithMeeting() });
     for (let i = 0; i < 20 && !container.querySelector('.campusmap__nogl'); i++) await pump();
