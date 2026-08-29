@@ -40,7 +40,7 @@ export class FakeMap {
    * fires `moveend`, which is what every test that does not care wants. Set
    * below 1 to model an ease still IN FLIGHT: the camera sits part-way there and
    * no `moveend` comes, which is the state a second zoom-button click used to
-   * read its starting zoom from (QA M2). Only applies when a duration was asked
+   * read its starting zoom from. Only applies when a duration was asked
    * for — `reduceMotion` callers pass 0 and always land.
    */
   static easeProgress = 1;

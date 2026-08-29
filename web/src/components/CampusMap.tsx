@@ -785,7 +785,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
               ))}
             </div>
             {/* Above the hairline: which pins to show. Below it: measure between
-                two of them. Two different jobs, so not a fourth tab (§7.1). */}
+                two of them. Two different jobs, so not a fourth tab. */}
             <div className="campusmap__rule" />
             <DistanceBar
               places={places}

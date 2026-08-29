@@ -209,7 +209,7 @@ describe('placeLabels near the canvas edge', () => {
 
 describe('hitMarker', () => {
   // The overlay's markers are pointer-transparent so that every press reaches
-  // the GL canvas and pans it (QA I1: they used to swallow the gesture whole).
+  // the GL canvas and pans it (they used to swallow the gesture whole).
   // This is what stands in for the browser's own hit testing afterwards, so it
   // has to agree with the boxes MapMarkers draws — same chip rect, same dot.
   const marker = (key: string, x: number, y: number, chip: PlacedMarker['chip']): PlacedMarker => ({

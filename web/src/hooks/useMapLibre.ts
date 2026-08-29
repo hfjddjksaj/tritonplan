@@ -1,8 +1,8 @@
 /**
  * Owns the actual MapLibre GL map instance and its camera: creates the map
  * once a container and a style are ready, fits it to the campus "home" view,
- * and exposes a small, rAF-throttled `tick` the DOM marker overlay (Task 7)
- * re-projects on. The style object itself is applied only at construction —
+ * and exposes a small, rAF-throttled `tick` the DOM marker overlay
+ * (MapMarkers.tsx) re-projects on. The style object itself is applied only at construction —
  * the underlying GeoJSON never changes at runtime (see `map-style.ts`), so
  * there is nothing to react to there; what DOES change over the map's life is
  * the camera, which this hook tracks and drives.
@@ -24,7 +24,7 @@ export interface HomeSpec {
   padding: { top: number; right: number; bottom: number; left: number };
 }
 
-/** Camera limits and motion preference — Task 8 sources these from `map-style.ts`'s `CAMERA`. */
+/** Camera limits and motion preference — sourced from `map-style.ts`'s `CAMERA`. */
 export interface MapCameraOptions {
   minZoom: number;
   maxZoom: number;
@@ -33,7 +33,7 @@ export interface MapCameraOptions {
 }
 
 /**
- * How long the map gets to fire `load` before we stop waiting on it (QA C3).
+ * How long the map gets to fire `load` before we stop waiting on it.
  *
  * MapLibre has exactly one honest failure channel, the `error` event, and two
  * of the three ways this map died in QA never reached it: a worker whose script
@@ -127,7 +127,7 @@ export function useMapLibre(
   // Where the zoom buttons are steering, while an ease is still in flight.
   // Reading `map.getZoom()` per click sampled the ANIMATION instead: a second
   // click inside the 500 ms ease restarted from the interpolated value, so two
-  // clicks moved 1.04 levels rather than 2 (QA M2). Cleared on `moveend` —
+  // clicks moved 1.04 levels rather than 2. Cleared on `moveend` —
   // which covers the end of our own ease and any wheel/pinch the student does
   // in between — so it never drifts away from the real camera.
   const targetZoom = useRef<number | null>(null);
@@ -277,8 +277,8 @@ export function useMapLibre(
     if (!map || !h) return;
     const cam = map.cameraForBounds(h.bounds, { padding: h.padding });
     // `cameraForBounds` answers centre/zoom/bearing and says nothing about
-    // pitch, so a tilted map used to stay tilted through "Reset view" — the
-    // student had no way back to flat at all (QA I3). "Reset" means the view
+    // pitch, so a tilted map would stay tilted through "Reset view" — the
+    // student would have no way back to flat at all. "Reset" means the view
     // the map opened on, and that view is flat and north-up — and, since the
     // fit-on-load effect above boosts the same `cameraForBounds` answer,
     // "Reset" has to boost it too, or it would land the camera on a WIDER
@@ -315,8 +315,8 @@ export function useMapLibre(
     (o: { pitch?: number; bearing?: number }) => {
       if (!map) return;
       // A control that changes nothing must not report that it did: pressing
-      // the compass at bearing 0 used to re-enable "Reset view" for a camera
-      // that never moved (QA M4).
+      // the compass at bearing 0 would re-enable "Reset view" for a camera
+      // that never moved.
       const settled = (want: number | undefined, have: number) => want === undefined || Math.abs(want - have) < 0.01;
       if (settled(o.bearing, map.getBearing()) && settled(o.pitch, map.getPitch())) return;
       // This ease interrupts any zoom ease in flight, and an interrupted one ends

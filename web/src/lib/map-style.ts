@@ -410,7 +410,7 @@ function dem(base: string) {
   };
 }
 
-/** Build the MapLibre style for the campus map, in the exact layer order the spec defines. */
+/** Build the MapLibre style for the campus map; layer order is load-bearing. */
 export function buildStyle(o: StyleOptions): StyleSpecification {
   const { sources, assetBase: base } = o;
 

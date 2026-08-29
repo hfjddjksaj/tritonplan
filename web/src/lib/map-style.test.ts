@@ -121,7 +121,7 @@ describe('buildStyle', () => {
     const district = s.layers.find((l) => l.id === LAYER.districtNames)!.layout as Record<string, unknown>;
     expect(district['text-letter-spacing']).toBe(0.08);
   });
-  it('pins the spec palette-table anchor colours exactly, and both Pool/Fountain spellings alike', () => {
+  it('pins the official palette anchor colours exactly, and both Pool/Fountain spellings alike', () => {
     // Anchors named directly, row by row, in the official palette table.
     expect(GROUND_COLORS['Grass']).toBe('#D4E5B9');
     expect(GROUND_COLORS['Planter']).toBe('#B5C7A2');
@@ -200,7 +200,7 @@ describe('hosts', () => {
     expect(calls).toContainEqual([LAYER.hosts3d, 'visibility', 'none']);
     expect(calls).toContainEqual(['terrain', null]);
   });
-  it('applyMode(_, "3d") sets the EXACT set of visibility flips the brief lists, not a superset that happens to include the right ones', () => {
+  it('applyMode(_, "3d") sets the EXACT documented set of visibility flips, not a superset that happens to include the right ones', () => {
     const map = new FakeMap({});
     applyMode(map, '3d');
     const visibility: Record<string, unknown> = {};
@@ -216,7 +216,7 @@ describe('hosts', () => {
       [LAYER.trees3d]: 'visible',
     });
   });
-  it('applyMode(_, "2d") sets the EXACT set of visibility flips the brief lists', () => {
+  it('applyMode(_, "2d") sets the EXACT documented set of visibility flips', () => {
     const map = new FakeMap({});
     applyMode(map, '2d');
     const visibility: Record<string, unknown> = {};
