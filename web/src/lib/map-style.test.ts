@@ -106,11 +106,10 @@ describe('buildStyle', () => {
     const landmark = s.layers.find((l) => l.id === LAYER.landmarkNames)!.layout as Record<string, unknown>;
     expect(layout['text-size']).toBeLessThan(landmark['text-size'] as number);
   });
-  it('draws road names in mixed case, the user’s preference over uppercase', async () => {
-    // Reverses this plan's original Ruling 10 (uppercase) — the user's own
-    // call, made after seeing the official UCSD map's mixed-case labels.
-    // Pinned so a revert to uppercase is a failing test, not a quiet
-    // regression nobody sees until the next browser pass.
+  it('draws road names in mixed case, matching the official UCSD map', async () => {
+    // Mixed case matches the official UCSD map's road labels. Pinned so a
+    // revert to uppercase is a failing test, not a quiet regression nobody
+    // sees until the next browser pass.
     const s = buildStyle({ sources: buildSources(await loadCampusGeo(), await loadCampusMap()), assetBase: '/' });
     const layout = s.layers.find((l) => l.id === LAYER.roadNames)!.layout as Record<string, unknown>;
     expect(layout['text-transform']).not.toBe('uppercase');

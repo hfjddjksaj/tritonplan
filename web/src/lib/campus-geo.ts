@@ -5,14 +5,14 @@
  * second bundled file (`ucsd-campus-map.json`) carries the ground-surface
  * polygons, trees, campus boundary and land use from the same ArcGIS source.
  *
- * Generated at dev time by `npm run fetch:buildings -w @triton/web`. The page
+ * Generated at dev time by `npm run fetch:campus-map -w @triton/web`. The page
  * NEVER fetches either file at runtime; both are bundled and pulled in with a
  * dynamic `?raw` import so they stay out of the first-paint chunk.
  *
- * Wire format keeps the files bundle-able without discarding precision: the
+ * Wire format keeps the files bundle-able without visible precision loss: the
  * map draws up to z19, where one screen pixel is ≈ 0.25 m at UCSD's latitude,
- * so the source geometry is carried unsimplified (no RDP) and only quantised
- * onto a 1e6 integer grid (~0.11 m — below a pixel), delta-encoded within each
+ * and the source geometry is RDP-simplified at 0.25 m (geo-encode.mjs),
+ * quantised onto a 1e6 integer grid (~0.11 m), and delta-encoded within each
  * ring so most values are one or two digits.
  */
 
@@ -144,9 +144,7 @@ let cached: Promise<CampusGeo> | null = null;
  * first-paint chunk, and makes JSON.parse the cost instead of evaluating a
  * giant JS array literal. Memoized — reopening the map never re-parses.
  * (This count moves with the RDP tolerance in geo-encode.mjs's
- * `encodeRing`/`encodeShape` default `epsM` — was ~11k pre-precision-fix,
- * ~77k at the briefly-shipped fully-lossless `eps 0`, now ~43k at the
- * user's chosen `eps 0.25`.)
+ * `encodeRing`/`encodeShape` default `epsM` — ~43k at the default 0.25 m.)
  */
 export function loadCampusGeo(): Promise<CampusGeo> {
   cached ??= import('../data/ucsd-campus-geo.json?raw').then((mod) => {
@@ -175,8 +173,7 @@ let cachedMap: Promise<CampusMapData> | null = null;
  * Same dynamic `?raw` import scheme as `loadCampusGeo`, and for the same
  * reason: ~214k numeric literals (mostly the ground layer), far too many to
  * let TypeScript deep-type. Memoized the same way — reopening the map never
- * re-parses. (Was ~565k at the briefly-shipped `eps 0`; RDP at the user's
- * chosen 0.25 m brought this back down.)
+ * re-parses.
  */
 export function loadCampusMap(): Promise<CampusMapData> {
   cachedMap ??= import('../data/ucsd-campus-map.json?raw').then((mod) => {
@@ -207,9 +204,9 @@ export function loadCampusMap(): Promise<CampusMapData> {
  * Its polygon reaches from RIMAC (32.8849) up to 32.8917 — 680 m of canyon,
  * playing fields and parking, and the northern 530 m of that hosts nothing at
  * all. Because the fit is height-bound on a wide canvas, that empty band cost
- * twice over, measured against the framing the user asked for (2.00 m/px
- * centred on 32.88030, read off their reference screenshot's scale bar and
- * marker positions): the fitted camera sat **310 m north** of it, which piled
+ * twice over, measured against the target framing (2.00 m/px centred on
+ * 32.88030, read off a reference screenshot's scale bar and marker
+ * positions): the fitted camera sat **310 m north** of it, which piled
  * every teaching building into the bottom half of the canvas, and the fit came
  * out **24 % wider** than asked. Dropping this one name lands within 46 m of
  * that centre at 1.85 m/px on the same canvas, with no magic offset anywhere.

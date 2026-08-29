@@ -203,7 +203,7 @@ function injectStyleOnce(): void {
   style.textContent = [
     /* Cosmetic patch for a TSS display quirk (confirmed present WITHOUT this
      * extension): the table's column-resize handle can get stuck as a thick
-     * bar spilling down the whole list. It is now ALWAYS invisible — no bar,
+     * bar spilling down the whole list. It is ALWAYS invisible — no bar,
      * no guide line — with its hit area confined to the header row; the
      * col-resize cursor is the only hint. Drag feedback comes from the live
      * column-resize preview below (the real column border follows the mouse). */

@@ -3,11 +3,11 @@
  * geometry, turn two places into two sets of doors, and route all three modes.
  *
  * Nothing here runs — and nothing downloads — until BOTH ends are picked. That
- * is what keeps opening the map itself unchanged in cost (spec §7.6): the
+ * is what keeps opening the map itself unchanged in cost: the
  * graph and the geometry are dynamic imports behind memoized loaders, so a
  * reader who never fills in the second select never pays a byte for either.
  *
- * Every failure below degrades instead of throwing (spec §6). Routing over
+ * Every failure below degrades instead of throwing. Routing over
  * real data fails for ordinary reasons — 182 of the 608 bundled footprints sit
  * outside the walk graph's bbox and get no doors at all — so a caller that had
  * to handle exceptions would be handling the common case.
@@ -136,7 +136,7 @@ export function useWalkRoute(a: WalkPlace | null, b: WalkPlace | null): WalkStat
 
     // Two distinct, locatable ends or nothing. Anything less has no answer —
     // not even a degraded one, which needs two coordinates to draw a straight
-    // line between — so we return before touching either loader (spec §7.6).
+    // line between — so we return before touching either loader.
     if (!from || !to || from.id === to.id || !fromAt || !toAt) {
       setState(IDLE);
       return;

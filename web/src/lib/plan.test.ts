@@ -100,7 +100,7 @@ describe('optionSummaryParts', () => {
     ]);
   });
 
-  it('path 2 (standby): hideOther drops TeachingMethod "Other" components entirely', () => {
+  it('standby switch: hideOther drops TeachingMethod "Other" components entirely', () => {
     expect(optionSummaryParts(chemOption, true)).toEqual([{ type: 'LEC', time: 'F 09:00–09:50' }]);
   });
 });

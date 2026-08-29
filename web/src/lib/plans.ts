@@ -1,7 +1,7 @@
 /**
- * Multiple named plans. The single working plan grew into a list the user can
- * switch between ("My plan", "备选方案", "朋友的plan", …) — all pure functions
- * over one PlansState so the hook stays thin and everything unit-tests.
+ * Multiple named plans the user can switch between ("My plan", "备选方案",
+ * "朋友的plan", …) — all pure functions over one PlansState so the hook stays
+ * thin and everything unit-tests.
  *
  * Invariants: `plans` is never empty, and `activeId` always points at a member.
  * Every mutator preserves them (deletePlan refuses the last plan; migratePlans

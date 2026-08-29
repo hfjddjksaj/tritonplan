@@ -3,11 +3,10 @@
  * Post-build guard: does the thing we shipped actually have the files it will
  * ask for at runtime, on our own origin?
  *
- * This exists because of QA C1. `maplibre-gl@6` resolves its web worker at
- * runtime, from `import.meta.url` of whatever chunk it landed in, and that
- * worker statically imports a sibling `maplibre-gl-shared.mjs`. Neither file is
- * in the module graph Rollup sees, so for nine tasks the build emitted neither —
- * and NOTHING NOTICED. Not the type checker, not 451 unit tests, not the
+ * `maplibre-gl@6` resolves its web worker at runtime, from `import.meta.url`
+ * of whatever chunk it landed in, and that worker statically imports a sibling
+ * `maplibre-gl-shared.mjs`. Neither file is in the module graph Rollup sees,
+ * so the build emitted neither — and NOTHING NOTICED. Not the type checker, not 451 unit tests, not the
  * console: a worker that fails to load raises no MapLibre `error` event, so the
  * map simply sat on "Loading campus…" forever. `vite preview` even hid the 404
  * behind its SPA fallback; only GitHub Pages would have shown it as a 404.

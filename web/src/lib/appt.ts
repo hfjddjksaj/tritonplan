@@ -27,8 +27,8 @@ export function nextRelevantWindow(appt: ApptTimes, now: Date): ApptWindow | nul
 
 /** Which captured term to show: the one whose next not-ended window begins
  *  soonest; if every term is over, the most recently captured all-ended term.
- *  A term with an empty `windows[]` never displays — spec treats it as
- *  no-data (stored, but the capsule stays hidden), not as "ended". */
+ *  A term with an empty `windows[]` never displays — treated as no-data
+ *  (stored, but the capsule stays hidden), not as "ended". */
 export function pickDisplayTerm(list: ApptTimes[], now: Date): ApptTimes | null {
   let best: ApptTimes | null = null;
   let bestBegin = Infinity;

@@ -68,10 +68,9 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
 /**
  * Apply a fresh auto capture. TSS WINS: every id the feed reports comes out booked,
  * and any manual mark or unmark of that course dissolves. Enrolment is a fact TSS
- * owns — a student who is enrolled has no reason to say otherwise here, and letting
- * a stale unmark outvote the feed is exactly how three of one student's courses went
- * dark while TSS reported all three (2026-08-19). Manual marks survive only for
- * courses the feed says nothing about, and a real drop clears its badge by itself.
+ * owns — a student who is enrolled has no reason to say otherwise here, and a stale
+ * unmark must never outvote the feed. Manual marks survive only for courses the
+ * feed says nothing about, and a real drop clears its badge by itself.
  */
 export function applyAutoBooked(ws: TermWorkspace, ids: readonly string[]): TermWorkspace {
   const auto = [...new Set(ids)];

@@ -86,10 +86,9 @@ describe('bundled campus geometry', () => {
       (n, s) => n + s.rings.reduce((m, r) => m + r.length / 2, 0),
       0,
     );
-    // RDP simplification is back at the user's chosen default (0.25 m,
-    // geo-encode.mjs) — the branch briefly shipped a fully-lossless `eps 0`
-    // (measured ~26202 here), which traded away more payload than the user
-    // wanted for a ~1.5 s map-open cost. Back down to ~15090 at 0.25 m.
+    // RDP at the default 0.25 m (geo-encode.mjs) — a deliberate
+    // precision/payload trade-off: fully lossless `eps 0` costs a ~1.5 s
+    // map-open penalty. Measures ~15090 at 0.25 m.
     expect(verts).toBeGreaterThan(10560);
     expect(verts).toBeLessThan(19620);
 

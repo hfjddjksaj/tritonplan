@@ -146,7 +146,7 @@ describe('buildPortals', () => {
     expect(doors.map((p) => p.node)).toEqual([0]);
   });
 
-  it('exposes the constants the spec pins down', () => {
+  it('pins the calibrated constants', () => {
     expect(PORTAL_REACH_M).toBe(8);
     expect(FACE_RESCUE_M).toBe(2 * PORTAL_REACH_M);
     expect(RESCUE_REACH_M).toBe(45);

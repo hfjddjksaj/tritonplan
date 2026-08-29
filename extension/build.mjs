@@ -59,9 +59,9 @@ const common = {
  * and the overlap is the same red the calendar paints a conflict in. Keep the
  * two in sync — the SVG is what a designer would open, this is what ships.
  *
- * Deliberately NOT the old placeholder (a gold trident on navy): that borrows
- * UCSD Tritons' athletic mark, which contradicts the listing's own "not
- * affiliated with UCSD" line. Do not put the trident back.
+ * Never use UCSD's trident mark here: it is UCSD Tritons' athletic mark, and
+ * borrowing it contradicts the store listing's own "not affiliated with UCSD"
+ * line.
  * -------------------------------------------------------------------------- */
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -107,10 +107,10 @@ function inRoundRect(px, py, x, y, w, h, r) {
 /**
  * Rasterise the mark at `size`, 4x4 supersampled.
  *
- * The old generator sampled one point per pixel, so every edge was a staircase
- * and 16px was mush. Here each pixel averages 16 samples: colour is the mean of
- * the covered samples and alpha is the coverage itself, which is ordinary
- * (un-premultiplied) RGBA and antialiases the rounded corners for free.
+ * One sample per pixel would staircase every edge and turn 16px to mush, so
+ * each pixel averages 16 samples: colour is the mean of the covered samples and
+ * alpha is the coverage itself, which is ordinary (un-premultiplied) RGBA and
+ * antialiases the rounded corners for free.
  *
  * The conflict wedge is not drawn as its own shape — it is simply "in both
  * blocks", so its corners inherit the blocks' radii and can never drift out of

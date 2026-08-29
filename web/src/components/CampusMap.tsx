@@ -76,7 +76,7 @@ interface Props {
   onClose: () => void;
 }
 
-/** Nobody's booked set applies to someone else's plan — see §5.4. */
+/** Nobody's booked set applies to someone else's plan. */
 const NO_BOOKED: ReadonlySet<string> = new Set();
 
 /** The island's height until it has been measured (and under jsdom): three rows. */
@@ -156,19 +156,18 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
  * cluster top-right (Booked only · compass · close), the marker card, the
  * "not on the map" island bottom-left, the zoom buttons bottom-right.
  *
- * Layering, and why no `suppressClick` guard survives from the SVG renderer:
+ * Layering, and why there is no `suppressClick` guard:
  * `.campusmap__gl` (the GL canvas MapLibre owns and binds its drag/zoom
  * handlers to) and `.campusmap__overlay` (the DOM markers) are SIBLINGS, and
  * the overlay is `pointer-events: none` THROUGHOUT — markers included. Every
  * press, drag, pinch and wheel therefore reaches MapLibre untouched, wherever
  * on the canvas it lands, and marker selection rides on MapLibre's own `click`
- * instead: the handler below asks `hitMarker()` what was under the point. That
- * is also why no `suppressClick` guard is needed. MapLibre does not fire
- * `click` after a drag, so a drag released over a marker opens nothing, and a
- * drag STARTED on one pans normally — which is the whole point, because while
- * the markers took the pointer they were a dead zone that swallowed the
- * gesture entirely (QA I1). The old hand-rolled pan handler needed
- * `suppressClick` only because its markers lived INSIDE the element it dragged.
+ * instead: the handler below asks `hitMarker()` what was under the point.
+ * MapLibre does not fire `click` after a drag, so a drag released over a
+ * marker opens nothing, and a drag STARTED on one pans normally — which is the
+ * whole point: a marker that takes the pointer is a dead zone that swallows
+ * the gesture entirely. A `suppressClick` guard is only needed when the
+ * markers live INSIDE the element being dragged, and here they don't.
  */
 export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', onClose }: Props) {
   const [data, setData] = useState<{ geo: CampusGeo; map: CampusMapData } | null>(null);
@@ -198,9 +197,9 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   //
   // The `.catch` is not defensive boilerplate: without it, a geometry chunk that
   // 404s leaves `style` and `home` null forever, so `new MapLibreMap()` never runs,
-  // so the load timeout that C3 exists to fire never even starts — the exact silent
-  // hang C1 shipped, from the same class of cause (an asset the build was supposed
-  // to emit). A failure here has to reach the same fallback the other two do.
+  // so the load timeout never even starts — a silent hang on "Loading campus…",
+  // no error event, no console line, from an asset the build was supposed to
+  // emit. A failure here has to reach the same fallback the other two do.
   useEffect(() => {
     let live = true;
     Promise.all([loadCampusGeo(), loadCampusMap()])
@@ -274,7 +273,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     };
   }, [gl.map]);
 
-  // Both read-only defences, side by side. §5.4 hides the toggle because the plan on
+  // Both read-only defences, side by side. The toggle hides because the plan on
   // screen is someone else's; the same reasoning kills the solid/hollow booked dots,
   // which would otherwise paint YOUR enrolment over THEIR plan with nothing to explain it.
   // On your own plan the toggle appears as soon as anything is booked — by the extension's
@@ -340,12 +339,12 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
 
   // Split against the ground the basemap actually covers — NOT against the camera's
-  // opening frame, which is what this used to do. The home view is now framed tightly
-  // on the teaching core, and a marker the first frame happens to miss is still a
-  // marker on a building this map draws and the student can pan to; calling that
-  // "outside the mapped area" was false, and on a phone (whose frame is under 900 m
-  // wide) it was false about most of campus. What stays true off this box is
-  // Hillcrest, and anywhere else the bundled geometry has no ground for.
+  // opening frame. The home view is framed tightly on the teaching core, and a
+  // marker the first frame happens to miss is still a marker on a building this
+  // map draws and the student can pan to; calling that "outside the mapped area"
+  // would be false, and on a phone (whose frame is under 900 m wide) it would be
+  // false about most of campus. What stays true off this box is Hillcrest, and
+  // anywhere else the bundled geometry has no ground for.
   const groups = useMemo(() => groupPins(shown), [shown]);
   const mapped = useMemo(() => (data ? mappedBounds(data.geo) : null), [data]);
   const { onCanvas, offCanvas } = useMemo(() => splitByBounds(groups, mapped), [groups, mapped]);
@@ -367,7 +366,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // by the same `inside()` test the markers do — so the card and its dot leave
   // together. Without that the card outlived its marker: `project()` keeps answering
   // off-screen coordinates, `cardPlacement` clamps them back in, and the card parked
-  // itself in a corner over open ocean with no dot and nothing to belong to (QA I2).
+  // itself in a corner over open ocean with no dot and nothing to belong to.
   //
   // HIDDEN, not closed. The card is the open marker's chip, so it should come back
   // when the marker does — panning past a dot and back should not have thrown the
@@ -383,7 +382,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // Keyed off the card being VISIBLE — `openMarker`, the same thing the card itself
   // renders on — not off `openKey` alone. Two ways a selection outlives what it
   // draws: a tab switch can leave `openKey` pointing at a group this view no longer
-  // has, and I2 hides the card once its dot pans off the canvas. In both cases
+  // has, and the cull above hides the card once its dot pans off the canvas. In both cases
   // Escape must not spend itself clearing something nobody can see; it must close
   // the map, first press.
   useEscapeKey(mapLoc ? () => {} : openMarker ? () => setOpenKey(null) : onClose);
@@ -496,13 +495,13 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // the reading and the copy. This file only holds which two places are picked
   // and which mode is showing, and draws the answer — CampusMap.tsx is already
   // the largest file in the app and the one real regression risk this feature
-  // carries (spec §7.6), so anything that could be a decision is not made here.
+  // carries, so anything that could be a decision is not made here.
   //
   // Deliberately NOT reset when `mapView` or the slice changes, unlike `picked`
   // and `openKey` in the ViewTabs handler below. A distance is a distance: the
   // reader who switched to Finals did not ask to forget which two buildings
-  // they were measuring, and the picker is not sliced by weekday anyway
-  // (spec §8). Only the clear button, a new pick, and closing the map end it.
+  // they were measuring, and the picker is not sliced by weekday anyway.
+  // Only the clear button, a new pick, and closing the map end it.
   const [distA, setDistA] = useState<WalkPlace | null>(null);
   const [distB, setDistB] = useState<WalkPlace | null>(null);
   const [distProfile, setDistProfile] = useState<Profile>('walk');
@@ -515,7 +514,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
    *
    * With nothing measured, the layer stack has to be exactly what it was
    * before this feature existed — that is the promise that opening the map
-   * costs no more than it used to (spec §7.6). So the cleanup drops both
+   * costs no more than it used to. So the cleanup drops both
    * layers AND the source, and there is no in-place update path: React runs
    * that cleanup before it re-runs this effect, in the same synchronous turn,
    * so the map never paints a frame between the removal and the re-add.
@@ -526,11 +525,10 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
    *  - A DEGRADED answer carries `path: null`. A straight line across a canyon
    *    would be a confident lie, and the readout already says the route is
    *    unclear.
-   *  - A SINGLE-POINT path. Rare since the 2026-08-23 door-pricing fix, since
-   *    the line now starts on the wall rather than at the node it snapped to,
-   *    but two footprints that TOUCH can still share a door with no hop at
-   *    either end; a LineString needs two positions, and MapLibre would reject
-   *    the geometry.
+   *  - A SINGLE-POINT path. Rare — the line starts on the wall rather than at
+   *    the node it snapped to — but two footprints that TOUCH can still share
+   *    a door with no hop at either end; a LineString needs two positions, and
+   *    MapLibre would reject the geometry.
    */
   useEffect(() => {
     const map = gl.map;
@@ -608,10 +606,10 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const noRoomEmpty = gl.ready && !emptyCopy && onCanvas.length === 0 && noRoom.length > 0;
 
   // `aria-modal="true"` is a promise to assistive tech that nothing outside this
-  // dialog is reachable, and until now it was a lie: with no containment, Tab
-  // walked 31 controls of the planner underneath the full-screen overlay — every
-  // course card's "open in TSS", "mark booked", "Remove" — before it reached the
-  // map's own island, and 43 presses before the first marker (QA I4).
+  // dialog is reachable; without containment it is a lie: Tab walks 31 controls
+  // of the planner underneath the full-screen overlay — every course card's
+  // "open in TSS", "mark booked", "Remove" — before it reaches the map's own
+  // island, and 43 presses before the first marker.
   //
   // `inert` on the dialog's SIBLINGS rather than a hand-rolled Tab trap: the
   // browser then removes that whole subtree from the tab order, from hit
@@ -666,9 +664,9 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
           the same kind of thing about the camera — which way it faces, and
           whether it is standing up — and because the tilt gesture can flip this
           toggle on its own (see the pitch effect above), which is only legible
-          if the toggle is somewhere the eye already rests. It left the 28 px
-          zoom column for that: a control the map can press by itself should not
-          be the smallest thing on screen.
+          if the toggle is somewhere the eye already rests — not in the 28 px
+          zoom column: a control the map can press by itself should not be the
+          smallest thing on screen.
           The camera move and the layer swap are one gesture from here: the
           effect above applies `mode` to the style, this eases the pitch and
           bearing the mode implies. */}
@@ -691,9 +689,8 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
           back. The needle turns against the bearing, re-read on every `gl.tick`, so
           a drag-rotate spins it live.
           What it resets depends on who owns pitch. In 2D nobody does, so a
-          two-finger pitch has to be undoable here: bearing AND pitch, which is the
-          affordance QA I3 asked for ("Reset view" alone left a tilted map tilted
-          until `goHome` was taught to flatten it too). In 3D the MODE owns pitch —
+          two-finger pitch has to be undoable here: bearing AND pitch. In 3D the
+          MODE owns pitch —
           flattening the camera from here would leave a pressed 3D toggle over a
           flat map — so the compass resets north only, and says so in its label. */}
       <button

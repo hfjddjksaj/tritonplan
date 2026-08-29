@@ -3,7 +3,7 @@
  *
  * Walking is the mode this feature stands behind; bike and scooter are
  * ESTIMATES and say so in the UI. OSM tags only 7% of UCSD's ways with
- * `bicycle=*` (spec §2.3), so nothing here may claim to route a bike around a
+ * `bicycle=*`, so nothing here may claim to route a bike around a
  * dismount zone. What it CAN do is refuse stairs, which is tagged completely
  * (322 segments) — and carrying a bike down a staircase is a failed route, not
  * a slow one.
