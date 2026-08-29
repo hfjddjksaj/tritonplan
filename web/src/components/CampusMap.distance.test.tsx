@@ -1,6 +1,6 @@
 /**
  * The Distance bar as the map mounts it, and the route line the map draws for
- * it — the two halves Task 9 adds to `CampusMap.tsx`.
+ * it — the two halves of the feature that live in `CampusMap.tsx`.
  *
  * ⚠ `createRoot` + `act`, not @testing-library: that package is not a
  * dependency of this workspace, and every other component test here renders
@@ -89,7 +89,7 @@ const answered = (r: WalkResult) => ({
  * (`components: []`) — so it would make every assertion here pass vacuously.
  * This mirrors `courseWithMeetings()` in `../lib/map-pins.test.ts`. The days
  * are split Mon / Wed on purpose: the day slice filters the MARKERS but not
- * the pickers, so a Mon slice with a Wed pick is the case §8 calls out.
+ * the pickers, so a Mon slice with a Wed pick is exactly the case to cover.
  */
 function courseAt(id: string, code: string, building: string, day: string): CourseOffering {
   return {
@@ -241,7 +241,7 @@ describe('CampusMap · Distance', () => {
     render();
     await settle();
     // Not "an empty source" — none at all. Opening the map has to cost exactly
-    // what it cost before this feature existed (spec §7.6).
+    // what it cost before this feature existed.
     expect(layers()).not.toContain(LAYER.route);
     expect(layers()).not.toContain(LAYER.routeCasing);
     expect(map().getSource(ROUTE_SOURCE)).toBeUndefined();
@@ -319,7 +319,7 @@ describe('CampusMap · Distance', () => {
     ) as HTMLButtonElement;
     act(() => mon.click());
     // B is a Wednesday class, so its marker is gone from the canvas — the line
-    // between the two buildings is not (spec §8).
+    // between the two buildings is not.
     expect(drawn()).toBe(true);
     expect(selects()[1]!.value).not.toBe('');
   });

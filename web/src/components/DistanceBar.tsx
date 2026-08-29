@@ -4,8 +4,7 @@
  *
  * Deliberately NOT a fourth tab beside Classes / Finals / Midterms: those pick
  * WHICH PINS to show, this performs an action on two of them. Sharing that row
- * would blur what the row means (user's call, 2026-08-21). A hairline separates
- * the two jobs instead.
+ * would blur what the row means. A hairline separates the two jobs instead.
  *
  * ⚠ Time is shown to the minute and never finer, and no copy here may imply
  * better. That is not a rendering preference, it is the accuracy floor. TSS
@@ -13,7 +12,7 @@
  * positioned at its building's centroid: the median UCSD teaching building is
  * 52 m across (p90 88 m, Biomedical Sciences 143 m), which at 1.3 m/s is ±40 s
  * of error before the router has done anything at all — ±1.8 min for the worst
- * building (spec §2.2, §2.4). "13 min 20 s" would be a claim the data cannot
+ * building. "13 min 20 s" would be a claim the data cannot
  * support however exact the routing is. The drawn route, the flight count and
  * the climb are this feature's real output; the time is a rounded courtesy.
  *
@@ -30,8 +29,8 @@
  *     So the distance is always LABELLED as the on-path distance — "364 m on
  *     paths" — the length of the gold line they can see, never the trip.
  *  2. A route can be a single point with `metres === 0`, and that is a real
- *     answer rather than a failure. Rare since the 2026-08-23 door-pricing fix
- *     — no two teaching buildings do it any more — but two footprints that
+ *     answer rather than a failure. Rare — no two teaching buildings currently
+ *     do it — but two footprints that
  *     TOUCH can still share a door node with no hop at either end, and then the
  *     whole trip is indoors. "0 m" would read as broken, so under a metre the
  *     distance slot says "Next door" and the readout explains that there is no
@@ -80,7 +79,7 @@ const rawDistance = (m: number): string =>
 /**
  * The distance slot, qualified so it can never be divided into the time.
  * Degraded answers get "≈" instead of "on paths": there is no path behind them
- * (spec §6 draws no line for those), so claiming one would be the wrong lie.
+ * (the map draws no line for those), so claiming one would be the wrong lie.
  */
 function distanceText(r: WalkResult): string {
   if (r.degraded) return `≈ ${rawDistance(r.metres)}`;
@@ -175,7 +174,7 @@ export function DistanceBar({
   loading,
 }: Props) {
   // Never remembered — every time the map opens this starts closed, on phones
-  // and desktop alike (user's call, 2026-08-21). Expanded it stands ~268 px
+  // and desktop alike. Expanded it stands ~268 px
   // tall, which is most of a narrow screen, and nobody wants that back until
   // they ask for it. So: component state, no localStorage, on purpose.
   const [open, setOpen] = useState(false);
@@ -262,7 +261,7 @@ export function DistanceBar({
           {!loading && !route && (
             <div className="campusmap__dist-note">
               {/* One place at both ends is not a trip, so useWalkRoute returns
-                  nothing for it (`from.id === to.id`, spec §7.6) and it lands
+                  nothing for it (`from.id === to.id`) and it lands
                   on this same empty branch as an untouched bar. Saying "pick
                   both ends" there asks for something the student has already
                   done — twice — and leaves them hunting for what went wrong. */}

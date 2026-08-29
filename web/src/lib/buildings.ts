@@ -84,9 +84,9 @@ function addBuilding(row: BuildingRow): void {
 EXTRA_BUILDINGS.forEach(addBuilding);
 for (const [alias, target] of Object.entries(BUILDING_ALIASES)) {
   const entry = byName.get(target);
-  if (!entry) continue; // dataset drifted; the sanity test in Task 3 catches this
-  // Unconditional set (not register()): the overlay is a deliberate human
-  // ruling and must win even if a dataset refresh later collides on this
+  if (!entry) continue; // dataset drifted; the overlay sanity test in buildings.test.ts catches this
+  // Unconditional set (not register()): the overlay is a hand-curated
+  // override and must win even if a dataset refresh later collides on this
   // key, rather than being poisoned to 'ambiguous' like a plain data clash.
   for (const key of keyVariants(alias)) index.set(key, entry);
 }

@@ -195,13 +195,12 @@ export function abbreviateBuildingWords(name: string): string {
 }
 
 /**
- * Footprint names too long to help, shortened where a stock word allows. Used
- * to be null for any name starting with a digit (meant to filter street
- * addresses like "9500 Gilman Drive"), but that also blanked real buildings
- * whose official name simply starts with a number ("134 Dickinson", "64
- * Degrees") — a building whose name *is* its address should read as that
- * address rather than an unnamed grey block, so there is no address guard
- * here any more.
+ * Footprint names too long to help, shortened where a stock word allows.
+ * Deliberately no digit/address guard: filtering names that start with a
+ * digit (meant for street addresses like "9500 Gilman Drive") also blanks
+ * real buildings whose official name simply starts with a number ("134
+ * Dickinson", "64 Degrees") — a building whose name *is* its address should
+ * read as that address rather than an unnamed grey block.
  */
 export function buildingShortName(name: string): string | null {
   if (!name) return null;

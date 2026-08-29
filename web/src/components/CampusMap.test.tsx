@@ -887,7 +887,7 @@ describe('CampusMap', () => {
   });
 
   it('makes the planner behind the overlay unreachable while the map is open, and gives itself focus', async () => {
-    // QA I4: `aria-modal="true"` with no containment meant 43 Tab presses to the
+    // `aria-modal="true"` with no containment means 43 Tab presses to the
     // first marker, 31 of them through invisible planner controls.
     // Mirrors App's shape: the map renders inline, as a SIBLING of the planner,
     // not through a portal — which is exactly why `inert` goes on the siblings.
