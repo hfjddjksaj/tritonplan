@@ -1,6 +1,6 @@
 /** The topbar term chip, upgraded to a switcher: anchored panel with one row
  *  per academic year (Fall | Winter | Spring), a bold divider, then Summer
- *  rows. Grey placeholder cells are not clickable (spec §5). */
+ *  rows. Grey placeholder cells are not clickable. */
 import { useRef, useState } from 'react';
 import type { Term } from '@triton/shared';
 import { buildSwitcherRows, type SwitcherCell, type TermKey } from '../lib/terms';

@@ -140,9 +140,9 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             )}
           </div>
           <div className="course-card__title">{course.title}</div>
-          {/* Facts about the course, not controls — units used to sit in the button row
-              and read as a fifth thing to click. Conflict stays down here with it rather
-              than up on the code line, where a third badge wrapped and shoved the title. */}
+          {/* Facts about the course, not controls — in the button row the units would
+              read as a fifth thing to click. Conflict stays down here with them rather
+              than up on the code line, where a third badge wraps and shoves the title. */}
           {(course.units !== undefined || conflicted) && (
             <div className="course-card__facts">
               {course.units !== undefined && (
@@ -210,9 +210,8 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
           </button>
           {/* Manual marking exists for courses TSS has not spoken about. Once it
               reports one, there is nothing here to decide — enrolment is its fact, not
-              a preference — and the toggle only offered a way to contradict it that no
-              enrolled student wants. One student unmarked all three of theirs and spent
-              days wondering why the badges were dark (2026-08-19). */}
+              a preference — and the toggle would only offer a way to contradict it
+              that no enrolled student wants. */}
           {onToggleBooked && !bookedByTss && !queued && (
             <button
               type="button"

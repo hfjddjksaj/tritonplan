@@ -110,7 +110,7 @@ describe('CourseCard booked state', () => {
       const warn = container.querySelector('.tag--alert');
       expect(warn?.querySelector('svg')).not.toBeNull(); // drawn, not typed — see WarnCircle
       expect(warn?.tagName).toBe('BUTTON'); // opens the explanation, not hover-only
-      // The hover wording lives in the tooltip layer now, not a `title`; the
+      // The hover wording lives in the tooltip layer, not a `title`; the
       // package still has to be named to a screen reader either way.
       expect(warn?.getAttribute('title')).toBeNull();
       expect(warn?.getAttribute('aria-label')).toMatch(/TSS has P-002-004/);
@@ -182,10 +182,10 @@ describe('CourseCard waitlisted state', () => {
   });
 
   it('says THAT the student is queued, and nowhere says where in the queue', () => {
-    // The position is not a prop any more, so the guard is on what the card actually
-    // says — badge, label, and the hover wording, which is the one place it used to
-    // print. A number that moves as others drop, on a page TSS never prints one on,
-    // can only ever be believed and be wrong.
+    // The position is not a prop, so the guard is on what the card actually
+    // says — badge, label, and the hover wording, the one place a position
+    // could leak back in. A number that moves as others drop, on a page TSS
+    // never prints one on, can only ever be believed and be wrong.
     vi.useFakeTimers();
     const layerHost = document.createElement('div');
     document.body.appendChild(layerHost);

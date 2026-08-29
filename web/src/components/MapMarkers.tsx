@@ -23,12 +23,12 @@
  * card was the first thing "Directions" did.
  *
  * POINTER-TRANSPARENT, deliberately. This overlay is a SIBLING of the GL
- * container, so anything it takes, MapLibre never sees. Markers used to be
- * `pointer-events: auto` (and to cancel `pointerdown` on top of that, to keep a
- * mouse press from leaving a focus ring), which made every chip and dot a dead
- * zone: press and drag on one and the map did not move, did not zoom, and no
- * card opened either — the gesture simply vanished, over as much as 4 % of the
- * canvas on a phone (QA I1). Now the whole overlay is transparent to the
+ * container, so anything it takes, MapLibre never sees. A marker that takes the
+ * pointer (`pointer-events: auto`, let alone cancelling `pointerdown` to keep a
+ * mouse press from leaving a focus ring) makes every chip and dot a dead
+ * zone: press and drag on one and the map does not move, does not zoom, and no
+ * card opens either — the gesture simply vanishes, over as much as 4 % of the
+ * canvas on a phone. So the whole overlay is transparent to the
  * pointer: every press, drag, pinch and wheel reaches MapLibre untouched, and
  * `CampusMap` opens the card from MapLibre's own `click` via `hitMarker()` —
  * which also means a drag that starts on a chip pans without opening anything,
@@ -39,9 +39,9 @@
  * `pointer-events: none` does not touch the tab order, so Tab still reaches
  * every marker and Enter / Space still open its card, and a screen reader
  * activating this `role="button"` dispatches a synthetic `click` straight at
- * the element, which `onClick` below still answers. The focus ring the
- * cancelled `pointerdown` was there to suppress cannot happen any more — a
- * mouse can no longer focus a marker at all — and the `:focus` / `:focus-visible`
+ * the element, which `onClick` below still answers. The focus ring that
+ * cancelling `pointerdown` would guard against cannot happen — a mouse
+ * cannot focus a marker at all — and the `:focus` / `:focus-visible`
  * pair in app.css keeps keyboard focus visible.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';

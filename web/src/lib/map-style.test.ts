@@ -93,7 +93,7 @@ describe('buildStyle', () => {
     for (const id of [LAYER.buildings3d, LAYER.hosts3d, LAYER.trees3d]) expect((s.layers.find((l) => l.id === id)!.layout as { visibility?: string }).visibility).toBe('none');
   });
   it('sets district names to the official map’s proportions, not a size that eats them', async () => {
-    // QA I5: at 13 px / 0.2 em these ran ~1.2x taller and ~25 % wider per word than
+    // At 13 px / 0.2 em these ran ~1.2x taller and ~25 % wider per word than
     // the official map's ~10-11 px untracked, which is what turned WARREN into WAR
     // and EAST CAMPUS OPEN SPACE PRESERVE into three fragments under a course chip.
     // Pinned so a revert to 13 / 0.2 is a failing test rather than a quiet
@@ -122,7 +122,7 @@ describe('buildStyle', () => {
     expect(district['text-letter-spacing']).toBe(0.08);
   });
   it('pins the spec palette-table anchor colours exactly, and both Pool/Fountain spellings alike', () => {
-    // Anchors named directly, row by row, in the spec §1 palette table.
+    // Anchors named directly, row by row, in the official palette table.
     expect(GROUND_COLORS['Grass']).toBe('#D4E5B9');
     expect(GROUND_COLORS['Planter']).toBe('#B5C7A2');
     expect(GROUND_COLORS['Walking Path']).toBe('#F2EEE9');

@@ -107,10 +107,10 @@ describe('MapMarkers', () => {
   });
 
   it('opens from the keyboard (Enter) and never touches a pointer press', async () => {
-    // The markers are pointer-transparent now (QA I1), so a press must reach the
+    // The markers are pointer-transparent, so a press must reach the
     // GL canvas underneath and start MapLibre's drag. Cancelling pointerdown —
-    // which this component used to do, to keep a mouse press from leaving a focus
-    // ring — is exactly what made every chip and dot a dead zone. Nothing may
+    // tempting, to keep a mouse press from leaving a focus
+    // ring — is exactly what makes every chip and dot a dead zone. Nothing may
     // consume the press here; the focus ring is handled in CSS instead.
     const onSelect = vi.fn();
     await render({ onSelect });
@@ -195,7 +195,7 @@ describe('MapMarkers', () => {
   it('draws no card layer with nothing open, or with a marker that is off the canvas', async () => {
     // The layer exists only to be pinned to a dot, so it must not outlive one:
     // no selection at all, or a selection whose marker the camera has left
-    // behind (QA I2), and there is nothing to pin.
+    // behind, and there is nothing to pin.
     await render({ selectedKey: null, card: <div className="probe-card">card</div> });
     expect(container.querySelector('.campusmap__cardlayer')).toBeNull();
     await render({ selectedKey: 'c', card: <div className="probe-card">card</div> }); // Hillcrest: off the frame
