@@ -212,10 +212,13 @@ export function WarnTriangle({ size = 13, ...props }: P) {
  * Two shapes were rejected before this one, both for belonging to no family.
  * A solid free-drawn bang was the only filled bespoke glyph in the app, where
  * every other warning is a 2px stroke (`Warning` on conflicts, blocks, finals);
- * and a triangle — the obvious alternative — is already taken by `WarnTriangle`
- * for waitlist-only sections, which would have put one silhouette on two
- * unrelated meanings. A circle is the shape left that says "read this" without
- * claiming either. `r=9` is `Clock`'s circle, deliberately.
+ * and a triangle — the obvious alternative — is `WarnTriangle`, which is the
+ * WAITLIST's mark: "Waitlist only" in the section list, and the same badge as
+ * this one in amber when TSS has you QUEUED for a package the plan doesn't show
+ * (`.tag--alert-queued`). Circle and triangle therefore split the badge slot the
+ * way the card's standing does — red circle for an enrolment on another section,
+ * amber triangle for a queue place on another section — and neither silhouette
+ * has to carry both. `r=9` is `Clock`'s circle, deliberately.
  *
  * Two numbers here are measured, not chosen. The ink runs from y=6.45 (the
  * bar's round cap above 7.6) to y=17.55 (the dot's cap below 16.4), centring

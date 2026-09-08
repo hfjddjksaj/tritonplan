@@ -6,7 +6,7 @@ import { courseFull } from '../lib/seats';
 import { OptionPicker } from './OptionPicker';
 import { PrereqPopover } from './PrereqPopover';
 import { BookedSectionPopover } from './BookedSectionPopover';
-import { Trash, External, WarnCircle } from './icons';
+import { Trash, External, WarnCircle, WarnTriangle } from './icons';
 import { tip } from './Tooltip';
 
 interface Props {
@@ -119,23 +119,56 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                 </span>
               )
             )}
-            {/* TSS has you in a DIFFERENT package than the one on the grid. Its own
-                mark, beside Booked rather than inside it: a caveat crammed into
-                another badge reads as decoration on that badge, and at 13px it read
-                as a smudge. It opens the explanation rather than only hovering it —
-                one character can't carry the sentence, and a tooltip is mouse-only.
-                Nothing here switches the section: that stays the student's own click. */}
-            {booked && bookedOptionCode && (
+            {/* TSS has you on a DIFFERENT package than the one on the grid. Its own
+                mark, beside the standing badge rather than inside it: a caveat
+                crammed into another badge reads as decoration on that badge, and at
+                13px it read as a smudge. It opens the explanation rather than only
+                hovering it — one character can't carry the sentence, and a tooltip is
+                mouse-only. Nothing here switches the section: that stays the
+                student's own click.
+
+                One slot, two states, and the shape says which. Red circle: you are
+                ENROLLED somewhere else, and the plan is wrong about a fact. Amber
+                triangle: you are QUEUED somewhere else, which is the same
+                disagreement one step earlier and nothing to fix yet. The colour is
+                the card's own standing carried down — the badge above already reads
+                Booked green or Waitlisted amber — so the pair never has to be
+                learned separately. TSS names the queued package in the same field it
+                names a booked one (`EventPackageAbbr`, both on every My Courses row —
+                fixture rows 4 and 5, captured live 2026-08-21), so this needs no new
+                data, only the state it was already refusing to speak for. */}
+            {(booked || queued) && bookedOptionCode && (
               <button
                 type="button"
-                className="tag tag--alert"
+                className={`tag tag--alert${queued ? ' tag--alert-queued' : ''}`}
                 onClick={() => setAlertOpen(true)}
-                aria-label={`Booked section differs: TSS has ${bookedOptionCode}`}
-                {...tip(`TSS has you in ${bookedOptionCode}, not the section on this plan. Click for details.`)}
+                aria-label={
+                  queued
+                    ? `Waitlisted section differs: TSS has you queued for ${bookedOptionCode}`
+                    : `Booked section differs: TSS has ${bookedOptionCode}`
+                }
+                {...tip(
+                  queued
+                    ? `TSS has you queued for ${bookedOptionCode}, not the section on this plan. Click for details.`
+                    : `TSS has you in ${bookedOptionCode}, not the section on this plan. Click for details.`,
+                )}
               >
-                {/* 14, not 13: an even size in the badge's even content box is what
-                    puts whole pixels on both sides of it — see the note on WarnCircle. */}
-                <WarnCircle size={14} />
+                {/* Two shapes, two sizes, and the difference is measured. The circle
+                    takes 14 — an even size in the badge's even content box, whole
+                    pixels either side (see the note on WarnCircle). The triangle takes
+                    13, which is what it already is at the other place a student meets
+                    it (`WaitlistOnlyMark`), and what puts the two marks at the same
+                    optical weight: a triangle is wider at its base than a circle of
+                    equal height, so 14 gave it 10.6% more ink and 1.16px less air than
+                    the circle in the identical plate, and it read as the louder of the
+                    two — backwards, since this is the state where nothing is wrong yet.
+                    13 lands its ink at 10.60px against the circle's 10.50px. The even/
+                    odd rule doesn't decide it: at neither size do this glyph's ink
+                    margins fall on whole pixels (2.59px at 14, 3.05px at 13), so the
+                    only whole-pixel thing 14 would buy is an invisible box edge.
+                    The optical nudge the triangle needs and the circle doesn't lives on
+                    .tag--alert-queued svg. */}
+                {queued ? <WarnTriangle size={13} /> : <WarnCircle size={14} />}
               </button>
             )}
           </div>
@@ -250,6 +283,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
         <BookedSectionPopover
           courseCode={course.courseCode}
           booked={bookedOptionCode}
+          queued={queued}
           selected={course.options.find((o) => o.id === entry.selectedOptionId)?.code}
           accent={{ text: c.text, spine: c.spine }}
           onShowSections={() => {

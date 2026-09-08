@@ -216,4 +216,67 @@ describe('CourseCard waitlisted state', () => {
     render({ waitlisted: true });
     expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'mark booked')).toBe(false);
   });
+
+  describe('queued, but not for the section on the grid', () => {
+    function renderQueued(props: { waitlisted?: boolean; booked?: boolean; code?: string }) {
+      act(() => {
+        root.render(
+          <CourseCard
+            entry={fullEntry()} index={0} conflicted={false}
+            booked={props.booked ?? false}
+            waitlisted={props.waitlisted}
+            bookedByTss={props.booked ?? false}
+            {...(props.code ? { bookedOptionCode: props.code } : {})}
+            onSelect={() => {}} onRemove={() => {}} onOpenTss={() => {}}
+          />,
+        );
+      });
+    }
+
+    it('puts the alert chip beside Waitlisted, in the queue\'s own colour', () => {
+      renderQueued({ waitlisted: true, code: 'P-003-004' });
+      const warn = container.querySelector('.tag--alert');
+      expect(warn?.tagName).toBe('BUTTON');
+      expect(warn?.classList.contains('tag--alert-queued')).toBe(true);
+      expect(warn?.querySelector('svg')).not.toBeNull(); // drawn, not typed
+      expect(warn?.getAttribute('aria-label')).toMatch(/queued for P-003-004/);
+    });
+
+    it('says QUEUED, never enrolled — the one word this card must not get wrong', () => {
+      renderQueued({ waitlisted: true, code: 'P-003-004' });
+      expect(container.querySelector('.tag--alert')?.getAttribute('aria-label'))
+        .not.toMatch(/booked/i);
+      act(() => (container.querySelector('.tag--alert') as HTMLButtonElement).click());
+      const pop = document.querySelector('.bookedpop')!;
+      expect(pop.textContent).toContain('TSS has you queued for');
+      expect(pop.textContent).toContain('P-003-004'); // the package TSS has them queued for
+      expect(pop.textContent).toContain('P-001-001'); // the one the plan shows
+      expect(pop.querySelector('.eyebrow')?.textContent).toBe('Waitlisted section');
+      expect(pop.querySelector('.bookedpop__code--queued')).not.toBeNull();
+      // Same offer as the booked half: reveal the list, change nothing.
+      expect([...pop.querySelectorAll('.mappop__actions button')].map((b) => b.textContent))
+        .toEqual(['Show sections']);
+    });
+
+    it('keeps the red circle for an ENROLMENT elsewhere — one slot, two shapes', () => {
+      renderQueued({ booked: true, code: 'P-002-004' });
+      const warn = container.querySelector('.tag--alert');
+      expect(warn?.classList.contains('tag--alert-queued')).toBe(false);
+      expect(warn?.getAttribute('aria-label')).toMatch(/TSS has P-002-004/);
+    });
+
+    it('stays quiet when the queued package is the one planned', () => {
+      renderQueued({ waitlisted: true });
+      expect(container.querySelector('.tag--alert')).toBeNull();
+      expect(container.querySelector('.tag--waitlisted')?.textContent).toBe('Waitlisted');
+    });
+
+    it('says nothing for a course that is neither booked nor queued', () => {
+      // The code can only reach the card for a course TSS reported; a term whose
+      // workspace never took the push leaves both states false, and an alert with
+      // no standing behind it would be a warning about nothing.
+      renderQueued({ code: 'P-003-004' });
+      expect(container.querySelector('.tag--alert')).toBeNull();
+    });
+  });
 });

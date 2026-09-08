@@ -86,7 +86,8 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
           entries.map((entry, i) => {
             const option = findOption(entry.course, entry.selectedOptionId);
             const bookable = option && tssBookingLink(entry.course, option) !== null;
-            // Warn only, and only when TSS names one specific other package. Switching
+            // Warn only, and only when TSS names one specific other package —
+            // whether it has the student enrolled on it or queued for it. Switching
             // a section stays a click the student makes themselves.
             const elsewhere = bookedElsewhere(
               entry.course,

@@ -75,6 +75,12 @@ export function bookedOptionOf(
 /**
  * The booked option when it is NOT the one selected in the plan — the only case worth
  * a word on screen. Returns null when they agree, or when either is unknown.
+ *
+ * "Booked" here means whatever standing TSS reported, enrolment or QUEUE PLACE: My
+ * Courses writes the package into the same `EventPackageAbbr` on a waitlisted row as
+ * on a booked one (fixture rows 4 and 5, captured live 2026-08-21), so one comparison
+ * serves both. Which word the screen uses is the card's business — see the
+ * `queued` split on `.tag--alert` — not this function's.
  */
 export function bookedElsewhere(
   course: CourseOffering,

@@ -678,8 +678,10 @@ p {
    corner — exactly how Booked / Full / Waitlisted are built. The 1.5px solid
    --conflict-ink outline it used to carry made it the only hard-edged object on
    the card, and it read as a sticker from someone else's icon set.
-   Still --conflict, not the waitlist amber: the plan and TSS disagreeing about
-   which section you are in is the loudest thing this card can say.
+   --conflict here, amber on --tag--alert-queued below: the plate carries the card's
+   own standing, so a red circle means the ENROLMENT is on another section and an
+   amber triangle means a QUEUE PLACE is. Red for both would have shouted the same
+   volume at a booking that isn't wrong yet.
    The 18px width holds through the border-box: 1px of transparent border plus
    1px of slack around a 14px glyph puts a whole 2px on all four sides. */
 .tag--alert {
@@ -698,6 +700,40 @@ p {
 .tag--alert:focus-visible {
   outline: 2px solid var(--conflict-ink);
   outline-offset: 2px;
+}
+/* The queued half of the same plate: TSS has you WAITING on a package the plan
+   doesn't show. Waitlisted's own --gold pair, so the two badges on this line read
+   as one statement rather than a standing and an unrelated alarm. */
+.tag--alert-queued {
+  color: var(--gold-ink);
+  background: var(--gold-soft);
+}
+.tag--alert-queued:hover {
+  color: #fff;
+  background: var(--gold-ink);
+}
+.tag--alert-queued:focus-visible {
+  outline-color: var(--gold-ink);
+}
+/* The one thing the circle needed no answer to. Flex centres the BOX; a triangle
+   inside it then reads low, because its area is all down at the base and the eye
+   finds its middle above the box's — the same effect .picker__wl corrects in a
+   text row.
+
+   Geometry first, so the nudge is the whole correction and not a fudge covering
+   something structural. WarnTriangle's ink runs y=2.130 (the apex arc's crown,
+   0.970 above its 3.1 control point) to y=21.7 in the 24 viewBox; at 13px inside
+   the 16px content box that leaves 3.654px above the apex and 3.746px below the
+   base, measured live — 0.046px off dead centre, which is nothing. So everything
+   this line moves is optical, not a structural error being papered over.
+
+   0.4px: half the 0.8px .picker__wl arrived at for the same 13px triangle. There
+   the anchor is a cap band with open air under it, so the correction can run the
+   full step; here it is a plate whose two edges sit ~3.7px away and answer for
+   each other, and the full step reads high. Read off a 1× ladder (0, .3, .45, .6)
+   in a real card row, the same method — measure to find it, choose at 1×. */
+.tag--alert-queued svg {
+  transform: translateY(-0.4px);
 }
 /* The four actions as two explicit rows. Explicit is what keeps them in the card:
    the old single wrapping row let the fourth button run past the edge, where the
@@ -1868,6 +1904,11 @@ button.menu__item:hover {
 }
 .bookedpop__code--tss {
   color: var(--conflict-ink);
+}
+/* A queue place is not a wrong booking — the code TSS names carries the same amber
+   as the badge that opened this, not the alarm red. */
+.bookedpop__code--queued {
+  color: var(--gold-ink);
 }
 
 /* ================================= enrollment requirements popover (in-card) */
