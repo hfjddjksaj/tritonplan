@@ -204,7 +204,7 @@ describe('hand-curated overlay', () => {
   // committed dataset, none of the three current overlay keys collide with
   // an already-ambiguous dataset key, so there's no real poisoned-key case
   // to assert against without fabricating a synthetic dataset row — which
-  // the spec for this fix explicitly disallows. The three tests below still
+  // these tests deliberately avoid. The three tests below still
   // exercise the overlay resolving correctly today.
 
   it('maps Ledden Auditorium into the HSS complex', () => {

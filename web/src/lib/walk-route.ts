@@ -12,7 +12,7 @@
  *     is no such failure mode without a heuristic.
  *  3. We can afford it. A full relaxation of the 15.6k-node graph lands in the
  *     low single-digit milliseconds — slower than A* would be, still far inside
- *     one frame, and the user asked for correct over fast.
+ *     one frame, and correctness is deliberately preferred over speed here.
  */
 import { type WalkGraph, metresBetween } from './walk-graph';
 import { PROFILES, type Profile, edgeSeconds } from './walk-cost';
@@ -26,8 +26,8 @@ export interface WalkRoute {
    * line drawn on the map is exactly this, so "910 m" has to match the line a
    * reader can see.
    *
-   * ⚠ The hops belong in here, and leaving them out was a bug (fixed
-   * 2026-08-23). A hop is ordinary outdoor walking: you step out of the
+   * ⚠ The hops belong in here, and leaving them out is a bug. A hop is
+   * ordinary outdoor walking: you step out of the
    * building and cross up to FACE_RESCUE_M of ground to the nearest path. It
    * is charged in `seedCost`, so counting it as zero distance while charging
    * it as time made the two readings disagree with each other AND made the
@@ -93,7 +93,7 @@ export type WalkResult = WalkRoute | WalkEstimate;
 
 /**
  * Straight line → route length, fitted against this engine over 1206 teaching
- * pairs (spec §2.4; p50 detour 1.17, p90 1.28). Only used when routing fails
+ * pairs (p50 detour 1.17, p90 1.28). Only used when routing fails
  * outright.
  */
 export const DETOUR_K = 1.18;
@@ -165,7 +165,7 @@ class MinHeap {
  *
  * `null` rather than a throw: an empty door set and an unreachable target are
  * ordinary outcomes on this data, and it is the CALLER that decides whether to
- * degrade to `straightLineEstimate` (spec §6).
+ * degrade to `straightLineEstimate`.
  */
 export function routeBetween(
   g: WalkGraph,

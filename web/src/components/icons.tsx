@@ -179,19 +179,11 @@ export const Compass = (p: P) => (
 );
 
 /**
- * Exclamation mark drawn as geometry rather than typed as a character.
- *
- * A "!" glyph centres by its line box, not by its ink: the descender space below the
- * baseline is empty, so the mark rides high inside any box you centre it in, by a
- * fraction that changes with the font. Drawing it makes the ink itself the thing
- * being centred. Bar and dot fill the viewBox exactly, top to bottom.
- */
-/**
  * The road-sign warning mark: a bang inside a triangular frame, all one colour.
- * Drawn rather than typed for the reason `Bang` below exists — a "!" is a
- * character, so it aligns to a line box and sits high in whatever you centre it
- * in. The bar and dot here are geometry inside the same viewBox as the frame,
- * so they cannot drift when the font changes.
+ * Drawn rather than typed: a "!" is a character, so it aligns to a line box
+ * and sits high in whatever you centre it in. The bar and dot here are
+ * geometry inside the same viewBox as the frame, so they cannot drift when
+ * the font changes.
  */
 export function WarnTriangle({ size = 13, ...props }: P) {
   return (
@@ -209,16 +201,14 @@ export function WarnTriangle({ size = 13, ...props }: P) {
  * A bang inside a circle — the mark beside Booked when TSS has you in a
  * different package than the plan shows.
  *
- * Two shapes were rejected before this one, both for belonging to no family.
- * A solid free-drawn bang was the only filled bespoke glyph in the app, where
- * every other warning is a 2px stroke (`Warning` on conflicts, blocks, finals);
- * and a triangle — the obvious alternative — is `WarnTriangle`, which is the
- * WAITLIST's mark: "Waitlist only" in the section list, and the same badge as
- * this one in amber when TSS has you QUEUED for a package the plan doesn't show
- * (`.tag--alert-queued`). Circle and triangle therefore split the badge slot the
- * way the card's standing does — red circle for an enrolment on another section,
- * amber triangle for a queue place on another section — and neither silhouette
- * has to carry both. `r=9` is `Clock`'s circle, deliberately.
+ * A stroke, because every other warning in the app is a 2px stroke (`Warning`
+ * on conflicts, blocks, finals); a circle, because the triangle is the
+ * waitlist's shape — `WarnTriangle` marks waitlist-only sections, and stands in
+ * amber on this same badge when TSS has the student QUEUED for a package the
+ * plan doesn't show (`.tag--alert-queued`). The two split the badge slot the way
+ * the card's standing does: red circle for an enrolment on another section,
+ * amber triangle for a queue place on one, neither silhouette carrying both.
+ * `r=9` is `Clock`'s circle, deliberately.
  *
  * Two numbers here are measured, not chosen. The ink runs from y=6.45 (the
  * bar's round cap above 7.6) to y=17.55 (the dot's cap below 16.4), centring
@@ -226,8 +216,7 @@ export function WarnTriangle({ size = 13, ...props }: P) {
  * aligns to a line box whose descent below the baseline is empty, so it rides
  * high by a fraction that moves with the font. And the badge renders this at
  * an EVEN size inside an even content box, so both side margins are whole
- * pixels: the glyph this replaced was 3.14px wide, landing on no pixel
- * boundary at all, and read as shifted right however it was centred.
+ * pixels and the mark cannot read as shifted.
  *
  * `strokeWidth` 2.3 rather than the shared 2: at 14px that is a 1.34px stroke,
  * which is what `base()`'s 2 gives at its own 16px call size. Same ink, one

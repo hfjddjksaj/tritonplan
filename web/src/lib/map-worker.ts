@@ -8,7 +8,7 @@
  * neither is copied — the worker URL 404s (a hard 404 on GitHub Pages, an
  * `index.html` SPA fallback under a dev/preview server), the map never starts,
  * and — because a worker that fails to load raises no MapLibre `error` event —
- * it fails silently. See `task-10-qa-report.md` C1.
+ * it fails silently.
  *
  * The fix is to stop letting MapLibre guess. `?worker&url` hands the worker
  * entry to Vite as a worker: Vite gives it its OWN Rollup build, which pulls

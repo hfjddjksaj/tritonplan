@@ -517,12 +517,12 @@ describe('CampusMap', () => {
     );
     // 3D sits immediately left of the compass: both describe the camera, and a
     // tilt gesture can press the toggle by itself, so it belongs where the eye
-    // already is rather than in the 28 px zoom column it used to head.
+    // already is rather than in the 28 px zoom column.
     expect(kinds).toEqual(['booked', '3d', 'compass', 'close']);
     const compass = cluster.querySelector('.campusmap__compass') as HTMLButtonElement;
     expect(compass.tagName).toBe('BUTTON');
     // In 2D it still resets bearing AND pitch: a two-finger pitch on a flat map
-    // has to be undoable, and this is the control that says so (QA I3). In 3D the
+    // has to be undoable, and this is the control that says so. In 3D the
     // mode owns pitch and the label changes with it — see the compass test below.
     expect(compass.getAttribute('aria-label')).toBe('Reset north and tilt');
     const map = FakeMap.instances[0]!;
@@ -554,7 +554,7 @@ describe('CampusMap', () => {
     expect(container.querySelectorAll('.campusmap__marker--booked')).toHaveLength(1);
 
     // Read-only: same course, same booked set, but the plan is someone else's — so
-    // your enrolment says nothing about it and must not be painted onto it (§5.4).
+    // your enrolment says nothing about it and must not be painted onto it.
     render({ plan: planWithMeeting(), booked: mine, readOnly: true });
     await settle();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
@@ -727,10 +727,10 @@ describe('CampusMap', () => {
   });
 
   it('opens a card from a click on the CANVAS, because the markers no longer take the pointer', async () => {
-    // QA I1. The marker overlay is a sibling of the GL canvas, so while the
-    // markers were `pointer-events: auto` a press on a chip or a dot never
-    // reached MapLibre at all: the map did not pan, did not zoom, and no card
-    // opened either. They are transparent now, and this is the path a real
+    // The marker overlay is a sibling of the GL canvas, so a marker that takes
+    // the pointer (`pointer-events: auto`) keeps a press on a chip or a dot
+    // from ever reaching MapLibre: no pan, no zoom, and no card opened either.
+    // The markers are transparent instead, and this is the path a real
     // mouse takes — MapLibre's own click, hit-tested against the drawn chips.
     // (MapLibre does not fire `click` after a drag, so a drag STARTED on a chip
     // pans and opens nothing; that half is the library's, and is verified in a
@@ -773,7 +773,8 @@ describe('CampusMap', () => {
   });
 
   it('spends one Escape, not two, when the card is hidden because its dot left the canvas', async () => {
-    // I2 hides the card without clearing the selection, so `open` stays truthy.
+    // Panning the dot off the canvas hides the card without clearing the
+    // selection, so `open` stays truthy.
     // Keyed off `open` alone, the first Escape cleared a card nobody could see and
     // the student had to press it twice to leave the map.
     const onClose = render({ plan: planWithMeeting() });
@@ -810,9 +811,9 @@ describe('CampusMap', () => {
   });
 
   it('hides the open card once its dot pans off the canvas, and brings it back when the dot returns', async () => {
-    // QA I2: the card used to outlive its marker — `project()` kept answering
-    // off-screen coordinates and `cardPlacement` clamped them back inside, so it
-    // parked in a corner over open ocean with no dot and no way to relate it to
+    // Without the cull the card outlives its marker — `project()` keeps answering
+    // off-screen coordinates and `cardPlacement` clamps them back inside, so it
+    // parks in a corner over open ocean with no dot and no way to relate it to
     // anything. Hidden rather than closed: the card IS the marker's chip, so
     // panning past it and back must not have thrown the selection away.
     render({ plan: planWithMeeting() });
@@ -835,10 +836,10 @@ describe('CampusMap', () => {
   });
 
   it('falls back to the building list when the map never finishes starting, error or no error', async () => {
-    // QA C3. Neither a 404'd worker chunk nor a container the CSS cascade
-    // collapsed to zero height produces a MapLibre `error`, so `gl.error` stays
-    // null and the WebGL fallback never fires — the student watched
-    // "Loading campus…" forever with a clean console. This is the other way in.
+    // Neither a 404'd worker chunk nor a container the CSS cascade collapsed
+    // to zero height produces a MapLibre `error`, so `gl.error` stays null and
+    // the WebGL fallback never fires — the student watches "Loading campus…"
+    // forever with a clean console. This is the other way in.
     // The suite's own fake clock only fakes Date (so the "today" slice is
     // stable); the load timer needs setTimeout faked too, and its own pump.
     vi.useRealTimers();
@@ -869,9 +870,9 @@ describe('CampusMap', () => {
 
   it('falls back to the building list when the campus data itself never arrives', async () => {
     // The third silent hang, and the nastiest: with no geometry there is no style
-    // and no home frame, so `new MapLibreMap()` never runs — which means C3's load
-    // timeout never even starts. Same class of cause as C1 (an asset the build was
-    // supposed to emit), so it needs the same exit.
+    // and no home frame, so `new MapLibreMap()` never runs — which means the load
+    // timeout never even starts. Same class of cause as the stall above (an asset
+    // the build was supposed to emit), so it needs the same exit.
     chunks.fail = true;
     render({ plan: planWithMeeting() });
     for (let i = 0; i < 20 && !container.querySelector('.campusmap__nogl'); i++) await pump();
@@ -886,7 +887,7 @@ describe('CampusMap', () => {
   });
 
   it('makes the planner behind the overlay unreachable while the map is open, and gives itself focus', async () => {
-    // QA I4: `aria-modal="true"` with no containment meant 43 Tab presses to the
+    // `aria-modal="true"` with no containment means 43 Tab presses to the
     // first marker, 31 of them through invisible planner controls.
     // Mirrors App's shape: the map renders inline, as a SIBLING of the planner,
     // not through a portal — which is exactly why `inert` goes on the siblings.

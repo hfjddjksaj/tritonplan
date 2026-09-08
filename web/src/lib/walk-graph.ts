@@ -134,7 +134,7 @@ let cached: Promise<WalkGraph> | null = null;
 /**
  * Load and decode the graph, once per session. Dynamic import so the bytes
  * never enter the first-paint chunk — nothing downloads until the Distance bar
- * is first expanded (spec §7.6: opening the map itself stays 0 ms slower).
+ * is first expanded (opening the map itself stays 0 ms slower).
  */
 export function loadWalkGraph(): Promise<WalkGraph> {
   cached ??= import('../data/ucsd-walk-graph.json').then((m) =>

@@ -34,7 +34,7 @@ describe('displayTermLabel', () => {
   it('Fall shows the calendar year', () => {
     expect(displayTermLabel(FALL26)).toBe('Fall 2026');
   });
-  it('Winter shows the ACADEMIC-year start year (user decision)', () => {
+  it('Winter shows the ACADEMIC-year start year', () => {
     // Jan–Mar 2027 belongs to AY 2026–27 → displays "Winter 2026".
     expect(displayYear(WINTER27)).toBe(2026);
     expect(displayTermLabel(WINTER27)).toBe('Winter 2026');

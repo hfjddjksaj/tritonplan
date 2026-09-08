@@ -87,7 +87,7 @@ describe('encodeRing default epsM (0.25 m, the precision/payload trade-off)', ()
     expect(wire.length / 2).toBe(3); // p1 simplified away
   });
 
-  it('keeps every point when eps is explicitly 0 (round 1’s lossless mode still reachable)', () => {
+  it('keeps every point when eps is explicitly 0 (the lossless mode still reachable)', () => {
     const wire = encodeRing(ring, 0);
     expect(wire.length / 2).toBe(4); // nothing simplified away at eps 0
   });
@@ -108,8 +108,7 @@ describe('encodeRing — zero-length segments from quantisation', () => {
   it('drops a consecutive point that rounds onto the same GEO_SCALE grid cell as the previous one', () => {
     // p1 differs from p0 by 1e-10° — far below the 1e-6 grid, so it quantises
     // to the exact same integer point. This is the 7-digit-precision-vs-1e6
-    // -grid collapse the reviewer measured on the real ground layer (12.1%
-    // of vertices).
+    // -grid collapse measured on the real ground layer (12.1% of vertices).
     const ring = [
       [-117.234, 32.879], // p0
       [-117.2340000001, 32.8790000001], // p1 — collapses onto p0, must be dropped

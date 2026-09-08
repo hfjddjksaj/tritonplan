@@ -329,7 +329,7 @@ export const DOT_HIT_R = 11;
  * SIBLING of the GL canvas, every press that landed on a chip or a dot was
  * swallowed whole: the map did not pan, did not zoom, and no card opened
  * either — up to ~4 % of the canvas, concentrated exactly where the eye and the
- * finger go (QA I1). Letting every gesture through to MapLibre and asking this
+ * finger go. Letting every gesture through to MapLibre and asking this
  * function afterwards costs nothing and fixes drag, pinch and wheel in one
  * move; MapLibre only fires `click` when the press was not a drag, so a drag
  * that starts on a chip pans without opening anything.

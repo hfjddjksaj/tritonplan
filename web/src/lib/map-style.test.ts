@@ -93,7 +93,7 @@ describe('buildStyle', () => {
     for (const id of [LAYER.buildings3d, LAYER.hosts3d, LAYER.trees3d]) expect((s.layers.find((l) => l.id === id)!.layout as { visibility?: string }).visibility).toBe('none');
   });
   it('sets district names to the official map’s proportions, not a size that eats them', async () => {
-    // QA I5: at 13 px / 0.2 em these ran ~1.2x taller and ~25 % wider per word than
+    // At 13 px / 0.2 em these ran ~1.2x taller and ~25 % wider per word than
     // the official map's ~10-11 px untracked, which is what turned WARREN into WAR
     // and EAST CAMPUS OPEN SPACE PRESERVE into three fragments under a course chip.
     // Pinned so a revert to 13 / 0.2 is a failing test rather than a quiet
@@ -106,11 +106,10 @@ describe('buildStyle', () => {
     const landmark = s.layers.find((l) => l.id === LAYER.landmarkNames)!.layout as Record<string, unknown>;
     expect(layout['text-size']).toBeLessThan(landmark['text-size'] as number);
   });
-  it('draws road names in mixed case, the user’s preference over uppercase', async () => {
-    // Reverses this plan's original Ruling 10 (uppercase) — the user's own
-    // call, made after seeing the official UCSD map's mixed-case labels.
-    // Pinned so a revert to uppercase is a failing test, not a quiet
-    // regression nobody sees until the next browser pass.
+  it('draws road names in mixed case, matching the official UCSD map', async () => {
+    // Mixed case matches the official UCSD map's road labels. Pinned so a
+    // revert to uppercase is a failing test, not a quiet regression nobody
+    // sees until the next browser pass.
     const s = buildStyle({ sources: buildSources(await loadCampusGeo(), await loadCampusMap()), assetBase: '/' });
     const layout = s.layers.find((l) => l.id === LAYER.roadNames)!.layout as Record<string, unknown>;
     expect(layout['text-transform']).not.toBe('uppercase');
@@ -122,8 +121,8 @@ describe('buildStyle', () => {
     const district = s.layers.find((l) => l.id === LAYER.districtNames)!.layout as Record<string, unknown>;
     expect(district['text-letter-spacing']).toBe(0.08);
   });
-  it('pins the spec palette-table anchor colours exactly, and both Pool/Fountain spellings alike', () => {
-    // Anchors named directly, row by row, in the spec §1 palette table.
+  it('pins the official palette anchor colours exactly, and both Pool/Fountain spellings alike', () => {
+    // Anchors named directly, row by row, in the official palette table.
     expect(GROUND_COLORS['Grass']).toBe('#D4E5B9');
     expect(GROUND_COLORS['Planter']).toBe('#B5C7A2');
     expect(GROUND_COLORS['Walking Path']).toBe('#F2EEE9');
@@ -201,7 +200,7 @@ describe('hosts', () => {
     expect(calls).toContainEqual([LAYER.hosts3d, 'visibility', 'none']);
     expect(calls).toContainEqual(['terrain', null]);
   });
-  it('applyMode(_, "3d") sets the EXACT set of visibility flips the brief lists, not a superset that happens to include the right ones', () => {
+  it('applyMode(_, "3d") sets the EXACT documented set of visibility flips, not a superset that happens to include the right ones', () => {
     const map = new FakeMap({});
     applyMode(map, '3d');
     const visibility: Record<string, unknown> = {};
@@ -217,7 +216,7 @@ describe('hosts', () => {
       [LAYER.trees3d]: 'visible',
     });
   });
-  it('applyMode(_, "2d") sets the EXACT set of visibility flips the brief lists', () => {
+  it('applyMode(_, "2d") sets the EXACT documented set of visibility flips', () => {
     const map = new FakeMap({});
     applyMode(map, '2d');
     const visibility: Record<string, unknown> = {};

@@ -1,6 +1,6 @@
 /**
  * The term-switcher container: one TermWorkspace per academic term, each
- * holding its own complete PlansState (spec 2026-08-10 §3). plans.ts pure
+ * holding its own complete PlansState. plans.ts pure
  * functions are reused unchanged inside a workspace. Invariants mirror
  * plans.ts: `terms` is never empty and `activeTermKey` always points at a
  * member; every mutator preserves them and returns the same reference on no-op.
@@ -183,7 +183,7 @@ function clearAllBrowsed(ps: PlansState, now: string): PlansState {
 }
 
 /**
- * Runs on every app load (spec §6). Archived-ness is DERIVED from the date —
+ * Runs on every app load. Archived-ness is DERIVED from the date —
  * no stored flag — and the cleanup converges: after one sweep the pool holds
  * nothing from archived terms, so the next run finds nothing to do.
  */
@@ -235,7 +235,7 @@ export interface RouteResult {
 }
 
 /**
- * Route freshly-captured courses into their own term's active plan (spec §3).
+ * Route freshly-captured courses into their own term's active plan.
  * "Fresh" = new id, or a strictly newer capturedAt (a deliberate re-open in
  * TSS — the × -recovery path). Seat-refresh pushes with unchanged capturedAt
  * route nowhere.

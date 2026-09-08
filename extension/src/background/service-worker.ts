@@ -228,8 +228,6 @@ function isMyCoursesTab(url: string): boolean {
  */
 async function openOrReloadTssHome(url: string): Promise<void> {
   const tabs = await queryTssTabs();
-  // Already on the list: reload it. TSS is a UI5 single-page app, so only a full load
-  // re-fetches — focusing a stale tab would look like the check silently did nothing.
   const listed = tabs.find((t) => t.id != null && isMyCoursesTab(t.url ?? ''));
   if (listed && listed.id != null) {
     try {

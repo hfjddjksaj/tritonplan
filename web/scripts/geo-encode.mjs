@@ -9,13 +9,13 @@
 // to CAMERA.maxZoom 19, where one screen pixel is ≈ 0.25 m at UCSD's
 // latitude — the original 1 m default tolerance was ≈ 4 px, which sliced
 // right angles into diagonals and collapsed narrow wings into slivers.
-// Every fetch-script call site now passes `eps = 0.25`: at 0.25 m plus the
+// Every fetch-script call site passes `eps = 0.25`: at 0.25 m plus the
 // ≈ 0.055 m worst-case quantisation error (half of GEO_SCALE's own grid —
 // see below), the combined worst-case deviation is ≈ 0.3 m ≈ 1.2 px at z19,
-// still under a pixel and a half. This is the user's own deliberate
-// precision/payload trade-off (the branch briefly shipped `eps = 0`, fully
-// lossless but noticeably heavier to download) — not a re-simplification of
-// the original 1 m bug, which really did produce visible bevels.
+// still under a pixel and a half. This is a deliberate precision/payload
+// trade-off (`eps = 0`, fully lossless, is noticeably heavier to download) —
+// not a re-simplification of the original 1 m bug, which really did produce
+// visible bevels.
 export const M_PER_DEG_LAT = 111132;
 export const M_PER_DEG_LON = 93500; // 111320 * cos(32.88°)
 

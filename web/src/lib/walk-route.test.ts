@@ -267,7 +267,7 @@ describe('routeBetween', () => {
   });
 
   it('returns a bare indoor walk when both buildings share a door', () => {
-    // Rare since the 2026-08-23 door-pricing fix but still real: two footprints
+    // Rare but still real: two footprints
     // that TOUCH can share a node with no hop at either end, and then the
     // cheapest route never reaches the network. The outdoor leg is honestly
     // 0 m and the path is one point — the drawing code has to cope, so the
@@ -283,7 +283,7 @@ describe('routeBetween', () => {
   });
 
   /**
-   * The regression guard for the bug reported 2026-08-23: the gold line began
+   * The regression guard for the floating-line bug: the gold line began
    * and ended at network NODES, so it floated tens of metres from the very
    * buildings it claimed to join. The hop from the wall to the node is
    * ordinary outdoor walking and is charged in seedCost, so it belongs on the

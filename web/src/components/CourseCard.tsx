@@ -129,14 +129,13 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
 
                 One slot, two states, and the shape says which. Red circle: you are
                 ENROLLED somewhere else, and the plan is wrong about a fact. Amber
-                triangle: you are QUEUED somewhere else, which is the same
-                disagreement one step earlier and nothing to fix yet. The colour is
-                the card's own standing carried down — the badge above already reads
-                Booked green or Waitlisted amber — so the pair never has to be
-                learned separately. TSS names the queued package in the same field it
-                names a booked one (`EventPackageAbbr`, both on every My Courses row —
-                fixture rows 4 and 5, captured live 2026-08-21), so this needs no new
-                data, only the state it was already refusing to speak for. */}
+                triangle: you are QUEUED somewhere else, the same disagreement one
+                step earlier and nothing to fix yet. Each takes the colour of the
+                badge beside it — Booked green, Waitlisted amber — so the pair reads
+                as one statement instead of two. Both states answer from the same
+                capture: My Courses writes the package into `EventPackageAbbr` on a
+                waitlisted row exactly as on a booked one (fixture rows 4 and 5,
+                captured live 2026-08-21). */}
             {(booked || queued) && bookedOptionCode && (
               <button
                 type="button"
@@ -153,29 +152,28 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                     : `TSS has you in ${bookedOptionCode}, not the section on this plan. Click for details.`,
                 )}
               >
-                {/* Two shapes, two sizes, and the difference is measured. The circle
-                    takes 14 — an even size in the badge's even content box, whole
-                    pixels either side (see the note on WarnCircle). The triangle takes
-                    13, which is what it already is at the other place a student meets
-                    it (`WaitlistOnlyMark`), and what puts the two marks at the same
-                    optical weight: a triangle is wider at its base than a circle of
-                    equal height, so 14 gave it 10.6% more ink and 1.16px less air than
-                    the circle in the identical plate, and it read as the louder of the
-                    two — backwards, since this is the state where nothing is wrong yet.
-                    13 lands its ink at 10.60px against the circle's 10.50px. The even/
-                    odd rule doesn't decide it: at neither size do this glyph's ink
-                    margins fall on whole pixels (2.59px at 14, 3.05px at 13), so the
-                    only whole-pixel thing 14 would buy is an invisible box edge.
-                    The optical nudge the triangle needs and the circle doesn't lives on
+                {/* Two shapes, two sizes, both measured. The circle takes 14 — an even
+                    size in the badge's even content box, whole pixels either side (see
+                    the note on WarnCircle). The triangle takes 13, which is its size at
+                    the other place a student meets it (`WaitlistOnlyMark`) and what
+                    holds the two marks at one optical weight: a triangle is wider at
+                    its base than a circle of equal height, so 14 gives it 10.6% more
+                    ink and 1.16px less air in the identical plate and reads as the
+                    louder of the two — backwards for the state where nothing is wrong
+                    yet. 13 lands its ink at 10.60px against the circle's 10.50px. The
+                    even/odd rule does not decide it: at neither size do this glyph's
+                    ink margins fall on whole pixels (2.59px at 14, 3.05px at 13), so
+                    the only whole-pixel thing 14 buys is an invisible box edge. The
+                    optical nudge the triangle needs and the circle does not lives on
                     .tag--alert-queued svg. */}
                 {queued ? <WarnTriangle size={13} /> : <WarnCircle size={14} />}
               </button>
             )}
           </div>
           <div className="course-card__title">{course.title}</div>
-          {/* Facts about the course, not controls — units used to sit in the button row
-              and read as a fifth thing to click. Conflict stays down here with it rather
-              than up on the code line, where a third badge wrapped and shoved the title. */}
+          {/* Facts about the course, not controls — in the button row the units would
+              read as a fifth thing to click. Conflict stays down here with them rather
+              than up on the code line, where a third badge wraps and shoves the title. */}
           {(course.units !== undefined || conflicted) && (
             <div className="course-card__facts">
               {course.units !== undefined && (
@@ -243,9 +241,8 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
           </button>
           {/* Manual marking exists for courses TSS has not spoken about. Once it
               reports one, there is nothing here to decide — enrolment is its fact, not
-              a preference — and the toggle only offered a way to contradict it that no
-              enrolled student wants. One student unmarked all three of theirs and spent
-              days wondering why the badges were dark (2026-08-19). */}
+              a preference — and the toggle would only offer a way to contradict it
+              that no enrolled student wants. */}
           {onToggleBooked && !bookedByTss && !queued && (
             <button
               type="button"

@@ -10,8 +10,8 @@
  * bottom edge so the trunk meets the ground where the point is.
  *
  * WHY IT IS BUILT THE WAY IT IS. The first version was one disc on a stick, and
- * it read as a lollipop from the first look — exactly the failure this task was
- * told to watch for. Three things fix it, and none of them is detail for
+ * it read as a lollipop from the first look — the classic failure mode for a
+ * tree sprite. Three things fix it, and none of them is detail for
  * detail's sake, because at z15 this draws at 3–14 px and only the silhouette
  * and the shading survive:
  *

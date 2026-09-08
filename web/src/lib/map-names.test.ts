@@ -76,8 +76,8 @@ describe('buildingShortName', () => {
   });
 
   it('reads an address-style name as its address instead of a blank grey block', () => {
-    // The old digit guard dropped these; the ruling is to abbreviate them like
-    // any other name (street words included) rather than blank them.
+    // The old digit guard dropped these; address-style names are abbreviated
+    // like any other name (street words included) rather than blanked.
     expect(buildingShortName('9500 Gilman Drive')).toBe('9500 Gilman Dr');
     expect(buildingShortName('134 Dickinson')).toBe('134 Dickinson');
   });

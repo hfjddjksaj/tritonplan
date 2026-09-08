@@ -15,10 +15,9 @@ import type { CampusGeo, CampusLine, CampusMapData, CampusShape } from './campus
 import { LANDMARKS, buildingShortName, districtLabel, districtPriority, roadLabelText } from './map-names';
 
 export interface MapSources {
-  // Widened from the brief's literal `Polygon` to `Polygon | MultiPolygon`
-  // (Ruling 6): a ground shape's rings can be genuinely disjoint pieces, not
-  // just holes, and MapLibre fills/extrudes/places symbols on both the same
-  // way, so this costs Task 5's style nothing.
+  // `Polygon | MultiPolygon`: a ground shape's rings can be genuinely
+  // disjoint pieces, not just holes, and MapLibre fills/extrudes/places
+  // symbols on both the same way.
   ground: FeatureCollection<Polygon | MultiPolygon, { type: string; rank: number }>;
   buildings: FeatureCollection<Polygon | MultiPolygon, { name: string; height: number }>;
   trees: FeatureCollection<Point, { cls: number }>;
@@ -213,7 +212,7 @@ function assembleRings(rings: number[][]): number[][][] {
  * its own holes). Used for both building footprints and ground-surface
  * shapes: both bundled sources mix genuine holes (an atrium, a courtyard)
  * with genuinely disjoint pieces sharing one name/type, and only containment
- * — not just "how many rings" — tells them apart (Ruling 6).
+ * — not just "how many rings" — tells them apart.
  */
 export function shapeGeometry(rings: number[][]): Polygon | MultiPolygon {
   const pieces = assembleRings(rings);

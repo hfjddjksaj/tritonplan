@@ -53,8 +53,7 @@ describe('bookedTitle: waitlist places are not bookings', () => {
 
   it('does not call a term with only waitlist places "no bookings at all"', () => {
     // The card next to it says Waitlisted in so many words. A tooltip flatly
-    // denying TSS reported anything is the exact shape of lie that cost three
-    // rounds of misdiagnosis in 2026-08.
+    // denying TSS reported anything would contradict it on the same screen.
     const rows = [queued('CHEM-114A'), queued('CHEM-152')];
     const t = bookedTitle(true, new Set<string>(), NOW, rows, FALL);
     expect(t).not.toMatch(/no bookings at all/);

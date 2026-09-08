@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * QA C1: `maplibre-gl@6` guesses its worker URL from `import.meta.url`, which
+ * `maplibre-gl@6` guesses its worker URL from `import.meta.url`, which
  * points at a file Rollup never emits — so the worker 404s, the map never
  * starts, and MapLibre raises no error while it happens. Nothing noticed.
  *

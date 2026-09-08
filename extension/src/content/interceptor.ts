@@ -1,7 +1,7 @@
 /**
  * PASSIVE OData interceptor — runs in the PAGE's MAIN world on TSS.
  *
- * ⛔ NO-BAN RED LINE (see docs/tss-recon + plan): this file must be a pure PASSIVE
+ * ⛔ NO-BAN RED LINE (see docs/tss-recon): this file must be a pure PASSIVE
  * OBSERVER. It only wraps fetch/XHR to READ responses the TSS page ALREADY requested,
  * via `response.clone()`. It MUST NEVER:
  *   - issue, replay, retry, or modify any request,

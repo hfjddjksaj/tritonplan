@@ -230,11 +230,10 @@ export function planFromHash(hash: string): PlanState | null {
 
 /* --- the address-bar mirror of the user's OWN plan --------------------------
  * The planner mirrors the active plan into the address bar so the browser's own
- * bookmark sync / "send this tab to my phone" carries the latest plan. That
- * mirror used to share the `#p=` key with real share links and was told apart
- * by a per-tab sessionStorage marker — which a bookmark, always opening in a
- * fresh tab, never has. So the user's own plan came back as "not your plan".
- * The mirror now has its own key: `#m=` means mine, `#p=` means someone sent it. */
+ * bookmark sync / "send this tab to my phone" carries the latest plan. The
+ * mirror has its own key — `#m=` means mine, `#p=` means someone sent it — so
+ * a bookmarked tab, which always opens fresh with no per-tab sessionStorage
+ * marker, still reads as the user's own plan and not "not your plan". */
 const MIRROR_KEY = 'm';
 
 /** Build the `#m=…` fragment for the address-bar mirror (without the leading `#`). */

@@ -21,7 +21,7 @@ function Harness({ onHandle, home = HOME, reduceMotion = true }: { onHandle: (h:
 // requestAnimationFrame with a real ~16.67ms setInterval — a 0ms setTimeout has
 // no guaranteed budget to let a scheduled rAF actually fire before flush()
 // returns. 20ms clears that floor with margin; this is a test-harness timing
-// fix, not a change to the hook's throttling (task-6 Ruling 2).
+// fix, not a change to the hook's throttling.
 const flush = async () => { for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve(); await new Promise((r) => setTimeout(r, 20)); }); };
 
 describe('useMapLibre', () => {
@@ -33,9 +33,8 @@ describe('useMapLibre', () => {
   // creation effect and everything else stays green: every other unit test passes,
   // and `verify-build.mjs` passes too, because the module is still in the graph so
   // the worker asset still emits and is still referenced. Production just goes back
-  // to "Loading campus…" forever — now dressed up by C3's timeout as a slow map
-  // rather than a bug. This test is the only thing standing between that line and
-  // the nine tasks it already survived.
+  // to "Loading campus…" forever — dressed up by the loading timeout as a slow
+  // map rather than a bug. This test is the only guard on that line.
   //
   // It has to run FIRST in this file: `configureMapWorker()` is idempotent, so only
   // the first map built in this module registry records anything.
@@ -65,7 +64,7 @@ describe('useMapLibre', () => {
     expect(handle.atHome).toBe(true);
     expect(m.getCenter().lng).toBeCloseTo(-117.235, 3);
     // The fake's cameraForBounds always answers zoom 15; the home fit must
-    // boost that by HOME_ZOOM_BOOST (the user's "~30% tighter" preference).
+    // boost that by HOME_ZOOM_BOOST — the deliberately tighter home framing.
     expect(m.getZoom()).toBeCloseTo(15 + HOME_ZOOM_BOOST, 6);
     const tickBefore = handle.tick;
     await act(async () => { m.simulateUserPan(0.01, 0); });
@@ -152,7 +151,7 @@ describe('useMapLibre', () => {
     await act(async () => root.unmount());
   });
 
-  // Fix round 1, Finding 1: this app renders under <StrictMode> (web/src/main.tsx),
+  // This app renders under <StrictMode> (web/src/main.tsx),
   // which double-invokes every effect on mount in development — run, cleanup, run
   // again. The creation effect's once-only guard must survive that: the SECOND
   // run has to build a fresh map, not bail out and leave `map` pointing at the
@@ -182,7 +181,7 @@ describe('useMapLibre', () => {
     await act(async () => root.unmount());
   });
 
-  // Fix round 1, Finding 2(a): the throttle's entire point is coalescing a
+  // The throttle's entire point is coalescing a
   // burst of moves into one rAF — a regression that ticked synchronously on
   // every `move` would still pass every other test in this file unchanged.
   it('coalesces a burst of synchronous move events into exactly one tick', async () => {
@@ -226,7 +225,7 @@ describe('useMapLibre', () => {
   });
 
   it('easeCamera does nothing — and does not un-home the view — when the camera is already there', async () => {
-    // QA M4: the compass pressed at bearing 0 used to re-enable "Reset view" for
+    // The compass pressed at bearing 0 used to re-enable "Reset view" for
     // a camera that never moved.
     let handle!: MapHandle;
     const root = createRoot(document.body.appendChild(document.createElement('div')));
@@ -246,7 +245,7 @@ describe('useMapLibre', () => {
   });
 
   it('goHome levels the map, not just its bearing', async () => {
-    // QA I3: cameraForBounds answers centre/zoom/bearing and says nothing about
+    // cameraForBounds answers centre/zoom/bearing and says nothing about
     // pitch, so a tilted map stayed tilted through "Reset view" forever.
     let handle!: MapHandle;
     const root = createRoot(document.body.appendChild(document.createElement('div')));
@@ -263,7 +262,7 @@ describe('useMapLibre', () => {
   });
 
   it('accumulates zoom steps instead of re-reading a camera that is still animating', async () => {
-    // QA M2: two clicks inside the 500 ms ease moved 1.04 levels, not 2, because
+    // Two clicks inside the 500 ms ease moved 1.04 levels, not 2, because
     // the second click started from the interpolated zoom.
     FakeMap.easeProgress = 0.4;
     let handle!: MapHandle;
@@ -328,7 +327,7 @@ describe('useMapLibre', () => {
   });
 
   it('gives up on a map that never starts, without waiting on an error that is not coming', async () => {
-    // QA C3: a 404'd worker chunk and a zero-height container both leave the map
+    // A 404'd worker chunk and a zero-height container both leave the map
     // "starting" forever — ready false, error null, console clean. Nothing else
     // in the app can tell that apart from a slow load.
     vi.useFakeTimers();

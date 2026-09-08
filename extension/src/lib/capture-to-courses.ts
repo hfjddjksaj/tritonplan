@@ -195,9 +195,9 @@ export class CaptureStore {
     // So an empty report only counts in the exact shape verified live on 2026-08-11: a
     // whole-body OData v2 document, fetched from a URL naming this service's ModuleSet.
     // Anything else — a $batch body, another entity set riding the same endpoint, a
-    // $metadata XML doc, an HTML error page — leaves the list alone. Reading v2 out of
-    // batches (added 2026-08-19) made those bodies eligible to clear, and a student's
-    // captured bookings went to zero; batched captures now only ever ADD.
+    // $metadata XML doc, an HTML error page — leaves the list alone. In particular,
+    // batched captures only ever ADD: letting a $batch body clear once zeroed a
+    // student's captured bookings.
     const clearsOnEmpty =
       isV2Doc &&
       isWholeV2Body(body) &&
@@ -228,12 +228,10 @@ export class CaptureStore {
    * the 3, both queued courses absent, and no status field anywhere in the row. So
    * "missing from this feed" means "not enrolled"; it can never mean "not waitlisted".
    *
-   * Letting it write the whole list is what made the queue places disappear: My Courses
-   * reported them, then the student's next TSS visit landed on the home page — the page
-   * every login opens — and the amber badges silently went out.
-   *
-   * A course this report now names as an enrolment is NOT carried over: the student came
-   * off the queue and into the class, and no course is ever both at once.
+   * If this feed wrote the whole list, every login — which lands on the home page —
+   * would silently drop the queue places My Courses reported. A course this report
+   * names as an enrolment is NOT carried over: the student came off the queue and
+   * into the class, and no course is ever both at once.
    *
    * ⚠ The carried-over rows keep the position TSS stated when My Courses was read, while
    * `bookedAt` moves to now — the enrolment half of the answer really is that fresh. A

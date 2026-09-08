@@ -5,13 +5,6 @@
  * Class Sections UI. Clicking it ONLY reads already-captured data and sends a `plan-add`
  * intent to our background worker (which opens OUR planner). It NEVER clicks TSS controls,
  * NEVER triggers a TSS network call — see the no-ban red line.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- *  SELECTORS ASSUMED FROM RECON — VERIFY LIVE (no logged-in TSS was available).
- *  TSS is SAPUI5/Fiori; class names are generated and may differ. Everything below
- *  degrades gracefully: if a selector matches nothing, we simply inject no button and
- *  never throw into the page. Tune the constants here after inspecting a live DOM.
- * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import { PRODUCT_NAME, MSG } from '../config.js';

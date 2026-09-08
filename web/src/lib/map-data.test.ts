@@ -36,7 +36,7 @@ describe('buildSources', () => {
     expect(s.labels.features.find((f) => f.properties.kind === 'building' && f.properties.label === 'Geisel Library')).toBeUndefined();
   });
   it('labels street-address footprints instead of leaving them a blank grey block', async () => {
-    // Fix 3's ruling: a building whose official name is its address (e.g.
+    // A building whose official name is its address (e.g.
     // "134 Dickinson") reads as that address rather than getting dropped —
     // the old digit guard used to blank all of these.
     const s = buildSources(await loadCampusGeo(), await loadCampusMap());

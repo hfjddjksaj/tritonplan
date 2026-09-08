@@ -246,8 +246,6 @@ export function apptPeriodsToApptTimes(
 
 const stripLeadingZeros = (s: string): string => s.replace(/^0+(?=.)/, '');
 
-/** Homepage booked row → BookedModule. moduleId/period are zero-padded in this
- *  feed ("00002077"/"002") but must match course-capture keys ("2077"/"2"). */
 /**
  * A "My Courses" row → the same BookedModule, plus the package it was booked on.
  *
@@ -258,7 +256,7 @@ const stripLeadingZeros = (s: string): string => s.replace(/^0+(?=.)/, '');
  * not in doubt — `WaitlistBooking`, or the display text. Everything else (a withdrawal,
  * say) is still refused.
  *
- * Both halves are now confirmed against a real waitlisted student (2026-08-21, two
+ * Both halves are confirmed against a real waitlisted student (2026-08-21, two
  * queued courses beside three booked ones):
  *
  * | field              | waitlisted        | booked        |
@@ -269,7 +267,7 @@ const stripLeadingZeros = (s: string): string => s.replace(/^0+(?=.)/, '');
  * | `WaitlistPosition` | `2` / `11`        | `0`           |
  * | `SemanticState`    | `'Warning'`       | `'Information'` |
  *
- * The rule still does NOT read `SmStatus === '00'`, now that the code is known: `'00'`
+ * The rule does NOT read `SmStatus === '00'`, even though the code is known: `'00'`
  * has only ever been seen on rows that also said `WaitlistBooking: true`, so it adds no
  * case, while the statuses nobody has captured (a withdrawal, a pending request) would
  * be free to collide with it. The semantic fields say what they mean; the code does not.
@@ -298,6 +296,8 @@ export function myModuleRowToBooked(
   };
 }
 
+/** Homepage booked row → BookedModule. moduleId/period are zero-padded in this
+ *  feed ("00002077"/"002") but must match course-capture keys ("2077"/"2"). */
 export function bookedRowToModule(row: TssBookedModuleRow): BookedModule | null {
   const courseCode = row.SmShort?.trim();
   const moduleId = stripLeadingZeros(row.SmObjid ?? '');

@@ -153,12 +153,12 @@ describe('the shipped walk graph', () => {
     // Measured 95.0% (14,861 of 15,643) on 2026-08-21, over 39 components.
     // Below 90% means the source fragmented — most likely because the fetch
     // query lost the campus SERVICE/RESIDENTIAL roads, which alone drops this
-    // to 89.4% and takes building-pair failure from 3.6% to 16.6% (spec §2.1).
+    // to 89.4% and takes building-pair failure from 3.6% to 16.6%.
     expect(largestComponentShare()).toBeGreaterThan(0.9);
   });
 
   it('still carries UCSD stairs', () => {
-    // ⚠ TWO UNITS, DO NOT MIX THEM. The recon in spec §2.3 counted 322 steps
+    // ⚠ TWO UNITS, DO NOT MIX THEM. The OSM recon counted 322 steps
     // WAYS; the decoded graph only knows EDGES, and those 322 ways carry 430
     // SEGMENTS (273 of the ways are plain 2-point ways, 49 have more geometry).
     // So the fetch script's own health check bands 250–400 on WAYS, and this
@@ -205,8 +205,8 @@ describe('the shipped walk graph', () => {
       }
     }
     // 0 failures over all 231 pairs. This is the core promise of the feature
-    // (spec §2.1, where the same sweep over 51 teaching buildings and 1275
-    // pairs also measured 0.00%): degradation to a straight-line estimate is a
+    // (a wider sweep over 51 teaching buildings and 1275 pairs also measured
+    // 0.00%): degradation to a straight-line estimate is a
     // fuse for peripheral facilities, never something a student in a lecture
     // hall should ever see.
     expect(failures).toEqual([]);

@@ -294,7 +294,7 @@ export interface OptionSummaryPart {
 }
 
 /**
- * Path-2 standby switch (see PROGRESS.md 2026-07-24): TSS fills schedules in
+ * Standby switch: TSS fills schedules in
  * gradually (ETHN-001R's async lecture later gained times), so undefined
  * components are shown as-is — type tag + "undefined" — and refresh with the
  * data. If "Other" components (CHEM-043A's "Other / Schedule Not Defined" rows)

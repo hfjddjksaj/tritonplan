@@ -8,7 +8,7 @@ import type { WalkState } from './useWalkRoute';
  * The two loaders are wrapped, NOT replaced: the point of these cases is that
  * the real 15.6k-node graph and the real 608 bundled footprints route
  * end to end. The counters exist only to prove the other half of the contract
- * — that a half-filled Distance bar downloads neither of them (spec §7.6) —
+ * — that a half-filled Distance bar downloads neither of them —
  * and `failNext` to prove a load that blows up degrades instead of throwing.
  */
 const probe = vi.hoisted(() => ({ graph: 0, geo: 0, failNext: false }));
@@ -216,7 +216,7 @@ describe('useWalkRoute', () => {
       expect(r.degraded).toBe(true);
       if (!r.degraded) throw new Error('unreachable');
       expect(r.reason).toBe('no-snap');
-      // No line on the map for a route we could not compute (spec §6).
+      // No line on the map for a route we could not compute.
       expect(r.path).toBeNull();
       expect(r.metres).toBeGreaterThan(1000); // Revelle to the shore, roughly
       expect(r.seconds).toBeGreaterThan(0);

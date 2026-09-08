@@ -60,8 +60,8 @@ describe('treeSprite', () => {
 
 describe('treeSprite silhouette', () => {
   // The lollipop test, made mechanical. The first sprite was one disc on a stick
-  // and read as a lollipop at first glance — the exact failure the task was told
-  // to watch for. A lobed crown is what fixes it, so assert the crown is NOT a
+  // and read as a lollipop at first glance — the classic failure mode for a
+  // tree sprite. A lobed crown is what fixes it, so assert the crown is NOT a
   // circle: sample its outline and require the radius to vary.
   it('has a lobed crown rather than a perfect disc', () => {
     const img = treeSprite(48);

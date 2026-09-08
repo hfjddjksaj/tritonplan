@@ -86,10 +86,9 @@ describe('bundled campus geometry', () => {
       (n, s) => n + s.rings.reduce((m, r) => m + r.length / 2, 0),
       0,
     );
-    // RDP simplification is back at the user's chosen default (0.25 m,
-    // geo-encode.mjs) — the branch briefly shipped a fully-lossless `eps 0`
-    // (measured ~26202 here), which traded away more payload than the user
-    // wanted for a ~1.5 s map-open cost. Back down to ~15090 at 0.25 m.
+    // RDP at the default 0.25 m (geo-encode.mjs) — a deliberate
+    // precision/payload trade-off: fully lossless `eps 0` costs a ~1.5 s
+    // map-open penalty. Measures ~15090 at 0.25 m.
     expect(verts).toBeGreaterThan(10560);
     expect(verts).toBeLessThan(19620);
 
@@ -237,8 +236,8 @@ describe('bundled campus map data', () => {
     for (const t of ['Grass', 'Sidewalk', 'Walking Path', 'Planter', 'Parking Lot', 'Street', 'Building']) expect(types.has(t)).toBe(true);
     expect(types.has('Curb')).toBe(false);
     // Dropping `maxAllowableOffset` raised the raw feature count; the
-    // ground-Building dedup (Fix 2) then removes the ~310 that duplicate a
-    // footprint, and RDP simplification (0.25 m default) plus the
+    // ground-Building dedup (fetch-campus-map.mjs) then removes the ~310 that
+    // duplicate a footprint, and RDP simplification (0.25 m default) plus the
     // zero-length-segment guard drop any polygon that degenerates. Net
     // measured ~4390, comfortably in the thousands either way.
     expect(m.ground.length).toBeGreaterThan(3000);
@@ -247,7 +246,7 @@ describe('bundled campus map data', () => {
     expect(m.boundary.length).toBeGreaterThanOrEqual(1);
     expect(m.landuse.length).toBeGreaterThan(0);
     // The ground layer's own `Building` polygons should be almost all gone
-    // (deduped against the 609 footprints in Fix 2) — only the ~33 orphans
+    // (deduped against the 609 footprints in fetch-campus-map.mjs) — only the ~33 orphans
     // the footprint layer is missing survive, not the full ~343.
     const groundBuildings = m.ground.filter((g) => g.type === 'Building').length;
     expect(groundBuildings).toBeGreaterThan(0);

@@ -97,7 +97,7 @@ function initialState(): { pool: CourseOffering[]; terms: TermsState; forgetModu
     if (seed) terms = adoptSeedPlan(terms, seed, iso);
   }
   const swept = archiveSweep(terms, pool, now);
-  // Default view is always the NEWEST term (spec §6): the stored activeTermKey is
+  // Default view is always the NEWEST term: the stored activeTermKey is
   // ignored on load.
   const state = switchTermIn(swept.state, newestTermKey(swept.state));
   return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds };

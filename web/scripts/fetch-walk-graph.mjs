@@ -227,7 +227,7 @@ async function main() {
   // changing anything real, so an edge-based band fails spuriously. The way
   // count only moves when staircases are actually added or removed. 250–400 is
   // calibrated on ways, against the 322 measured 2026-08-21 (which is also
-  // where spec §2.3's 33/322 `step_count` and 145/322 `incline` come from —
+  // where the 33/322 `step_count` and 145/322 `incline` figures come from —
   // tag counts, hence per-way). The wire `steps` array still indexes EDGES;
   // only this health check counts ways.
   if (g.stepsWays < 250 || g.stepsWays > 400) {

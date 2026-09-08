@@ -55,8 +55,7 @@ export const TSS_HOME_URL = 'https://tss.ucsd.edu/fiori#YStudent-Overview';
  * The home page needs two separate feeds and a deduction to say the same thing, and
  * says nothing at all about which section.
  *
- * A cold load here fetches ONLY this app's feed — no home-page feeds — which is
- * exactly why the extension had to learn to read it before this became the target.
+ * A cold load here fetches ONLY this app's feed — no home-page feeds.
  */
 export const TSS_MY_COURSES_URL =
   'https://tss.ucsd.edu/fiori#ZUSModule-display?TileType=MYMOD&sap-app-origin-hint=&/MyModules';

@@ -256,11 +256,11 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
  * (verified live 2026-08-18). So this button exists, and so does this explanation.
  *
  * Counts what the plan shows (bookedIds), never what the feed said (rows) — those
- * are two different numbers, and conflating them is how this line spent three rounds
- * saying "TSS reports no bookings at all" while TSS was reporting all three of a
- * student's courses: they had unmarked each by hand, and this blamed the feed for
- * their own edit. The feed now overrules an unmark (see applyAutoBooked), so the two
- * can only differ for a course TSS never mentioned.
+ * are two different numbers, and conflating them makes this line say "TSS reports
+ * no bookings at all" while TSS is reporting all three of a student's courses:
+ * each one unmarked by hand, the feed blamed for the student's own edit. The feed
+ * overrules an unmark (see applyAutoBooked), so the two can only differ for a
+ * course TSS never mentioned.
  *
  * The other case is "read, but none for this term". The badges key off the term on
  * screen, so bookings TSS reports for a DIFFERENT term look identical to no bookings
@@ -295,7 +295,7 @@ export function bookedTitle(
     r.term.year === viewedTerm.year && r.term.period === viewedTerm.period;
   // A queue place is not a booking, and must not be counted as one — nor denied.
   // "TSS reports no bookings at all" printed beside two Waitlisted badges is the
-  // same class of lie that took three rounds to find in 2026-08.
+  // same class of lie.
   const enrolled = rows.filter((r) => !r.waitlisted);
   const queuedHere = rows.filter((r) => r.waitlisted && isHere(r)).length;
   const alsoQueued = queuedHere > 0 ? `, plus ${queuedHere} waitlisted` : '';

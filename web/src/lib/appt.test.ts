@@ -53,7 +53,7 @@ describe('pickDisplayTerm', () => {
     expect(pickDisplayTerm([fall, winter], new Date('2027-01-01T00:00:00Z'))).toBe(winter);
     expect(pickDisplayTerm([], new Date())).toBeNull();
   });
-  it('never features an empty-windows term (spec: treat as no data)', () => {
+  it('never features an empty-windows term (no data, not ended)', () => {
     const empty = term({ capturedAt: '2026-07-27T12:00:00Z', windows: [] });
     expect(pickDisplayTerm([empty], new Date('2026-07-25T00:00:00Z'))).toBeNull();
   });

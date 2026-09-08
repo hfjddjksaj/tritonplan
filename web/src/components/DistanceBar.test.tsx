@@ -1,7 +1,7 @@
 /**
  * ⚠ Rendered with `createRoot` + `act`, not @testing-library — that package is
  * not a dependency of this workspace and every other component test here does
- * it this way (see ViewTabs.test.tsx). The assertions are the plan's.
+ * it this way (see ViewTabs.test.tsx).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
@@ -307,7 +307,7 @@ describe('DistanceBar', () => {
   });
 
   it('names the one place at both ends instead of asking for picks already made', () => {
-    // useWalkRoute returns IDLE for `from.id === to.id` (spec §7.6), so this
+    // useWalkRoute returns IDLE for `from.id === to.id`, so this
     // lands on the same empty-route branch as an untouched bar — where "pick
     // both ends" is a lie, because both ends ARE picked.
     render(props({ a: PLACES[0]!, b: PLACES[0]!, route: null }));

@@ -84,9 +84,9 @@ function addBuilding(row: BuildingRow): void {
 EXTRA_BUILDINGS.forEach(addBuilding);
 for (const [alias, target] of Object.entries(BUILDING_ALIASES)) {
   const entry = byName.get(target);
-  if (!entry) continue; // dataset drifted; the sanity test in Task 3 catches this
-  // Unconditional set (not register()): the overlay is a deliberate human
-  // ruling and must win even if a dataset refresh later collides on this
+  if (!entry) continue; // dataset drifted; the overlay sanity test in buildings.test.ts catches this
+  // Unconditional set (not register()): the overlay is a hand-curated
+  // override and must win even if a dataset refresh later collides on this
   // key, rather than being poisoned to 'ambiguous' like a plain data clash.
   for (const key of keyVariants(alias)) index.set(key, entry);
 }
@@ -213,10 +213,9 @@ export type MapsTravelMode = 'walking' | 'bicycling';
 /**
  * Directions from one place to another (user-initiated navigation only).
  *
- * ⚠ Not `googleMapsLink(destination)`. The Distance bar linked to a SEARCH for
- * the far building until 2026-08-23, which dropped the half a reader came for
- * — they are looking at a route and asking to take it with them, not asking
- * where the building is.
+ * ⚠ Not `googleMapsLink(destination)`. Linking to a SEARCH for the far
+ * building drops the half a reader came for — they are looking at a route and
+ * asking to take it with them, not asking where the building is.
  */
 export function googleMapsDirections(
   origin: MapsTarget,

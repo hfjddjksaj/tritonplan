@@ -727,11 +727,11 @@ p {
    base, measured live — 0.046px off dead centre, which is nothing. So everything
    this line moves is optical, not a structural error being papered over.
 
-   0.4px: half the 0.8px .picker__wl arrived at for the same 13px triangle. There
-   the anchor is a cap band with open air under it, so the correction can run the
-   full step; here it is a plate whose two edges sit ~3.7px away and answer for
-   each other, and the full step reads high. Read off a 1× ladder (0, .3, .45, .6)
-   in a real card row, the same method — measure to find it, choose at 1×. */
+   0.4px: half the 0.8px .picker__wl takes for the same 13px triangle. There the
+   anchor is a cap band with open air under it, so the correction runs the full
+   step; here it is a plate whose two edges sit ~3.7px away and answer for each
+   other, and the full step reads high. Picked from a 1× ladder (0, .3, .45, .6)
+   in a real card row — the same rule: measure to find it, choose at 1×. */
 .tag--alert-queued svg {
   transform: translateY(-0.4px);
 }

@@ -3,7 +3,6 @@
  * responses — see docs/tss-recon/tss-api-notes.md.
  */
 
-/** One row of the `_sections` navigation response: a (Event × EventPackage) pair (DENORMALIZED). */
 /** One row of YUCSD_I_PREREQ_TREE — a flat tree of enrollment requirements.
  *  Roots (`parent_id: ""`) are AND-ed groups; children are OR alternatives.
  *  The owning module is NOT in the rows — it's in the collection's @odata.context. */
@@ -14,6 +13,9 @@ export interface TssPrereqRow {
 }
 
 /**
+ * One row of the `_sections` navigation response: a (Event × EventPackage) pair
+ * (DENORMALIZED).
+ *
  * Which fields a row carries depends on the requesting page's `$select` — e.g. the
  * 2026-08-10 live feed has `locationText` (lowercase) but no `EventKey` / `BeginDate` /
  * `EndDate` / `LocationText`, while the 2026-07-21 fixtures are the other way around.

@@ -23,7 +23,7 @@ import type { PinGroup } from './map-labels';
 
 export type MapMode = '2d' | '3d';
 
-/** The official UCSD map's colours, named by what they paint (spec §1 table). */
+/** The official UCSD map's colours, named by what they paint. */
 export const MAP_PALETTE = {
   land: '#ECEAE4',
   campus: '#B2C49F',
@@ -52,13 +52,8 @@ export const GROUND_FALLBACK = '#FFEBAF';
 
 /**
  * Every ground-surface `Type` value the bundled data (and the official style)
- * uses, mapped to its official fill colour. The spec's §1 palette table names
- * only a subset by row (Grass, Planter, Walking/Bike Path, Sidewalk, Street/
- * Service Road, Parking Lot, Building, Pool/Fountain, Sand/Dirt/Gravel/Mulch,
- * Athletic Track/Hardcourt/fields); the task brief's own verbatim list covers
- * the rest (Dock / Pier, Miscellaneous Structures, Shed, Rock, Wall, and each
- * individual field/court type) with exact hex values pulled from the official
- * style JSON, so every entry below is copied, not derived by this task.
+ * uses, mapped to its official fill colour. Every hex value below is pulled
+ * verbatim from the official style JSON — copied, not derived.
  */
 export const GROUND_COLORS: Readonly<Record<string, string>> = {
   'Athletic Track': '#D7B09E',
@@ -127,7 +122,7 @@ export const LAYER = {
  *
  * Added and removed at runtime rather than declared in the style: with no
  * route picked, the layer stack must be byte-identical to what it was before
- * this feature existed (spec §7.6). An empty source left permanently in place
+ * this feature existed. An empty source left permanently in place
  * would be cheap, but "cheap" is not the promise — "unchanged" is.
  */
 export const ROUTE_SOURCE = 'route';
@@ -168,8 +163,8 @@ export function modeForPitch(pitch: number, current: MapMode): MapMode {
 
 /**
  * How much tighter the home view fits than the core box's own
- * `cameraForBounds` answer — a framing *preference* the user asked for
- * ("too far out"), not a value derived from anything about the campus or the
+ * `cameraForBounds` answer — a deliberate framing *preference*, not a value
+ * derived from anything about the campus or the
  * canvas. Applied as `cam.zoom + HOME_ZOOM_BOOST` (raising the fitted zoom)
  * rather than shrinking the core bounds box: the core box is tall while the
  * desktop canvas is wide, so the fit is already letterboxed on one axis, and
@@ -415,10 +410,9 @@ function dem(base: string) {
   };
 }
 
-/** Build the MapLibre style for the campus map, in the exact layer order the spec defines. */
+/** Build the MapLibre style for the campus map; layer order is load-bearing. */
 export function buildStyle(o: StyleOptions): StyleSpecification {
   const { sources, assetBase: base } = o;
-  // o.terrain: Phase 3 adds the `hillshade` layer here, gated on this flag.
 
   const groundMatch: unknown[] = ['match', ['get', 'type']];
   for (const [type, color] of Object.entries(GROUND_COLORS)) groundMatch.push(type, color);
@@ -592,7 +586,7 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
     //
     // Putting the flat layers first makes the extrusions win every overlap:
     // a tree or a road BEHIND a building is correctly hidden. The cost, chosen
-    // deliberately over a custom WebGL layer (2026-08-18), is that one in FRONT
+    // deliberately over a custom WebGL layer, is that one in FRONT
     // is hidden too — a missing tree rather than a tree standing on a roof.
     // Symbol labels stay below (after) the extrusions on purpose: a building
     // name has to stay readable over the block it names.
@@ -625,9 +619,8 @@ export function buildStyle(o: StyleOptions): StyleSpecification {
       },
     },
     // 13. road-names
-    // Mixed case, not uppercase: the user chose the official UCSD map's
-    // mixed-case road labels (reverses this plan's original Ruling 10 —
-    // their call, stands). 0.12 em tracking was sized for uppercase letters,
+    // Mixed case, not uppercase, to match the official UCSD map's road
+    // labels. 0.12 em tracking was sized for uppercase letters,
     // which need the extra air between them; on mixed case it reads as
     // broken-looking gaps, so it drops to 0.02 em, the same light tracking a
     // mixed-case road sign typically gets.

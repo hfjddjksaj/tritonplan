@@ -38,7 +38,7 @@ const SEASON_NAMES: Record<Season, string> = {
 };
 
 /**
- * Display-year rule (user decision, applied globally): Winter shows the
+ * Display-year rule: Winter shows the
  * ACADEMIC-year start year — the winter after Fall 2026 displays "Winter 2026"
  * even though it runs Jan–Mar 2027. Other seasons show the calendar year.
  * `term.year` is treated as the quarter's own calendar year until verified
@@ -77,7 +77,7 @@ export function chronoIndex(term: Term): number | null {
   return Number(term.year) * 10 + SEASON_ORDER[season];
 }
 
-// Fixed month-day archive boundaries (spec §6): a term is archived once `now`
+// Fixed month-day archive boundaries: a term is archived once `now`
 // reaches the boundary after its finals week. Real dates drift ±1 week per
 // year; the boundary only decides default display + freeze timing, so a fixed
 // approximation is deliberately chosen over a per-year calendar table.

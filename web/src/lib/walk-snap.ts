@@ -2,7 +2,7 @@
  * A building is not a point on the network — it is a set of DOORS, and which
  * door you leave by is part of the route, not a precondition for it.
  *
- * Measured 2026-08-21 over 50 UCSD teaching buildings (spec §5.1): snapping to
+ * Measured 2026-08-21 over 50 UCSD teaching buildings: snapping to
  * one node was the single largest error source in this feature — bigger than
  * the routing itself by an order of magnitude. Center Hall ↔ Student Services
  * came out 424 m single-node against 186 m door-to-door, because the one node
@@ -15,7 +15,7 @@
  * come out LONGER than single-node. That 20% is exactly where the zero-seed
  * version was cheating.
  *
- * ⚠ And the same is true of the OTHER leg, which took until 2026-08-23 to see.
+ * ⚠ And the same is true of the OTHER leg.
  * A door costs `indoor × INDOOR + hop × OFFPATH`, and `hop` — the straight
  * line from the footprint out to the node — was charged at 1.0 with a 45 m
  * reach behind it. Same failure, other half of the formula: free movement the
@@ -45,7 +45,7 @@ export interface Portal {
  * How far from the footprint a node may sit and still count as that
  * building's door.
  *
- * ⚠ Was 45 m until 2026-08-23, and that was the whole of the "the gold line
+ * ⚠ Do not widen this: a 45 m reach here was the whole of the "the gold line
  * starts nowhere near my building" bug. See OFFPATH below for why a generous
  * reach is not the harmless safety margin it looks like.
  *
@@ -100,7 +100,7 @@ export const INDOOR = 1.2;
  * What a metre of `hop` costs, against a metre of pavement.
  *
  * ⚠ This is the other half of the lesson in the header, and leaving it at 1.0
- * is what broke the feature for two months. The indoor leg was charged
+ * is exactly that failure. The indoor leg was charged
  * honestly at INDOOR while the hop — a STRAIGHT LINE from the footprint to a
  * network node, across whatever happens to be there — was charged at 1.0, i.e.
  * free.
