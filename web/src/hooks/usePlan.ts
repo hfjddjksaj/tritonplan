@@ -177,18 +177,31 @@ export function usePlan() {
     saveViewing(v);
   }, []);
 
-  // A share link's #p=… is consumed ONCE into the received slot, then stripped from
-  // the address bar (leaving it would pin every reload to that snapshot). The user's
-  // own plan is untouched — the shared plan opens read-only alongside it. Also runs
-  // on hashchange: pasting a link into an already-open planner tab doesn't reload.
+  // A hash that isn't one of this device's plans (a share link, or a #m= mirror
+  // bookmarked/copied on another device) is consumed ONCE into the received slot,
+  // then stripped from the address bar (leaving it would pin every reload to that
+  // snapshot). The user's own plans are untouched — it opens read-only alongside
+  // them. Also runs on hashchange: pasting a link into an already-open planner tab
+  // doesn't reload.
   useEffect(() => {
     const consume = () => {
+      const owned = Object.entries(termsRef.current.terms).flatMap(([key, ws]) =>
+        ws.plans.plans.map((p) => ({ key, id: p.id, plan: p.plan })),
+      );
       const intent = readHash(window.location.hash, {
-        plans: Object.values(termsRef.current.terms).flatMap((ws) => ws.plans.plans.map((p) => p.plan)),
+        plans: owned.map((o) => o.plan),
         syncedToken: loadSyncedToken(),
       });
-      // Our own mirror — including a bookmark minted before the #m= split. The copy
-      // saved on this device wins; the mirror effect below rewrites the hash from it.
+      if (intent.kind === 'mine') {
+        // The hash names one of my plans — show that one, not whatever was active.
+        const match = intent.index === null ? null : owned[intent.index];
+        if (match) {
+          setTermsState((s) =>
+            switchTermIn(updateWorkspace(s, match.key, (ps) => switchActive(ps, match.id)), match.key),
+          );
+        }
+        return;
+      }
       if (intent.kind !== 'shared') return;
       const rec: ReceivedPlan = {
         plan: intent.plan,

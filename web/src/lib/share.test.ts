@@ -213,7 +213,21 @@ describe('own mirror hash vs incoming share link', () => {
   });
 
   it('reads our own mirror as mine in a fresh tab — no echo marker needed', () => {
-    expect(readHash(`#${planToMirrorHash(richPlan())}`, own).kind).toBe('mine');
+    const mine = decodePlan(encodePlan(richPlan()))!;
+    const intent = readHash(`#${planToMirrorHash(richPlan())}`, { plans: [makePlan(), mine], syncedToken: null });
+    expect(intent).toMatchObject({ kind: 'mine', index: 1 });
+  });
+
+  /*
+   * The URL is the plan. A bookmarked #m= opened on a device that already holds
+   * OTHER plans (an iPad with old test plans) used to be read as "mine" and then
+   * overwritten by the device's own active plan — the bookmark's plan was lost,
+   * and a copied address-bar link showed the recipient their own plan.
+   */
+  it('reads a #m= mirror that matches none of my plans as shared, never as mine', () => {
+    const hash = `#${planToMirrorHash(richPlan())}`;
+    expect(readHash(hash, { plans: [makePlan()], syncedToken: null }).kind).toBe('shared');
+    expect(readHash(hash, own).kind).toBe('shared');
   });
 
   it("reads someone else's #p= link as shared", () => {
@@ -223,7 +237,8 @@ describe('own mirror hash vs incoming share link', () => {
   it('treats a legacy #p= self-mirror as mine when it re-encodes a plan I hold', () => {
     // Bookmarks and synced tabs minted before the #m= split still carry #p=<own token>.
     const mine = decodePlan(encodePlan(richPlan()))!; // what "Replace current plan" stored
-    expect(readHash(`#${planToHash(mine)}`, { plans: [mine], syncedToken: null }).kind).toBe('mine');
+    expect(readHash(`#${planToHash(mine)}`, { plans: [mine], syncedToken: null }))
+      .toMatchObject({ kind: 'mine', index: 0 });
     // …but an unrelated plan under the same key is still someone else's.
     expect(readHash(`#${planToHash(richPlan())}`, { plans: [makePlan()], syncedToken: null }).kind)
       .toBe('shared');

@@ -260,35 +260,41 @@ export function mirrorSeedPlan(hash: string): PlanState | null {
   return plan && plan.entries.length > 0 ? plan : null;
 }
 
-/** What a location hash means on load. 'mine' never reaches the received slot. */
+/**
+ * What a location hash means on load. 'mine' never reaches the received slot;
+ * its `index` points into `own.plans` at the plan it re-encodes (null when only
+ * the per-tab echo marker vouched for it).
+ */
 export type HashIntent =
   | { kind: 'ignore' }
-  | { kind: 'mine'; plan: PlanState }
+  | { kind: 'mine'; plan: PlanState; index: number | null }
   | { kind: 'shared'; plan: PlanState };
 
 /**
  * Classify the hash the page loaded with.
  *
- * `#m=` is our own mirror. `#p=` is a shared link — unless it re-encodes a plan
- * the user already holds (bookmarks minted before the `#m=` split still carry
- * `#p=<own token>`) or matches this tab's echo marker (the ShareMenu clipboard
- * fallback parks a link in the address bar).
+ * The URL is the plan: a hash is "mine" only when it re-encodes a plan this
+ * device already holds, whichever key it uses. A `#m=` mirror matching none of
+ * them came from another device or another person (a bookmark synced from a
+ * laptop, a copied address bar), so it opens as a shared plan instead of being
+ * silently replaced by whatever this device had active. `#p=` also counts as
+ * mine when it matches this tab's echo marker (the ShareMenu clipboard fallback
+ * parks a link in the address bar).
  */
 export function readHash(
   hash: string,
   own: { plans: PlanState[]; syncedToken: string | null },
 ): HashIntent {
   const mirror = mirrorTokenFromHash(hash);
-  if (mirror) {
-    const plan = decodePlan(mirror);
-    return plan ? { kind: 'mine', plan } : { kind: 'ignore' };
-  }
-  const token = tokenFromHash(hash);
+  const token = mirror ?? tokenFromHash(hash);
   if (!token) return { kind: 'ignore' };
   const plan = decodePlan(token);
   if (!plan) return { kind: 'ignore' };
-  if (token === own.syncedToken) return { kind: 'mine', plan };
-  if (own.plans.some((p) => encodePlan(p, 'full') === token)) return { kind: 'mine', plan };
+  // Compare normalized encodings: a plan adopted from a hash is stored decoded.
+  const encoded = encodePlan(plan, 'full');
+  const index = own.plans.findIndex((p) => encodePlan(p, 'full') === encoded);
+  if (index >= 0) return { kind: 'mine', plan, index };
+  if (!mirror && token === own.syncedToken) return { kind: 'mine', plan, index: null };
   return { kind: 'shared', plan };
 }
 
