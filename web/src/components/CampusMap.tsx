@@ -85,6 +85,18 @@ const NO_BOOKED: ReadonlySet<string> = new Set();
 const ISLAND_FALLBACK_H = 118;
 /** Gap between the island's bottom edge and where the fitted map may begin. */
 const ISLAND_TOP = 10;
+
+/**
+ * What the open Distance panel adds to the island: the bar's box minus its own
+ * header row (`.campusmap__dist` is a gapless column, so that difference is the
+ * panel exactly). 0 while it is shut.
+ */
+function distPanelShare(island: HTMLElement): number {
+  const dist = island.querySelector('.campusmap__dist');
+  const row = island.querySelector('.campusmap__dist-barrow');
+  if (!dist || !row) return 0;
+  return dist.getBoundingClientRect().height - row.getBoundingClientRect().height;
+}
 const ISLAND_GAP = 8;
 
 interface MapViewDef {
@@ -183,6 +195,13 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const islandRef = useRef<HTMLElement | null>(null);
   const islandH = useElementHeight(islandRef, ISLAND_FALLBACK_H);
   const insetTop = ISLAND_TOP + islandH + ISLAND_GAP;
+  // The home frame is fitted below the island WITHOUT the Distance panel. The
+  // map re-fits whenever home changes (while the student hasn't moved it), so
+  // letting the panel count made opening it zoom the whole map out a level —
+  // for a panel that is open for a minute. The card still avoids the real,
+  // taller island through `insetTop`.
+  const homeIslandH = useElementHeight(islandRef, ISLAND_FALLBACK_H, distPanelShare);
+  const homeInsetTop = ISLAND_TOP + homeIslandH + ISLAND_GAP;
   const [collapsed, setCollapsed] = useState(false);
   // Off unless the student switched it on before: the map is for planning first,
   // and "everything in the plan" is the honest default.
@@ -227,9 +246,9 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const home = useMemo(
     () =>
       data
-        ? { bounds: coreBounds(data.geo), padding: { top: insetTop + pad, right: pad, bottom: pad, left: pad } }
+        ? { bounds: coreBounds(data.geo), padding: { top: homeInsetTop + pad, right: pad, bottom: pad, left: pad } }
         : null,
-    [data, insetTop, pad],
+    [data, homeInsetTop, pad],
   );
   const reduceMotion =
     typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;

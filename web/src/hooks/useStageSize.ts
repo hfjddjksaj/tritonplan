@@ -55,14 +55,23 @@ export function useStageSize(ref: RefObject<HTMLElement | null>): StageSize {
 /**
  * The rendered height of an element (the floating header), for laying the map
  * out around it. `fallback` is used until it has layout — and forever under jsdom.
+ *
+ * `discount` takes part of the element back out — read in the SAME measurement
+ * as the element itself, so the two can never be a frame apart. Measured
+ * separately, one would land first and the difference would flicker through a
+ * wrong value on its way to the right one. Must be a stable function.
  */
-export function useElementHeight(ref: RefObject<HTMLElement | null>, fallback: number): number {
+export function useElementHeight(
+  ref: RefObject<HTMLElement | null>,
+  fallback: number,
+  discount?: (el: HTMLElement) => number,
+): number {
   const [h, setH] = useState(fallback);
   useIso(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const measure = () => {
-      const height = el.getBoundingClientRect().height;
+      const height = el.getBoundingClientRect().height - (discount?.(el) ?? 0);
       if (height <= 0) return;
       setH((prev) => (Math.abs(prev - height) < 0.5 ? prev : Math.round(height)));
     };
@@ -70,6 +79,6 @@ export function useElementHeight(ref: RefObject<HTMLElement | null>, fallback: n
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [ref]);
+  }, [ref, discount]);
   return h;
 }
