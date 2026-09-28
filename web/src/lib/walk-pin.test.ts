@@ -44,6 +44,12 @@ describe('droppedPlace', () => {
     expect(a.id).not.toContain('|'); // walk-places ids are course|label|place
   });
 
+  it('takes its own id when both ends are pins, so the two never read as one place', () => {
+    const a = droppedPlace({ lat: 32.9, lng: -117.2 }, SHAPES, `${DROPPED_ID}:a`);
+    const b = droppedPlace({ lat: 32.9, lng: -117.2 }, SHAPES, `${DROPPED_ID}:b`);
+    expect(a.id).not.toBe(b.id);
+  });
+
   it('recognises a real parking structure from the bundled campus geometry', async () => {
     const geo = await loadCampusGeo();
     const hopkins = geo.footprints.find((f) => f.name === 'Hopkins Parking')!;

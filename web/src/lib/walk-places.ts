@@ -34,14 +34,14 @@ export interface WalkPlace {
  * belongs in it because one course can teach in two of them — CSE 11's lecture
  * in Center Hall and its discussion in CSB are two places to walk to, not one.
  */
-export const walkPlaceId = (pin: MapPin): string =>
+const idOf = (pin: MapPin): string =>
   `${pin.courseId}|${pin.label}|${pin.place ?? pin.building ?? ''}`;
 
 export function walkPlaces(plan: PlanState): WalkPlace[] {
   const all = [...meetingPins(plan), ...midtermPins(plan), ...finalPins(plan)];
   const seen = new Map<string, WalkPlace>();
   for (const pin of all) {
-    const id = walkPlaceId(pin);
+    const id = idOf(pin);
     if (seen.has(id)) continue; // an MWF lecture is one place, not three
     const online = isOnlineModality(pin.modality);
     seen.set(id, {

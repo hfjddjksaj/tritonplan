@@ -333,68 +333,103 @@ describe('CampusMap · Distance', () => {
     expect(selects()[1]!.value).not.toBe('');
   });
 
-  // ---- measuring from a point clicked on the map (the parking-lot case) ----
+  // ---- an end chosen on the map (the parking-lot case) ----
 
-  /** Open the Center Hall marker's card and press its Distance button. */
-  function distanceFromCard() {
-    const marker = [...container.querySelectorAll<HTMLElement>('.campusmap__marker')].find((m) =>
-      m.textContent?.includes('CSE-8A'),
-    )!;
-    act(() => marker.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    const btn = container.querySelector<HTMLButtonElement>('.campusmap__card-dist');
-    expect(btn?.textContent).toBe('Distance');
-    act(() => btn!.click());
-  }
   const hint = () => container.querySelector('.campusmap__pinhint');
   const ends = () => hook.ends as [WalkPlace | null, WalkPlace | null];
-  /** The coordinates the pin's source was last given. */
-  const pinAt = () => {
+  /** Pick "Choose on map" in one end's list (opening the bar first if needed). */
+  function chooseMap(end: 'a' | 'b') {
+    if (bar().getAttribute('aria-expanded') !== 'true') expand();
+    const sel = selects()[end === 'a' ? 0 : 1]!;
+    const opt = [...sel.options].find((o) => /choose on map/i.test(o.textContent ?? ''));
+    if (!opt) throw new Error(`no map option: ${[...sel.options].map((o) => o.textContent)}`);
+    act(() => {
+      sel.value = opt.value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+  const click = (x: number, y: number) => act(() => map().simulateMapClick(x, y));
+  /** The points the pin source was last given, one per dropped end. */
+  const pins = () => {
     const adds = map().calls.filter((c) => c.method === 'addSource' && c.args[0] === PIN_SOURCE);
-    return (adds.at(-1)!.args[1] as { data: { geometry: { coordinates: unknown } } }).data.geometry.coordinates;
+    const data = (adds.at(-1)!.args[1] as {
+      data: { features: { geometry: { coordinates: [number, number] } }[] };
+    }).data;
+    return data.features.map((f) => f.geometry.coordinates);
   };
 
-  it('a card’s Distance puts its class at B, opens the bar and asks for a click', async () => {
+  it('the marker card offers Directions only — measuring lives in the bar', async () => {
     render();
     await settle();
-    distanceFromCard();
-    expect(container.querySelector('.campusmap__card')).toBeNull();
-    expect(bar().getAttribute('aria-expanded')).toBe('true');
-    expect(ends()[0]).toBeNull();
-    expect(ends()[1]?.place).toBe('Center Hall');
-    expect(hint()?.textContent).toMatch(/click anywhere/i);
-    // Nothing on the map yet: the pin is drawn only once it has a place.
-    expect(map().getSource(PIN_SOURCE)).toBeUndefined();
+    const marker = container.querySelector<HTMLElement>('.campusmap__marker')!;
+    act(() => marker.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    const buttons = [...container.querySelectorAll('.campusmap__card button')].map((b) => b.textContent);
+    expect(buttons).toEqual(['Directions']);
   });
 
-  it('a click on empty map drops the pin at A, and the next click moves it', async () => {
+  it('each list offers "Choose on map" first, above the classes', async () => {
     render();
     await settle();
-    distanceFromCard();
-    act(() => map().simulateMapClick(5, 5));
+    expand();
+    for (const sel of selects()) {
+      // [0] is the empty "Pick a place…"; the map choice comes right after it.
+      expect(sel.options[1]!.textContent).toMatch(/choose on map/i);
+    }
+  });
+
+  it('choosing the map for A asks for a click; the click drops the pin and the next moves it', async () => {
+    render();
+    await settle();
+    expand();
+    pick('b', 'Center Hall');
+    chooseMap('a');
+    expect(hint()?.textContent).toMatch(/click anywhere/i);
+    expect(ends()[0]).toBeNull();
+    expect(map().getSource(PIN_SOURCE)).toBeUndefined();
+
+    click(5, 5);
     const first = ends()[0]!;
     expect(first.dropped).toBe(true);
     expect(first.label).toBe('Dropped pin');
     expect(selects()[0]!.selectedOptions[0]!.textContent).toMatch(/Dropped pin/);
-    expect(map().getSource(PIN_SOURCE)).toBeDefined();
     expect(layers()).toContain(LAYER.pin);
-    const was = pinAt();
+    expect(pins()).toHaveLength(1);
+    const was = pins()[0];
 
-    act(() => map().simulateMapClick(40, 60));
+    click(40, 60);
     expect(ends()[0]!.coords).not.toEqual(first.coords);
-    expect(pinAt()).not.toEqual(was);
+    expect(pins()[0]).not.toEqual(was);
     expect(ends()[1]?.place).toBe('Center Hall'); // the class end stays put
     expect(hint()?.textContent).toMatch(/move the pin/i);
+  });
+
+  it('both ends can be on the map; clicks move the end chosen last', async () => {
+    render();
+    await settle();
+    chooseMap('a');
+    click(5, 5);
+    chooseMap('b');
+    click(40, 60);
+    const [a, b] = ends();
+    expect(a!.dropped && b!.dropped).toBe(true);
+    // Two pins must never read as "the same place at both ends".
+    expect(a!.id).not.toBe(b!.id);
+    expect(pins()).toHaveLength(2);
+
+    click(80, 90);
+    expect(ends()[0]!.coords).toEqual(a!.coords);
+    expect(ends()[1]!.coords).not.toEqual(b!.coords);
   });
 
   it('a marker click still opens its card rather than moving the pin', async () => {
     render();
     await settle();
-    distanceFromCard();
-    act(() => map().simulateMapClick(5, 5));
+    chooseMap('a');
+    click(5, 5);
     const pinned = ends()[0];
     const marker = container.querySelector<HTMLElement>('.campusmap__marker')!;
     const [x, y] = marker.style.transform.match(/[0-9.]+/g)!.map(Number);
-    act(() => map().simulateMapClick(Number(x), Number(y)));
+    click(Number(x), Number(y));
     expect(container.querySelector('.campusmap__card')).not.toBeNull();
     expect(ends()[0]).toBe(pinned);
   });
@@ -402,49 +437,65 @@ describe('CampusMap · Distance', () => {
   it('swap carries the pin to B, and the next click lands there', async () => {
     render();
     await settle();
-    distanceFromCard();
-    act(() => map().simulateMapClick(5, 5));
+    expand();
+    pick('b', 'Center Hall');
+    chooseMap('a');
+    click(5, 5);
     act(() => container.querySelector<HTMLButtonElement>('.campusmap__dist-swap')!.click());
     expect(ends()[1]!.dropped).toBe(true);
     expect(ends()[0]?.place).toBe('Center Hall');
-    act(() => map().simulateMapClick(40, 60));
+    click(40, 60);
     expect(ends()[1]!.dropped).toBe(true);
     expect(ends()[0]?.place).toBe('Center Hall');
   });
 
-  it('Escape ends it: pin gone, clicks inert, map still open', async () => {
+  it('Escape stops placing but keeps the pin; later clicks drop nothing', async () => {
     render();
     await settle();
-    distanceFromCard();
-    act(() => map().simulateMapClick(5, 5));
+    chooseMap('a');
+    click(5, 5);
+    const pinned = ends()[0];
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     expect(container.querySelector('.campusmap')).not.toBeNull();
-    expect(ends()[0]).toBeNull();
     expect(hint()).toBeNull();
-    expect(map().getSource(PIN_SOURCE)).toBeUndefined();
-    act(() => map().simulateMapClick(40, 60));
-    expect(ends()[0]).toBeNull();
+    expect(ends()[0]).toBe(pinned);
+    expect(map().getSource(PIN_SOURCE)).toBeDefined();
+    click(40, 60);
+    expect(ends()[0]).toBe(pinned);
   });
 
-  it('picking a class for the pin’s end from the list ends pin mode', async () => {
+  it('picking a class over a pin removes that pin and stops placing', async () => {
     render();
     await settle();
-    distanceFromCard();
-    act(() => map().simulateMapClick(5, 5));
+    chooseMap('a');
+    click(5, 5);
     pick('a', 'York Hall');
     expect(ends()[0]?.place).toBe('York Hall');
     expect(hint()).toBeNull();
     expect(map().getSource(PIN_SOURCE)).toBeUndefined();
-    act(() => map().simulateMapClick(40, 60));
+    click(40, 60);
     expect(ends()[0]?.place).toBe('York Hall');
   });
 
-  it('an ordinary click with no pin mode drops nothing', async () => {
+  it('clear removes every pin and stops placing', async () => {
     render();
     await settle();
-    act(() => map().simulateMapClick(5, 5));
+    chooseMap('a');
+    click(5, 5);
+    act(() => container.querySelector<HTMLButtonElement>('.campusmap__dist-clear')!.click());
+    expect(ends()).toEqual([null, null]);
+    expect(hint()).toBeNull();
+    expect(map().getSource(PIN_SOURCE)).toBeUndefined();
+    click(40, 60);
+    expect(ends()).toEqual([null, null]);
+  });
+
+  it('an ordinary click with no end being placed drops nothing', async () => {
+    render();
+    await settle();
+    click(5, 5);
     expect(ends()).toEqual([null, null]);
     expect(map().getSource(PIN_SOURCE)).toBeUndefined();
   });

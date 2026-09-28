@@ -3351,21 +3351,9 @@ button.termsw__cell:hover {
   font-size: 11.5px;
   line-height: 1.35;
 }
-/* Directions over Distance, one width, so the pair reads as the card's actions. */
-.campusmap__card-head:has(.campusmap__card-acts) {
-  align-items: flex-start;
-}
-.campusmap__card-acts {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.campusmap__card-dir,
-.campusmap__card-dist {
+.campusmap__card-dir {
   flex: none;
   height: 26px;
-  justify-content: center;
 }
 /* While a pin is wanted, empty map is a target: the crosshair says a click
    there does something. Over a marker the pointer still wins (is-over-marker). */

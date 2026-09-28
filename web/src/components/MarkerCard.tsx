@@ -15,8 +15,6 @@ interface Props {
   insetTop: number;
   /** Absent when the building has no name to look up (never the case for a matched pin). */
   onDirections?: () => void;
-  /** Measure from a point the student clicks on the map to this building. */
-  onDistance?: () => void;
 }
 
 /**
@@ -35,7 +33,7 @@ interface Props {
  * here is local to the dot rather than in canvas coordinates: the marker's own
  * transform is what keeps card, chip and dot moving as one object under a drag.
  */
-export function MarkerCard({ group, anchor, chip, canvas, insetTop, onDirections, onDistance }: Props) {
+export function MarkerCard({ group, anchor, chip, canvas, insetTop, onDirections }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const sections = useMemo(() => cardSections(group.pins), [group]);
   const where = group.place ?? group.building ?? 'This building';
@@ -68,28 +66,14 @@ export function MarkerCard({ group, anchor, chip, canvas, insetTop, onDirections
         <span className="eyebrow campusmap__card-place" {...tip(where)}>
           {shownWhere}
         </span>
-        {(onDirections || onDistance) && (
-          <div className="campusmap__card-acts">
-            {onDirections && (
-              <button
-                type="button"
-                className="btn btn--sm btn--primary campusmap__card-dir"
-                onClick={onDirections}
-              >
-                Directions
-              </button>
-            )}
-            {onDistance && (
-              <button
-                type="button"
-                className="btn btn--sm campusmap__card-dist"
-                {...tip('Click a spot on the map — a parking lot, say — to see how far it is from here')}
-                onClick={onDistance}
-              >
-                Distance
-              </button>
-            )}
-          </div>
+        {onDirections && (
+          <button
+            type="button"
+            className="btn btn--sm btn--primary campusmap__card-dir"
+            onClick={onDirections}
+          >
+            Directions
+          </button>
         )}
       </div>
       {sections.map((s) => {

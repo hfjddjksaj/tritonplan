@@ -4,7 +4,7 @@
  * it this way (see ViewTabs.test.tsx).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, useState } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { DistanceBar } from './DistanceBar';
 import type { WalkPlace } from '../lib/walk-places';
@@ -94,12 +94,6 @@ const DEGRADED = {
 
 type Props = Parameters<typeof DistanceBar>[0];
 
-/** The map owns the bar's open state; this stands in for it, closed to start like the map's. */
-function Harness(p: Props) {
-  const [open, setOpen] = useState(false);
-  return <DistanceBar {...p} open={open} onToggle={() => setOpen((v) => !v)} />;
-}
-
 describe('DistanceBar', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -128,16 +122,15 @@ describe('DistanceBar', () => {
       onProfile: vi.fn(),
       results: null,
       loading: false,
-      open: false,
-      onToggle: vi.fn(),
       pinEnd: null,
+      onChooseMap: vi.fn(),
       ...over,
     };
   }
 
   function render(p: Props) {
     act(() => {
-      root.render(<Harness {...p} />);
+      root.render(<DistanceBar {...p} />);
     });
     return p;
   }
@@ -196,6 +189,7 @@ describe('DistanceBar', () => {
     const opts = [...selects()[0]!.options];
     expect(opts.map((o) => o.textContent)).toEqual([
       'Pick a place…',
+      '📍 Choose on map…',
       'CSE 11 · LEC — Center Hall',
       'MATH 20C · DI — Applied Physics and Mathematics',
       'MUIR 40 · LEC (online)',
@@ -204,6 +198,32 @@ describe('DistanceBar', () => {
     expect(opts.find((o) => o.textContent?.includes('MUIR 40'))!.disabled).toBe(true);
     expect(opts.find((o) => o.textContent?.includes('TDGE 1'))!.disabled).toBe(true);
     expect(opts.find((o) => o.textContent?.includes('CSE 11'))!.disabled).toBe(false);
+  });
+
+  it('reports "Choose on map" as its own choice, never as a pick', () => {
+    const p = render(props());
+    expand();
+    const to = selects()[1]!;
+    const opt = [...to.options].find((o) => o.textContent === '📍 Choose on map…')!;
+    act(() => {
+      to.value = opt.value;
+      to.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(p.onChooseMap).toHaveBeenCalledWith('b');
+    expect(p.onPick).not.toHaveBeenCalled();
+  });
+
+  it('shows the map choice selected while its end waits for a click, then the pin', () => {
+    render(props({ pinEnd: 'a' }));
+    expand();
+    expect(selects()[0]!.selectedOptions[0]!.textContent).toBe('📍 Choose on map…');
+    const pin = { id: 'dropped-pin:1', courseCode: '', label: 'Hopkins Parking', hue: 0,
+      place: 'Hopkins Parking', coords: { lat: 32.88, lng: -117.24 }, disabled: false, dropped: true as const };
+    render(props({ pinEnd: 'a', a: pin }));
+    expect(selects()[0]!.selectedOptions[0]!.textContent).toBe('📍 Hopkins Parking');
+    // Waiting with nothing picked yet must still offer a way out.
+    render(props({ pinEnd: 'b' }));
+    expect(clear()).not.toBeNull();
   });
 
   it('reports a pick and a swap', () => {

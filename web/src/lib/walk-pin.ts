@@ -18,9 +18,10 @@ import { pointInRing } from './map-data';
 import type { WalkPlace } from './walk-places';
 
 /**
- * One id for the pin wherever it lands. It has no `|`, so it cannot equal a
+ * The pin's id wherever it lands. It has no `|`, so it cannot equal a
  * `walkPlaceId` (course|label|place); `useWalkRoute` keys on coordinates too,
- * so moving the pin still re-routes.
+ * so moving the pin still re-routes. With a pin at BOTH ends each needs its
+ * own (`dropped-pin:a`), or the router would read them as one place.
  */
 export const DROPPED_ID = 'dropped-pin';
 
@@ -34,10 +35,11 @@ function inside(lng: number, lat: number, shape: CampusShape): boolean {
 export function droppedPlace(
   at: { lat: number; lng: number },
   footprints: readonly CampusShape[],
+  id: string = DROPPED_ID,
 ): WalkPlace {
   const name = footprints.find((f) => inside(at.lng, at.lat, f))?.name;
   return {
-    id: DROPPED_ID,
+    id,
     courseCode: '',
     label: name ?? 'Dropped pin',
     hue: 0,
