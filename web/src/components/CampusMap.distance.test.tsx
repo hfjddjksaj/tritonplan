@@ -30,14 +30,23 @@ vi.mock('maplibre-gl', () => fakeMapLibreModule);
  */
 const hook = vi.hoisted(() => {
   const idle = { loading: false, results: null, error: null };
-  return { idle, state: idle as typeof idle | { loading: boolean; results: unknown; error: null } };
+  return {
+    idle,
+    state: idle as typeof idle | { loading: boolean; results: unknown; error: null },
+    /** The two ends the map last asked to route between. */
+    ends: [null, null] as [unknown, unknown],
+  };
 });
 vi.mock('../hooks/useWalkRoute', () => ({
-  useWalkRoute: (a: unknown, b: unknown) => (a && b ? hook.state : hook.idle),
+  useWalkRoute: (a: unknown, b: unknown) => {
+    hook.ends = [a, b];
+    return a && b ? hook.state : hook.idle;
+  },
 }));
 
 import { CampusMap } from './CampusMap';
-import { LAYER, ROUTE_SOURCE } from '../lib/map-style';
+import { LAYER, PIN_SOURCE, ROUTE_SOURCE } from '../lib/map-style';
+import type { WalkPlace } from '../lib/walk-places';
 import type { WalkResult } from '../lib/walk-route';
 
 /** A two-point route: 910 m of gold line, the ordinary case. */
@@ -322,5 +331,121 @@ describe('CampusMap · Distance', () => {
     // between the two buildings is not.
     expect(drawn()).toBe(true);
     expect(selects()[1]!.value).not.toBe('');
+  });
+
+  // ---- measuring from a point clicked on the map (the parking-lot case) ----
+
+  /** Open the Center Hall marker's card and press its Distance button. */
+  function distanceFromCard() {
+    const marker = [...container.querySelectorAll<HTMLElement>('.campusmap__marker')].find((m) =>
+      m.textContent?.includes('CSE-8A'),
+    )!;
+    act(() => marker.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    const btn = container.querySelector<HTMLButtonElement>('.campusmap__card-dist');
+    expect(btn?.textContent).toBe('Distance');
+    act(() => btn!.click());
+  }
+  const hint = () => container.querySelector('.campusmap__pinhint');
+  const ends = () => hook.ends as [WalkPlace | null, WalkPlace | null];
+  /** The coordinates the pin's source was last given. */
+  const pinAt = () => {
+    const adds = map().calls.filter((c) => c.method === 'addSource' && c.args[0] === PIN_SOURCE);
+    return (adds.at(-1)!.args[1] as { data: { geometry: { coordinates: unknown } } }).data.geometry.coordinates;
+  };
+
+  it('a card’s Distance puts its class at B, opens the bar and asks for a click', async () => {
+    render();
+    await settle();
+    distanceFromCard();
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+    expect(bar().getAttribute('aria-expanded')).toBe('true');
+    expect(ends()[0]).toBeNull();
+    expect(ends()[1]?.place).toBe('Center Hall');
+    expect(hint()?.textContent).toMatch(/click anywhere/i);
+    // Nothing on the map yet: the pin is drawn only once it has a place.
+    expect(map().getSource(PIN_SOURCE)).toBeUndefined();
+  });
+
+  it('a click on empty map drops the pin at A, and the next click moves it', async () => {
+    render();
+    await settle();
+    distanceFromCard();
+    act(() => map().simulateMapClick(5, 5));
+    const first = ends()[0]!;
+    expect(first.dropped).toBe(true);
+    expect(first.label).toBe('Dropped pin');
+    expect(selects()[0]!.selectedOptions[0]!.textContent).toMatch(/Dropped pin/);
+    expect(map().getSource(PIN_SOURCE)).toBeDefined();
+    expect(layers()).toContain(LAYER.pin);
+    const was = pinAt();
+
+    act(() => map().simulateMapClick(40, 60));
+    expect(ends()[0]!.coords).not.toEqual(first.coords);
+    expect(pinAt()).not.toEqual(was);
+    expect(ends()[1]?.place).toBe('Center Hall'); // the class end stays put
+    expect(hint()?.textContent).toMatch(/move the pin/i);
+  });
+
+  it('a marker click still opens its card rather than moving the pin', async () => {
+    render();
+    await settle();
+    distanceFromCard();
+    act(() => map().simulateMapClick(5, 5));
+    const pinned = ends()[0];
+    const marker = container.querySelector<HTMLElement>('.campusmap__marker')!;
+    const [x, y] = marker.style.transform.match(/[0-9.]+/g)!.map(Number);
+    act(() => map().simulateMapClick(Number(x), Number(y)));
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+    expect(ends()[0]).toBe(pinned);
+  });
+
+  it('swap carries the pin to B, and the next click lands there', async () => {
+    render();
+    await settle();
+    distanceFromCard();
+    act(() => map().simulateMapClick(5, 5));
+    act(() => container.querySelector<HTMLButtonElement>('.campusmap__dist-swap')!.click());
+    expect(ends()[1]!.dropped).toBe(true);
+    expect(ends()[0]?.place).toBe('Center Hall');
+    act(() => map().simulateMapClick(40, 60));
+    expect(ends()[1]!.dropped).toBe(true);
+    expect(ends()[0]?.place).toBe('Center Hall');
+  });
+
+  it('Escape ends it: pin gone, clicks inert, map still open', async () => {
+    render();
+    await settle();
+    distanceFromCard();
+    act(() => map().simulateMapClick(5, 5));
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(container.querySelector('.campusmap')).not.toBeNull();
+    expect(ends()[0]).toBeNull();
+    expect(hint()).toBeNull();
+    expect(map().getSource(PIN_SOURCE)).toBeUndefined();
+    act(() => map().simulateMapClick(40, 60));
+    expect(ends()[0]).toBeNull();
+  });
+
+  it('picking a class for the pin’s end from the list ends pin mode', async () => {
+    render();
+    await settle();
+    distanceFromCard();
+    act(() => map().simulateMapClick(5, 5));
+    pick('a', 'York Hall');
+    expect(ends()[0]?.place).toBe('York Hall');
+    expect(hint()).toBeNull();
+    expect(map().getSource(PIN_SOURCE)).toBeUndefined();
+    act(() => map().simulateMapClick(40, 60));
+    expect(ends()[0]?.place).toBe('York Hall');
+  });
+
+  it('an ordinary click with no pin mode drops nothing', async () => {
+    render();
+    await settle();
+    act(() => map().simulateMapClick(5, 5));
+    expect(ends()).toEqual([null, null]);
+    expect(map().getSource(PIN_SOURCE)).toBeUndefined();
   });
 });

@@ -25,6 +25,8 @@ export interface WalkPlace {
   coords: { lat: number; lng: number } | null;
   disabled: boolean;
   disabledReason?: 'online' | 'no-location';
+  /** A point the student clicked on the map, not a place in the plan (walk-pin.ts). */
+  dropped?: true;
 }
 
 /**
@@ -32,14 +34,14 @@ export interface WalkPlace {
  * belongs in it because one course can teach in two of them — CSE 11's lecture
  * in Center Hall and its discussion in CSB are two places to walk to, not one.
  */
-const idOf = (pin: MapPin): string =>
+export const walkPlaceId = (pin: MapPin): string =>
   `${pin.courseId}|${pin.label}|${pin.place ?? pin.building ?? ''}`;
 
 export function walkPlaces(plan: PlanState): WalkPlace[] {
   const all = [...meetingPins(plan), ...midtermPins(plan), ...finalPins(plan)];
   const seen = new Map<string, WalkPlace>();
   for (const pin of all) {
-    const id = idOf(pin);
+    const id = walkPlaceId(pin);
     if (seen.has(id)) continue; // an MWF lecture is one place, not three
     const online = isOnlineModality(pin.modality);
     seen.set(id, {

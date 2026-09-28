@@ -19,6 +19,7 @@ import {
   CAMERA,
   LAYER,
   modeForPitch,
+  PIN_SOURCE,
   ROUTE_SOURCE,
   TREE_ICON,
   type MapMode,
@@ -48,7 +49,8 @@ import {
 import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
 import { pluralize } from '../lib/format';
 import type { Profile } from '../lib/walk-cost';
-import { walkPlaces, type WalkPlace } from '../lib/walk-places';
+import { walkPlaceId, walkPlaces, type WalkPlace } from '../lib/walk-places';
+import { droppedPlace } from '../lib/walk-pin';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useMapLibre } from '../hooks/useMapLibre';
@@ -375,17 +377,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // still what actually close it.
   const openMarker = placed.find((m) => m.group.key === openKey) ?? null;
   const open = openMarker?.group ?? null;
-  // Escape peels one layer at a time: the popover (which registers its own handler
-  // while `mapLoc` is set — without this guard both would fire on one keypress),
-  // then the open marker card, then the map itself.
-  //
-  // Keyed off the card being VISIBLE — `openMarker`, the same thing the card itself
-  // renders on — not off `openKey` alone. Two ways a selection outlives what it
-  // draws: a tab switch can leave `openKey` pointing at a group this view no longer
-  // has, and the cull above hides the card once its dot pans off the canvas. In both cases
-  // Escape must not spend itself clearing something nobody can see; it must close
-  // the map, first press.
-  useEscapeKey(mapLoc ? () => {} : openMarker ? () => setOpenKey(null) : onClose);
+  // (Escape is wired below the Distance state, which it peels too.)
 
   const openPlace = open ? (open.place ?? open.building) : undefined;
   // Without a working camera there is no home frame, so nothing is "on canvas" —
@@ -467,8 +459,16 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     // therefore missed markers the student could plainly see, by as much as a
     // frame of camera motion.
     const liveDot = (p: PlacedMarker) => m.project([p.group.lng, p.group.lat]);
-    const onClick = (e: { point: { x: number; y: number } }) => {
+    const onClick = (e: { point: { x: number; y: number }; lngLat?: { lng: number; lat: number } }) => {
       const hit = hitMarker(placedRef.current, e.point.x, e.point.y, liveDot);
+      // A marker still opens its card while a pin is wanted — only EMPTY map
+      // drops one, so the student can look a building up mid-measurement.
+      const pin = pinRef.current;
+      if (hit === null && pin.end && e.lngLat && pin.footprints) {
+        const place = droppedPlace(e.lngLat, pin.footprints);
+        if (pin.end === 'a') setDistA(place);
+        else setDistB(place);
+      }
       // TOGGLE, the same way the marker's own onClick does. Assigning the hit key
       // outright made a click on the OPEN marker's dot a no-op — it returns the key
       // that is already set — so the mouse and a screen reader (which reaches the
@@ -505,9 +505,70 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const [distA, setDistA] = useState<WalkPlace | null>(null);
   const [distB, setDistB] = useState<WalkPlace | null>(null);
   const [distProfile, setDistProfile] = useState<Profile>('walk');
+  // Never remembered — every time the map opens the bar starts closed, on phones
+  // and desktop alike. Expanded it stands ~268 px tall, which is most of a narrow
+  // screen, and nobody wants that back until they ask for it. Held here rather
+  // than in the bar only so a card's Distance button can open it.
+  const [distOpen, setDistOpen] = useState(false);
+  // Which end a click on empty map fills with a dropped pin (walk-pin.ts), or
+  // null when map clicks drop nothing. Set by a card's Distance button; the pin
+  // follows a swap, and it ends with ✕, Escape, or a place picked for its end.
+  // Invariant: a `dropped` place only ever sits at this end.
+  const [pinEnd, setPinEnd] = useState<'a' | 'b' | null>(null);
+  // The click handler is bound once per map, so it reads these through a ref.
+  const pinRef = useRef<{ end: 'a' | 'b' | null; footprints: CampusGeo['footprints'] | null }>({
+    end: null,
+    footprints: null,
+  });
+  pinRef.current = { end: pinEnd, footprints: data?.geo.footprints ?? null };
+  const pinPlace = distA?.dropped ? distA : distB?.dropped ? distB : null;
+  const endPin = () => {
+    if (distA?.dropped) setDistA(null);
+    if (distB?.dropped) setDistB(null);
+    setPinEnd(null);
+  };
+  // Escape peels one layer at a time: the popover (which registers its own handler
+  // while `mapLoc` is set — without this guard both would fire on one keypress),
+  // then the open marker card, then a dropped pin, then the map itself.
+  //
+  // Keyed off the card being VISIBLE — `openMarker`, the same thing the card itself
+  // renders on — not off `openKey` alone. Two ways a selection outlives what it
+  // draws: a tab switch can leave `openKey` pointing at a group this view no longer
+  // has, and the cull above hides the card once its dot pans off the canvas. In both cases
+  // Escape must not spend itself clearing something nobody can see; it must close
+  // the map, first press.
+  useEscapeKey(
+    mapLoc ? () => {} : openMarker ? () => setOpenKey(null) : pinEnd ? endPin : onClose,
+  );
   const places = useMemo(() => walkPlaces(plan), [plan]);
   const walk = useWalkRoute(distA, distB);
   const route = walk.results?.[distProfile] ?? null;
+
+  /**
+   * The open card's building as a Distance end. Every course on one card
+   * shares the building, so its first pin speaks for all of them; a place the
+   * picker would refuse (no location) gets no button rather than a dead one.
+   */
+  const cardEnd = useMemo(() => {
+    const first = open?.pins[0];
+    if (!first) return null;
+    const id = walkPlaceId(first);
+    return places.find((p) => p.id === id && !p.disabled) ?? null;
+  }, [open, places]);
+
+  /**
+   * A card's Distance: its building becomes B, and A waits for a click. A pin
+   * already down stays down and moves to A — the student comparing one parking
+   * spot against each of their classes should not have to drop it again.
+   */
+  const measureFrom = (end: WalkPlace) => {
+    setDistA(pinPlace);
+    setDistB(end);
+    setPinEnd('a');
+    setOpenKey(null);
+    setCollapsed(false);
+    setDistOpen(true);
+  };
 
   /**
    * The route line: added and removed, never merely emptied.
@@ -554,7 +615,13 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     // names would cost more than it gives. `roadNames` is the first label
     // layer in the stack (map-style.ts), so inserting before it puts the line
     // over the ground, the buildings and the roads and under every name.
-    const before = map.getLayer(LAYER.roadNames) ? LAYER.roadNames : undefined;
+    // Under the pin too, when one is down: the line ends AT the pin, so the
+    // pin has to sit on top of it rather than be painted over.
+    const before = map.getLayer(LAYER.pin)
+      ? LAYER.pin
+      : map.getLayer(LAYER.roadNames)
+        ? LAYER.roadNames
+        : undefined;
     map.addLayer(
       {
         id: LAYER.routeCasing,
@@ -577,6 +644,41 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     );
     return drop;
   }, [gl.map, gl.ready, route]);
+
+  /**
+   * The dropped pin, on the same terms as the route: added while one is down,
+   * removed — source and all — the moment it is not, so the layer stack
+   * without one is exactly what it always was. Keyed on the coordinates, not
+   * the place object, so a re-render does not tear it down and rebuild it.
+   */
+  const pinLng = pinPlace?.coords?.lng;
+  const pinLat = pinPlace?.coords?.lat;
+  useEffect(() => {
+    const map = gl.map;
+    if (!map || !gl.ready || pinLng === undefined || pinLat === undefined) return;
+    map.addSource(PIN_SOURCE, {
+      type: 'geojson',
+      data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [pinLng, pinLat] } },
+    });
+    map.addLayer(
+      {
+        id: LAYER.pin,
+        type: 'circle',
+        source: PIN_SOURCE,
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#182b49',
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 3,
+        },
+      },
+      map.getLayer(LAYER.roadNames) ? LAYER.roadNames : undefined,
+    );
+    return () => {
+      if (map.getLayer(LAYER.pin)) map.removeLayer(LAYER.pin);
+      if (map.getSource(PIN_SOURCE)) map.removeSource(PIN_SOURCE);
+    };
+  }, [gl.map, gl.ready, pinLng, pinLat]);
 
   // The generic "nothing to place" copy is false only when a LOCATABLE class exists that
   // booked-only is hiding — an unbooked pin with no coords was never going on the map
@@ -791,20 +893,29 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
               places={places}
               a={distA}
               b={distB}
-              onPick={(end, p) => (end === 'a' ? setDistA(p) : setDistB(p))}
+              onPick={(end, p) => {
+                if (end === pinEnd) setPinEnd(null); // a place picked over the pin replaces it
+                if (end === 'a') setDistA(p);
+                else setDistB(p);
+              }}
               onSwap={() => {
                 setDistA(distB);
                 setDistB(distA);
+                setPinEnd((e) => (e === 'a' ? 'b' : e === 'b' ? 'a' : null));
               }}
               onClear={() => {
                 setDistA(null);
                 setDistB(null);
+                setPinEnd(null);
               }}
               route={route}
               profile={distProfile}
               onProfile={setDistProfile}
               results={walk.results}
               loading={walk.loading}
+              open={distOpen}
+              onToggle={() => setDistOpen((v) => !v)}
+              pinEnd={pinEnd}
             />
           </>
         )}
@@ -817,7 +928,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
             moment the style and home frame are ready, so it must never be gated
             behind the ready/error state it is what produces. */}
         <div
-          className={`campusmap__gl${hoverKey ? ' is-over-marker' : ''}`}
+          className={`campusmap__gl${hoverKey ? ' is-over-marker' : pinEnd ? ' is-dropping' : ''}`}
           ref={glRef}
           aria-label="UCSD campus map of this term's class locations"
           role="group"
@@ -863,6 +974,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
                     onDirections={
                       openPlace ? () => setMapLoc({ building: openPlace, room: openMarker.group.pins[0]!.room }) : undefined
                     }
+                    onDistance={cardEnd ? () => measureFrom(cardEnd) : undefined}
                   />
                 )
               }
@@ -891,6 +1003,18 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
                 ⟲
               </button>
             </div>
+            {pinEnd && (
+              <div className="campusmap__pinhint" role="status">
+                {/* A phone has no Escape key; the bar's ✕ is its way out. */}
+                {isMobile
+                  ? pinPlace
+                    ? 'Tap elsewhere to move the pin · ✕ in Distance to finish'
+                    : `Tap anywhere on the map to measure ${pinEnd === 'a' ? 'from' : 'to'} there`
+                  : pinPlace
+                    ? 'Click elsewhere to move the pin · Esc to finish'
+                    : `Click anywhere on the map to measure ${pinEnd === 'a' ? 'from' : 'to'} there · Esc to cancel`}
+              </div>
+            )}
             {/* The empty-state copy floats over the basemap: a map with no pins is
                 still a map, and a blank panel taught nothing about where campus is. */}
             {emptyCopy && <div className="campusmap__empty">{emptyCopy}</div>}

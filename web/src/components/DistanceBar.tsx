@@ -36,7 +36,7 @@
  *     distance slot says "Next door" and the readout explains that there is no
  *     outdoor leg to draw.
  */
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { googleMapsDirections } from '../lib/buildings';
 import { colorsForHue } from '../lib/colors';
 import { PROFILES, PROFILE_ORDER, type Profile } from '../lib/walk-cost';
@@ -58,6 +58,11 @@ interface Props {
   /** Every profile's result, so a mode chip can carry its own time. */
   results: Partial<Record<Profile, WalkResult>> | null;
   loading: boolean;
+  /** Expanded or not. Owned by the map, so a card's Distance button can open it. */
+  open: boolean;
+  onToggle(): void;
+  /** The end a map click fills (walk-pin.ts), or null when clicks drop nothing. */
+  pinEnd: 'a' | 'b' | null;
 }
 
 /**
@@ -104,6 +109,7 @@ const flights = (n: number): string => `${n} flight${n === 1 ? '' : 's'}`;
  * dropping it looks like the planner lost their course.
  */
 const placeLabel = (p: WalkPlace): string => {
+  if (p.dropped) return `📍 ${p.label}`;
   const where = p.place ? ` — ${p.place}` : '';
   const why =
     p.disabledReason === 'online'
@@ -114,19 +120,28 @@ const placeLabel = (p: WalkPlace): string => {
   return `${p.courseCode} · ${p.label}${where}${why}`;
 };
 
+/** An end as a sentence names it; an unnamed pin has no course code to fall back on. */
+const endName = (p: WalkPlace): string => p.place ?? (p.dropped ? 'the dropped pin' : p.courseCode);
+
 function Picker({
   end,
   value,
   places,
   onPick,
   label,
+  awaiting,
 }: {
   end: 'a' | 'b';
   value: WalkPlace | null;
   places: WalkPlace[];
   onPick(end: 'a' | 'b', place: WalkPlace | null): void;
   label: string;
+  /** This end is waiting for a click on the map. */
+  awaiting: boolean;
 }) {
+  // The pin is not a place in the plan, so it is not in `places`: it gets an
+  // option of its own while it holds this end, or the select would read blank.
+  const pinned = value?.dropped ? value : null;
   const id = useId();
   return (
     <div className="campusmap__dist-row">
@@ -142,14 +157,15 @@ function Picker({
         value={value?.id ?? ''}
         onChange={(e) => onPick(end, places.find((p) => p.id === e.target.value) ?? null)}
       >
-        <option value="">Pick a place…</option>
+        <option value="">{awaiting ? 'Click the map…' : 'Pick a place…'}</option>
+        {pinned && <option value={pinned.id}>{placeLabel(pinned)}</option>}
         {places.map((p) => (
           <option key={p.id} value={p.id} disabled={p.disabled}>
             {placeLabel(p)}
           </option>
         ))}
       </select>
-      {value && (
+      {value && !value.dropped && (
         <span
           className="campusmap__dist-swatch"
           style={{ background: colorsForHue(value.hue).spine }}
@@ -172,12 +188,10 @@ export function DistanceBar({
   onProfile,
   results,
   loading,
+  open,
+  onToggle,
+  pinEnd,
 }: Props) {
-  // Never remembered — every time the map opens this starts closed, on phones
-  // and desktop alike. Expanded it stands ~268 px
-  // tall, which is most of a narrow screen, and nobody wants that back until
-  // they ask for it. So: component state, no localStorage, on purpose.
-  const [open, setOpen] = useState(false);
   const panelId = useId();
 
   const near = route !== null && !route.degraded && route.metres < NEAR_M;
@@ -209,7 +223,7 @@ export function DistanceBar({
           className="campusmap__dist-bar"
           aria-expanded={open}
           aria-controls={panelId}
-          onClick={() => setOpen((v) => !v)}
+          onClick={onToggle}
         >
           <span className="campusmap__dist-mark" aria-hidden="true">
             ⤳
@@ -245,7 +259,7 @@ export function DistanceBar({
 
       {open && (
         <div className="campusmap__dist-panel" id={panelId}>
-          <Picker end="a" value={a} places={places} onPick={onPick} label="From" />
+          <Picker end="a" value={a} places={places} onPick={onPick} label="From" awaiting={pinEnd === 'a' && !a} />
           <button
             type="button"
             className="campusmap__dist-swap"
@@ -254,7 +268,7 @@ export function DistanceBar({
           >
             <span aria-hidden="true">⇅ </span>Swap
           </button>
-          <Picker end="b" value={b} places={places} onPick={onPick} label="To" />
+          <Picker end="b" value={b} places={places} onPick={onPick} label="To" awaiting={pinEnd === 'b' && !b} />
 
           {loading && <div className="campusmap__dist-note">Working out the route…</div>}
 
@@ -335,9 +349,7 @@ export function DistanceBar({
                     )}
                     target="_blank"
                     rel="noreferrer noopener"
-                    aria-label={`Open directions from ${a.place ?? a.courseCode} to ${
-                      b.place ?? b.courseCode
-                    } in Google Maps`}
+                    aria-label={`Open directions from ${endName(a)} to ${endName(b)} in Google Maps`}
                   >
                     Open in Google Maps ↗
                   </a>

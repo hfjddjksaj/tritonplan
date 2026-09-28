@@ -4,7 +4,7 @@
  * it this way (see ViewTabs.test.tsx).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { DistanceBar } from './DistanceBar';
 import type { WalkPlace } from '../lib/walk-places';
@@ -94,6 +94,12 @@ const DEGRADED = {
 
 type Props = Parameters<typeof DistanceBar>[0];
 
+/** The map owns the bar's open state; this stands in for it, closed to start like the map's. */
+function Harness(p: Props) {
+  const [open, setOpen] = useState(false);
+  return <DistanceBar {...p} open={open} onToggle={() => setOpen((v) => !v)} />;
+}
+
 describe('DistanceBar', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -122,13 +128,16 @@ describe('DistanceBar', () => {
       onProfile: vi.fn(),
       results: null,
       loading: false,
+      open: false,
+      onToggle: vi.fn(),
+      pinEnd: null,
       ...over,
     };
   }
 
   function render(p: Props) {
     act(() => {
-      root.render(<DistanceBar {...p} />);
+      root.render(<Harness {...p} />);
     });
     return p;
   }

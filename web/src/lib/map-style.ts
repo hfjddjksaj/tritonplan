@@ -111,6 +111,9 @@ export const LAYER = {
   // in one place, but NOT built by `buildStyle` — see ROUTE_SOURCE.
   routeCasing: 'route-casing',
   route: 'route',
+  // The point the student clicked to measure from (walk-pin.ts): over the route
+  // it ends, under the names. Runtime-only, like the route — see PIN_SOURCE.
+  pin: 'dropped-pin',
   roadNames: 'road-names',
   districtNames: 'district-names',
   landmarkNames: 'landmark-names',
@@ -126,6 +129,9 @@ export const LAYER = {
  * would be cheap, but "cheap" is not the promise — "unchanged" is.
  */
 export const ROUTE_SOURCE = 'route';
+
+/** GeoJSON source id for the Distance bar's dropped pin — present only while one is down. */
+export const PIN_SOURCE = 'dropped-pin';
 
 export const CAMERA = {
   minZoom: 13.5,

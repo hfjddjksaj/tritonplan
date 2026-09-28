@@ -159,9 +159,13 @@ export class FakeMap {
    * What a click on the GL canvas looks like from the outside. Real MapLibre
    * always carries `point` (canvas-relative pixels) and only fires `click` when
    * the press was not a drag; the app hit-tests markers against that point, so a
-   * fake click without one is not a click.
+   * fake click without one is not a click. `lngLat` is the same point on the
+   * ground, which real MapLibre also always carries.
    */
-  simulateMapClick(x: number, y: number) { return this.fire('click', { point: { x, y } }); }
+  simulateMapClick(x: number, y: number) {
+    const [lng, lat] = this.unproject({ x, y });
+    return this.fire('click', { point: { x, y }, lngLat: { lng, lat } });
+  }
   /** Pointer motion over the canvas — drives the hover/cursor hit test. */
   simulateMapMouseMove(x: number, y: number) { return this.fire('mousemove', { point: { x, y } }); }
   /** What a user drag looks like from the outside: a move that carries an originalEvent. */

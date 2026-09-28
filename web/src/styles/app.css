@@ -3351,9 +3351,48 @@ button.termsw__cell:hover {
   font-size: 11.5px;
   line-height: 1.35;
 }
-.campusmap__card-dir {
+/* Directions over Distance, one width, so the pair reads as the card's actions. */
+.campusmap__card-head:has(.campusmap__card-acts) {
+  align-items: flex-start;
+}
+.campusmap__card-acts {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.campusmap__card-dir,
+.campusmap__card-dist {
   flex: none;
   height: 26px;
+  justify-content: center;
+}
+/* While a pin is wanted, empty map is a target: the crosshair says a click
+   there does something. Over a marker the pointer still wins (is-over-marker). */
+.campusmap .campusmap__gl.is-dropping .maplibregl-canvas {
+  cursor: crosshair;
+}
+/* "Click anywhere…": a floating status line at the top of the map, between the
+   island and the cluster. Not at the foot: parking sits at campus's edges, so
+   the pin and the end of its route land low on screen as often as not, and a
+   banner there covered exactly what it was asking the student to place. */
+.campusmap__pinhint {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 96px);
+  padding: 7px 14px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text);
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
 }
 .campusmap__card-section + .campusmap__card-section {
   margin-top: 8px;
@@ -3693,6 +3732,16 @@ button.termsw__cell:hover {
 }
 
 @media (max-width: 760px) {
+  /* The island owns the top of a phone, so the hint drops to the foot, clear
+     of the zoom column on the right. */
+  .campusmap__pinhint {
+    top: auto;
+    bottom: 30px;
+    left: 12px;
+    right: 52px;
+    max-width: none;
+    transform: none;
+  }
   /* The island spans the screen; the control cluster joins its title row. */
   .campusmap__island {
     left: 8px;

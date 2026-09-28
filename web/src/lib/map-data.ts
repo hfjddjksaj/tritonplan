@@ -43,7 +43,7 @@ export function ringArea(ring: number[]): number {
   return a / 2;
 }
 
-function pointInRing(x: number, y: number, ring: number[]): boolean {
+export function pointInRing(x: number, y: number, ring: number[]): boolean {
   let inside = false;
   const n = ring.length / 2;
   for (let i = 0, j = n - 1; i < n; j = i++) {
