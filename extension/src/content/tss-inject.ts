@@ -126,13 +126,12 @@ async function onAddClick(header: Element, btn: HTMLButtonElement): Promise<void
     flash(btn, 'No course open', false);
     return;
   }
-  if (!cachedCourses.length) await refreshCourses();
-  let course = findCourseByModuleId(cachedCourses, ref.moduleId);
-  if (!course) {
-    // Maybe not captured yet; try one more refresh then bail gracefully.
-    await refreshCourses();
-    course = findCourseByModuleId(cachedCourses, ref.moduleId);
-  }
+  // Always re-read: the cache is filled when this script starts, BEFORE the page's
+  // own section fetch lands, so for a course captured on an earlier visit it holds
+  // that visit's copy — adding from it put a moved class back in its old room.
+  // (A message to our own worker, not a network request.)
+  await refreshCourses();
+  const course = findCourseByModuleId(cachedCourses, ref.moduleId);
   if (!course) {
     flash(btn, 'Browse first', false);
     return;
