@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TritonPlan",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "UCSD course planner for TSS — your whole week on one calendar, with class and final-exam conflict detection.",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
