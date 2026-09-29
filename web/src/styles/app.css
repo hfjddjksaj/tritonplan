@@ -566,7 +566,7 @@ p {
   letter-spacing: -0.01em;
   color: var(--c-text);
 }
-/* code + every status badge (Booked / Full / Conflict) share one line */
+/* code + every status badge (Enrolled / Full / Conflict) share one line */
 .course-card__codeline {
   display: flex;
   flex-wrap: wrap;
@@ -585,7 +585,7 @@ p {
    1.5px is where both look settled. Chosen at 1×, deliberately: a 4–6× blow-up
    rasterises differently and argued for 0, and 1× is the size that ships.
    Layout-neutral, so nothing reflows, and the icon-only alert plate rides along
-   with Booked — which is what keeps the two badges locked to each other. Scoped
+   with Enrolled — which is what keeps the two badges locked to each other. Scoped
    to this line: the units/conflict chips below have no big type to align to. */
 .course-card__codeline .tag {
   position: relative;
@@ -621,7 +621,7 @@ p {
   /* The top padding is an optical correction, not spacing. `align-items: center`
      centres the LINE box, and a line box reserves the font's full descent — 3px
      of it at 10.5px Inter. Not one of the words that goes in here has a descender
-     (Booked, Full, Waitlisted, Conflict, "4 units"), so that 3px is empty and
+     (Enrolled, Full, Waitlisted, Conflict, "4 units"), so that 3px is empty and
      shows up as a strip of plate below the letters: measured at 1×, every tag had
      3.656px above its ink and 5.344px below, the ink sitting 0.844px high. Half
      the imbalance as padding pushes the centred line box down by the other half
@@ -652,7 +652,7 @@ p {
   color: var(--conflict-ink);
   border-color: transparent;
 }
-/* Booked: confirmed-positive counterpart to Full — mutually exclusive, Booked wins */
+/* Enrolled: confirmed-positive counterpart to Full — mutually exclusive, Enrolled wins */
 .tag--booked {
   background: #e7f5ec;
   color: #1b7f4d;
@@ -660,7 +660,7 @@ p {
 }
 /* Waitlisted: the third state in the same slot, and the reason it needs its own
    colour is that it is neither of the other two — Full says the door is shut,
-   Booked says you are through it, this says you are in the queue. Amber, the same
+   Enrolled says you are through it, this says you are in the queue. Amber, the same
    family as the Waitlist Only section mark, at full strength: unlike that one it
    appears once per card, not thirteen times down a list. */
 .tag--waitlisted {
@@ -668,14 +668,14 @@ p {
   color: var(--gold-ink);
   border-color: transparent;
 }
-/* "…but not the section you have." A square plate beside Booked — the standard
+/* "…but not the section you have." A square plate beside Enrolled — the standard
    warning shape, and square because a 13px circle with a glyph in it read as a
    smudge at this size. Same box metrics as its neighbours (18px tall) so the row of
    badges keeps one baseline; the glyph is centred by flex, not by line-height,
    which is what had it sitting off-centre. */
 /* The one badge on this line that is a glyph instead of a word. It is drawn as
    a chip and nothing else: tinted fill, transparent border, the family's 4px
-   corner — exactly how Booked / Full / Waitlisted are built. The 1.5px solid
+   corner — exactly how Enrolled / Full / Waitlisted are built. The 1.5px solid
    --conflict-ink outline it used to carry made it the only hard-edged object on
    the card, and it read as a sticker from someone else's icon set.
    --conflict here, amber on --tag--alert-queued below: the plate carries the card's
@@ -987,7 +987,7 @@ p {
   color: var(--text-faint);
   font-size: 10px;
 }
-/* Waitlist Only, in the same soft-fill badge language as Full and Booked, one
+/* Waitlist Only, in the same soft-fill badge language as Full and Enrolled, one
    step quieter: a hairline instead of a solid tint, because in a real capture
    13 of 21 packages carried it and a column of loud chips says nothing at all. */
 .opt__wl {
@@ -2909,7 +2909,7 @@ button.termsw__cell:hover {
   white-space: nowrap;
 }
 
-/* --- the control cluster (top-right): Booked only · 3D · compass · close ---- */
+/* --- the control cluster (top-right): Enrolled only · 3D · compass · close ---- */
 .campusmap__cluster {
   position: absolute;
   top: 10px;
@@ -2931,7 +2931,7 @@ button.termsw__cell:hover {
    control the map can press by itself — a tilt gesture past CAMERA.enter3dPitch
    turns it on — so a state you did not click has to be readable at a glance.
    That reading comes from the width, the weight and the pressed colours, which
-   are "Booked only"'s so a toggle still looks like a toggle. NOT from the height:
+   are "Enrolled only"'s so a toggle still looks like a toggle. NOT from the height:
    it stood 34px in a row of 28px controls and simply read as the odd one out,
    so it now sits at the row's height like everything else in the cluster. */
 .campusmap__mode3d {

@@ -48,13 +48,13 @@ describe('CourseCard head/action split', () => {
       b.textContent!.trim(),
     );
 
-  it('orders the actions open in TSS, book section, prerequisites, mark booked', () => {
+  it('orders the actions open in TSS, book section, prerequisites, mark enrolled', () => {
     render();
     expect(actionLabels()).toEqual([
       'open in TSS',
       'book section',
       'prerequisites',
-      'mark booked',
+      'mark enrolled',
     ]);
   });
 

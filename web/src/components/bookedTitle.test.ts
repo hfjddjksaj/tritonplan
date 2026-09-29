@@ -16,7 +16,7 @@ describe('bookedTitle: what TSS said vs what this plan shows', () => {
   it('reports the plain agreeing case', () => {
     const rows = [row('CHEM-114A'), row('CHEM-152')];
     const t = bookedTitle(true, idsOf(rows), NOW, rows, FALL);
-    expect(t).toMatch(/^2 booked in Fall 2026, read /);
+    expect(t).toMatch(/^2 enrolled in Fall 2026, read /);
   });
 
   it('still names the other term when every booking is elsewhere', () => {
@@ -34,7 +34,7 @@ describe('bookedTitle: what TSS said vs what this plan shows', () => {
   });
 
   it('reports a genuine zero only when the feed carried nothing', () => {
-    expect(bookedTitle(true, new Set<string>(), NOW, [], FALL)).toMatch(/no bookings at all/);
+    expect(bookedTitle(true, new Set<string>(), NOW, [], FALL)).toMatch(/no enrolled courses at all/);
   });
 
   it('speaks for no report it did not receive this session', () => {
@@ -56,7 +56,7 @@ describe('bookedTitle: waitlist places are not bookings', () => {
     // denying TSS reported anything would contradict it on the same screen.
     const rows = [queued('CHEM-114A'), queued('CHEM-152')];
     const t = bookedTitle(true, new Set<string>(), NOW, rows, FALL);
-    expect(t).not.toMatch(/no bookings at all/);
+    expect(t).not.toMatch(/no enrolled courses at all/);
     expect(t).toMatch(/2 waitlisted/);
   });
 
@@ -64,13 +64,13 @@ describe('bookedTitle: waitlist places are not bookings', () => {
     const enrolled = [row('CHEM-114A')];
     const rows = [...enrolled, queued('CHEM-152')];
     const t = bookedTitle(true, idsOf(enrolled), NOW, rows, FALL);
-    expect(t).toMatch(/^1 booked in Fall 2026/);
+    expect(t).toMatch(/^1 enrolled in Fall 2026/);
     expect(t).toMatch(/1 waitlisted/);
   });
 
   it('does not let a waitlist place inflate the count of bookings elsewhere', () => {
     const rows = [row('CHEM-114A', WINTER), queued('CHEM-152', WINTER)];
     const t = bookedTitle(true, new Set<string>(), NOW, rows, FALL);
-    expect(t).toMatch(/TSS reports 1 booked, but in Winter 2027/);
+    expect(t).toMatch(/TSS reports 1 enrolled, but in Winter 2027/);
   });
 });

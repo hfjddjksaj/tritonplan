@@ -688,7 +688,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
     allPins.some((p) => p.coords !== null && !p.booked);
 
   const emptyCopy = bookedOnlyHidesEverything
-    ? 'Booked only is on and nothing here is booked yet. Turn it off to see every course in your plan.'
+    ? 'Enrolled only is on and you are not enrolled in anything here yet. Turn it off to see every course in your plan.'
     : onCanvas.length === 0 && unplaced.length > 0
       ? `Nothing here lands on the mapped part of campus — the list at the bottom-left has where these ${viewNoun} actually meet.`
       : onCanvas.length === 0 && noRoom.length === 0
@@ -750,7 +750,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
           type="button"
           className={`btn btn--sm campusmap__bookedtoggle${bookedOnly ? ' is-on' : ''}`}
           aria-pressed={bookedOnly}
-          {...tip('Show only the classes you are booked into')}
+          {...tip('Show only the classes you are enrolled in')}
           onClick={() => {
             const next = !bookedOnly;
             setBookedOnly(next);
@@ -758,7 +758,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
           }}
         >
           {bookedOnly && <Check size={13} />}
-          <span className="campusmap__bookedtoggle-label">Booked only</span>
+          <span className="campusmap__bookedtoggle-label">Enrolled only</span>
         </button>
       )}
       {/* Flat ⇄ standing up. It sits next to the compass because the two now say

@@ -281,12 +281,12 @@ export function bookedTitle(
   const how =
     "TSS states what you're enrolled in only on pages you load yourself — opening a " +
     'course from here never passes it along. This opens My Courses, which reports both ' +
-    'your bookings and the section each one is on.';
+    'your enrolled courses and the section each one is on.';
   const count = bookedIds.size;
-  if (!synced) return `Booked courses not read yet. ${how}`;
+  if (!synced) return `Enrolled courses not read yet. ${how}`;
   if (at === null) {
     return count > 0
-      ? `${count} booked in ${viewedTerm.label}, from an earlier read. ${how}`
+      ? `${count} enrolled in ${viewedTerm.label}, from an earlier read. ${how}`
       : `Nothing read from TSS this session. ${how}`;
   }
 
@@ -299,10 +299,10 @@ export function bookedTitle(
   const enrolled = rows.filter((r) => !r.waitlisted);
   const queuedHere = rows.filter((r) => r.waitlisted && isHere(r)).length;
   const alsoQueued = queuedHere > 0 ? `, plus ${queuedHere} waitlisted` : '';
-  if (count > 0) return `${count} booked in ${viewedTerm.label}${alsoQueued}${read}. ${how}`;
+  if (count > 0) return `${count} enrolled in ${viewedTerm.label}${alsoQueued}${read}. ${how}`;
   if (queuedHere > 0) {
     return (
-      `No bookings in ${viewedTerm.label} — ${queuedHere} waitlisted${read}. ` +
+      `Not enrolled in anything in ${viewedTerm.label} — ${queuedHere} waitlisted${read}. ` +
       `A place in a queue is not an enrolment. ${how}`
     );
   }
@@ -310,10 +310,10 @@ export function bookedTitle(
   const elsewhere = [...new Set(enrolled.filter((r) => !isHere(r)).map((r) => r.term.label))];
   if (elsewhere.length > 0) {
     return (
-      `TSS reports ${enrolled.length} booked, but in ${elsewhere.join(' and ')} — none in ` +
+      `TSS reports ${enrolled.length} enrolled, but in ${elsewhere.join(' and ')} — none in ` +
       `${viewedTerm.label}, the term on screen${read}. ${how}`
     );
   }
-  return `TSS reports no bookings at all${read}. ${how}`;
+  return `TSS reports no enrolled courses at all${read}. ${how}`;
 }
 

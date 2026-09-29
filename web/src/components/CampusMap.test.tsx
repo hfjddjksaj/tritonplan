@@ -541,7 +541,7 @@ describe('CampusMap', () => {
     // Booked-only on; the plan's one class isn't booked, so it's filtered out — but it
     // DOES exist, unlike makePlan().
     expect(container.textContent).toContain(
-      'Booked only is on and nothing here is booked yet. Turn it off to see every course in your plan.',
+      'Enrolled only is on and you are not enrolled in anything here yet. Turn it off to see every course in your plan.',
     );
     expect(container.textContent).not.toContain('No class locations to place yet');
   });
@@ -632,7 +632,7 @@ describe('CampusMap', () => {
     await settle();
     act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
     expect(container.textContent).not.toContain(
-      'Booked only is on and nothing here is booked yet',
+      'Enrolled only is on and you are not enrolled in anything here yet',
     );
     expect(container.textContent).toContain('No class locations to place yet');
   });
@@ -1174,7 +1174,7 @@ describe('CampusMap', () => {
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
     act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
-    expect(container.textContent).toContain('Booked only is on and nothing here is booked yet');
+    expect(container.textContent).toContain('Enrolled only is on and you are not enrolled in anything here yet');
   });
 
   it('the marker card in an exam view is dated on the code row', async () => {

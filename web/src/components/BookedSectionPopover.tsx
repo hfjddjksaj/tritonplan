@@ -43,7 +43,7 @@ export function BookedSectionPopover({
         className="mappop bookedpop"
         role="dialog"
         aria-modal="true"
-        aria-label={`${courseCode} ${queued ? 'waitlisted' : 'booked'} section`}
+        aria-label={`${courseCode} ${queued ? 'waitlisted' : 'enrolled'} section`}
         style={
           accent && {
             ['--c-text' as string]: accent.text,
@@ -55,7 +55,7 @@ export function BookedSectionPopover({
         <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
           <X size={14} />
         </button>
-        <div className="eyebrow">{queued ? 'Waitlisted section' : 'Booked section'}</div>
+        <div className="eyebrow">{queued ? 'Waitlisted section' : 'Enrolled section'}</div>
         <div className="bookedpop__course">{courseCode}</div>
 
         <div className="bookedpop__rows">
@@ -88,8 +88,8 @@ export function BookedSectionPopover({
             </>
           ) : (
             <>
-              Nothing here changes your booking or your plan. If you meant to plan the section you
-              booked, pick {booked} from the list yourself.
+              Nothing here changes your enrollment or your plan. If you meant to plan the section you
+              are enrolled in, pick {booked} from the list yourself.
             </>
           )}
         </p>

@@ -43,7 +43,7 @@ describe('CourseCard booked state', () => {
 
   it('booked replaces Full: green badge, no gray card, selected code not grayed', () => {
     renderCard(true);
-    expect(container.querySelector('.tag--booked')?.textContent).toBe('Booked');
+    expect(container.querySelector('.tag--booked')?.textContent).toBe('Enrolled');
     expect(container.querySelector('.tag--full')).toBeNull();
     expect(container.querySelector('.course-card')!.classList.contains('course-card--full')).toBe(false);
     expect(container.querySelector('.picker__selected--full')).toBeNull(); // collapsed by default
@@ -59,7 +59,7 @@ describe('CourseCard booked state', () => {
 
   it('the action-row toggle reads "mark booked" / "unmark" and fires the callback', () => {
     const spy = renderCard(false);
-    const btn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'mark booked')!;
+    const btn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'mark enrolled')!;
     act(() => btn.click());
     expect(spy).toHaveBeenCalledTimes(1);
     renderCard(true);
@@ -81,7 +81,7 @@ describe('CourseCard booked state', () => {
 
     it('drops the toggle — enrolment is TSS\'s fact, not a preference', () => {
       render(true);
-      expect(container.querySelector('.tag--booked')?.textContent).toBe('Booked');
+      expect(container.querySelector('.tag--booked')?.textContent).toBe('Enrolled');
       expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'unmark')).toBe(false);
     });
 
@@ -130,7 +130,7 @@ describe('CourseCard booked state', () => {
     it('stays quiet when the two agree — silence is the normal case', () => {
       render();
       expect(container.querySelector('.tag--alert')).toBeNull();
-      expect(container.querySelector('.tag--booked')?.textContent).toBe('Booked');
+      expect(container.querySelector('.tag--booked')?.textContent).toBe('Enrolled');
     });
   });
 });
@@ -177,7 +177,7 @@ describe('CourseCard waitlisted state', () => {
     // Both at once would be TSS contradicting itself; the enrolment is the one
     // that decides what the student should do next.
     render({ booked: true, waitlisted: true });
-    expect(container.querySelector('.tag--booked')?.textContent).toBe('Booked');
+    expect(container.querySelector('.tag--booked')?.textContent).toBe('Enrolled');
     expect(container.querySelector('.tag--waitlisted')).toBeNull();
   });
 
@@ -214,7 +214,7 @@ describe('CourseCard waitlisted state', () => {
 
   it('hides the manual mark toggle — the queue is TSS\'s fact, not a preference', () => {
     render({ waitlisted: true });
-    expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'mark booked')).toBe(false);
+    expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'mark enrolled')).toBe(false);
   });
 
   describe('queued, but not for the section on the grid', () => {
@@ -245,7 +245,7 @@ describe('CourseCard waitlisted state', () => {
     it('says QUEUED, never enrolled — the one word this card must not get wrong', () => {
       renderQueued({ waitlisted: true, code: 'P-003-004' });
       expect(container.querySelector('.tag--alert')?.getAttribute('aria-label'))
-        .not.toMatch(/booked/i);
+        .not.toMatch(/booked|enrolled/i);
       act(() => (container.querySelector('.tag--alert') as HTMLButtonElement).click());
       const pop = document.querySelector('.bookedpop')!;
       expect(pop.textContent).toContain('TSS has you queued for');

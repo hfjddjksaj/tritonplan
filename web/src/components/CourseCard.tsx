@@ -97,11 +97,11 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
             <span className="course-card__code">{course.courseCode}</span>
             {booked ? (
               <span className="tag tag--booked" {...tip('You are enrolled in this course')}>
-                Booked
+                Enrolled
               </span>
             ) : queued ? (
               /* Not enrolled, but holding a place — its own word and its own colour,
-                 because "Full" says the door is shut and "Booked" says you are through
+                 because "Full" says the door is shut and "Enrolled" says you are through
                  it, and this is neither. Which PLACE in the queue is deliberately not
                  said anywhere, badge or tooltip: TSS states a number, but it moves as
                  other students drop, TSS's own My Courses page never prints it, and
@@ -131,7 +131,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                 ENROLLED somewhere else, and the plan is wrong about a fact. Amber
                 triangle: you are QUEUED somewhere else, the same disagreement one
                 step earlier and nothing to fix yet. Each takes the colour of the
-                badge beside it — Booked green, Waitlisted amber — so the pair reads
+                badge beside it — Enrolled green, Waitlisted amber — so the pair reads
                 as one statement instead of two. Both states answer from the same
                 capture: My Courses writes the package into `EventPackageAbbr` on a
                 waitlisted row exactly as on a booked one (fixture rows 4 and 5,
@@ -144,7 +144,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
                 aria-label={
                   queued
                     ? `Waitlisted section differs: TSS has you queued for ${bookedOptionCode}`
-                    : `Booked section differs: TSS has ${bookedOptionCode}`
+                    : `Enrolled section differs: TSS has ${bookedOptionCode}`
                 }
                 {...tip(
                   queued
@@ -250,11 +250,11 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
               onClick={onToggleBooked}
               {...tip(
                 booked
-                  ? `Unmark ${course.courseCode} as booked`
-                  : `Mark ${course.courseCode} as booked — you enrolled, so a 0-seat count doesn't apply to you`,
+                  ? `Unmark ${course.courseCode} as enrolled`
+                  : `Mark ${course.courseCode} as enrolled — you're in, so a 0-seat count doesn't apply to you`,
               )}
             >
-              {booked ? 'unmark' : 'mark booked'}
+              {booked ? 'unmark' : 'mark enrolled'}
             </button>
           )}
         </div>
