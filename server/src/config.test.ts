@@ -26,6 +26,12 @@ describe('loadConfig', () => {
     expect(c.mail.from).toBe('TritonPlan <noreply@tritonplan.cn>');
   });
 
+  test('origin is normalized to a bare origin; an unparseable one is a config error', () => {
+    expect(loadConfig({ ...base, TP_ORIGIN: 'https://tritonplan.cn/' }).origin).toBe('https://tritonplan.cn');
+    expect(loadConfig({ ...base, TP_ORIGIN: 'http://localhost:5173/x?y' }).origin).toBe('http://localhost:5173');
+    expect(() => loadConfig({ ...base, TP_ORIGIN: 'not a url' })).toThrow(/TP_ORIGIN/);
+  });
+
   test('rejects an unknown mail transport and a bad port', () => {
     expect(() => loadConfig({ ...base, TP_MAIL_TRANSPORT: 'smtp' })).toThrow(/TP_MAIL_TRANSPORT/);
     expect(() => loadConfig({ ...base, TP_PORT: 'abc' })).toThrow(/TP_PORT/);

@@ -25,10 +25,19 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   const port = Number(env.TP_PORT || 8787);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error(`TP_PORT is not a valid port: ${env.TP_PORT}`);
 
+  // Normalized because the write guard compares the Origin header for exact equality, and browsers never send a trailing slash.
+  let origin: string;
+  try {
+    origin = new URL(env.TP_ORIGIN!).origin;
+  } catch {
+    throw new Error(`TP_ORIGIN is not a valid URL: ${env.TP_ORIGIN}`);
+  }
+  if (origin === 'null') throw new Error(`TP_ORIGIN is not a valid http(s) origin: ${env.TP_ORIGIN}`);
+
   return {
     port,
     host: env.TP_HOST || '127.0.0.1',
-    origin: env.TP_ORIGIN!,
+    origin,
     dbPath: env.TP_DB_PATH!,
     // Secure-by-default: only the literal 'false' (local http dev) turns it off.
     cookieSecure: env.TP_COOKIE_SECURE !== 'false',

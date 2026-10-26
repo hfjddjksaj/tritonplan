@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Config } from './config';
 import type { Db } from './db/db';
+import { sameOriginJson, type AppEnv } from './http/guard';
 import type { Mailer } from './mail/mailer';
 
 export interface Deps {
@@ -11,9 +12,11 @@ export interface Deps {
   fetch: typeof fetch;
 }
 
-export function createApp(deps: Deps): Hono {
-  void deps; // routes mounted by later tasks close over deps
-  const app = new Hono();
+export function createApp(deps: Deps): Hono<AppEnv> {
+  const app = new Hono<AppEnv>();
+
+  // Registered before any route so it also covers writes to routes that don't exist.
+  app.use('/api/*', sameOriginJson(deps.config));
 
   app.get('/api/health', (c) => c.json({ ok: true }));
 

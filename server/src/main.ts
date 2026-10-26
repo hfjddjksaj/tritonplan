@@ -3,6 +3,7 @@ import { createApp } from './app';
 import { loadConfig } from './config';
 import { openDb } from './db/db';
 import { createConsoleMailer, createMemoryMailer, type Mailer } from './mail/mailer';
+import { createResendMailer } from './mail/resend';
 
 const config = loadConfig(process.env);
 const db = openDb(config.dbPath);
@@ -14,7 +15,7 @@ function buildMailer(): Mailer {
     case 'memory':
       return createMemoryMailer();
     case 'resend':
-      throw new Error('TP_MAIL_TRANSPORT=resend: the Resend mailer is wired up in Task 4');
+      return createResendMailer(config.mail.resendApiKey!, config.mail.from, fetch); // loadConfig guarantees the key
   }
 }
 
