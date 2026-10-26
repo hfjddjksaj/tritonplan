@@ -5,6 +5,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# API server bundle and local SQLite data
+server/dist/
+server/.data/
+
 # packaged release artifacts (built from extension/dist on demand)
 *.zip
 

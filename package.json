@@ -6,7 +6,8 @@
   "workspaces": [
     "shared",
     "web",
-    "extension"
+    "extension",
+    "server"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
