@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Config } from './config';
 import type { Db } from './db/db';
+import { accountRoutes } from './account/routes';
 import { authRoutes, meRoute } from './auth/routes';
 import { googleRoutes } from './auth/google-routes';
 import { createRateLimiter } from './http/rate-limit';
@@ -28,6 +29,7 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   app.route('/api/auth', authRoutes(deps, limiter));
   app.route('/api/auth/google', googleRoutes(deps, limiter));
   app.route('/api/me', meRoute(deps));
+  app.route('/api/account', accountRoutes(deps, limiter));
 
   // Never leak internals to the client; the log has the detail.
   app.onError((err, c) => {
