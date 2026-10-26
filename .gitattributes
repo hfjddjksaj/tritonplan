@@ -1,0 +1,7 @@
+# Everything under server/deploy runs on Linux, and provision.sh is piped to
+# `bash -s` over SSH from a Windows checkout: a CRLF would break it.
+*.sh text eol=lf
+Caddyfile text eol=lf
+*.service text eol=lf
+*.timer text eol=lf
+env.example text eol=lf

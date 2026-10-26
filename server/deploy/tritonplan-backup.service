@@ -1,0 +1,15 @@
+[Unit]
+Description=TritonPlan nightly SQLite backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=tritonplan
+Group=tritonplan
+ExecStart=/usr/local/bin/tritonplan-backup
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# .backup needs write access to the data dir (the WAL -shm file) as well.
+ReadWritePaths=/srv/tritonplan/data /srv/tritonplan/backups

@@ -1,0 +1,24 @@
+[Unit]
+Description=TritonPlan accounts and plan-sync server
+After=network.target
+# Enabled by provision.sh before the first deploy: skip cleanly (instead of
+# crash-looping) until deploy.sh has put the bundle in place.
+ConditionPathExists=/srv/tritonplan/app/main.mjs
+
+[Service]
+User=tritonplan
+Group=tritonplan
+EnvironmentFile=/etc/tritonplan/env
+ExecStart=/usr/bin/node /srv/tritonplan/app/main.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# The only writable path: the SQLite database (and its -wal/-shm files).
+ReadWritePaths=/srv/tritonplan/data
+MemoryMax=600M
+
+[Install]
+WantedBy=multi-user.target
