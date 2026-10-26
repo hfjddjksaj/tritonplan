@@ -6,6 +6,7 @@
 import { useState, type FormEvent } from 'react';
 import { apiPost } from '../../lib/cloud/api';
 import { nav } from '../../lib/nav';
+import { safeReturnTo } from '../../lib/site';
 import { AuthCard, AuthField, AuthMessage } from './AuthCard';
 import { failureText, WRONG_CREDENTIALS } from './copy';
 
@@ -26,6 +27,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
   const [showNotice, setShowNotice] = useState(true);
 
   const addr = email.trim();
+  const target = safeReturnTo(returnTo);
 
   const go = (next: Mode) => {
     setMode(next);
@@ -48,7 +50,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
     if (mode === 'signin') {
       const r = await apiPost('/api/auth/login', { email: addr, password });
       if (r.ok) {
-        nav.assign(returnTo); // stays busy: the page is leaving
+        nav.assign(target); // stays busy: the page is leaving
         return;
       }
       if (r.status === 403) setUnconfirmed(addr);
@@ -97,7 +99,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
       ) : (
         <>
           <p className="auth__lede">{LEDE}</p>
-          <a className="btn auth__wide auth__google" href={'/api/auth/google?returnTo=' + encodeURIComponent(returnTo)}>
+          <a className="btn auth__wide auth__google" href={'/api/auth/google?returnTo=' + encodeURIComponent(target)}>
             <GoogleMark />
             Continue with Google
           </a>
@@ -120,6 +122,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
             type="password"
             name="password"
             autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            minLength={mode === 'signup' ? 8 : undefined}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />

@@ -17,18 +17,25 @@ export class UnauthorizedError extends Error {
 }
 
 const SYNC_TIMEOUT_MS = 20_000;
+const READ_TIMEOUT_MS = 15_000;
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+/** A hung GET would leave the start page blank, or hold the refocus refresh forever; the abort throws like a network failure. */
+const readInit = (): RequestInit => ({
+  credentials: 'same-origin',
+  ...(typeof AbortSignal.timeout === 'function' ? { signal: AbortSignal.timeout(READ_TIMEOUT_MS) } : {}),
+});
 
 /** 401 → null (signed out); anything else unexpected throws so the caller can show "offline" rather than "signed out". */
 export async function fetchMe(): Promise<Me | null> {
-  const r = await fetch('/api/me', { credentials: 'same-origin' });
+  const r = await fetch('/api/me', readInit());
   if (r.status === 401) return null;
   if (!r.ok) throw new Error(`GET /api/me failed: ${r.status}`);
   return (await r.json()) as Me;
 }
 
 export async function fetchState(): Promise<WebSnapshot> {
-  const r = await fetch('/api/state', { credentials: 'same-origin' });
+  const r = await fetch('/api/state', readInit());
   if (r.status === 401) throw new UnauthorizedError();
   if (!r.ok) throw new Error(`GET /api/state failed: ${r.status}`);
   return (await r.json()) as WebSnapshot;

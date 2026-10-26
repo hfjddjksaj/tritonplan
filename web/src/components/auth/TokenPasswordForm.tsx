@@ -48,6 +48,7 @@ export function TokenPasswordForm({
           type="password"
           name="password"
           autoComplete={autoComplete}
+          minLength={autoComplete === 'new-password' ? 8 : undefined}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />

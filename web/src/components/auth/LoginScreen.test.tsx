@@ -76,6 +76,22 @@ describe('LoginScreen', () => {
     expect(navSpy).toHaveBeenCalledWith('/migrate');
   });
 
+  it('a returnTo that would leave the site falls back to /', async () => {
+    answers['/api/auth/login'] = () => json(200, { ok: true });
+    await render({ returnTo: '//evil.com' });
+    const google = [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'));
+    expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2F');
+    await signIn();
+    expect(navSpy).toHaveBeenCalledWith('/');
+  });
+
+  it('only a new password asks for 8 characters', async () => {
+    await render();
+    expect(container.querySelector('input[type="password"]')?.getAttribute('minlength')).toBeNull();
+    await click('Create an account');
+    expect(container.querySelector('input[type="password"]')?.getAttribute('minlength')).toBe('8');
+  });
+
   it('401 → wrong email or password', async () => {
     answers['/api/auth/login'] = () => json(401, { error: 'invalid_credentials' });
     await render();

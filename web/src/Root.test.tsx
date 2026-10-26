@@ -7,6 +7,14 @@ import { usePlan } from './hooks/usePlan';
 import { useApptTimes } from './hooks/useApptTimes';
 import { nav } from './lib/nav';
 import { PENDING_HASH_KEY, type CloudBoot } from './lib/cloud/boot';
+import type { TermMeta, WebSnapshot } from './lib/cloud/records';
+import { BRIDGE_SOURCE, installBridgeHub, resetBridgeHubForTests } from './lib/bridge';
+import { makeCourse, makePlan } from './lib/fixtures';
+import type { NamedPlan } from './lib/plans';
+import { planToHash } from './lib/share';
+import { loadReceived, saveReceived } from './lib/storage';
+import type { TermsState } from './lib/terms-state';
+import { makeTestBoot, snapshotOf, TEST_ME } from './test/boot';
 
 // Every boot Root makes, so tests can see how many engines exist and which were disposed.
 const { boots } = vi.hoisted(() => ({ boots: [] as CloudBoot[] }));
@@ -27,14 +35,6 @@ function disposed(boot: CloudBoot): boolean {
   boot.engine.setPool([...boot.pool, makeCourse('PROBE|2026|2')]);
   return !boot.engine.hasPending();
 }
-import type { TermMeta, WebSnapshot } from './lib/cloud/records';
-import { BRIDGE_SOURCE, installBridgeHub, resetBridgeHubForTests } from './lib/bridge';
-import { makeCourse, makePlan } from './lib/fixtures';
-import type { NamedPlan } from './lib/plans';
-import { planToHash } from './lib/share';
-import { loadReceived } from './lib/storage';
-import type { TermsState } from './lib/terms-state';
-import { makeTestBoot, snapshotOf, TEST_ME } from './test/boot';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,6 +64,10 @@ function startServer() {
     counter: 500,
     /** While set, GET /api/state answers with what the server held when the request arrived, once this settles. */
     holdState: null as Promise<void> | null,
+    /** GET /api/me and /api/state never answer; only the request's own timeout ends them. */
+    hang: false,
+    /** POST /api/sync fails as a network error, so edits stay unsaved. */
+    syncDown: false,
   };
   const sync = (ops: SyncOp[]): Response => {
     const versions: SyncVersions = { terms: {}, plans: {} };
@@ -88,6 +92,12 @@ function startServer() {
     srv.calls.push({ method, url, body });
     const route = `${method} ${url}`;
     if (route === 'GET /api/me' || route === 'GET /api/state') {
+      if (srv.hang) {
+        return new Promise<Response>((_, reject) => {
+          const signal = init?.signal;
+          signal?.addEventListener('abort', () => reject(signal.reason));
+        });
+      }
       if (srv.me === 'down') throw new TypeError('Failed to fetch');
       if (srv.me === 'out') return json(401, { error: 'unauthorized' });
       if (route === 'GET /api/me') return json(200, TEST_ME);
@@ -95,7 +105,10 @@ function startServer() {
       if (srv.holdState) await srv.holdState;
       return answer;
     }
-    if (route === 'POST /api/sync') return sync((body as { ops: SyncOp[] }).ops);
+    if (route === 'POST /api/sync') {
+      if (srv.syncDown) throw new TypeError('Failed to fetch');
+      return sync((body as { ops: SyncOp[] }).ops);
+    }
     const answer = srv.auth[route];
     return answer ? answer(body) : json(404, { error: 'not_found' });
   });
@@ -163,12 +176,32 @@ async function becomeVisible() {
   await settle();
 }
 
-/** Run the engine's debounce so the planner's first save reaches the fake server. */
-async function letSyncRun() {
+async function advance(ms: number) {
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(ms);
   });
   await settle();
+}
+
+/** Run the engine's debounce so the planner's first save reaches the fake server. */
+const letSyncRun = () => advance(1000);
+
+/** Past the 30 s a refocus refresh waits after the last boot or refresh. */
+const waitOutThrottle = () => advance(31_000);
+
+const courseCodes = () => [...container.querySelectorAll('.course-card__code')].map((e) => e.textContent);
+
+/** Another device adds MATH-18 to plan-1 (the server bumps its version). */
+function addCourseElsewhere() {
+  const doc = srv.state.plans['plan-1']!;
+  const named = doc.data as NamedPlan;
+  const course = makeCourse('MATH-18|2026|2', 'MATH-18');
+  const entry = { course, selectedOptionId: course.options[0]!.id, color: '120' };
+  srv.state.plans['plan-1'] = {
+    ...doc,
+    version: doc.version + 100,
+    data: { ...named, plan: { ...named.plan, entries: [...named.plan.entries, entry] } },
+  };
 }
 
 beforeEach(() => {
@@ -176,7 +209,13 @@ beforeEach(() => {
   sessionStorage.clear();
   resetBridgeHubForTests();
   boots.length = 0;
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+  // Request timeouts on the fake clock, so a test can let one run out.
+  vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+    const c = new AbortController();
+    setTimeout(() => c.abort(new DOMException('The operation timed out.', 'TimeoutError')), ms);
+    return c.signal;
+  });
   srv = startServer();
   navSpy = vi.spyOn(nav, 'assign').mockImplementation(() => {});
 });
@@ -223,6 +262,26 @@ describe('Root: signed out', () => {
     await click('Try again');
     expect(container.querySelector('.app')).not.toBeNull();
   });
+
+  it('a server that never answers is given up on after 15 s, with Try again', async () => {
+    srv.hang = true;
+    await mount('/');
+    expect(text()).not.toContain("Can't reach TritonPlan right now.");
+    await advance(15_000);
+    expect(text()).toContain("Can't reach TritonPlan right now.");
+    srv.hang = false;
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await click('Try again');
+    expect(container.querySelector('.app')).not.toBeNull();
+  });
+
+  it('a hostile path never becomes the sign-in returnTo', async () => {
+    await mount(`${window.location.origin}//evil.com/x`); // https://tritonplan.cn//evil.com/x
+    expect(window.location.pathname).toBe('//evil.com/x');
+    const google = [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'));
+    expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2F');
+  });
 });
 
 describe('Root: signed in', () => {
@@ -255,6 +314,14 @@ describe('Root: signed in', () => {
     expect(container.querySelector('.topbar .brand')?.textContent).toContain('TritonPlan');
     expect(container.querySelector('.planswitch__name')?.textContent).toBe('Fall schedule');
     expect(callsTo('GET', '/api/state')).toHaveLength(1);
+  });
+
+  it('a #p= link opened while signed in opens as a received plan', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount(`/#${planToHash(otherPlan())}`);
+    expect(loadReceived()?.plan.entries.map((e) => e.course.id)).toEqual(['MATH-18|2026|2']);
+    expect(container.querySelector('.received')).not.toBeNull();
   });
 
   it('a #p= link opened while signed out is restored after signing in', async () => {
@@ -304,11 +371,13 @@ describe('Root: signed in', () => {
 });
 
 describe('Root: coming back to the tab', () => {
-  it('a 401 on refresh shows the sign-in screen', async () => {
+  it('a 401 on refresh shows the sign-in screen; signing back in does not misread the old mirror', async () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
     await letSyncRun();
+    expect(window.location.hash).toMatch(/^#m=/); // the planner's own address-bar mirror
+    await waitOutThrottle();
     srv.me = 'out';
     await becomeVisible();
     expect(container.querySelector('.app')).toBeNull();
@@ -317,6 +386,61 @@ describe('Root: coming back to the tab', () => {
     expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2F');
     expect(boots).toHaveLength(1);
     expect(disposed(boots[0]!)).toBe(true);
+    expect(window.location.hash).toBe('');
+
+    // Meanwhile another device added a course; the student signs in again in another tab.
+    addCourseElsewhere();
+    srv.me = 'in';
+    await becomeVisible();
+    expect(container.querySelector('.app')).not.toBeNull();
+    expect(loadReceived()).toBeNull();
+    expect(container.querySelector('.received')).toBeNull();
+    expect(courseCodes()).toContain('MATH-18');
+  });
+
+  it('a network error or a 500 on refresh keeps the planner as it is', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    await letSyncRun();
+    const app = container.querySelector('.app');
+    await waitOutThrottle();
+    srv.me = 'down';
+    await becomeVisible();
+    expect(container.querySelector('.app')).toBe(app);
+    expect(boots).toHaveLength(1);
+  });
+
+  it('a refresh that never answers times out and frees the next one', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    await letSyncRun();
+    const app = container.querySelector('.app');
+    await waitOutThrottle();
+    srv.hang = true;
+    await becomeVisible();
+    const gets = callsTo('GET', '/api/state').length;
+    await advance(15_000);
+    expect(container.querySelector('.app')).toBe(app);
+    srv.hang = false;
+    await becomeVisible();
+    expect(callsTo('GET', '/api/state')).toHaveLength(gets + 1);
+  });
+
+  it('refreshes at most once per 30 s', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    await letSyncRun();
+    const gets = callsTo('GET', '/api/state').length;
+    await becomeVisible(); // seconds after the boot
+    expect(callsTo('GET', '/api/state')).toHaveLength(gets);
+    await waitOutThrottle();
+    await becomeVisible();
+    expect(callsTo('GET', '/api/state')).toHaveLength(gets + 1);
+    await becomeVisible(); // right after that refresh
+    expect(callsTo('GET', '/api/state')).toHaveLength(gets + 1);
   });
 
   it('nothing changed elsewhere → the planner stays mounted', async () => {
@@ -325,6 +449,7 @@ describe('Root: coming back to the tab', () => {
     await mount('/');
     await letSyncRun();
     const app = container.querySelector('.app');
+    await waitOutThrottle();
     const gets = callsTo('GET', '/api/state').length;
     await becomeVisible();
     expect(callsTo('GET', '/api/state')).toHaveLength(gets + 1);
@@ -340,6 +465,7 @@ describe('Root: coming back to the tab', () => {
     const app = container.querySelector('.app');
     const doc = srv.state.plans['plan-1']!;
     srv.state.plans['plan-1'] = { ...doc, version: doc.version + 100, data: { ...(doc.data as NamedPlan), name: 'Renamed on phone' } };
+    await waitOutThrottle();
     await becomeVisible();
     expect(container.querySelector('.app')).not.toBe(app);
     expect(container.querySelector('.planswitch__name')?.textContent).toBe('Renamed on phone');
@@ -356,6 +482,7 @@ describe('Root: coming back to the tab', () => {
     await mount('/');
     await letSyncRun();
     const app = container.querySelector('.app');
+    await waitOutThrottle();
     let release!: () => void;
     srv.holdState = new Promise<void>((r) => {
       release = r;
@@ -381,10 +508,63 @@ describe('Root: coming back to the tab', () => {
 
   it('unsaved edits skip the refresh', async () => {
     srv.me = 'in'; // an empty account: the planner's first "My plan" is waiting to be saved
+    srv.syncDown = true; // ...and cannot be, so it stays unsaved
     await mount('/');
+    await waitOutThrottle();
     const gets = callsTo('GET', '/api/state').length;
     await becomeVisible();
     expect(callsTo('GET', '/api/state')).toHaveLength(gets);
+  });
+
+  it('another device added a course → it shows, and our old #m= mirror is not taken for a received plan', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    await letSyncRun();
+    expect(window.location.hash).toMatch(/^#m=/);
+    addCourseElsewhere();
+    await waitOutThrottle();
+    await becomeVisible();
+    expect(boots).toHaveLength(2);
+    expect(courseCodes()).toContain('MATH-18');
+    expect(container.querySelector('.received')).toBeNull();
+    expect(loadReceived()).toBeNull();
+  });
+
+  it('a plan someone sent stays in the received slot across that remount', async () => {
+    const sent = { plan: otherPlan(), source: 'link' as const, receivedAt: '2026-10-01T00:00:00.000Z' };
+    saveReceived(sent);
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    await letSyncRun();
+    addCourseElsewhere();
+    await waitOutThrottle();
+    await becomeVisible();
+    expect(boots).toHaveLength(2);
+    expect(loadReceived()).toEqual(sent);
+  });
+
+  it('another device switching its active plan is not switched back by this tab', async () => {
+    const terms = mine();
+    terms.terms['2026|2']!.plans.plans.push({
+      id: 'plan-2', name: 'Second', plan: otherPlan(), createdAt: 'c', updatedAt: 'u', browsed: [],
+    });
+    srv.me = 'in';
+    srv.state = snapshotOf(terms);
+    await mount('/');
+    await letSyncRun();
+    expect(window.location.hash).toMatch(/^#m=/); // mirrors plan-1, the active one here
+    const t = srv.state.terms['2026|2']!;
+    srv.state.terms['2026|2'] = { ...t, version: t.version + 100, data: { ...t.data, activeId: 'plan-2' } };
+    const syncs = callsTo('POST', '/api/sync').length;
+    await waitOutThrottle();
+    await becomeVisible();
+    await letSyncRun();
+    expect(boots).toHaveLength(2);
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Second');
+    expect(callsTo('POST', '/api/sync')).toHaveLength(syncs);
+    expect(srv.state.terms['2026|2']!.data.activeId).toBe('plan-2');
   });
 });
 
@@ -395,6 +575,7 @@ describe('Root: email links', () => {
     expect(window.location.hash).toBe('');
     expect(window.location.pathname).toBe('/reset');
     expect(text()).toContain('Choose a new password');
+    expect(input('password')?.getAttribute('minlength')).toBe('8');
     type(input('password'), 'new password 1');
     await click('Save password');
     expect(callsTo('POST', '/api/auth/reset')[0]?.body).toEqual({ token: 'abc', password: 'new password 1' });
@@ -420,6 +601,7 @@ describe('Root: email links', () => {
     expect(window.location.hash).toBe('');
     expect(text()).toContain('Confirm your email');
     expect(text()).toContain('Enter the password you chose when you signed up.');
+    expect(input('password')?.getAttribute('minlength')).toBeNull(); // an existing password: no new rule
     type(input('password'), 'correct horse');
     await click('Confirm and sign in');
     expect(callsTo('POST', '/api/auth/verify')[0]?.body).toEqual({ token: 'tok', password: 'correct horse' });

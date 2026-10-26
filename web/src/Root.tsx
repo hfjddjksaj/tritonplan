@@ -61,6 +61,19 @@ type PlannerScreen = Extract<Screen, { kind: 'planner' }>;
 
 type Loaded = { kind: 'offline' } | { kind: 'signed-out' } | { kind: 'ready'; me: Me; snapshot: WebSnapshot };
 
+/** A refocus refresh downloads the whole account; the TSS ↔ planner back-and-forth must not do that every few seconds. */
+const REFRESH_MIN_GAP_MS = 30_000;
+
+/**
+ * Drop the address bar's hash before another App mounts. A mounted planner
+ * mirrors its active plan there as #m=; a fresh mount reads the hash on load,
+ * and the old mirror would then pass for someone else's plan (overwriting the
+ * received slot) or switch this tab back to the plan it showed before.
+ */
+function dropAddressHash(): void {
+  if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+}
+
 async function loadAccount(): Promise<Loaded> {
   let me: Me | null;
   try {
@@ -86,6 +99,8 @@ function SignInGate({ notice }: { notice?: string }) {
   // One load or refresh in flight at a time; StrictMode's second effect run joins the first.
   const busy = useRef(false);
   const alive = useRef(true);
+  // When the planner last got the server's state (boot or refresh), for REFRESH_MIN_GAP_MS.
+  const lastFresh = useRef(0);
 
   const show = useCallback((next: Screen) => {
     current.current = next;
@@ -94,8 +109,12 @@ function SignInGate({ notice }: { notice?: string }) {
 
   const enter = useCallback(
     (me: Me, snapshot: WebSnapshot) => {
+      // On the page's first entry the hash is the link the student opened. After a planner has
+      // been mounted here (signed out mid-session, back in), it can only be that planner's mirror.
+      if (nonce.current > 0) dropAddressHash();
       restorePendingHash();
       setPageNotice(undefined);
+      lastFresh.current = Date.now();
       show({ kind: 'planner', boot: makeBoot(me, snapshot), nonce: nonce.current++ });
     },
     [show],
@@ -129,7 +148,7 @@ function SignInGate({ notice }: { notice?: string }) {
     async (s: PlannerScreen) => {
       const { engine } = s.boot;
       // Unsaved edits would be lost by a remount; they save first and the next visit compares.
-      if (busy.current || engine.hasPending()) return;
+      if (busy.current || engine.hasPending() || Date.now() - lastFresh.current < REFRESH_MIN_GAP_MS) return;
       busy.current = true;
       // A save that starts and finishes while the GET is out can make the answer older than our acks.
       let saved = false;
@@ -143,12 +162,15 @@ function SignInGate({ notice }: { notice?: string }) {
         } catch (err) {
           if (err instanceof UnauthorizedError && alive.current && current.current === s) {
             engine.dispose();
+            dropAddressHash();
             show({ kind: 'signed-out' });
           }
-          return; // unreachable or a server hiccup: keep the planner as it is
+          return; // unreachable, timed out or a server hiccup: keep the planner as it is
         }
+        lastFresh.current = Date.now();
         if (!alive.current || current.current !== s || saved || engine.hasPending() || engine.matchesServer(fresh)) return;
         engine.dispose();
+        dropAddressHash();
         show({ kind: 'planner', boot: makeBoot(s.boot.me, fresh), nonce: nonce.current++ });
       } finally {
         off();

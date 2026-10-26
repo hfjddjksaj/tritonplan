@@ -26,6 +26,23 @@ describe('fetchMe / fetchState', () => {
     expect(await fetchState()).toEqual(snap);
     expect(calls()[0]![1]).toMatchObject({ credentials: 'same-origin' });
   });
+  it('a hung server is given up on after 15 s, as a network failure (not a sign-out)', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() =>
+      AbortSignal.abort(new DOMException('The operation timed out.', 'TimeoutError')));
+    // A fetch that never answers on its own: only its signal ends it.
+    stub(async (...a: unknown[]) => {
+      const signal = (a[1] as RequestInit).signal!;
+      return new Promise<Response>((_, reject) => {
+        if (signal.aborted) reject(signal.reason);
+        signal.addEventListener('abort', () => reject(signal.reason));
+      });
+    });
+    await expect(fetchMe()).rejects.toThrow();
+    const err = await fetchState().catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(UnauthorizedError);
+    expect(timeout).toHaveBeenCalledWith(15_000);
+    timeout.mockRestore();
+  });
 });
 
 describe('postSync', () => {

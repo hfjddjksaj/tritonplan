@@ -77,6 +77,7 @@ export function sameAcked(a: Acked, b: Acked): boolean {
     const q = b.plans.get(id);
     if (!q || q.version !== p.version || q.termKey !== p.termKey) return false;
   }
+  // Relies on the server echoing each course's keys in the order the client sent them (it stores the JSON as given).
   for (const [id, json] of a.pool) if (b.pool.get(id) !== json) return false;
   return a.appt === b.appt;
 }
