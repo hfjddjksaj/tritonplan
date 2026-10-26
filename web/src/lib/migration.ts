@@ -9,12 +9,12 @@ import type { ApptTimes, CourseOffering, PlanState } from '@triton/shared';
 import { mergeCourses } from './bridge';
 import { decodePlan, encodePlan, mirrorTokenFromHash } from './share';
 import {
-  isCoursePool, isPlanState, isPlansState, isTermsState,
+  isApptTimesList, isCoursePool, isPlanState, isPlansState, isReceivedPlan, isTermShape, isTermsState,
   loadApptTimes, loadPlan, loadPlans, loadPool, loadReceived, loadTerms,
   type ReceivedPlan,
 } from './storage';
 import {
-  migrateToTermsState, newestTermKey, type TermsState, type TermWorkspace,
+  isPristine, migrateToTermsState, newestTermKey, type TermsState, type TermWorkspace,
 } from './terms-state';
 import type { NamedPlan, PlansState } from './plans';
 import { termKey } from './terms';
@@ -60,12 +60,6 @@ export function collectLegacyPayload(hash: string, nowIso: string): MigrationPay
   };
 }
 
-function isReceived(v: unknown): boolean {
-  if (!v || typeof v !== 'object') return false;
-  const r = v as Record<string, unknown>;
-  return (r.source === 'link' || r.source === 'json') && typeof r.receivedAt === 'string' && isPlanState(r.plan);
-}
-
 /** Validates with the same guards storage.ts uses, but tolerates unknown extra fields. */
 export function isMigrationPayload(v: unknown): v is MigrationPayload {
   if (!v || typeof v !== 'object') return false;
@@ -78,8 +72,8 @@ export function isMigrationPayload(v: unknown): v is MigrationPayload {
     (p.plans === null || isPlansState(p.plans)) &&
     (p.plan === null || isPlanState(p.plan)) &&
     isCoursePool(p.pool) &&
-    (p.appt === null || Array.isArray(p.appt)) &&
-    (p.received === null || isReceived(p.received)) &&
+    (p.appt === null || isApptTimesList(p.appt)) &&
+    (p.received === null || isReceivedPlan(p.received)) &&
     (p.hashPlan === null || isPlanState(p.hashPlan))
   );
 }
@@ -107,11 +101,6 @@ function validKey(k: unknown): k is string {
   return typeof k === 'string' && k.length >= 1 && k.length <= 100 && !FORBIDDEN_KEYS.has(k);
 }
 
-/** Nothing the student did: single default plan state with no courses and no browsed history. */
-function isPristinePlan(p: NamedPlan): boolean {
-  return p.plan.entries.length === 0 && (p.browsed ?? []).length === 0;
-}
-
 function safeEncode(plan: PlanState): string | null {
   try {
     return encodePlan(plan, 'full');
@@ -130,22 +119,30 @@ const BOOKED_FIELDS = ['bookedAuto', 'bookedOn', 'bookedOff', 'waitlistedAuto'] 
 /**
  * Merge old-site data into the account; the result is uploaded right after.
  *
- * Rules:
+ * Rules (R29 amends the original 2-4):
  *  1. legacy = migrateToTermsState(payload.terms, plans, plan, pool, now).
- *  2. A plan with neither courses nor browsed history is NOT imported:
- *     migrateToTermsState invents an empty "My plan" when there is no data,
- *     and that must not become noise in the account.
- *  3. Extra plans: `received` -> "Shared plan (old site)"; `hashPlan` ->
- *     "Plan from bookmark", only when its full encoding differs from every
- *     legacy plan. Both get a content-derived id 'm-' + fnv1a(encodePlan(plan,
- *     'full')) so a repeat import does not duplicate them.
- *  4. Per term: absent from the account -> the whole workspace comes in (a
- *     term left with no plans after filtering is dropped); present -> plans
- *     whose id is not in the account are appended, bookedAuto/On/Off and
- *     waitlistedAuto are unioned, the account's activeId is unchanged.
+ *     Plans it minted itself (id not in payload.terms/plans: the pre-terms
+ *     plan:v1 / pool-only paths) get a content id 'm-' + fnv1a('v1|' + encoded
+ *     plan), because a random UUID would be re-imported as new every time.
+ *  2. A legacy workspace that is pristine (the single default empty "My plan")
+ *     is not imported: migrateToTermsState invents one when there is no data.
+ *     Other empty plans (e.g. a renamed "Plan B") are real and are imported.
+ *  3. Extras: `received` -> "Shared plan (old site)", `hashPlan` -> "Plan from
+ *     bookmark", both with id 'm-' + fnv1a(encodePlan(plan, 'full')). Each is
+ *     dropped when its full encoding equals any account plan or legacy plan
+ *     (or an extra already added); an extra whose term is malformed is skipped.
+ *  4. Per term: absent from the account -> the whole workspace comes in; a
+ *     pristine account workspace (bootstrapped by the app) is replaced by the
+ *     legacy one when that has plans to import; otherwise plans whose id is not
+ *     in the account are appended and the account's activeId is unchanged.
+ *     Booked lists: bookedAuto/waitlistedAuto are TSS snapshots and bookedOff
+ *     is an override the next feed clears, so when the account already has a
+ *     feed for the term (bookedAuto defined) it keeps its own auto/waitlisted/
+ *     off and only bookedOn is unioned; otherwise all four lists are unioned.
  *  5. A plan id already in the account (any term) is skipped and counted in
- *     `skipped` - this is what makes the import idempotent. Ids/term keys the
- *     server would reject are skipped and counted the same way.
+ *     `skipped`: that makes the import idempotent. Ids/term keys the server
+ *     would reject, and malformed or duplicate extras, are skipped and counted
+ *     the same way. Pristine drops (rule 2) are not counted.
  *  6. pool = mergeCourses(payload.pool, account.pool): the account's copy is
  *     the newer one and overrides the old site's.
  *  7. appt = account.appt?.length ? account.appt : payload.appt.
@@ -162,27 +159,43 @@ export function mergeMigration(
   const legacy = migrateToTermsState(payload.terms, payload.plans, payload.plan, payload.pool, nowIso);
   const accountTerms = account.terms && Object.keys(account.terms.terms).length > 0 ? account.terms : null;
 
+  const payloadIds = new Set<string>();
+  for (const w of Object.values(payload.terms?.terms ?? {})) for (const p of w.plans.plans) payloadIds.add(p.id);
+  for (const p of payload.plans?.plans ?? []) payloadIds.add(p.id);
+
   const out = new Map<string, TermWorkspace>(Object.entries(accountTerms?.terms ?? {}));
   const seen = new Set<string>();
-  for (const w of out.values()) for (const p of w.plans.plans) seen.add(p.id);
+  const encodings = new Set<string>(); // full encodings of every plan already in the account or the legacy data
+  for (const w of out.values()) {
+    for (const p of w.plans.plans) {
+      seen.add(p.id);
+      const enc = safeEncode(p.plan);
+      if (enc) encodings.add(enc);
+    }
+  }
 
   const added = { terms: 0, plans: 0 };
   let skipped = 0;
 
   const appendTo = (key: string, w: TermWorkspace, fresh: NamedPlan[], bookedFrom?: TermWorkspace) => {
     const existing = out.get(key);
-    if (existing) {
+    const activeId = fresh.some((p) => p.id === w.plans.activeId) ? w.plans.activeId : fresh[0]?.id;
+    if (existing && isPristine(existing) && fresh.length > 0) {
+      const next: TermWorkspace = { ...w, plans: { activeId: activeId!, plans: fresh } };
+      if (bookedFrom) for (const f of BOOKED_FIELDS) if (bookedFrom[f]) next[f] = [...bookedFrom[f]!];
+      out.set(key, next);
+    } else if (existing) {
       const next: TermWorkspace = { ...existing, plans: { ...existing.plans, plans: [...existing.plans.plans, ...fresh] } };
       if (bookedFrom) {
-        for (const f of BOOKED_FIELDS) {
+        const fields = existing.bookedAuto !== undefined ? (['bookedOn'] as const) : BOOKED_FIELDS;
+        for (const f of fields) {
           const u = union(existing[f], bookedFrom[f]);
           if (u) next[f] = u;
         }
       }
       out.set(key, next);
     } else {
-      const activeId = fresh.some((p) => p.id === w.plans.activeId) ? w.plans.activeId : fresh[0]!.id;
-      const next: TermWorkspace = { ...w, plans: { activeId, plans: fresh } };
+      const next: TermWorkspace = { ...w, plans: { activeId: activeId!, plans: fresh } };
       if (bookedFrom) for (const f of BOOKED_FIELDS) if (bookedFrom[f]) next[f] = [...bookedFrom[f]!];
       out.set(key, next);
       added.terms++;
@@ -190,34 +203,39 @@ export function mergeMigration(
     added.plans += fresh.length;
   };
 
-  const legacyEncodings = new Set<string>();
   for (const [key, w] of Object.entries(legacy.terms)) {
-    const fresh: NamedPlan[] = [];
-    for (const p of w.plans.plans) {
+    if (isPristine(w)) continue;
+    const plans = w.plans.plans.map((p) => {
       const enc = safeEncode(p.plan);
-      if (enc) legacyEncodings.add(enc);
-      if (isPristinePlan(p)) continue;
+      if (enc) encodings.add(enc);
+      return payloadIds.has(p.id) || !enc ? p : { ...p, id: 'm-' + fnv1a('v1|' + enc) };
+    });
+    const active = plans[w.plans.plans.findIndex((p) => p.id === w.plans.activeId)] ?? plans[0]!;
+    const fresh: NamedPlan[] = [];
+    for (const p of plans) {
       if (!validKey(key) || !validKey(p.id) || seen.has(p.id)) { skipped++; continue; }
       seen.add(p.id);
       fresh.push(p);
     }
     if (!validKey(key)) continue;
-    if (fresh.length > 0 || out.has(key)) appendTo(key, w, fresh, w);
+    if (fresh.length > 0 || out.has(key)) {
+      appendTo(key, { ...w, plans: { activeId: active.id, plans } }, fresh, w);
+    }
   }
 
-  const extras: Array<[PlanState | null, string, boolean]> = [
-    [payload.received?.plan ?? null, 'Shared plan (old site)', false],
-    [payload.hashPlan, 'Plan from bookmark', true],
+  const extras: Array<[PlanState | null, string]> = [
+    [payload.received?.plan ?? null, 'Shared plan (old site)'],
+    [payload.hashPlan, 'Plan from bookmark'],
   ];
-  for (const [plan, name, dedupeAgainstLegacy] of extras) {
+  for (const [plan, name] of extras) {
     if (!plan || plan.entries.length === 0) continue;
-    const enc = safeEncode(plan);
+    const enc = isTermShape(plan.term) ? safeEncode(plan) : null;
     if (enc === null) { skipped++; continue; }
-    if (dedupeAgainstLegacy && legacyEncodings.has(enc)) continue;
     const id = 'm-' + fnv1a(enc);
     const key = termKey(plan.term);
-    if (!validKey(key) || !validKey(id) || seen.has(id)) { skipped++; continue; }
+    if (!validKey(key) || !validKey(id) || seen.has(id) || encodings.has(enc)) { skipped++; continue; }
     seen.add(id);
+    encodings.add(enc);
     const np: NamedPlan = {
       id, name, plan, createdAt: nowIso, updatedAt: nowIso, browsed: plan.entries.map((e) => e.course.id),
     };
@@ -239,11 +257,13 @@ export function mergeMigration(
 
 /* ---- pending migration (survives sign-in redirects) ---- */
 
-export function savePendingMigration(p: MigrationPayload): void {
+/** False when it could not be stored, so the caller knows the import is not resumable. */
+export function savePendingMigration(p: MigrationPayload): boolean {
   try {
     localStorage.setItem(MIGRATION_PENDING_KEY, JSON.stringify(p));
+    return true;
   } catch {
-    /* storage full / disabled - the import then simply isn't resumable */
+    return false;
   }
 }
 

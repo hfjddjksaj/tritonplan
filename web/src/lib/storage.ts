@@ -121,7 +121,7 @@ export function loadPlans(): import('./plans').PlansState | null {
 
 const TERMS_KEY = 'triton-planner:terms:v1';
 
-function isTermShape(value: unknown): boolean {
+export function isTermShape(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return typeof v.year === 'string' && typeof v.period === 'string' && typeof v.label === 'string';
@@ -139,7 +139,8 @@ function isTermWorkspace(value: unknown): boolean {
     isPlansState(v.plans) &&
     isOptionalIdList(v.bookedAuto) &&
     isOptionalIdList(v.bookedOn) &&
-    isOptionalIdList(v.bookedOff)
+    isOptionalIdList(v.bookedOff) &&
+    isOptionalIdList(v.waitlistedAuto)
   );
 }
 
@@ -179,7 +180,7 @@ export interface ReceivedPlan {
   receivedAt: string; // ISO timestamp
 }
 
-function isReceivedPlan(value: unknown): value is ReceivedPlan {
+export function isReceivedPlan(value: unknown): value is ReceivedPlan {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return (

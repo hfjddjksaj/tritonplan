@@ -5,9 +5,9 @@ import {
   savePendingMigration, loadPendingMigration, clearPendingMigration,
   MIGRATION_PENDING_KEY, MIGRATE_MSG, type MigrationPayload,
 } from './migration';
-import { saveTerms, savePlans, savePlan, savePool, saveApptTimes, saveReceived } from './storage';
+import { isTermShape, saveTerms, savePlans, savePlan, savePool, saveApptTimes, saveReceived } from './storage';
 import type { TermsState, TermWorkspace } from './terms-state';
-import { planToMirrorHash } from './share';
+import { planToMirrorHash, mirrorTokenFromHash, decodePlan } from './share';
 import { emptyPlan } from './plan';
 import { makeCourse } from './fixtures';
 import type { NamedPlan } from './plans';
@@ -207,13 +207,150 @@ describe('mergeMigration', () => {
     expect(r.skipped).toBe(1);
   });
 
-  it('received / hashPlan with a garbage term do not throw', () => {
+  it('received / hashPlan with a garbage term are skipped and counted, never imported', () => {
     const junk = { ...planWith(FALL, 'A'), term: { year: 5, period: null, label: {} } } as unknown as PlanState;
+    const junk2 = { ...planWith(FALL, 'B'), term: { year: 5, period: null, label: {} } } as unknown as PlanState;
     const r = mergeMigration(EMPTY_ACCOUNT, payload({
-      received: { plan: junk, source: 'link', receivedAt: NOW }, hashPlan: junk,
+      received: { plan: junk, source: 'link', receivedAt: NOW }, hashPlan: junk2,
     }), NOW);
-    for (const k of Object.keys(r.terms.terms)) expect(k.length).toBeGreaterThan(0);
-    expect(r.added.plans + r.skipped).toBeGreaterThanOrEqual(0);
+    expect(r.added).toEqual({ terms: 0, plans: 0 });
+    expect(r.skipped).toBe(2);
+    for (const w of Object.values(r.terms.terms)) expect(isTermShape(w.term)).toBe(true);
+    expect(allIds(r.terms).some((i) => i.startsWith('m-'))).toBe(false);
+  });
+
+  // ---- R29 fix round 1 ----
+
+  it('C1: a plan:v1-only payload does not duplicate on re-import', () => {
+    const p = payload({ plan: planWith(FALL, 'CSE-8A') });
+    const first = mergeMigration(EMPTY_ACCOUNT, p, NOW);
+    expect(first.added).toEqual({ terms: 1, plans: 1 });
+    expect(allIds(first.terms)[0]).toMatch(/^m-[0-9a-f]{8}$/);
+    const second = mergeMigration({ terms: first.terms, pool: first.pool, appt: first.appt }, p, '2026-11-01T00:00:00.000Z');
+    expect(second.added).toEqual({ terms: 0, plans: 0 });
+    expect(second.skipped).toBe(1);
+    expect(allIds(second.terms)).toEqual(allIds(first.terms));
+  });
+
+  it('C1: a pool-only payload (bootstrap plan with browsed history) does not duplicate on re-import', () => {
+    const p = payload({ pool: [courseIn(FALL, 'PHYS-2A')] });
+    const first = mergeMigration(EMPTY_ACCOUNT, p, NOW);
+    expect(first.added.plans).toBe(1);
+    const second = mergeMigration({ terms: first.terms, pool: first.pool, appt: first.appt }, p, '2026-11-01T00:00:00.000Z');
+    expect(second.added).toEqual({ terms: 0, plans: 0 });
+    expect(second.skipped).toBe(1);
+  });
+
+  it('I1: with an account feed the account keeps auto/waitlisted/off and only bookedOn is unioned', () => {
+    const acct = terms(['2026|2', ws(FALL, [named('mine', FALL, ['A'])], {
+      bookedAuto: ['CSE-8A|2026|2'], bookedOn: ['b'], bookedOff: [], waitlistedAuto: ['wl'],
+    })]);
+    const old = terms(['2026|2', ws(FALL, [named('a1', FALL, ['C'])], {
+      bookedAuto: ['stale'], bookedOn: ['x'], bookedOff: ['CSE-8A|2026|2'], waitlistedAuto: ['old-wl'],
+    })]);
+    const r = mergeMigration({ terms: acct, pool: [], appt: null }, payload({ terms: old }), NOW);
+    const w = r.terms.terms['2026|2']!;
+    expect(w.bookedAuto).toEqual(['CSE-8A|2026|2']);
+    expect(w.bookedOff).toEqual([]);
+    expect(w.waitlistedAuto).toEqual(['wl']);
+    expect(w.bookedOn).toEqual(['b', 'x']);
+  });
+
+  it('I1: without an account feed for the term, all four lists are taken and unioned', () => {
+    const acct = terms(['2026|2', ws(FALL, [named('mine', FALL, ['A'])], { bookedOn: ['b'] })]);
+    const old = terms(['2026|2', ws(FALL, [named('a1', FALL, ['C'])], {
+      bookedAuto: ['y'], bookedOn: ['x'], bookedOff: ['o'], waitlistedAuto: ['w'],
+    })]);
+    const w = mergeMigration({ terms: acct, pool: [], appt: null }, payload({ terms: old }), NOW).terms.terms['2026|2']!;
+    expect(w.bookedAuto).toEqual(['y']);
+    expect(w.bookedOn).toEqual(['b', 'x']);
+    expect(w.bookedOff).toEqual(['o']);
+    expect(w.waitlistedAuto).toEqual(['w']);
+  });
+
+  it('I3: a hashPlan equal to a plan already in the account is not added', () => {
+    const shared = planWith(FALL, 'CSE-100');
+    const acct = terms(['2026|2', ws(FALL, [{ ...named('other-device', FALL, []), plan: shared }])]);
+    const r = mergeMigration({ terms: acct, pool: [], appt: null }, payload({ hashPlan: shared }), NOW);
+    expect(r.added).toEqual({ terms: 0, plans: 0 });
+    expect(r.skipped).toBe(1);
+    expect(allIds(r.terms)).toEqual(['other-device']);
+  });
+
+  it('I3: a received plan equal to one of the student\'s own plans is not added', () => {
+    const t = legacy();
+    const own = t.terms['2026|2']!.plans.plans[0]!.plan;
+    const r = mergeMigration(EMPTY_ACCOUNT, payload({ terms: t, received: { plan: own, source: 'link', receivedAt: NOW } }), NOW);
+    expect(r.added.plans).toBe(3);
+    expect(r.skipped).toBe(1);
+    expect(allIds(r.terms).some((i) => i.startsWith('m-'))).toBe(false);
+  });
+
+  it('I3: received and hashPlan identical to each other add only one', () => {
+    const same = planWith(FALL, 'CSE-100');
+    const r = mergeMigration(EMPTY_ACCOUNT, payload({
+      received: { plan: same, source: 'link', receivedAt: NOW }, hashPlan: same,
+    }), NOW);
+    expect(r.added.plans).toBe(1);
+    expect(r.skipped).toBe(1);
+    expect(allIds(r.terms)).toHaveLength(1);
+  });
+
+  it('M2: an empty plan is skipped only in a pristine workspace; a renamed empty "Plan B" is imported', () => {
+    const t = terms(['2026|2', ws(FALL, [named('my', FALL, [], 'My plan'), named('planb', FALL, [], 'Plan B')])]);
+    const r = mergeMigration(EMPTY_ACCOUNT, payload({ terms: t }), NOW);
+    expect(allIds(r.terms).sort()).toEqual(['my', 'planb']);
+    const pristineOnly = terms(['2026|2', ws(FALL, [named('my', FALL, [], 'My plan')])]);
+    const r2 = mergeMigration(EMPTY_ACCOUNT, payload({ terms: pristineOnly }), NOW);
+    expect(r2.added.plans).toBe(0);
+    expect(r2.skipped).toBe(0);
+  });
+
+  it('M4: a pristine account workspace is replaced by the legacy workspace for that term', () => {
+    const acct = terms(['2026|2', ws(FALL, [named('boot', FALL, [])])]);
+    const t = legacy();
+    t.terms['2026|2']!.plans.activeId = 'a2';
+    const r = mergeMigration({ terms: acct, pool: [], appt: null }, payload({ terms: t }), NOW);
+    const fall = r.terms.terms['2026|2']!;
+    expect(fall.plans.plans.map((x) => x.id)).toEqual(['a1', 'a2']);
+    expect(fall.plans.activeId).toBe('a2');
+    expect(r.added).toEqual({ terms: 1, plans: 3 });
+    // nothing importable for that term: the account's pristine workspace stays
+    const r2 = mergeMigration({ terms: acct, pool: [], appt: null }, payload({ terms: terms(['2027|3', t.terms['2027|3']!]) }), NOW);
+    expect(r2.terms.terms['2026|2']!.plans.plans.map((x) => x.id)).toEqual(['boot']);
+  });
+
+  it('M5: a real #m= token decoded via mirrorTokenFromHash/decodePlan is deduped against a saved plan', () => {
+    const saved = planWith(FALL, 'CSE-8A');
+    const t = terms(['2026|2', ws(FALL, [{ ...named('s1', FALL, []), plan: saved }])]);
+    const hash = '#' + planToMirrorHash(saved);
+    const decoded = decodePlan(mirrorTokenFromHash(hash)!)!;
+    const r = mergeMigration(EMPTY_ACCOUNT, payload({ terms: t, hashPlan: decoded }), NOW);
+    expect(r.added.plans).toBe(1);
+    expect(r.skipped).toBe(1);
+  });
+
+  it('M5: plans:v1 with a hidden list and a pool seeds browsed from pool minus hidden', () => {
+    const p1 = courseIn(FALL, 'P1');
+    const p2 = courseIn(FALL, 'P2');
+    const np: NamedPlan = { ...named('p-1', FALL, ['CSE-8A']), hidden: [p2.id], browsed: undefined };
+    const r = mergeMigration(EMPTY_ACCOUNT, payload({ plans: { activeId: 'p-1', plans: [np] }, pool: [p1, p2] }), NOW);
+    const imported = r.terms.terms['2026|2']!.plans.plans[0]!;
+    expect(imported.id).toBe('p-1');
+    expect(imported.browsed).toContain(p1.id);
+    expect(imported.browsed).not.toContain(p2.id);
+    expect('hidden' in imported).toBe(false);
+  });
+
+  it('M6: skipped counts duplicates and invalid ids exactly, not pristine drops', () => {
+    const acct = terms(['2026|2', ws(FALL, [named('a1', FALL, ['CSE-8A'])])]);
+    const t = terms(
+      ['2026|2', ws(FALL, [named('a1', FALL, ['CSE-8A']), named('__proto__', FALL, ['X']), named('n1', FALL, ['Y'])])],
+      ['2027|3', ws(WINTER, [named('w', WINTER, [], 'My plan')])],
+    );
+    const r = mergeMigration({ terms: acct, pool: [], appt: null }, payload({ terms: t }), NOW);
+    expect(r.added).toEqual({ terms: 0, plans: 1 });
+    expect(r.skipped).toBe(2);
   });
 });
 
@@ -267,7 +404,7 @@ describe('collectLegacyPayload', () => {
 describe('pending migration storage', () => {
   it('round-trips and clears', () => {
     const p = payload({ terms: legacy() });
-    savePendingMigration(p);
+    expect(savePendingMigration(p)).toBe(true);
     expect(localStorage.getItem(MIGRATION_PENDING_KEY)).not.toBeNull();
     expect(loadPendingMigration()).toEqual(p);
     clearPendingMigration();
@@ -286,7 +423,7 @@ describe('pending migration storage', () => {
     const boom = () => { throw new Error('denied'); };
     Storage.prototype.getItem = boom; Storage.prototype.setItem = boom; Storage.prototype.removeItem = boom;
     try {
-      expect(() => savePendingMigration(payload())).not.toThrow();
+      expect(savePendingMigration(payload())).toBe(false);
       expect(loadPendingMigration()).toBeNull();
       expect(() => clearPendingMigration()).not.toThrow();
     } finally {
