@@ -13,6 +13,7 @@ import { makeCourse, makePlan } from './lib/fixtures';
 import type { NamedPlan } from './lib/plans';
 import { planToHash, planToMirrorHash } from './lib/share';
 import { loadReceived, saveReceived } from './lib/storage';
+import { OLD_SITE_ORIGIN } from './lib/site';
 import { loadPendingMigration, savePendingMigration, type MigrationPayload } from './lib/migration';
 import type { TermsState } from './lib/terms-state';
 import { makeTestBoot, snapshotOf, TEST_ME } from './test/boot';
@@ -725,5 +726,78 @@ describe('Root: moving plans from the old site', () => {
     await click('Not now');
     expect(container.querySelector('.app')).not.toBeNull();
     expect(loadPendingMigration()).not.toBeNull();
+  });
+
+  it('after a successful import no confirm button is clickable while the fresh state loads', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf();
+    savePendingMigration(pending());
+    await mount('/migrate');
+    const realFetch = globalThis.fetch;
+    let gets = 0;
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      // Counted from here: #1 is the import's own refresh, #2 is the planner's boot (held).
+      if (String(input) === '/api/state' && ++gets === 2) await held;
+      return realFetch(input, init);
+    }));
+    await click('Add to my account');
+    expect(gets).toBe(2);
+    expect(container.querySelectorAll('button')).toHaveLength(0);
+    await act(async () => release());
+    await settle();
+    expect(container.querySelector('.app')).not.toBeNull();
+  });
+
+  it('Not now after a half-applied import boots from the server state, first batch included', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf();
+    savePendingMigration(pending());
+    await mount('/migrate');
+    const realFetch = globalThis.fetch;
+    let failed = false;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const r = await realFetch(input, init);
+      // The server commits, but the answer is lost: the student sees a failure.
+      if (String(input) === '/api/sync' && !failed) { failed = true; return json(500, { error: 'boom' }); }
+      return r;
+    }));
+    await click('Add to my account');
+    expect(text()).toContain("Couldn't add your plans. Please try again.");
+    await click('Not now');
+    expect(container.querySelector('.app')).not.toBeNull();
+    expect(text()).toContain('Old plan');
+    expect(loadPendingMigration()).not.toBeNull();
+  });
+
+  it('a sign-in notice survives while a migration is pending', async () => {
+    savePendingMigration(pending());
+    await mount('/?auth=google-failed');
+    expect(text()).toContain('Sign in to finish moving your plans');
+    expect(text()).toContain("Google sign-in didn't finish. Please try again.");
+  });
+
+  it('?handoff=1 with an opener replaces a stale pending payload and is stripped from the URL', async () => {
+    savePendingMigration(pending());
+    const frame = document.body.appendChild(document.createElement('iframe'));
+    const opener = frame.contentWindow!;
+    (opener as unknown as { postMessage: unknown }).postMessage = vi.fn();
+    Object.defineProperty(window, 'opener', { configurable: true, value: opener });
+    try {
+      await mount('/migrate?handoff=1');
+      expect(text()).toContain('Moving your plans from the old TritonPlan…');
+      expect(window.location.search).toBe('');
+      const fresh: MigrationPayload = { ...pending(), exportedAt: '2026-11-01T00:00:00.000Z' };
+      await act(async () => {
+        window.dispatchEvent(new MessageEvent('message', { data: { type: 'tp-migrate-payload', payload: fresh }, origin: OLD_SITE_ORIGIN, source: opener }));
+      });
+      await settle();
+      expect(loadPendingMigration()?.exportedAt).toBe('2026-11-01T00:00:00.000Z');
+      expect(text()).toContain('Sign in to finish moving your plans');
+    } finally {
+      Object.defineProperty(window, 'opener', { configurable: true, value: null });
+      frame.remove();
+    }
   });
 });

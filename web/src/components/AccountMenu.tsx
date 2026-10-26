@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { apiPost, type Me } from '../lib/cloud/api';
 import { nav } from '../lib/nav';
+import { clearPendingMigration } from '../lib/migration';
 import { clearReceived } from '../lib/storage';
 import { useClickAway } from '../hooks/useClickAway';
 import { ChevronDown } from './icons';
@@ -41,6 +42,7 @@ export function AccountMenu({ me: initial, onFlash }: { me: Me; onFlash: (msg: s
 
   async function signOut() {
     await apiPost('/api/auth/logout', {}); // a failed logout still leaves: the next load re-checks the session
+    clearPendingMigration(); // the old site's plans are this student's, not the next person's on a shared browser
     clearReceived(); // someone else's plan must not greet the next person on this browser
     nav.assign('/');
   }

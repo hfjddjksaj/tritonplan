@@ -53,6 +53,10 @@ async function click(label: string) {
   await act(async () => { el.click(); });
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
+const APPT = {
+  academicYear: '2026', academicSession: '2', yearText: '2026/2027', sessionText: 'Fall Quarter',
+  capturedAt: '2026-10-01T00:00:00Z', windows: [],
+};
 const ok: SendResult = { ok: true, versions: { terms: {}, plans: {} } };
 const sentOps = (from = 0) => (mocks.postSync.mock.calls.slice(from) as SyncOp[][][]).flatMap((c) => c[0] ?? []);
 const planIds = (ops: SyncOp[]) => ops.flatMap((o) => (o.op === 'putPlan' ? [o.planId] : [])).sort();
@@ -87,7 +91,7 @@ describe('ImportConfirm', () => {
     expect(planIds(sentOps())).toEqual(['p1', 'p2']);
     expect(localStorage.getItem(MIGRATION_PENDING_KEY)).toBeNull();
     expect(window.location.pathname).toBe('/');
-    expect(onDone).toHaveBeenCalledWith({ kind: 'imported', plans: 2 });
+    expect(onDone).toHaveBeenCalledWith({ kind: 'imported', plans: 2, coursesOnly: false });
   });
 
   it('a failed import keeps the pending payload and says so', async () => {
@@ -140,8 +144,9 @@ describe('ImportConfirm', () => {
     expect(mocks.fetchState).toHaveBeenCalledTimes(2);
     const retry = sentOps(3);
     expect(retry.filter((o) => o.op === 'putTerm')).toHaveLength(0);
-    expect(planIds(retry)).toHaveLength(1);
-    expect(onDone).toHaveBeenCalledWith({ kind: 'imported', plans: 1 });
+    expect(planIds(retry)).toEqual(['p2']);
+    // The count the student confirmed (2), not the one plan this last attempt had left.
+    expect(onDone).toHaveBeenCalledWith({ kind: 'imported', plans: 2, coursesOnly: false });
   });
 
   it('Discard asks twice; Keep backs out, Discard clears', async () => {
@@ -166,5 +171,54 @@ describe('ImportConfirm', () => {
     await click('Not now');
     expect(loadPendingMigration()).toEqual(payload);
     expect(onDone).toHaveBeenCalledWith({ kind: 'later' });
+  });
+
+  it('a double click on Add sends the import once', async () => {
+    const payload = payloadOf(terms(['p1']));
+    savePendingMigration(payload);
+    mocks.fetchState.mockResolvedValue(snapshotOf());
+    mocks.postSync.mockResolvedValue(ok);
+    await render(snapshotOf(), payload);
+    const add = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Add to my account')!;
+    await act(async () => { add.click(); add.click(); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mocks.fetchState).toHaveBeenCalledTimes(1);
+    expect(planIds(sentOps())).toEqual(['p1']);
+  });
+
+  it('a rejected request says to download a backup and report it', async () => {
+    const payload = payloadOf(terms(['p1']));
+    savePendingMigration(payload);
+    mocks.fetchState.mockResolvedValue(snapshotOf());
+    mocks.postSync.mockResolvedValue({ ok: false, kind: 'rejected' });
+    await render(snapshotOf(), payload);
+    await click('Add to my account');
+    expect(text()).toContain("Couldn't add your plans. If this keeps happening, download a backup file on the old site and report it on GitHub.");
+  });
+
+  it('counts only the terms that gain a plan', async () => {
+    const both = terms(['p1', 'p2']);
+    const w = Object.values(terms(['p3']).terms)[0]!;
+    both.terms['2027|1'] = { ...w, term: { year: '2027', period: '1', label: 'Winter 2027' } };
+    await render(snapshotOf(terms(['p1'])), payloadOf(both));
+    expect(text()).toContain('We found 2 plans in 2 terms from the old TritonPlan.');
+    act(() => root.unmount());
+    root = createRoot(container);
+    // p1 and p2 are already there: only the Winter plan is new.
+    const account = terms(['p1', 'p2']);
+    await render(snapshotOf(account), payloadOf(both));
+    expect(text()).toContain('We found 1 plan in 1 term from the old TritonPlan.');
+  });
+
+  it('with no plans to add it sends only the browsed courses and never a default plan', async () => {
+    const payload = { ...payloadOf(terms(['p1'])), terms: null, appt: [APPT] };
+    savePendingMigration(payload);
+    mocks.fetchState.mockResolvedValue(snapshotOf());
+    mocks.postSync.mockResolvedValue(ok);
+    await render(snapshotOf(), payload);
+    expect(text()).toContain('We found your browsed courses and enrollment times from the old TritonPlan.');
+    await click('Add to my account');
+    expect(sentOps().map((o) => o.op)).toEqual(['putAppt']);
+    expect(onDone).toHaveBeenCalledWith({ kind: 'imported', plans: 0, coursesOnly: true });
   });
 });

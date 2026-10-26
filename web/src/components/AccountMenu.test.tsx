@@ -1,3 +1,4 @@
+import { MIGRATION_PENDING_KEY } from '../lib/migration';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -131,6 +132,15 @@ describe('sign out', () => {
     expect(fetchMock.mock.calls.some((c) => c[0] === '/api/auth/logout')).toBe(true);
     expect(localStorage.getItem(RECEIVED_KEY)).toBeNull();
     expect(assign).toHaveBeenCalledWith('/');
+  });
+
+  it('drops a pending migration so the next person on this browser does not inherit it', async () => {
+    localStorage.setItem(MIGRATION_PENDING_KEY, '{"x":1}');
+    answers['POST /api/auth/logout'] = () => json(200, { ok: true });
+    await render();
+    await openMenu();
+    await click('Sign out');
+    expect(localStorage.getItem(MIGRATION_PENDING_KEY)).toBeNull();
   });
 
   it('still clears and leaves when the logout call fails', async () => {

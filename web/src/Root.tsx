@@ -31,8 +31,12 @@ function readEntry(): Entry {
   const token = new URLSearchParams(hash.slice(1)).get('token');
   if (token && pathname === '/reset') return { kind: 'reset', token };
   if (token && pathname === '/verify') return { kind: 'verify', token };
-  // With a payload already stored the handshake is over; the sign-in gate takes it from here.
-  if (pathname === '/migrate' && !loadPendingMigration()) return { kind: 'migrate' };
+  // With a payload already stored the handshake is over, unless the old site opened this tab again
+  // (?handoff=1 plus an opener): then the stale payload must not block a fresh move.
+  if (pathname === '/migrate') {
+    const handoff = new URLSearchParams(search).get('handoff') === '1' && !!window.opener;
+    if (handoff || !loadPendingMigration()) return { kind: 'migrate' };
+  }
   const auth = new URLSearchParams(search).get('auth');
   return { kind: 'planner', notice: auth === null ? undefined : AUTH_NOTICES.get(auth), hasAuthParam: auth !== null };
 }
@@ -44,13 +48,19 @@ export default function Root() {
 
   useEffect(() => {
     const { pathname, search, hash } = window.location;
+    const handoff = pathname === '/migrate' && new URLSearchParams(search).has('handoff');
     if (entry.kind !== 'planner') {
-      // A token left in the address bar would stay in history and in any copy of the URL.
-      window.history.replaceState(null, '', pathname + search);
-    } else if (entry.hasAuthParam) {
+      // A token left in the address bar would stay in history and in any copy of the URL;
+      // handoff is a one-time flag and must not ride along into a sign-in redirect.
+      const params = new URLSearchParams(search);
+      params.delete('handoff');
+      const rest = params.toString();
+      window.history.replaceState(null, '', pathname + (rest ? `?${rest}` : ''));
+    } else if (entry.hasAuthParam || handoff) {
       // The notice is shown once; a reload or a bookmark must not repeat it.
       const params = new URLSearchParams(search);
       params.delete('auth');
+      params.delete('handoff');
       const rest = params.toString();
       window.history.replaceState(null, '', pathname + (rest ? `?${rest}` : '') + hash);
     }
@@ -147,14 +157,15 @@ function SignInGate({ notice }: { notice?: string }) {
         show({ kind: 'signed-out' });
         return;
       }
-      if (outcome.kind !== 'imported') {
-        mountPlanner(s.me, s.snapshot);
-        return;
-      }
-      // The import changed the account: the planner boots from what the server now holds.
+      // Leave the confirm screen first: its buttons must not be clickable while the GET is out.
+      show({ kind: 'loading' });
+      // Whatever happened there (even a half-applied attempt), the planner boots from what the server holds now.
+      const flash = outcome.kind !== 'imported' ? undefined
+        : outcome.coursesOnly ? 'Moved your saved courses to your account.'
+        : `Moved ${outcome.plans} ${pluralize(outcome.plans, 'plan')} to your account.`;
       try {
         const fresh = await fetchState();
-        if (alive.current) mountPlanner(s.me, fresh, `Moved ${outcome.plans} ${pluralize(outcome.plans, 'plan')} to your account.`);
+        if (alive.current) mountPlanner(s.me, fresh, flash);
       } catch (err) {
         if (alive.current) show({ kind: err instanceof UnauthorizedError ? 'signed-out' : 'offline' });
       }
@@ -266,7 +277,7 @@ function SignInGate({ notice }: { notice?: string }) {
       );
     case 'signed-out':
       return loadPendingMigration() ? (
-        <LoginScreen heading="Sign in to finish moving your plans" returnTo="/migrate" />
+        <LoginScreen notice={pageNotice} heading="Sign in to finish moving your plans" returnTo="/migrate" />
       ) : (
         <LoginScreen notice={pageNotice} returnTo={window.location.pathname} />
       );
