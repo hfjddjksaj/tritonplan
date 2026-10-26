@@ -24,4 +24,6 @@ CREATE TABLE user_docs (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CAS
   kind TEXT NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, kind));
 `,
+  // Per-user monotonic counter for term/plan versions, so a delete + recreate never reuses a version a stale device still holds.
+  `ALTER TABLE users ADD COLUMN version_seq INTEGER NOT NULL DEFAULT 0;`,
 ];

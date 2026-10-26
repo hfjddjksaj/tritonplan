@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { createApp } from '../app';
 import { createSession } from '../auth/sessions';
 import { createUser } from '../auth/users';
@@ -37,10 +37,15 @@ test('put then read back through /api/state', async () => {
     { op: 'putAppt', data: [] },
   ] }, t);
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, versions: { terms: { FA26: 1 }, plans: { p1: 1, p2: 1 } } });
+  const body = (await res.json()) as any;
+  expect(body.ok).toBe(true);
+  const all = [body.versions.terms.FA26, body.versions.plans.p1, body.versions.plans.p2];
+  expect(all.every((v: number) => v > 0)).toBe(true);
+  expect(new Set(all).size).toBe(3);
   const s = await snap(t);
-  expect(s.terms).toEqual({ FA26: { version: 1, data: { a: 1 } } });
-  expect(Object.values(s.plans).map((p: any) => p.version)).toEqual([1, 1]);
+  expect(s.terms).toEqual({ FA26: { version: body.versions.terms.FA26, data: { a: 1 } } });
+  expect(s.plans.p1.version).toBe(body.versions.plans.p1);
+  expect(s.plans.p2.version).toBe(body.versions.plans.p2);
   expect(s.pool).toHaveLength(3);
   expect(s.appt).toEqual([]);
 });
@@ -58,15 +63,20 @@ test('a stale baseVersion is 409 and nothing in the batch is applied', async () 
   expect(Object.keys((await snap(t)).plans)).toEqual(['p1']);
 });
 
-test('putPlan on a plan deleted elsewhere is a conflict; delete of a missing row is fine; base 0 recreates', async () => {
-  const { user, sync } = setup();
+test('putPlan on a plan deleted elsewhere is a conflict; delete of a missing row is fine; a stale base cannot hit the recreated doc', async () => {
+  const { user, sync, snap } = setup();
   const t = user('a@ucsd.edu');
-  await sync({ ops: [{ op: 'putPlan', planId: 'p', termKey: 'FA26', baseVersion: 0, data: 1 }] }, t);
-  await sync({ ops: [{ op: 'deletePlan', planId: 'p', baseVersion: 1 }] }, t);
-  expect((await sync({ ops: [{ op: 'putPlan', planId: 'p', termKey: 'FA26', baseVersion: 1, data: 2 }] }, t)).status).toBe(409);
-  expect((await sync({ ops: [{ op: 'deletePlan', planId: 'p', baseVersion: 1 }] }, t)).status).toBe(200);
-  const res = await sync({ ops: [{ op: 'putPlan', planId: 'p', termKey: 'FA26', baseVersion: 0, data: 3 }] }, t);
-  expect(await res.json()).toEqual({ ok: true, versions: { terms: {}, plans: { p: 1 } } });
+  const put = (base: number, data: unknown) => sync({ ops: [{ op: 'putPlan', planId: 'p', termKey: 'FA26', baseVersion: base, data }] }, t);
+  const a = ((await (await put(0, 'old')).json()) as any).versions.plans.p;
+  await sync({ ops: [{ op: 'deletePlan', planId: 'p', baseVersion: a }] }, t);
+  expect((await put(a, 'x')).status).toBe(409);
+  expect((await sync({ ops: [{ op: 'deletePlan', planId: 'p', baseVersion: a }] }, t)).status).toBe(200);
+  const b = ((await (await put(0, 'new')).json()) as any).versions.plans.p;
+  expect(b).toBeGreaterThan(a);
+  const stale = await put(a, 'stale');
+  expect(stale.status).toBe(409);
+  expect(await stale.json()).toEqual({ ok: false, error: 'conflict', conflicts: [{ kind: 'plan', id: 'p' }] });
+  expect((await snap(t)).plans.p).toEqual({ version: b, termKey: 'FA26', data: 'new' });
 });
 
 test("users cannot see or touch each other's data", async () => {
@@ -124,6 +134,10 @@ test('more than 500 ops or a malformed op is 400', async () => {
     { ops: [{ op: 'putCourses', courses: ['str'] }] },
     { ops: [{ op: 'deleteCourses', ids: [1] }] },
     { ops: [{ op: 'putAppt', data: 'x' }] },
+    { ops: [{ op: 'putTerm', termKey: 'a', baseVersion: 0 }] },
+    { ops: [{ op: 'putTerm', termKey: '__proto__', baseVersion: 0, data: 1 }] },
+    { ops: [{ op: 'putPlan', planId: 'constructor', termKey: 'a', baseVersion: 0, data: 1 }] },
+    { ops: [{ op: 'deleteCourses', ids: Array(10_001).fill('a') }] },
   ];
   for (const b of bad) {
     const res = await sync(b, t);
@@ -139,4 +153,25 @@ test('/api/state and /api/sync require a session', async () => {
   const { sync, state } = setup();
   expect((await state()).status).toBe(401);
   expect((await sync({ ops: [] })).status).toBe(401);
+});
+
+test('an unexpected failure mid-batch answers 500 and applies nothing', async () => {
+  const deps = testDeps();
+  const app = createApp(deps);
+  const u = createUser(deps.db, { email: 'a@ucsd.edu', verified: true, passwordHash: null, googleSub: null }, now);
+  const token = createSession(deps.db, u.id, now);
+  deps.db.exec('DROP TABLE pool_courses'); // the second op's statement fails after the first op wrote
+  const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const res = await app.request('/api/sync', {
+    method: 'POST',
+    headers: { Origin: 'https://tritonplan.cn', 'Content-Type': 'application/json', Cookie: `tp_session=${token}` },
+    body: JSON.stringify({ ops: [
+      { op: 'putPlan', planId: 'p', termKey: 'FA26', baseVersion: 0, data: 1 },
+      { op: 'putCourses', courses: [{ id: 'c' }] },
+    ] }),
+  });
+  spy.mockRestore();
+  expect(res.status).toBe(500);
+  expect(await res.json()).toEqual({ error: 'server' });
+  expect(deps.db.prepare('SELECT COUNT(*) AS n FROM plan_docs').get()).toEqual({ n: 0 });
 });
