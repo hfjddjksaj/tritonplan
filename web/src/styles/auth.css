@@ -1,0 +1,164 @@
+/* ================================================================ sign-in
+   The signed-out screens: one card on the planner's own canvas, in the same
+   tokens and .btn family, so signing in reads as the same product. */
+.auth {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: var(--canvas);
+}
+.auth__card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px 28px 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+}
+.auth__brand {
+  margin-bottom: 4px;
+}
+/* The phone topbar folds the brand to its icon (app.css); the card has room for the name. */
+.auth__brand > span {
+  display: inline;
+}
+.auth__title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.auth__lede {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.auth__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.auth__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.auth__input {
+  height: 38px;
+  padding: 0 11px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  transition: border-color 0.14s ease;
+}
+.auth__input:hover {
+  border-color: var(--text-faint);
+}
+.auth__input:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 0;
+  border-color: var(--gold);
+}
+
+/* Full-width actions: the primary submit, Google, "Back to sign in". */
+.auth__wide {
+  width: 100%;
+  height: 38px;
+  font-size: 13.5px;
+}
+.auth__google {
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.auth__or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.auth__or::before,
+.auth__or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.auth__msg {
+  padding: 9px 11px;
+  font-size: 13px;
+  line-height: 1.45;
+  border-radius: var(--r-sm);
+}
+.auth__msg--notice {
+  color: var(--gold-ink);
+  background: var(--gold-soft);
+}
+.auth__msg--error {
+  color: var(--conflict-ink);
+  background: var(--conflict-soft);
+}
+
+.auth__switch {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.auth__link {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.auth__link:hover {
+  text-decoration-color: currentColor;
+}
+.auth__link:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.auth__msg .auth__link {
+  color: inherit;
+}
+
+@media (max-width: 480px) {
+  .auth {
+    place-items: start center;
+    padding-top: 48px;
+  }
+  .auth__card {
+    padding: 24px 20px 20px;
+  }
+  /* Under 16px, iOS zooms the page when a field takes focus. */
+  .auth__input {
+    font-size: 16px;
+  }
+}

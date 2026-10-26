@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { PlanState, Term } from '@triton/shared';
 import type { NamedPlan } from '../plans';
 import type { TermsState } from '../terms-state';
-import { assembleTerms, splitTerms } from './records';
+import { assembleTerms, splitTerms, termsFromSnapshot, type WebSnapshot } from './records';
 
 const FA: Term = { year: '2026', period: '2', label: 'Fall 2026' };
 const WI: Term = { year: '2027', period: '3', label: 'Winter 2027' };
@@ -35,6 +35,19 @@ describe('splitTerms / assembleTerms', () => {
     expect(terms['2027|3']).not.toHaveProperty('bookedAuto'); // absent stays absent
     expect(terms['2026|2']!.bookedOff).toEqual([]); // empty stays empty
     expect(assembleTerms(terms, plans)).toEqual(state);
+  });
+
+  it('termsFromSnapshot assembles the docs of a GET /api/state answer', () => {
+    const state = multi();
+    const { terms, plans } = splitTerms(state);
+    const snapshot: WebSnapshot = {
+      terms: Object.fromEntries(Object.entries(terms).map(([k, data]) => [k, { version: 1, data }])),
+      plans: Object.fromEntries(Object.entries(plans).map(([id, p]) => [id, { version: 2, termKey: p.termKey, data: p.plan }])),
+      pool: [],
+      appt: null,
+    };
+    expect(termsFromSnapshot(snapshot)).toEqual(state);
+    expect(termsFromSnapshot({ terms: {}, plans: {}, pool: [], appt: null })).toBeNull();
   });
 
   it('returns null when there are no terms', () => {

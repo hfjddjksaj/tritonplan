@@ -64,6 +64,23 @@ export function diffOps(acked: Acked, desired: Desired): SyncOp[] {
   return ops;
 }
 
+/**
+ * Whether two acked states describe the same server data. Term and plan docs
+ * compare by version alone (the server bumps it on every write, so content
+ * re-serialised differently is not a change); courses and appt carry no
+ * version and compare by content.
+ */
+export function sameAcked(a: Acked, b: Acked): boolean {
+  if (a.terms.size !== b.terms.size || a.plans.size !== b.plans.size || a.pool.size !== b.pool.size) return false;
+  for (const [k, t] of a.terms) if (b.terms.get(k)?.version !== t.version) return false;
+  for (const [id, p] of a.plans) {
+    const q = b.plans.get(id);
+    if (!q || q.version !== p.version || q.termKey !== p.termKey) return false;
+  }
+  for (const [id, json] of a.pool) if (b.pool.get(id) !== json) return false;
+  return a.appt === b.appt;
+}
+
 /** The acked state after `sent` succeeded. Versions come from the response; never mutates its inputs. */
 export function applyAck(acked: Acked, sent: SyncOp[], versions: SyncVersions): Acked {
   const out: Acked = {

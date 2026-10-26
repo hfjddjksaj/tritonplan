@@ -2,13 +2,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import App from './App';
+import { makeTestBoot } from './test/boot';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('App → campus map', () => {
   let container: HTMLDivElement;
   let root: Root;
+  let boot: ReturnType<typeof makeTestBoot>;
   beforeEach(() => {
+    boot = makeTestBoot();
     localStorage.clear();
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -17,11 +20,12 @@ describe('App → campus map', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    boot.engine.dispose();
   });
 
   it('opens the map on the view the planner is showing', async () => {
     await act(async () => {
-      root.render(<App />);
+      root.render(<App boot={boot} />);
     });
     const finals = [...container.querySelectorAll('.toolbar [role="tab"]')].find((b) =>
       b.textContent?.includes('Finals'),

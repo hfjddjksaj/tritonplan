@@ -457,6 +457,24 @@ describe('unload guard and bfcache', () => {
   });
 });
 
+describe('matchesServer', () => {
+  it('matches its own snapshot, then the server state its acks describe; a change elsewhere does not match', async () => {
+    const f = fakeSend();
+    const e = createSyncEngine({ snapshot: snap(state(), [course('x')]), send: f.impl });
+    expect(e.matchesServer(snap(state(), [course('x')]))).toBe(true);
+    e.setTerms(state('b'));
+    await e.flush();
+    // fakeSend acked the plan with version 101; the term doc did not change (still 5).
+    const after = snap(state('b'), [course('x')]);
+    after.plans.a!.version = 101;
+    expect(e.matchesServer(after)).toBe(true);
+    expect(e.matchesServer(snap(state('b'), [course('x')]))).toBe(false); // the plan is at another version
+    after.pool = [course('x'), course('y')];
+    expect(e.matchesServer(after)).toBe(false); // a course arrived from another device
+    e.dispose();
+  });
+});
+
 describe('batchOps', () => {
   it('caps ops per batch and bytes per batch, keeping order', () => {
     const many: SyncOp[] = Array.from({ length: 1200 }, (_, i) => ({ op: 'deletePlan', planId: `p${i}`, baseVersion: 1 }));

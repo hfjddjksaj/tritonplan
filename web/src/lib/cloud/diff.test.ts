@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ApptTimes, CourseOffering, PlanState, Term } from '@triton/shared';
 import type { NamedPlan } from '../plans';
 import type { TermsState } from '../terms-state';
-import { applyAck, ackedFromSnapshot, diffOps, type Desired } from './diff';
+import { applyAck, ackedFromSnapshot, diffOps, sameAcked, type Desired } from './diff';
 import { splitTerms, type WebSnapshot } from './records';
 
 const FA: Term = { year: '2026', period: '2', label: 'Fall 2026' };
@@ -150,6 +150,38 @@ describe('applyAck', () => {
     next.terms['2026|2']!.plans.plans[0]!.name = 'x';
     const ops = diffOps(acked, want(next));
     expect(() => applyAck(acked, ops, { terms: {}, plans: {} })).toThrow();
+  });
+});
+
+describe('sameAcked', () => {
+  const a = () => ackedFromSnapshot(snapshot(state(), [course('x', 1)], appt));
+
+  it('equal snapshots match, even when the docs are different objects', () => {
+    expect(sameAcked(a(), ackedFromSnapshot(clone(snapshot(state(), [course('x', 1)], appt))))).toBe(true);
+  });
+
+  it('versions decide for docs: a bumped version is a change, same version is not re-compared by content', () => {
+    const s = snapshot(state(), [course('x', 1)], appt);
+    s.plans.a!.version += 1;
+    expect(sameAcked(a(), ackedFromSnapshot(s))).toBe(false);
+    const t = snapshot(state(), [course('x', 1)], appt);
+    t.terms['2026|2']!.version += 1;
+    expect(sameAcked(a(), ackedFromSnapshot(t))).toBe(false);
+  });
+
+  it('an added or removed doc is a change', () => {
+    const more = clone(state());
+    more.terms['2026|2']!.plans.plans.push(np('n', FA));
+    expect(sameAcked(a(), ackedFromSnapshot(snapshot(more, [course('x', 1)], appt)))).toBe(false);
+    const fewer = clone(state());
+    delete fewer.terms['2027|3'];
+    expect(sameAcked(a(), ackedFromSnapshot(snapshot(fewer, [course('x', 1)], appt)))).toBe(false);
+  });
+
+  it('courses and appt are compared by content', () => {
+    expect(sameAcked(a(), ackedFromSnapshot(snapshot(state(), [course('x', 2)], appt)))).toBe(false);
+    expect(sameAcked(a(), ackedFromSnapshot(snapshot(state(), [course('x', 1), course('y')], appt)))).toBe(false);
+    expect(sameAcked(a(), ackedFromSnapshot(snapshot(state(), [course('x', 1)], null)))).toBe(false);
   });
 });
 

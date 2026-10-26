@@ -21,14 +21,8 @@ import {
   toggleBooked as toggleBookedIn,
   waitlistedSet,
 } from '../lib/booked';
+import type { CloudBoot } from '../lib/cloud/boot';
 import {
-  loadPlan,
-  loadPlans,
-  loadTerms,
-  saveTerms,
-  loadPool,
-  savePool,
-  purgeSeededSamples,
   loadReceived,
   saveReceived,
   clearReceived,
@@ -54,8 +48,6 @@ import {
 } from '../lib/plans';
 import {
   activeWorkspace,
-  adoptSeedPlan,
-  allPlansEmpty,
   archiveSweep,
   ensureWorkspace,
   mapWorkspaces,
@@ -67,7 +59,7 @@ import {
   type TermsState,
 } from '../lib/terms-state';
 import { isArchived, termKey, type TermKey } from '../lib/terms';
-import { mirrorSeedPlan, planToMirrorHash, readHash } from '../lib/share';
+import { planToMirrorHash, readHash } from '../lib/share';
 import { openBooking, openInTss, openTssHome } from '../lib/tss';
 import {
   buildSelectedCourses,
@@ -84,18 +76,13 @@ import {
 // the extension re-pushes the real pool on each load via a `courses` bridge message.
 const SAMPLE = import.meta.env.DEV ? (sampleCourses as unknown as CourseOffering[]) : [];
 
-/** One-shot boot: pool repository + terms container + the archive sweep's forget list. */
-function initialState(): { pool: CourseOffering[]; terms: TermsState; forgetModuleIds: string[] } {
+/** One-shot boot from the account: pool repository + terms container + the archive sweep's forget list. */
+function initialState(boot: CloudBoot): { pool: CourseOffering[]; terms: TermsState; forgetModuleIds: string[] } {
   const now = new Date();
   const iso = now.toISOString();
-  const pool = mergeCourses(SAMPLE, purgeSeededSamples(loadPool() ?? []));
-  let terms = migrateToTermsState(loadTerms(), loadPlans(), loadPlan(), pool, iso);
-  if (allPlansEmpty(terms)) {
-    // Nothing saved on this device yet, but the address bar carries our own mirror:
-    // this is a synced/bookmarked tab opened somewhere new, so adopt it as the plan.
-    const seed = mirrorSeedPlan(window.location.hash);
-    if (seed) terms = adoptSeedPlan(terms, seed, iso);
-  }
+  const pool = mergeCourses(SAMPLE, boot.pool);
+  // An account with no terms yet starts from the same single empty plan a new device always did.
+  const terms = boot.terms ?? migrateToTermsState(null, null, null, pool, iso);
   const swept = archiveSweep(terms, pool, now);
   // Default view is always the NEWEST term: the stored activeTermKey is
   // ignored on load.
@@ -116,9 +103,9 @@ function appendEntry(
   };
 }
 
-export function usePlan() {
+export function usePlan(boot: CloudBoot) {
   const bootRef = useRef<ReturnType<typeof initialState> | null>(null);
-  if (bootRef.current === null) bootRef.current = initialState();
+  if (bootRef.current === null) bootRef.current = initialState(boot);
   const [pool, setPool] = useState<CourseOffering[]>(bootRef.current.pool);
   const [termsState, setTermsState] = useState<TermsState>(bootRef.current.terms);
   const [pendingQueue, setPendingQueue] = useState<{ course: CourseOffering; optionId: string }[]>([]);
@@ -232,18 +219,17 @@ export function usePlan() {
     window.history.replaceState(null, '', `#${planToMirrorHash(plan)}`);
   }, [plan, received]);
 
-  // Persist the terms container on change. No first-render skip: loading and
-  // migration happen synchronously in the same initializer, so the first write
-  // is exactly what was loaded — and it makes a fresh migration (or an archive
-  // sweep that changed nothing else) durable without waiting for an edit.
+  // Everything the account holds is saved by the sync engine, which diffs it
+  // against what the server acknowledged. No first-render skip: a new
+  // account's first plan, or an archive sweep, saves without waiting for an edit.
   useEffect(() => {
-    saveTerms(termsState);
-  }, [termsState]);
+    boot.engine.setTerms(termsState);
+  }, [boot.engine, termsState]);
 
-  // Persist the browsed pool so the "Browsed — not yet added" list survives reloads.
+  // The browsed pool too, so "Browsed — not yet added" follows the student to other devices.
   useEffect(() => {
-    savePool(pool);
-  }, [pool]);
+    boot.engine.setPool(pool);
+  }, [boot.engine, pool]);
 
   // ---- term switching ----------------------------------------------------
   const switchTerm = useCallback((key: TermKey) => {

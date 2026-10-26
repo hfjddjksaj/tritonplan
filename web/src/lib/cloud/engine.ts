@@ -7,8 +7,8 @@
 import { useSyncExternalStore } from 'react';
 import type { ApptTimes, CourseOffering, SyncOp, SyncVersions } from '@triton/shared';
 import type { TermsState } from '../terms-state';
-import { ackedFromSnapshot, applyAck, diffOps, type Acked, type Desired } from './diff';
-import { assembleTerms, type WebSnapshot } from './records';
+import { ackedFromSnapshot, applyAck, diffOps, sameAcked, type Acked, type Desired } from './diff';
+import { termsFromSnapshot, type WebSnapshot } from './records';
 
 export type SyncStatus = 'idle' | 'saving' | 'offline' | 'conflict' | 'signed-out' | 'error';
 export type SendResult =
@@ -25,6 +25,8 @@ export interface SyncEngine {
   hasPending(): boolean;
   /** The ops the next request would carry; empty while one is in flight or the engine has stopped (used by the unload guard). */
   pendingOps(): SyncOp[];
+  /** True when a fresh server snapshot holds exactly what this engine last saw acknowledged: nothing changed elsewhere since. */
+  matchesServer(s: WebSnapshot): boolean;
   subscribe(fn: () => void): () => void;
   dispose(): void;
 }
@@ -112,10 +114,7 @@ export function createSyncEngine(o: {
 
   let acked: Acked = ackedFromSnapshot(o.snapshot);
   const desired: Desired = {
-    terms: assembleTerms(
-      Object.fromEntries(Object.entries(o.snapshot.terms).map(([k, v]) => [k, v.data])),
-      Object.fromEntries(Object.entries(o.snapshot.plans).map(([k, v]) => [k, { termKey: v.termKey, plan: v.data }])),
-    ),
+    terms: termsFromSnapshot(o.snapshot),
     pool: o.snapshot.pool,
     appt: o.snapshot.appt,
   };
@@ -203,6 +202,7 @@ export function createSyncEngine(o: {
     status: () => status,
     hasPending: () => !stopped && (busy || diffOps(acked, desired).length > 0),
     pendingOps: () => (stopped || busy ? [] : diffOps(acked, desired)),
+    matchesServer: (s) => sameAcked(acked, ackedFromSnapshot(s)),
     subscribe(fn) { subs.add(fn); return () => { subs.delete(fn); }; },
     dispose() { stopped = true; clearTimer(); subs.clear(); },
   };

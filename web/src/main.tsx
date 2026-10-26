@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
+import Root from './Root';
 import './styles/app.css';
+import './styles/auth.css';
 import { installBridgeHub } from './lib/bridge';
 
 // Before anything renders: the extension pushes once at document_idle, and the planner
@@ -13,6 +14,6 @@ if (!root) throw new Error('Root element #root not found');
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <Root />
   </StrictMode>,
 );

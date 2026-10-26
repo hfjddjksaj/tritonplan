@@ -76,3 +76,11 @@ export function assembleTerms(terms: Record<TermKey, TermMeta>, plans: PlanRecor
   return { ...state, activeTermKey: newestTermKey(state) };
 }
 
+/** The planner state a GET /api/state answer describes (null for an account with no terms yet). */
+export function termsFromSnapshot(s: WebSnapshot): TermsState | null {
+  return assembleTerms(
+    Object.fromEntries(Object.entries(s.terms).map(([k, v]) => [k, v.data])),
+    Object.fromEntries(Object.entries(s.plans).map(([k, v]) => [k, { termKey: v.termKey, plan: v.data }])),
+  );
+}
+

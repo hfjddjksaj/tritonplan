@@ -26,11 +26,12 @@ import { displayTermLabel } from './lib/terms';
 import { pluralize } from './lib/format';
 import { loadCalView, saveCalView, type CalView } from './lib/storage';
 import type { PositionedBlock } from './lib/layout';
+import type { CloudBoot } from './lib/cloud/boot';
 
-export default function App() {
-  const ctl = usePlan();
+export default function App({ boot }: { boot: CloudBoot }) {
+  const ctl = usePlan(boot);
   const isMobile = useIsMobile();
-  const appt = useApptTimes();
+  const appt = useApptTimes(boot);
   const [tab, setTab] = useState<MobileTab>('calendar');
   const [calPulse, setCalPulse] = useState(false);
   const [calView, setCalView] = useState<CalView>(loadCalView);
