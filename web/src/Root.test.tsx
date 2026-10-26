@@ -13,6 +13,7 @@ import { makeCourse, makePlan } from './lib/fixtures';
 import type { NamedPlan } from './lib/plans';
 import { planToHash, planToMirrorHash } from './lib/share';
 import { loadReceived, saveReceived } from './lib/storage';
+import { loadPendingMigration, savePendingMigration, type MigrationPayload } from './lib/migration';
 import type { TermsState } from './lib/terms-state';
 import { makeTestBoot, snapshotOf, TEST_ME } from './test/boot';
 
@@ -676,5 +677,53 @@ describe('usePlan on a cloud boot', () => {
     expect(boot.sent.flat()).toContainEqual({ op: 'putAppt', data: incoming });
     expect(localStorage.getItem('triton-planner:appt:v1')).toBeNull();
     boot.engine.dispose();
+  });
+});
+
+describe('Root: moving plans from the old site', () => {
+  const pending = (): MigrationPayload => ({
+    kind: 'tritonplan-migration', version: 1, exportedAt: '2026-10-01T00:00:00.000Z',
+    terms: mine('Old plan', otherPlan()), plans: null, plan: null, pool: [], appt: null, received: null, hashPlan: null,
+  });
+
+  it('a signed-out visit to /migrate with a pending payload asks to sign in with returnTo=/migrate', async () => {
+    savePendingMigration(pending());
+    await mount('/migrate');
+    expect(text()).toContain('Sign in to finish moving your plans');
+    const google = [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'));
+    expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2Fmigrate');
+    expect(container.querySelector('.app')).toBeNull();
+    expect(loadPendingMigration()).not.toBeNull();
+  });
+
+  it('/migrate without a pending payload waits for the old site, even signed out', async () => {
+    await mount('/migrate');
+    expect(text()).toContain('Moving your plans from the old TritonPlan…');
+    expect(input('email')).toBeNull();
+  });
+
+  it('signed in with a pending payload: confirm first, then the planner with a flash and a clean URL', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf();
+    savePendingMigration(pending());
+    await mount('/migrate');
+    expect(text()).toContain('We found 1 plan in 1 term from the old TritonPlan.');
+    expect(container.querySelector('.app')).toBeNull();
+    await click('Add to my account');
+    expect(container.querySelector('.app')).not.toBeNull();
+    expect(text()).toContain('Moved 1 plan to your account.');
+    expect(loadPendingMigration()).toBeNull();
+    expect(window.location.pathname).toBe('/');
+    expect(Object.keys(srv.state.plans)).toEqual(['plan-1']);
+  });
+
+  it('Not now enters the planner and keeps the payload for the next load', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf();
+    savePendingMigration(pending());
+    await mount('/');
+    await click('Not now');
+    expect(container.querySelector('.app')).not.toBeNull();
+    expect(loadPendingMigration()).not.toBeNull();
   });
 });

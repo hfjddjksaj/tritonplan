@@ -9,15 +9,20 @@ import App from './App';
 import { AuthCard } from './components/auth/AuthCard';
 import { AUTH_NOTICES } from './components/auth/copy';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { ImportConfirm, type ImportOutcome } from './components/migrate/ImportConfirm';
+import { MigrateReceiver } from './components/migrate/MigrateReceiver';
 import { ResetPasswordScreen } from './components/auth/ResetPasswordScreen';
 import { VerifyScreen } from './components/auth/VerifyScreen';
 import { fetchMe, fetchState, UnauthorizedError, type Me } from './lib/cloud/api';
 import { makeBoot, restorePendingHash, stashPendingHash, type CloudBoot } from './lib/cloud/boot';
+import { pluralize } from './lib/format';
 import type { WebSnapshot } from './lib/cloud/records';
+import { loadPendingMigration, type MigrationPayload } from './lib/migration';
 
 type Entry =
   | { kind: 'reset'; token: string }
   | { kind: 'verify'; token: string }
+  | { kind: 'migrate' }
   | { kind: 'planner'; notice?: string; hasAuthParam: boolean };
 
 /** What this page load is for. Pure — StrictMode calls it twice — so the address bar is cleaned in an effect. */
@@ -26,12 +31,16 @@ function readEntry(): Entry {
   const token = new URLSearchParams(hash.slice(1)).get('token');
   if (token && pathname === '/reset') return { kind: 'reset', token };
   if (token && pathname === '/verify') return { kind: 'verify', token };
+  // With a payload already stored the handshake is over; the sign-in gate takes it from here.
+  if (pathname === '/migrate' && !loadPendingMigration()) return { kind: 'migrate' };
   const auth = new URLSearchParams(search).get('auth');
   return { kind: 'planner', notice: auth === null ? undefined : AUTH_NOTICES.get(auth), hasAuthParam: auth !== null };
 }
 
 export default function Root() {
   const [entry] = useState(readEntry);
+  const [received, setReceived] = useState(false);
+  const onReceived = useCallback(() => setReceived(true), []);
 
   useEffect(() => {
     const { pathname, search, hash } = window.location;
@@ -49,14 +58,16 @@ export default function Root() {
 
   if (entry.kind === 'reset') return <ResetPasswordScreen token={entry.token} />;
   if (entry.kind === 'verify') return <VerifyScreen token={entry.token} />;
-  return <SignInGate notice={entry.notice} />;
+  if (entry.kind === 'migrate' && !received) return <MigrateReceiver onReceived={onReceived} />;
+  return <SignInGate notice={entry.kind === 'planner' ? entry.notice : undefined} />;
 }
 
 type Screen =
   | { kind: 'loading' }
   | { kind: 'offline' }
   | { kind: 'signed-out' }
-  | { kind: 'planner'; boot: CloudBoot; nonce: number };
+  | { kind: 'import'; me: Me; snapshot: WebSnapshot; payload: MigrationPayload }
+  | { kind: 'planner'; boot: CloudBoot; nonce: number; flash?: string };
 type PlannerScreen = Extract<Screen, { kind: 'planner' }>;
 
 type Loaded = { kind: 'offline' } | { kind: 'signed-out' } | { kind: 'ready'; me: Me; snapshot: WebSnapshot };
@@ -107,17 +118,48 @@ function SignInGate({ notice }: { notice?: string }) {
     setScreen(next);
   }, []);
 
-  const enter = useCallback(
-    (me: Me, snapshot: WebSnapshot) => {
+  const mountPlanner = useCallback(
+    (me: Me, snapshot: WebSnapshot, flash?: string) => {
       // On the page's first entry the hash is the link the student opened. After a planner has
       // been mounted here (signed out mid-session, back in), it can only be that planner's mirror.
       if (nonce.current > 0) dropAddressHash();
       restorePendingHash();
       setPageNotice(undefined);
       lastFresh.current = Date.now();
-      show({ kind: 'planner', boot: makeBoot(me, snapshot), nonce: nonce.current++ });
+      show({ kind: 'planner', boot: makeBoot(me, snapshot), nonce: nonce.current++, flash });
     },
     [show],
+  );
+
+  /** Signed in: plans waiting from the old site are confirmed before the planner (and its engine) exists. */
+  const enter = useCallback(
+    (me: Me, snapshot: WebSnapshot) => {
+      const payload = loadPendingMigration();
+      if (payload) show({ kind: 'import', me, snapshot, payload });
+      else mountPlanner(me, snapshot);
+    },
+    [mountPlanner, show],
+  );
+
+  const importDone = useCallback(
+    async (s: Extract<Screen, { kind: 'import' }>, outcome: ImportOutcome) => {
+      if (outcome.kind === 'signed-out') {
+        show({ kind: 'signed-out' });
+        return;
+      }
+      if (outcome.kind !== 'imported') {
+        mountPlanner(s.me, s.snapshot);
+        return;
+      }
+      // The import changed the account: the planner boots from what the server now holds.
+      try {
+        const fresh = await fetchState();
+        if (alive.current) mountPlanner(s.me, fresh, `Moved ${outcome.plans} ${pluralize(outcome.plans, 'plan')} to your account.`);
+      } catch (err) {
+        if (alive.current) show({ kind: err instanceof UnauthorizedError ? 'signed-out' : 'offline' });
+      }
+    },
+    [mountPlanner, show],
   );
 
   /** Ask the server who this is. `recheck` = the tab came back while signed out: an unreachable server keeps the form. */
@@ -223,8 +265,14 @@ function SignInGate({ notice }: { notice?: string }) {
         </AuthCard>
       );
     case 'signed-out':
-      return <LoginScreen notice={pageNotice} returnTo={window.location.pathname} />;
+      return loadPendingMigration() ? (
+        <LoginScreen heading="Sign in to finish moving your plans" returnTo="/migrate" />
+      ) : (
+        <LoginScreen notice={pageNotice} returnTo={window.location.pathname} />
+      );
+    case 'import':
+      return <ImportConfirm snapshot={screen.snapshot} payload={screen.payload} onDone={(o) => void importDone(screen, o)} />;
     case 'planner':
-      return <App boot={screen.boot} key={screen.nonce} />;
+      return <App boot={screen.boot} key={screen.nonce} initialFlash={screen.flash} />;
   }
 }

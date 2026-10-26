@@ -31,7 +31,7 @@ import type { PositionedBlock } from './lib/layout';
 import type { CloudBoot } from './lib/cloud/boot';
 import { installUnloadGuard } from './lib/cloud/engine';
 
-export default function App({ boot }: { boot: CloudBoot }) {
+export default function App({ boot, initialFlash }: { boot: CloudBoot; initialFlash?: string }) {
   const ctl = usePlan(boot);
   const isMobile = useIsMobile();
   const appt = useApptTimes(boot);
@@ -45,7 +45,7 @@ export default function App({ boot }: { boot: CloudBoot }) {
   // Desktop has no Courses tab — the rail is always visible there.
   const view: MobileTab = !isMobile && tab === 'courses' ? 'calendar' : tab;
   const plannerView: PlannerView = view === 'courses' ? 'calendar' : view;
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(initialFlash ?? null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   const [campusOpen, setCampusOpen] = useState(false);
   const [sheetBlock, setSheetBlock] = useState<PositionedBlock | null>(null);
