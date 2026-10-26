@@ -17,10 +17,15 @@ tritonplan.cn {
 			header_up X-Real-IP {remote_host}
 		}
 	}
+	# Hashed assets: a missing one must 404, not fall back to index.html with a
+	# one-year immutable header (so no try_files here).
+	handle /assets/* {
+		root * /srv/tritonplan/web
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
 	handle {
 		root * /srv/tritonplan/web
-		@assets path /assets/*
-		header @assets Cache-Control "public, max-age=31536000, immutable"
 		# Everything that is not a hashed asset must revalidate. `header` runs
 		# before the try_files rewrite, so a matcher like `path / /index.html`
 		# would never match SPA routes such as /reset or /migrate: they would be

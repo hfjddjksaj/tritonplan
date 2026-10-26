@@ -21,14 +21,22 @@ never stored in the repo. Scripts run in Git Bash on your machine.
 ## First-time setup
 
 ```sh
-scp -r server/deploy "$TP_SSH:/root/tritonplan-deploy"
-ssh "$TP_SSH" 'bash -s' < server/deploy/provision.sh   # safe to re-run
+TP_SSH=... bash server/deploy/provision-remote.sh      # safe to re-run
 TP_SSH=... bash server/deploy/placeholder.sh           # "moving soon" site + privacy.html
 ```
 
+`provision-remote.sh` ships `server/deploy` to `/root/tritonplan-deploy` afresh
+each time (so a re-run never installs stale files) and runs `provision.sh` from
+that copy (not piped, so no child process can swallow the script).
 Provisioning installs Node 24, Caddy, the `tritonplan` user, directories, the
-service and nightly backup timer, and the Caddyfile. The service is enabled but
-skipped until the first deploy (`ConditionPathExists`).
+service and nightly backup timer, the Caddyfile, and the log-retention config.
+The service is enabled but skipped until the first deploy
+(`ConditionPathExists`).
+
+Notes on re-runs: provisioning does not restart `tritonplan`, so a changed unit
+file takes effect at the next deploy (or `systemctl restart tritonplan`). If DNS
+was not resolving when Caddy first started, run `systemctl reload caddy` once it
+does so Caddy retries the certificates.
 
 ### Filling secrets
 
@@ -88,8 +96,9 @@ Check: `systemctl list-timers | grep tritonplan-backup`,
 `systemctl start tritonplan-backup`.
 
 Off-site copy is deferred: it runs only if `/etc/tritonplan/rclone.conf` exists
-and `rclone` is installed (destination `cos:tritonplan-backups`, override with
-`TP_RCLONE_DEST`). Set it up once the Tencent COS bucket exists; cutover does
+and `rclone` is installed (destination `cos:tritonplan-backups`; override with
+`TP_RCLONE_DEST=...` in `/etc/tritonplan/backup.env`, which the backup unit
+reads if present). Set it up once the Tencent COS bucket exists; cutover does
 not wait for it.
 
 ### Restore from a backup
@@ -112,7 +121,9 @@ over the restored file.
 1. Register a test account and save a plan.
 2. `systemctl start tritonplan-backup`
 3. `cp /srv/tritonplan/backups/tritonplan-$(date -u +%F).db /tmp/restore.db`
-4. `sqlite3 /tmp/restore.db 'pragma integrity_check'` must print `ok`.
+4. `sqlite3 -readonly /tmp/restore.db 'pragma integrity_check'` must print `ok`.
+   Always open backup copies read-only (or as `tritonplan` via `runuser`), so
+   root never leaves `-wal`/`-shm` files the app cannot open.
 5. Start a second instance on the copy, as `tritonplan` (the env file is
    readable by that group; the later assignments override port and db, and the
    copy must be owned by `tritonplan`):
@@ -124,7 +135,11 @@ over the restored file.
 
 ## Logs
 
-Nothing is logged to files and Caddy has no access log. The journal keeps error
-logs only, and `/etc/systemd/journald.conf.d/tritonplan.conf` sets
-`MaxRetentionSec=14day`, matching the privacy policy's promise that error logs
-are deleted within 14 days. Do not add an access log without updating the policy.
+Caddy has no access log. The journal keeps error logs only;
+`/etc/systemd/journald.conf.d/tritonplan.conf` sets `MaxRetentionSec=14day` and
+`MaxFileSec=1day` (so the active file rotates daily), matching the privacy
+policy's promise that error logs are deleted within 14 days. The host's rsyslog
+would otherwise copy them into `/var/log/syslog` (about 4 weeks of retention), so
+`/etc/rsyslog.d/10-tritonplan.conf` drops messages from `tritonplan`,
+`tritonplan-backup` and `caddy`; rsyslog itself stays (the host security agent
+reads auth logs). Do not add an access log without updating the policy.

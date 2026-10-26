@@ -9,6 +9,8 @@ ConditionPathExists=/srv/tritonplan/app/main.mjs
 User=tritonplan
 Group=tritonplan
 EnvironmentFile=/etc/tritonplan/env
+# Stable name so rsyslog can be told to drop our messages (provision.sh).
+SyslogIdentifier=tritonplan
 ExecStart=/usr/bin/node /srv/tritonplan/app/main.mjs
 Restart=on-failure
 RestartSec=3

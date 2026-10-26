@@ -6,6 +6,9 @@ After=local-fs.target
 Type=oneshot
 User=tritonplan
 Group=tritonplan
+# Optional, e.g. TP_RCLONE_DEST=cos:my-bucket (the leading "-" = may be absent).
+EnvironmentFile=-/etc/tritonplan/backup.env
+SyslogIdentifier=tritonplan-backup
 ExecStart=/usr/local/bin/tritonplan-backup
 NoNewPrivileges=yes
 ProtectSystem=strict

@@ -21,9 +21,10 @@ tp_release_name() { date -u +%Y%m%dT%H%M%SZ; }
 tp_publish() {
   local stage=$1 name=$2 tgz
   tgz="$(mktemp)"
+  # shellcheck disable=SC2064
+  trap "rm -f '$tgz'" RETURN
   tar -C "$stage" -czf "$tgz" .
   scp -q "$tgz" "$TP_SSH:/tmp/tp-release-$name.tgz"
-  rm -f "$tgz"
   ssh "$TP_SSH" bash -s -- "$name" <<'REMOTE'
 set -euo pipefail
 name=$1
@@ -40,6 +41,7 @@ chown -R root:root "$rel"
 chmod -R u=rwX,go=rX "$rel"
 
 for d in "$rel"/*/; do
+  [ -d "$d" ] || { echo "error: release $name contains no directories" >&2; exit 1; }
   d=$(basename "$d")
   # ln to a temp name then rename: the live link is never absent or half-made.
   ln -sfn "$rel/$d" "$root/$d.new"
