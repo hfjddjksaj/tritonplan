@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiDelete, apiPost, fetchMe, fetchState, postSync, syncTimeoutMs, UnauthorizedError } from './api';
 
 const res = (status: number, body: unknown = {}) =>
@@ -26,22 +26,84 @@ describe('fetchMe / fetchState', () => {
     expect(await fetchState()).toEqual(snap);
     expect(calls()[0]![1]).toMatchObject({ credentials: 'same-origin' });
   });
-  it('a hung server is given up on after 15 s, as a network failure (not a sign-out)', async () => {
-    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() =>
-      AbortSignal.abort(new DOMException('The operation timed out.', 'TimeoutError')));
-    // A fetch that never answers on its own: only its signal ends it.
-    stub(async (...a: unknown[]) => {
+});
+
+describe('fetchMe / fetchState on a slow or hung server', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // Any AbortSignal.timeout runs on the fake clock too, so the test holds for either way of timing out.
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      const c = new AbortController();
+      setTimeout(() => c.abort(new DOMException('The operation timed out.', 'TimeoutError')), ms);
+      return c.signal;
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * Like a real fetch: headers after `headersMs` (never, if null), then the body after
+   * `bodyMs` more; aborting the signal fails whichever is still outstanding.
+   */
+  function slowServer(headersMs: number | null, bodyMs: number, body: unknown) {
+    stub((...a: unknown[]) => {
       const signal = (a[1] as RequestInit).signal!;
-      return new Promise<Response>((_, reject) => {
-        if (signal.aborted) reject(signal.reason);
+      return new Promise<Response>((resolve, reject) => {
         signal.addEventListener('abort', () => reject(signal.reason));
+        if (headersMs === null) return;
+        setTimeout(() => {
+          let done = false;
+          const stream = new ReadableStream<Uint8Array>({
+            start(c) {
+              signal.addEventListener('abort', () => { if (!done) { done = true; c.error(signal.reason); } });
+              setTimeout(() => {
+                if (done) return;
+                done = true;
+                c.enqueue(new TextEncoder().encode(JSON.stringify(body)));
+                c.close();
+              }, bodyMs);
+            },
+          });
+          resolve(new Response(stream, { status: 200 }));
+        }, headersMs);
       });
     });
-    await expect(fetchMe()).rejects.toThrow();
-    const err = await fetchState().catch((e: unknown) => e);
-    expect(err).not.toBeInstanceOf(UnauthorizedError);
-    expect(timeout).toHaveBeenCalledWith(15_000);
-    timeout.mockRestore();
+  }
+  function track(p: Promise<unknown>) {
+    const t: { settled: boolean; value?: unknown; error?: unknown } = { settled: false };
+    p.then((v) => { t.settled = true; t.value = v; }, (e: unknown) => { t.settled = true; t.error = e; });
+    return t;
+  }
+
+  it('no headers within 15 s → gives up, as a network failure (not a sign-out)', async () => {
+    slowServer(null, 0, {});
+    const me = track(fetchMe());
+    const state = track(fetchState());
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(me.settled || state.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(me.error).toBeDefined();
+    expect(state.error).toBeDefined();
+    expect(state.error).not.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('headers in time but a body that takes longer than 15 s still loads', async () => {
+    const snap = { terms: {}, plans: {}, pool: [], appt: null };
+    slowServer(200, 40_000, snap);
+    const state = track(fetchState());
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(state.settled).toBe(false); // still downloading, not given up on
+    await vi.advanceTimersByTimeAsync(10_200);
+    expect(state.error).toBeUndefined();
+    expect(state.value).toEqual(snap);
+
+    const me = { email: 'a@b.c', hasPassword: true, hasGoogle: false };
+    slowServer(200, 20_000, me);
+    const got = track(fetchMe());
+    await vi.advanceTimersByTimeAsync(20_200);
+    expect(got.value).toEqual(me);
   });
 });
 

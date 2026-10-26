@@ -210,7 +210,7 @@ beforeEach(() => {
   resetBridgeHubForTests();
   boots.length = 0;
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
-  // Request timeouts on the fake clock, so a test can let one run out.
+  // Every request timeout on the fake clock (the GETs' own timer already is; this covers postSync's).
   vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
     const c = new AbortController();
     setTimeout(() => c.abort(new DOMException('The operation timed out.', 'TimeoutError')), ms);

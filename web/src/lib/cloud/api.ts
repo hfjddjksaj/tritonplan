@@ -20,22 +20,32 @@ const SYNC_TIMEOUT_MS = 20_000;
 const READ_TIMEOUT_MS = 15_000;
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-/** A hung GET would leave the start page blank, or hold the refocus refresh forever; the abort throws like a network failure. */
-const readInit = (): RequestInit => ({
-  credentials: 'same-origin',
-  ...(typeof AbortSignal.timeout === 'function' ? { signal: AbortSignal.timeout(READ_TIMEOUT_MS) } : {}),
-});
+/**
+ * A GET whose headers must arrive within 15 s: a hung server would leave the start page
+ * blank, or hold the refocus refresh forever (the abort throws like a network failure).
+ * The limit ends once the headers are in. A big pool on a slow link can take far longer
+ * than that to download, and cutting the body off would turn it into "offline" every time.
+ */
+async function getWithTimeout(path: string): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(new DOMException('The operation timed out.', 'TimeoutError')), READ_TIMEOUT_MS);
+  try {
+    return await fetch(path, { credentials: 'same-origin', signal: ctl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** 401 → null (signed out); anything else unexpected throws so the caller can show "offline" rather than "signed out". */
 export async function fetchMe(): Promise<Me | null> {
-  const r = await fetch('/api/me', readInit());
+  const r = await getWithTimeout('/api/me');
   if (r.status === 401) return null;
   if (!r.ok) throw new Error(`GET /api/me failed: ${r.status}`);
   return (await r.json()) as Me;
 }
 
 export async function fetchState(): Promise<WebSnapshot> {
-  const r = await fetch('/api/state', readInit());
+  const r = await getWithTimeout('/api/state');
   if (r.status === 401) throw new UnauthorizedError();
   if (!r.ok) throw new Error(`GET /api/state failed: ${r.status}`);
   return (await r.json()) as WebSnapshot;
