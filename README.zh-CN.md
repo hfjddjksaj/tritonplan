@@ -4,13 +4,13 @@
 
 **一款以日历为核心的 UCSD 排课工具——找回新版 Triton Student System（TSS）没有提供的 WebReg "plan" 视图。**
 
-**➡️ 打开排课网站：<https://hfjddjksaj.github.io/tritonplan/>**
+**➡️ 打开排课网站：<https://tritonplan.cn>**
 **➡️ 安装扩展：[Chrome 应用商店](https://chromewebstore.google.com/detail/tritonplan/lnchlccmjhhpbbemlfnpldooeehcmjel)**
 
 老 WebReg 会把你的一周画成日历——上课时间、地点、教授、Section、期末考试一目了然，选课前就能看到时间冲突。新 TSS 没有这个功能。TritonPlan 把它重建了出来，由两部分组成：
 
 1. **一个 Chrome / Edge 扩展**：被动读取 TSS 本就展示给你的课程数据，在每个可选的 Section 上加一个 **"+ TritonPlan"** 按钮。
-2. **一个静态排课网站**：把你的一周画成日历并标出冲突。没有后端，你在上面做的一切都不会离开你的浏览器。
+2. **一个排课网站**：把你的一周画成日历并标出冲突。登录后方案保存在你的账号里，换设备也能接着用。
 
 > **非官方、学生自制工具。** 与 UC San Diego 无隶属关系，未获其授权或认可。详见[免责声明](#免责声明)与 [PRIVACY.md](./PRIVACY.md)。
 
@@ -25,8 +25,8 @@
 - **跳回 TSS**——点日历上的课程代码回到 TSS 中的那门课，也可以直接跳到该 Section 的 booking 页面。
 - **教学楼查询**——点上课地点，弹窗显示这是哪栋楼，附 Google Maps 和 UCSD 校园地图链接。
 - **选课时间**——从 TSS "My Appointment Times" 被动捕获的 First Pass / Second Pass 等窗口常驻 planner 顶栏，随时知道自己什么时候能选课。完全私有：绝不进入分享的 plan。
-- **分享与导出**——整个方案压缩进一个可分享的链接；也支持 JSON 导出 / 导入做备份。
-- **本地优先**——方案保存在浏览器的 `localStorage` 里，不上传到任何地方。
+- **分享**——发出一个链接，拿到链接的人能看到那份方案的快照。
+- **账号**——用邮箱 + 密码或 Google 登录；方案存在我们的服务器上，不只是留在某一个浏览器里。
 
 ## 截图
 
@@ -46,7 +46,7 @@
 
 TSS 是一个 SAP（SAPUI5 / Fiori）网页应用。你浏览 Schedule of Classes 时，TSS 服务器把课程数据以 **OData**（JSON）响应发到你的浏览器，页面再渲染到屏幕上。
 
-TritonPlan 需要的仅此而已。扩展在这些响应**到达你浏览器时把它们复制一份**——那是服务器本来就已经发给*你*的数据——从中解析出课表，交给排课网站。它从不向服务器索取任何东西。
+TritonPlan 需要的仅此而已。扩展在这些响应**到达你浏览器时把它们复制一份**——那是服务器本来就已经发给*你*的数据——从中解析出课表，交给你浏览器里的排课网站，由它存进你的账号。扩展从不向 TSS 服务器索取任何东西。
 
 这条被动式设计是整个产品的铁律：
 
@@ -63,7 +63,7 @@ TritonPlan 需要的仅此而已。扩展在这些响应**到达你浏览器时�
 2. 照常在 TSS 里浏览 **Schedule of Classes**。
 3. 在想要的 Section 上点 **"+ TritonPlan"**——你会来到排课网站，那个 Section 已经摆好。
 4. 调整各门课的 Section 避开冲突，再看一眼 **Finals** 视图。
-5. **分享或导出**你的方案。
+5. **分享**你的方案。
 
 <details>
 <summary>手动安装（加载已解压的扩展）</summary>
@@ -79,7 +79,7 @@ TritonPlan 需要的仅此而已。扩展在这些响应**到达你浏览器时�
 
 ## 隐私
 
-没有账号、没有后端、不收集数据，一切留在你的浏览器里——见 [PRIVACY.md](./PRIVACY.md)。
+用邮箱 + 密码或 Google 登录。我们把你的邮箱、方案、浏览过的课程、已选 / 候补标记和选课时间窗存放在一台服务器上（腾讯云，美国硅谷）。不出售、没有广告、没有统计、没有第三方追踪。随时可在账号菜单里删除账号。扩展依旧只读取 TSS 页面自己已经收到的数据，不向 TSS 发任何请求。详见 [PRIVACY.md](./PRIVACY.md) 或 <https://tritonplan.cn/privacy.html>。
 
 ## 开发
 
@@ -91,7 +91,7 @@ Monorepo 结构：`shared/`（数据模型与冲突逻辑）、`web/`（React �
 
 ## 免责声明
 
-TritonPlan 是一款**非官方、学生自制的工具**，与 UC San Diego 无隶属关系，未获其授权或认可。它只读取本就已经展示在你自己浏览器里的课程数据，并保存在你的设备本地。按**"原样"提供，不作任何担保——使用风险自负**。你需自行负责按照 UCSD 的《可接受使用政策》（Acceptable Use Policy）及所有适用的 UCSD 政策来使用它。
+TritonPlan 是一款**非官方、学生自制的工具**，与 UC San Diego 无隶属关系，未获其授权或认可。它只读取本就已经展示在你自己浏览器里的课程数据；排课网站把你的方案保存在你账号下的服务器上（见 [PRIVACY.md](./PRIVACY.md)）。按**"原样"提供，不作任何担保——使用风险自负**。你需自行负责按照 UCSD 的《可接受使用政策》（Acceptable Use Policy）及所有适用的 UCSD 政策来使用它。
 
 ## 许可证
 

@@ -9,19 +9,20 @@ Documentation for people working on the codebase. User-facing docs live in the
 plan/
 ├── shared/         Shared TypeScript: the normalized data model + conflict/time logic
 │   └── src/types.ts     The contract between extension and website
-├── web/            The planner website (React + Vite, static)
+├── server/         The API server (Hono on Node 24, node:sqlite): accounts, plans
+├── web/            The planner website (React + Vite)
 │   └── src/             Calendar UI, planner state, share/export, TSS deep links
 ├── extension/      The Chrome/Edge MV3 extension
 │   └── src/             Passive interceptor, TSS parser, background worker, popup
 └── docs/           TSS reverse-engineering notes + README screenshots
 ```
 
-npm workspaces monorepo (`shared`, `web`, `extension`). Both `web` and `extension` consume
+npm workspaces monorepo (`shared`, `server`, `web`, `extension`). Both `web` and `extension` consume
 `@triton/shared` directly from its TS source via bundler aliases.
 
 ## Prerequisites
 
-Node.js ≥ 20 and npm.
+Node.js ≥ 20 and npm (the server workspace needs Node 24 for `node:sqlite`).
 
 ## Commands
 
@@ -35,6 +36,10 @@ npm run build -w @triton/extension   # PRODUCTION extension build → extension/
 npm run build:dev -w @triton/extension  # DEV build targeting http://localhost:5173
 npm run watch -w @triton/extension   # watch mode (implies --dev)
 
+npm run dev -w @triton/server        # API server (tsx watch, reads server/.env.local)
+npm test -w @triton/server           # server tests
+npm run build -w @triton/server      # esbuild → server/dist/main.mjs
+
 npm test                             # vitest across all workspaces
 npm run typecheck                    # tsc --noEmit across all workspaces
 ```
@@ -42,7 +47,7 @@ npm run typecheck                    # tsc --noEmit across all workspaces
 ### Extension dev vs production builds
 
 The source `manifest.json` and the default build are **production-only** (planner =
-`https://hfjddjksaj.github.io/tritonplan/`). A `--dev` build targets the local Vite server
+`https://tritonplan.cn/`). A `--dev` build targets the local Vite server
 instead: `build.mjs` `define`s the planner URL constants into the bundles
 (`extension/src/config.ts`) and injects the `http://localhost:5173/*` matches into the
 **dist** manifest only — so the store zip never contains localhost permissions or URLs.
@@ -80,9 +85,9 @@ issues, replays, retries, prefetches, or automates anything.
    (reloading it when already on the same section), else opens one. Without the
    extension the page falls back to a plain `window.open`.
 5. **Plan** (`web/`): `usePlan` merges incoming courses, computes conflicts
-   (`shared/src/conflicts.ts`), renders the calendar/finals views, and persists to
-   `localStorage`. Sharing lz-string-compresses the whole plan into the URL hash;
-   export/import is plain JSON.
+   (`shared/src/conflicts.ts`), renders the calendar/finals views, and saves to
+   the signed-in account on the server. Only UI preferences and received shares stay in
+   `localStorage`.
 
 The normalized model shared by both halves is `shared/src/types.ts`
 (`CourseOffering → SectionOption → Component → Meeting/FinalExam`, plus `PlanState`).
@@ -192,12 +197,41 @@ one transform carries all three. Because the layout can be a frame behind what i
 `hitMarker` takes a live projection function — a marker you can see has to be a marker you can
 click.
 
+## Server
+
+`server/` (`@triton/server`) is a Hono app on Node 24 using `node:sqlite`. It handles
+accounts (email + password, Google sign-in), sessions, and plan storage. It never contacts
+tss.ucsd.edu. Deploy and ops are documented separately under `server/deploy/`.
+
+Local loop: run the server and the planner dev server side by side.
+
+```sh
+npm run dev -w @triton/server   # reads server/.env.local, listens on 127.0.0.1:8787
+npm run dev -w @triton/web      # Vite proxies /api to http://127.0.0.1:8787
+```
+
+Configure the server through `server/.env.local`. It is gitignored; secrets never go in the repo.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `TP_PORT` | `8787` | Port to listen on. |
+| `TP_HOST` | `127.0.0.1` | Address to bind. |
+| `TP_ORIGIN` | required | Public origin of the site; `http://localhost:5173` locally. |
+| `TP_DB_PATH` | required | SQLite file path, e.g. `.data/dev.db`. |
+| `TP_COOKIE_SECURE` | `true` | Only the literal `false` disables the `Secure` cookie flag — local dev only. |
+| `GOOGLE_CLIENT_ID` | — | Google OAuth client ID. |
+| `GOOGLE_CLIENT_SECRET` | — | Google OAuth client secret. |
+| `TP_MAIL_TRANSPORT` | `resend` | `resend`, `console`, or `memory`. Use `console` locally to print verification links to the server log. |
+| `RESEND_API_KEY` | — | Required when the transport is `resend`. |
+| `TP_MAIL_FROM` | `TritonPlan <noreply@tritonplan.cn>` | From address for outgoing mail. |
+
 ## Reference material
 
 - [`docs/tss-recon/tss-api-notes.md`](./tss-recon/tss-api-notes.md) — TSS/SAP OData
   reverse-engineering notes (endpoints, the `Sched` grammar, DOM selectors), with real
   captured fixtures in [`docs/tss-recon/fixtures/`](./tss-recon/fixtures/) that drive the
   parser tests.
-- The planner website deploys automatically: every push to `main` runs
-  [`deploy-pages.yml`](../.github/workflows/deploy-pages.yml) and publishes `web/dist`
-  to GitHub Pages.
+- Privacy policy: [`PRIVACY.md`](../PRIVACY.md), mirrored as the standalone page
+  `web/public/privacy.html` (served at `/privacy.html`); keep the two in sync.
+- The Pages workflow ([`deploy-pages.yml`](../.github/workflows/deploy-pages.yml)) runs on
+  every push to `main`; see the server deploy docs for how the new site is served.
