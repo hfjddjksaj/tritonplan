@@ -11,7 +11,7 @@ import type { TermMeta, WebSnapshot } from './lib/cloud/records';
 import { BRIDGE_SOURCE, installBridgeHub, resetBridgeHubForTests } from './lib/bridge';
 import { makeCourse, makePlan } from './lib/fixtures';
 import type { NamedPlan } from './lib/plans';
-import { planToHash } from './lib/share';
+import { planToHash, planToMirrorHash } from './lib/share';
 import { loadReceived, saveReceived } from './lib/storage';
 import type { TermsState } from './lib/terms-state';
 import { makeTestBoot, snapshotOf, TEST_ME } from './test/boot';
@@ -49,6 +49,11 @@ function mine(name = 'Mine', plan: PlanState = makePlan()): TermsState {
 function otherPlan(): PlanState {
   const course = makeCourse('MATH-18|2026|2', 'MATH-18');
   return { ...makePlan(), entries: [{ course, selectedOptionId: course.options[0]!.id, color: '120' }] };
+}
+
+/** An old #m= mirror still in the address bar (nothing writes one any more): a tab from before the upgrade. */
+function leaveStaleMirror(plan: PlanState = makePlan()) {
+  window.history.replaceState(null, '', `/#${planToMirrorHash(plan)}`);
 }
 
 const json = (status: number, body: unknown) =>
@@ -376,7 +381,7 @@ describe('Root: coming back to the tab', () => {
     srv.state = snapshotOf(mine());
     await mount('/');
     await letSyncRun();
-    expect(window.location.hash).toMatch(/^#m=/); // the planner's own address-bar mirror
+    leaveStaleMirror();
     await waitOutThrottle();
     srv.me = 'out';
     await becomeVisible();
@@ -521,7 +526,7 @@ describe('Root: coming back to the tab', () => {
     srv.state = snapshotOf(mine());
     await mount('/');
     await letSyncRun();
-    expect(window.location.hash).toMatch(/^#m=/);
+    leaveStaleMirror();
     addCourseElsewhere();
     await waitOutThrottle();
     await becomeVisible();
@@ -554,7 +559,7 @@ describe('Root: coming back to the tab', () => {
     srv.state = snapshotOf(terms);
     await mount('/');
     await letSyncRun();
-    expect(window.location.hash).toMatch(/^#m=/); // mirrors plan-1, the active one here
+    leaveStaleMirror(); // plan-1, the one this tab had active
     const t = srv.state.terms['2026|2']!;
     srv.state.terms['2026|2'] = { ...t, version: t.version + 100, data: { ...t.data, activeId: 'plan-2' } };
     const syncs = callsTo('POST', '/api/sync').length;

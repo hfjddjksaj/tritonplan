@@ -15,6 +15,8 @@ interface Props {
   planSwitcher?: ReactNode;
   /** The student's own appointment-times capsule, rendered before the unit pill. */
   apptSlot?: ReactNode;
+  /** The signed-in account's menu, rendered at the far right. */
+  accountSlot?: ReactNode;
   /** The plan on screen, for the Share menu (link + QR). */
   sharePlan: PlanState;
   onFlash: (msg: string) => void;
@@ -28,6 +30,7 @@ export function Topbar({
   readOnly,
   planSwitcher,
   apptSlot,
+  accountSlot,
   sharePlan,
   onFlash,
   onReset,
@@ -77,6 +80,8 @@ export function Topbar({
 
         <ShareMenu plan={sharePlan} onFlash={onFlash} />
       </div>
+
+      {accountSlot}
     </header>
   );
 }

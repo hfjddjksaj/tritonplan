@@ -6,4 +6,7 @@ export const nav = {
   assign(url: string): void {
     window.location.assign(url);
   },
+  reload(): void {
+    window.location.reload();
+  },
 };

@@ -3816,3 +3816,87 @@ button.termsw__cell:hover {
     animation: none;
   }
 }
+
+/* =============================================================== sync banner + account menu */
+.syncbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 18px 10px;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  color: var(--conflict-ink);
+  background: var(--conflict-soft);
+  border: 1px solid #f4c9cb;
+  border-left: 3px solid var(--conflict);
+  border-radius: var(--r-md);
+}
+.syncbar__text {
+  flex: 1;
+  min-width: 0;
+}
+.acctbtn {
+  gap: 5px;
+  padding: 0 8px;
+}
+.acctbtn__initial {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 50%;
+}
+.acctmenu {
+  width: 220px;
+}
+.acctmenu__email {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.acctmenu__item {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.acctdlg {
+  width: min(380px, calc(100vw - 40px));
+}
+.acctdlg .planpick__sub {
+  margin-bottom: 12px;
+}
+.acctdlg__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.acctdlg__danger {
+  color: #fff;
+  background: var(--conflict);
+  border-color: var(--conflict);
+}
+.acctdlg__danger:disabled {
+  opacity: 0.45;
+}
+@media (max-width: 760px) {
+  /* The initial alone is the account button on a phone — the chevron would
+     push Share off a 320px topbar. */
+  .acctbtn {
+    padding: 0 6px;
+  }
+  .acctbtn svg {
+    display: none;
+  }
+  .syncbar {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+}

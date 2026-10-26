@@ -10,6 +10,8 @@ import { CalendarGrid } from './components/CalendarGrid';
 import { CalViewToggle } from './components/CalViewToggle';
 import { FinalsView } from './components/FinalsView';
 import { MidtermsView } from './components/MidtermsView';
+import { SyncBanner } from './components/SyncBanner';
+import { AccountMenu } from './components/AccountMenu';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { BuildingPopover } from './components/BuildingPopover';
@@ -27,6 +29,7 @@ import { pluralize } from './lib/format';
 import { loadCalView, saveCalView, type CalView } from './lib/storage';
 import type { PositionedBlock } from './lib/layout';
 import type { CloudBoot } from './lib/cloud/boot';
+import { installUnloadGuard } from './lib/cloud/engine';
 
 export default function App({ boot }: { boot: CloudBoot }) {
   const ctl = usePlan(boot);
@@ -53,6 +56,10 @@ export default function App({ boot }: { boot: CloudBoot }) {
   const flash = useCallback((msg: string) => {
     setToast(msg);
   }, []);
+
+  // Once per boot: Root remounts App with a new boot on refocus, and the old
+  // engine's listeners must not outlive it.
+  useEffect(() => installUnloadGuard(boot.engine), [boot.engine]);
 
   useEffect(() => {
     if (!toast) return;
@@ -174,11 +181,13 @@ export default function App({ boot }: { boot: CloudBoot }) {
           />
         }
         apptSlot={<ApptCapsule appt={appt} />}
+        accountSlot={<AccountMenu me={boot.me} onFlash={flash} />}
         sharePlan={ctl.viewPlan}
         onFlash={flash}
         onReset={handleReset}
         onOpenMap={() => setCampusOpen(true)}
       />
+      <SyncBanner engine={boot.engine} />
       {ctl.received && (
         <ReceivedBanner
           received={ctl.received}

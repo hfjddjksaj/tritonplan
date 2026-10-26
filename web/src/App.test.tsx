@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import App from './App';
@@ -44,5 +44,19 @@ describe('App → campus map', () => {
     expect(island).not.toBeNull();
     const selected = [...island.querySelectorAll('[role="tab"]')].map((t) => t.getAttribute('aria-selected'));
     expect(selected).toEqual(['false', 'false', 'true']);
+  });
+
+  it('installs the unload guard once per boot and removes it on unmount', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const count = (spy: typeof add) => spy.mock.calls.filter((c) => c[0] === 'beforeunload').length;
+    await act(async () => {
+      root.render(<App boot={boot} />);
+    });
+    expect(count(add)).toBe(1);
+    act(() => root.unmount());
+    expect(count(remove)).toBe(1);
+    root = createRoot(container); // afterEach unmounts this one
+    vi.restoreAllMocks();
   });
 });

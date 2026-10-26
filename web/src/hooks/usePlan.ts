@@ -59,7 +59,7 @@ import {
   type TermsState,
 } from '../lib/terms-state';
 import { isArchived, termKey, type TermKey } from '../lib/terms';
-import { planToMirrorHash, readHash } from '../lib/share';
+import { mirrorTokenFromHash, readHash } from '../lib/share';
 import { openBooking, openInTss, openTssHome } from '../lib/tss';
 import {
   buildSelectedCourses,
@@ -164,8 +164,8 @@ export function usePlan(boot: CloudBoot) {
     saveViewing(v);
   }, []);
 
-  // A hash that isn't one of this device's plans (a share link, or a #m= mirror
-  // bookmarked/copied on another device) is consumed ONCE into the received slot,
+  // A hash that isn't one of this device's plans (a share link, or an old #m=
+  // mirror bookmarked/copied before plans lived in the account) is consumed ONCE into the received slot,
   // then stripped from the address bar (leaving it would pin every reload to that
   // snapshot). The user's own plans are untouched — it opens read-only alongside
   // them. Also runs on hashchange: pasting a link into an already-open planner tab
@@ -175,7 +175,10 @@ export function usePlan(boot: CloudBoot) {
       const owned = Object.entries(termsRef.current.terms).flatMap(([key, ws]) =>
         ws.plans.plans.map((p) => ({ key, id: p.id, plan: p.plan })),
       );
-      const intent = readHash(window.location.hash, {
+      const hash = window.location.hash;
+      const stripHash = () =>
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      const intent = readHash(hash, {
         plans: owned.map((o) => o.plan),
         syncedToken: loadSyncedToken(),
       });
@@ -187,6 +190,9 @@ export function usePlan(boot: CloudBoot) {
             switchTermIn(updateWorkspace(s, match.key, (ps) => switchActive(ps, match.id)), match.key),
           );
         }
+        // Nothing writes #m= any more; a stale one left in the bar would make an F5
+        // re-read an old snapshot (overwriting received, or flipping the active plan).
+        if (mirrorTokenFromHash(hash) !== null) stripHash();
         return;
       }
       if (intent.kind !== 'shared') return;
@@ -198,26 +204,12 @@ export function usePlan(boot: CloudBoot) {
       saveReceived(rec);
       setReceived(rec);
       switchViewing('received');
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      stripHash();
     };
     consume();
     window.addEventListener('hashchange', consume);
     return () => window.removeEventListener('hashchange', consume);
   }, [switchViewing]);
-
-  // Mirror the ACTIVE plan into the address bar as a #m=<full token> so the
-  // browser's own "send this tab to your device" / bookmark sync always carry
-  // the latest plan. The `#m=` key is what marks it as ours — a bookmark opens
-  // in a fresh tab, so nothing per-tab could ever do that job. Depends on
-  // `received` too: after consuming a foreign hash we restore our own hash
-  // right away.
-  useEffect(() => {
-    if (plan.entries.length === 0) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      return;
-    }
-    window.history.replaceState(null, '', `#${planToMirrorHash(plan)}`);
-  }, [plan, received]);
 
   // Everything the account holds is saved by the sync engine, which diffs it
   // against what the server acknowledged. No first-render skip: a new

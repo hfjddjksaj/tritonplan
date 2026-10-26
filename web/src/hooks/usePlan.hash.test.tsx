@@ -86,4 +86,23 @@ describe('usePlan: opening a #m= mirror hash', () => {
     expect(api.received).toBeNull();
     expect(courseIds(api.plan)).toEqual(courseIds(a));
   });
+
+  it('removes a #m= that matches one of my plans from the address bar after load', async () => {
+    const a = makePlan();
+    const b = otherPlan();
+    await open(`#${planToMirrorHash(a)}`, account([a, b], 1));
+    expect(window.location.hash).toBe('');
+  });
+
+  it('removes a #m= bookmark opened read-only from the address bar too', async () => {
+    await open(`#${planToMirrorHash(otherPlan())}`, account([makePlan()]));
+    expect(window.location.hash).toBe('');
+  });
+
+  it('adding a course no longer writes #m= into the address bar', async () => {
+    await open('', account([makePlan()]));
+    expect(window.location.hash).toBe('');
+    await act(async () => api.addCourse(makeCourse('MATH-18|2026|2', 'MATH-18')));
+    expect(window.location.hash).toBe('');
+  });
 });
