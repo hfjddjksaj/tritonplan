@@ -98,7 +98,7 @@ function isNamedPlan(value: unknown): boolean {
   );
 }
 
-function isPlansState(value: unknown): value is import('./plans').PlansState {
+export function isPlansState(value: unknown): value is import('./plans').PlansState {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return (
