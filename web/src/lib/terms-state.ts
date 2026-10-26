@@ -17,7 +17,8 @@ export interface TermWorkspace {
   term: Term;
   plans: PlansState;
   /** Booked (enrolled) status — see lib/booked.ts. Course-id lists; absent = empty.
-   *  PERSONAL data: local only, never in plans/shares/exports. */
+   *  PERSONAL data: stored in the user's account as part of the term
+   *  record (lib/cloud/records.ts), never in plans/shares/exports. */
   bookedAuto?: string[];
   bookedOn?: string[];
   bookedOff?: string[];
