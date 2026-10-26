@@ -47,32 +47,29 @@ export function normalizeEmail(raw: string): string | null {
 const HOUR_MS = 3_600_000;
 
 /** Single live token per user and kind: issuing a new one invalidates the previous link. Only the SHA-256 is stored. */
-export function issueEmailToken(db: Db, userId: string, kind: 'verify' | 'reset', now: Date, pendingPasswordHash?: string): string {
+export function issueEmailToken(db: Db, userId: string, kind: 'verify' | 'reset', now: Date): string {
   const token = randomToken();
   db.prepare('DELETE FROM email_tokens WHERE user_id = ? AND kind = ?').run(userId, kind);
-  db.prepare('INSERT INTO email_tokens (token_hash, user_id, kind, pending_password_hash, expires_at) VALUES (?, ?, ?, ?, ?)').run(
+  db.prepare('INSERT INTO email_tokens (token_hash, user_id, kind, expires_at) VALUES (?, ?, ?, ?)').run(
     sha256Hex(token),
     userId,
     kind,
-    pendingPasswordHash ?? null,
     new Date(now.getTime() + (kind === 'verify' ? 24 : 1) * HOUR_MS).toISOString(),
   );
   return token;
 }
 
-/** Looks up and deletes in one step so a link works once; returns null for unknown, wrong-kind or expired tokens. */
-export function consumeEmailToken(
-  db: Db,
-  token: string,
-  kind: 'verify' | 'reset',
-  now: Date,
-): { userId: string; pendingPasswordHash: string | null } | null {
-  const hash = sha256Hex(token);
-  const row = db.prepare('SELECT user_id, pending_password_hash, expires_at FROM email_tokens WHERE token_hash = ? AND kind = ?').get(hash, kind) as
-    | { user_id: string; pending_password_hash: string | null; expires_at: string }
+/** Owner of a known, right-kind, unexpired token, without using the token up. */
+export function findEmailToken(db: Db, token: string, kind: 'verify' | 'reset', now: Date): { userId: string } | null {
+  const row = db.prepare('SELECT user_id, expires_at FROM email_tokens WHERE token_hash = ? AND kind = ?').get(sha256Hex(token), kind) as
+    | { user_id: string; expires_at: string }
     | undefined;
-  if (!row) return null;
-  db.prepare('DELETE FROM email_tokens WHERE token_hash = ?').run(hash);
-  if (!(Date.parse(row.expires_at) > now.getTime())) return null;
-  return { userId: row.user_id, pendingPasswordHash: row.pending_password_hash };
+  return row && Date.parse(row.expires_at) > now.getTime() ? { userId: row.user_id } : null;
+}
+
+/** Looks up and deletes in one step so a link works once; returns null for unknown, wrong-kind or expired tokens. */
+export function consumeEmailToken(db: Db, token: string, kind: 'verify' | 'reset', now: Date): { userId: string } | null {
+  const found = findEmailToken(db, token, kind, now);
+  db.prepare('DELETE FROM email_tokens WHERE token_hash = ? AND kind = ?').run(sha256Hex(token), kind);
+  return found;
 }

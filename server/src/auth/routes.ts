@@ -7,7 +7,7 @@ import type { RateLimiter } from '../http/rate-limit';
 import { addPasswordMail, finishSignupMail, resetPasswordMail, verifyEmailMail } from '../mail/templates';
 import { hashPassword, passwordProblem, verifyPassword } from './passwords';
 import { clearSessionCookie, createSession, deleteSession, deleteUserSessions, SESSION_COOKIE, sessionCookie } from './sessions';
-import { consumeEmailToken, createUser, findUserByEmail, findUserById, issueEmailToken, normalizeEmail } from './users';
+import { consumeEmailToken, createUser, findEmailToken, findUserByEmail, findUserById, issueEmailToken, normalizeEmail } from './users';
 
 const HOUR = 3_600_000;
 const QUARTER = 900_000;
@@ -50,7 +50,7 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   // The token is issued synchronously; the caller decides whether to await the send.
   const sendVerify = (email: string, userId: string): Promise<void> => {
     const t = issueEmailToken(db, userId, 'verify', deps.now());
-    return deps.mailer.send({ to: email, ...verifyEmailMail(`${config.origin}/api/auth/verify?token=${t}`) });
+    return deps.mailer.send({ to: email, ...verifyEmailMail(`${config.origin}/verify#token=${t}`) });
   };
 
   /** Fire-and-forget: response time and status must not reveal whether a mail was sent. Never log the address. */
@@ -93,17 +93,25 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     return c.json({ ok: true });
   });
 
-  r.get('/verify', (c) => {
-    const token = c.req.query('token') ?? '';
-    const t = token ? consumeEmailToken(db, token, 'verify', deps.now()) : null;
-    if (!t) return c.redirect('/?auth=link-expired', 302);
+  // Verifying needs the mailbox (token) AND the account's password: a signup typed by someone else must not become
+  // a verified account just because the real owner clicked a routine confirm mail. POST, not GET, so a link can't sign in.
+  r.post('/verify', async (c) => {
+    const b = await body(c);
+    const blocked = limited(c, [[`verify:ip:${clientIp(c)}`, 30, QUARTER]]);
+    if (blocked) return blocked;
+    const token = str(b.token);
+    const t = token ? findEmailToken(db, token, 'verify', deps.now()) : null;
+    if (!t) return c.json({ error: 'link_expired' }, 400);
+    const user = findUserById(db, t.userId);
+    // A wrong guess leaves the token usable; the dummy hash keeps the no-password case the same cost.
+    const ok = await verifyPassword(str(b.password), user?.password_hash ?? (await DUMMY_HASH));
+    if (!user || !user.password_hash || !ok) return c.json({ error: 'invalid_credentials' }, 401);
     tx(db, () => {
-      db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(t.userId);
-      db.prepare("DELETE FROM email_tokens WHERE user_id = ? AND kind = 'verify'").run(t.userId);
+      db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(user.id);
+      db.prepare("DELETE FROM email_tokens WHERE user_id = ? AND kind = 'verify'").run(user.id);
     });
-    // No session: a GET link anyone can be lured into clicking must not sign a browser in (login CSRF), and the
-    // password on a self-signup may have been chosen by someone other than the mailbox owner.
-    return c.redirect('/?auth=verified', 302);
+    startSession(c, user.id);
+    return c.json({ ok: true });
   });
 
   r.post('/login', async (c) => {

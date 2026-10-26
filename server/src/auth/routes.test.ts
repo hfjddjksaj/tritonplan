@@ -15,32 +15,28 @@ function setup() {
   const tokenFrom = (i: number) => /token=([\w-]+)/.exec(deps.mailer.sent[i]!.text)![1]!;
   const cookieOf = (res: Response) => /tp_session=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')?.[1];
   const me = (cookie: string) => app.request('/api/me', { headers: { Cookie: `tp_session=${cookie}` } });
+  const verifyWith = (token: string, password: string) => post('/api/auth/verify', { token, password });
   const verified = async (email: string, pw: string) => {
     await post('/api/auth/signup', { email, password: pw });
-    const v = await app.request(`/api/auth/verify?token=${tokenFrom(deps.mailer.sent.length - 1)}`);
-    expect(v.headers.get('set-cookie')).toBeNull();
-    const l = await post('/api/auth/login', { email, password: pw });
-    expect(l.status).toBe(200);
-    return cookieOf(l)!;
+    const v = await verifyWith(tokenFrom(deps.mailer.sent.length - 1), pw);
+    expect(v.status).toBe(200);
+    return cookieOf(v)!;
   };
   const googleOnly = (email: string) =>
     deps.db.prepare("INSERT INTO users (id,email,email_verified,google_sub,created_at) VALUES (?,?,1,?,'x')").run(newId(), email, newId());
-  return { deps, app, post, tokenFrom, cookieOf, me, verified, googleOnly };
+  return { deps, app, post, tokenFrom, cookieOf, me, verified, googleOnly, verifyWith };
 }
 
-test('signup → verify link verifies without signing in → login → /api/me', async () => {
-  const { app, post, tokenFrom, cookieOf, me, deps } = setup();
+test('signup → verify with the password signs in → /api/me', async () => {
+  const { post, tokenFrom, cookieOf, me, deps, verifyWith } = setup();
   const res = await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ ok: true });
-  expect(deps.mailer.sent[0]!.text).toContain('https://tritonplan.cn/api/auth/verify?token=');
-  const v = await app.request(`/api/auth/verify?token=${tokenFrom(0)}`);
-  expect(v.status).toBe(302);
-  expect(v.headers.get('location')).toBe('/?auth=verified');
-  expect(v.headers.get('set-cookie')).toBeNull();
-  const l = await post('/api/auth/login', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
-  expect(l.status).toBe(200);
-  const cookie = cookieOf(l)!;
+  expect(deps.mailer.sent[0]!.text).toContain('https://tritonplan.cn/verify#token=');
+  const v = await verifyWith(tokenFrom(0), 'hunter2hunter2');
+  expect(v.status).toBe(200);
+  expect(await v.json()).toEqual({ ok: true });
+  const cookie = cookieOf(v)!;
   expect(cookie).toBeTruthy();
   expect(await (await me(cookie)).json()).toEqual({ email: 'a@ucsd.edu', hasPassword: true, hasGoogle: false });
 });
@@ -79,9 +75,9 @@ test('wrong password, unknown email and google-only account all answer 401 inval
 });
 
 test('email case and whitespace do not matter', async () => {
-  const { post, app, tokenFrom, deps } = setup();
+  const { post, tokenFrom, deps, verifyWith } = setup();
   await post('/api/auth/signup', { email: 'Foo@UCSD.edu ', password: 'hunter2hunter2' });
-  await app.request(`/api/auth/verify?token=${tokenFrom(0)}`);
+  expect((await verifyWith(tokenFrom(0), 'hunter2hunter2')).status).toBe(200);
   const login = await post('/api/auth/login', { email: 'foo@ucsd.edu', password: 'hunter2hunter2' });
   expect(login.status).toBe(200);
   expect((await post('/api/auth/login', { email: ' FOO@ucsd.EDU ', password: 'hunter2hunter2' })).status).toBe(200);
@@ -102,15 +98,15 @@ test('signup on a verified password account is 409 email_taken', async () => {
 });
 
 test('signup on an unverified account keeps the first password and link, and mails a choose-password link', async () => {
-  const { post, app, tokenFrom, deps } = setup();
+  const { post, tokenFrom, deps, verifyWith } = setup();
   await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'first-password' });
   const second = await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'second-password' });
   expect(second.status).toBe(200);
   expect(await second.json()).toEqual({ ok: true });
   expect(deps.mailer.sent[1]!.subject).toBe('Choose your TritonPlan password');
   expect(deps.mailer.sent[1]!.text).toContain('https://tritonplan.cn/reset#token=');
-  // The first verify link still works.
-  expect((await app.request(`/api/auth/verify?token=${tokenFrom(0)}`)).headers.get('location')).toBe('/?auth=verified');
+  // The first verify link still works, with the first password.
+  expect((await verifyWith(tokenFrom(0), 'first-password')).status).toBe(200);
   expect((await post('/api/auth/login', { email: 'a@ucsd.edu', password: 'first-password' })).status).toBe(200);
   expect((await post('/api/auth/login', { email: 'a@ucsd.edu', password: 'second-password' })).status).toBe(401);
   const r = await post('/api/auth/reset', { token: tokenFrom(1), password: 'owners-new-password' });
@@ -119,22 +115,44 @@ test('signup on an unverified account keeps the first password and link, and mai
 });
 
 test('unsolicited signup cannot hand the attacker the victim account', async () => {
-  const { post, app, tokenFrom, cookieOf, me, deps } = setup();
+  const { post, tokenFrom, verifyWith, deps } = setup();
   await post('/api/auth/signup', { email: 'victim@ucsd.edu', password: 'attacker-password' });
-  const click = await app.request(`/api/auth/verify?token=${tokenFrom(0)}`);
-  expect(click.headers.get('set-cookie')).toBeNull();
+  const verifyTok = tokenFrom(0);
+  // The victim clicks the routine confirm mail and types their own password: not the attacker's, so it fails.
+  expect((await verifyWith(verifyTok, 'victim-own-password')).status).toBe(401);
   const atk = await post('/api/auth/login', { email: 'victim@ucsd.edu', password: 'attacker-password' });
-  expect(atk.status).toBe(200);
-  const attackerSession = cookieOf(atk)!;
-  await post('/api/auth/forgot', { email: 'victim@ucsd.edu' });
-  const r = await post('/api/auth/reset', { token: tokenFrom(deps.mailer.sent.length - 1), password: 'victim-new-password' });
+  expect(atk.status).toBe(403);
+  expect(await atk.json()).toEqual({ error: 'unverified' });
+  // The victim signs up again, gets a choose-password link and takes the account over.
+  await post('/api/auth/signup', { email: 'victim@ucsd.edu', password: 'victim-own-password' });
+  expect(deps.mailer.sent[1]!.subject).toBe('Choose your TritonPlan password');
+  const r = await post('/api/auth/reset', { token: tokenFrom(1), password: 'victim-own-password' });
   expect(r.status).toBe(200);
+  expect((await post('/api/auth/login', { email: 'victim@ucsd.edu', password: 'victim-own-password' })).status).toBe(200);
   expect((await post('/api/auth/login', { email: 'victim@ucsd.edu', password: 'attacker-password' })).status).toBe(401);
-  expect((await me(attackerSession)).status).toBe(401);
+  expect((await verifyWith(verifyTok, 'attacker-password')).status).toBe(401);
+});
+
+test('wrong password at verify is 401 and leaves the token usable', async () => {
+  const { post, tokenFrom, verifyWith } = setup();
+  await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
+  const t = tokenFrom(0);
+  const bad = await verifyWith(t, 'wrong-password');
+  expect(bad.status).toBe(401);
+  expect(await bad.json()).toEqual({ error: 'invalid_credentials' });
+  expect((await verifyWith(t, 'hunter2hunter2')).status).toBe(200);
+});
+
+test('verify rate limit answers 429 on the 31st attempt from one IP', async () => {
+  const { post } = setup();
+  for (let i = 0; i < 30; i++) expect((await post('/api/auth/verify', { token: 'nope', password: 'x' })).status).toBe(400);
+  const res = await post('/api/auth/verify', { token: 'nope', password: 'x' });
+  expect(res.status).toBe(429);
+  expect(((await res.json()) as { error: string }).error).toBe('rate_limited');
 });
 
 test('wrong-kind tokens are rejected without burning the other kind', async () => {
-  const { post, app, tokenFrom, deps } = setup();
+  const { post, tokenFrom, deps, verifyWith } = setup();
   await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
   await post('/api/auth/forgot', { email: 'a@ucsd.edu' }); // verify mail 0, reset mail 1
   const verifyTok = tokenFrom(0);
@@ -142,9 +160,11 @@ test('wrong-kind tokens are rejected without burning the other kind', async () =
   const r = await post('/api/auth/reset', { token: verifyTok, password: 'brand-new-password' });
   expect(r.status).toBe(400);
   expect(await r.json()).toEqual({ error: 'link_expired' });
-  expect((await app.request(`/api/auth/verify?token=${resetTok}`)).headers.get('location')).toBe('/?auth=link-expired');
+  const v = await verifyWith(resetTok, 'hunter2hunter2');
+  expect(v.status).toBe(400);
+  expect(await v.json()).toEqual({ error: 'link_expired' });
   expect(deps.db.prepare('SELECT COUNT(*) AS n FROM email_tokens').get()).toEqual({ n: 2 });
-  expect((await app.request(`/api/auth/verify?token=${verifyTok}`)).headers.get('location')).toBe('/?auth=verified');
+  expect((await verifyWith(verifyTok, 'hunter2hunter2')).status).toBe(200);
   expect((await post('/api/auth/reset', { token: resetTok, password: 'brand-new-password' })).status).toBe(200);
 });
 
@@ -163,20 +183,21 @@ test('signup on a google-only account never applies the submitted password and m
   expect((await post('/api/auth/login', { email: 'g@ucsd.edu', password: 'attacker-chosen' })).status).toBe(401);
 });
 
-test('expired or reused verify link redirects to /?auth=link-expired', async () => {
-  const { post, app, tokenFrom, deps } = setup();
+test('expired, reused or missing verify token is 400 link_expired', async () => {
+  const { post, tokenFrom, deps, verifyWith } = setup();
   await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
   const t = tokenFrom(0);
-  expect((await app.request(`/api/auth/verify?token=${t}`)).headers.get('location')).toBe('/?auth=verified');
-  const reused = await app.request(`/api/auth/verify?token=${t}`);
-  expect(reused.status).toBe(302);
-  expect(reused.headers.get('location')).toBe('/?auth=link-expired');
-  expect((await app.request('/api/auth/verify')).headers.get('location')).toBe('/?auth=link-expired');
+  expect((await verifyWith(t, 'hunter2hunter2')).status).toBe(200);
+  const reused = await verifyWith(t, 'hunter2hunter2');
+  expect(reused.status).toBe(400);
+  expect(await reused.json()).toEqual({ error: 'link_expired' });
+  expect((await post('/api/auth/verify', { password: 'hunter2hunter2' })).status).toBe(400);
 
   await post('/api/auth/signup', { email: 'b@ucsd.edu', password: 'hunter2hunter2' });
   deps.db.prepare("UPDATE email_tokens SET expires_at = '2020-01-01T00:00:00.000Z'").run();
-  const exp = await app.request(`/api/auth/verify?token=${tokenFrom(deps.mailer.sent.length - 1)}`);
-  expect(exp.headers.get('location')).toBe('/?auth=link-expired');
+  const exp = await verifyWith(tokenFrom(deps.mailer.sent.length - 1), 'hunter2hunter2');
+  expect(exp.status).toBe(400);
+  expect(await exp.json()).toEqual({ error: 'link_expired' });
 });
 
 test('resend mails only existing unverified users but always answers 200', async () => {
