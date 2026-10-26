@@ -24,7 +24,7 @@ export async function exchangeGoogleCode(p: {
   redirectUri: string;
   fetchFn: typeof fetch;
   now: Date;
-}): Promise<{ sub: string; email: string; emailVerified: boolean }> {
+}): Promise<{ sub: string; email: string; emailVerified: boolean; hd?: string }> {
   const res = await p.fetchFn(TOKEN_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -40,7 +40,13 @@ export async function exchangeGoogleCode(p: {
   });
   // Deliberately no response body or code in the message: this error may be logged.
   if (!res.ok) throw new Error(`google token endpoint answered ${res.status}`);
-  const { id_token } = (await res.json()) as { id_token?: unknown };
+  // Parse failures get a fixed message: V8's own SyntaxError text quotes a snippet of the payload.
+  let id_token: unknown;
+  try {
+    id_token = ((await res.json()) as { id_token?: unknown }).id_token;
+  } catch {
+    throw new Error('google token response is not JSON');
+  }
   if (typeof id_token !== 'string') throw new Error('google response has no id_token');
 
   // The id_token's signature is not verified: we received it straight from Google's token endpoint over TLS
@@ -48,13 +54,19 @@ export async function exchangeGoogleCode(p: {
   // The claims below are still checked.
   const payload = id_token.split('.')[1];
   if (!payload) throw new Error('malformed id_token');
-  const c = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<string, unknown>;
+  let c: Record<string, unknown>;
+  try {
+    c = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<string, unknown>;
+  } catch {
+    throw new Error('malformed id_token payload');
+  }
+  if (!c || typeof c !== 'object') throw new Error('malformed id_token payload');
   if (c.aud !== p.clientId) throw new Error('id_token audience mismatch');
   if (typeof c.iss !== 'string' || !ISSUERS.includes(c.iss)) throw new Error('id_token issuer mismatch');
   if (typeof c.exp !== 'number' || !(c.exp * 1000 > p.now.getTime())) throw new Error('id_token expired');
   if (typeof c.sub !== 'string' || !c.sub || typeof c.email !== 'string' || !c.email) throw new Error('id_token lacks sub or email');
   // Strictly boolean true: Google has sent the string form in some token types, and a string must not count as verified.
-  return { sub: c.sub, email: c.email, emailVerified: c.email_verified === true };
+  return { sub: c.sub, email: c.email, emailVerified: c.email_verified === true, ...(typeof c.hd === 'string' && c.hd ? { hd: c.hd } : {}) };
 }
 
 /** Post-login redirect target; anything that could leave this origin collapses to '/'. */

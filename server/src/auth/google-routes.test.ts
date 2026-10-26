@@ -2,8 +2,10 @@ import { createHash } from 'node:crypto';
 import { expect, test, vi } from 'vitest';
 import { createApp } from '../app';
 import { testDeps } from '../test-helpers';
+import { hashPassword } from './passwords';
 import { createSession } from './sessions';
 import { newId } from './tokens';
+import { issueEmailToken } from './users';
 
 const now = new Date('2026-01-15T12:00:00.000Z');
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -14,6 +16,7 @@ const claims = (over: Record<string, unknown> = {}) => ({
   exp: now.getTime() / 1000 + 600,
   sub: 'sub-1',
   email: 'g@ucsd.edu',
+  hd: 'ucsd.edu',
   email_verified: true,
   ...over,
 });
@@ -169,12 +172,18 @@ test('google sign-in on an email someone pre-registered unverified clears their 
 });
 
 test('R19: an email-matched row with a different google_sub is re-bound and its old sessions die', async () => {
-  const { flow, me, deps } = setup(claims({ sub: 'new-sub' }));
+  const { flow, me, deps, post } = setup(claims({ sub: 'new-sub' }));
   const id = newId();
-  deps.db.prepare("INSERT INTO users (id,email,email_verified,google_sub,created_at) VALUES (?,?,1,'old-sub','x')").run(id, 'g@ucsd.edu');
+  deps.db
+    .prepare("INSERT INTO users (id,email,email_verified,google_sub,password_hash,created_at) VALUES (?,?,1,'old-sub',?,'x')")
+    .run(id, 'g@ucsd.edu', await hashPassword('old-holder-pass1'));
+  issueEmailToken(deps.db, id, 'reset', now);
+  expect((await post('/api/auth/login', { email: 'g@ucsd.edu', password: 'old-holder-pass1' })).status).toBe(200);
   const old = createSession(deps.db, id, now);
   const { cookies } = await flow();
   expect(deps.db.prepare('SELECT google_sub s FROM users WHERE id = ?').get(id)).toEqual({ s: 'new-sub' });
+  expect((await post('/api/auth/login', { email: 'g@ucsd.edu', password: 'old-holder-pass1' })).status).toBe(401);
+  expect(deps.db.prepare('SELECT COUNT(*) n FROM email_tokens WHERE user_id = ?').get(id)).toEqual({ n: 0 });
   expect((await me(old)).status).toBe(401);
   expect((await me(cookies.tp_session!)).status).toBe(200);
 });
@@ -186,4 +195,98 @@ test('a returning google user is matched by sub even if the email changed', asyn
   const { cookies } = await flow();
   expect(((await (await me(cookies.tp_session!)).json()) as { email: string }).email).toBe('old@ucsd.edu');
   expect(deps.db.prepare('SELECT COUNT(*) n FROM users').get()).toEqual({ n: 1 });
+});
+
+const clearedAll = (cookies: Record<string, string>) => {
+  expect(cookies.tp_g_state).toBe('');
+  expect(cookies.tp_g_verifier).toBe('');
+  expect(cookies.tp_g_return).toBe('');
+  expect(cookies.tp_session).toBeUndefined();
+};
+
+test('R20: Workspace (hd) and @gmail.com addresses are trusted', async () => {
+  const ws = setup(claims({ email: 'x@ucsd.edu', hd: 'ucsd.edu' }));
+  expect((await ws.flow()).cb.headers.get('location')).toBe('/migrate');
+  const gm = setup(claims({ email: 'x@gmail.com', hd: undefined }));
+  const r = await gm.flow();
+  expect(r.cb.headers.get('location')).toBe('/migrate');
+  expect(r.cookies.tp_session).toBeTruthy();
+});
+
+test('R20: a verified third-party address without hd is unsupported and touches no row', async () => {
+  const { flow, deps, post } = setup(claims({ email: 'x@yahoo.com', hd: undefined }));
+  await post('/api/auth/signup', { email: 'x@yahoo.com', password: 'hunter2hunter2' });
+  const token = /token=([\w-]+)/.exec(deps.mailer.sent[0]!.text)![1]!;
+  expect((await post('/api/auth/verify', { token, password: 'hunter2hunter2' })).status).toBe(200);
+  const { cb, cookies } = await flow();
+  expect(cb.headers.get('location')).toBe('/?auth=google-unsupported');
+  clearedAll(cookies);
+  expect((await post('/api/auth/login', { email: 'x@yahoo.com', password: 'hunter2hunter2' })).status).toBe(200);
+  expect(deps.db.prepare("SELECT google_sub s FROM users WHERE email='x@yahoo.com'").get()).toEqual({ s: null });
+});
+
+test('flow cookies are cleared on unverified and failed-exchange outcomes', async () => {
+  const u = await setup(claims({ email_verified: false })).flow();
+  clearedAll(u.cookies);
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const s = setup();
+  s.deps.fetch = (async () => new Response('{}', { status: 500 })) as unknown as typeof fetch;
+  const f = await s.flow();
+  expect(f.cb.headers.get('location')).toBe('/?auth=google-failed');
+  clearedAll(f.cookies);
+  const logged = JSON.stringify(log.mock.calls);
+  expect(logged).not.toContain('test-google-secret');
+  expect(logged).not.toContain('thecode');
+  log.mockRestore();
+});
+
+test('malformed id_tokens and unnormalizable emails end in google-failed', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  for (const id_token of ['nodots', `${b64({})}.${Buffer.from('not json {{').toString('base64url')}.sig`]) {
+    const s = setup();
+    s.deps.fetch = (async () => new Response(JSON.stringify({ id_token }), { status: 200 })) as unknown as typeof fetch;
+    const f = await s.flow();
+    expect(f.cb.headers.get('location')).toBe('/?auth=google-failed');
+    clearedAll(f.cookies);
+  }
+  const bad = setup(claims({ email: 'not-an-email' }));
+  const f = await bad.flow();
+  expect(f.cb.headers.get('location')).toBe('/?auth=google-failed');
+  expect(bad.deps.db.prepare('SELECT COUNT(*) n FROM users').get()).toEqual({ n: 0 });
+  expect(JSON.stringify(log.mock.calls)).not.toContain('not json');
+  log.mockRestore();
+});
+
+test('a hostile tp_g_return cookie never leaves the origin', async () => {
+  for (const evil of ['//evil.com', '/\\evil.com', 'https://evil.com']) {
+    const { app, jar } = setup();
+    const start = await app.request('/api/auth/google');
+    const c = jar(start);
+    const cb = await app.request(`/api/auth/google/callback?code=c&state=${c.tp_g_state}`, {
+      headers: { Cookie: `tp_g_state=${c.tp_g_state}; tp_g_verifier=${c.tp_g_verifier}; tp_g_return=${encodeURIComponent(evil)}` },
+    });
+    expect(cb.headers.get('location')).toBe('/');
+  }
+});
+
+test('the callback is rate limited per IP before any outbound call', async () => {
+  const { app, calls, jar, cookieHeader } = setup();
+  const ip = { 'x-real-ip': '9.9.9.9' };
+  for (let i = 0; i < 30; i++) await app.request('/api/auth/google/callback?code=c&state=s', { headers: ip });
+  const start = await app.request('/api/auth/google');
+  const c = jar(start);
+  const res = await app.request(`/api/auth/google/callback?code=c&state=${c.tp_g_state}`, { headers: { ...ip, Cookie: cookieHeader(c) } });
+  expect(res.headers.get('location')).toBe('/?auth=google-failed');
+  expect(calls).toHaveLength(0);
+  // Another IP with the same valid flow gets through.
+  const ok = await app.request(`/api/auth/google/callback?code=c&state=${c.tp_g_state}`, { headers: { 'x-real-ip': '8.8.8.8', Cookie: cookieHeader(c) } });
+  expect(ok.headers.get('location')).toBe('/');
+  expect(ok.headers.getSetCookie().join(';')).toContain('tp_session=');
+});
+
+test('with cookieSecure off the flow cookies omit Secure', async () => {
+  const { app, deps } = setup();
+  deps.config.cookieSecure = false;
+  const res = await app.request('/api/auth/google');
+  for (const line of res.headers.getSetCookie()) expect(line).not.toMatch(/Secure/);
 });

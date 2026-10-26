@@ -3,7 +3,8 @@ import { Hono, type Context } from 'hono';
 import { getCookie } from 'hono/cookie';
 import type { Deps } from '../app';
 import { tx } from '../db/db';
-import type { AppEnv } from '../http/guard';
+import { clientIp, type AppEnv } from '../http/guard';
+import type { RateLimiter } from '../http/rate-limit';
 import { exchangeGoogleCode, googleAuthUrl, safeReturnTo } from './google';
 import { createSession, deleteUserSessions, sessionCookie } from './sessions';
 import { createUser, findUserByEmail, normalizeEmail, type UserRow } from './users';
@@ -19,7 +20,7 @@ function same(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-export function googleRoutes(deps: Deps): Hono<AppEnv> {
+export function googleRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
   const { db, config } = deps;
   const redirectUri = `${config.origin}/api/auth/google/callback`;
@@ -52,15 +53,13 @@ export function googleRoutes(deps: Deps): Hono<AppEnv> {
     const verifier = getCookie(c, VERIFIER);
     const given = c.req.query('state');
     const code = c.req.query('code');
-    let returnTo = '/';
-    try {
-      returnTo = safeReturnTo(decodeURIComponent(getCookie(c, RETURN) ?? ''));
-    } catch {
-      /* malformed cookie: stay on '/' */
-    }
+    // getCookie already percent-decodes; the cookie is attacker-settable on a sibling path, so validate again.
+    const returnTo = safeReturnTo(getCookie(c, RETURN));
+    // Bounds how fast one client can make us call Google; checked before any outbound request.
+    if (!limiter.hit(`google:cb:ip:${clientIp(c)}`, 30, 900_000).ok) return done(c, '/?auth=google-failed');
     if (!state || !verifier || !given || !code || !same(state, given)) return done(c, '/?auth=google-failed');
 
-    let g: { sub: string; email: string; emailVerified: boolean };
+    let g: { sub: string; email: string; emailVerified: boolean; hd?: string };
     try {
       g = await exchangeGoogleCode({
         code,
@@ -79,6 +78,10 @@ export function googleRoutes(deps: Deps): Hono<AppEnv> {
     if (!g.emailVerified) return done(c, '/?auth=google-unverified');
     const email = normalizeEmail(g.email);
     if (!email) return done(c, '/?auth=google-failed');
+    // Google vouches for an address only when it hosts it (gmail.com) or it belongs to a Workspace domain (hd).
+    // For a consumer account using a third-party address, email_verified can be stale, and trusting it would let
+    // that account link to, re-bind or wipe someone else's row.
+    if (!(email.endsWith('@gmail.com') || g.hd)) return done(c, '/?auth=google-unsupported');
 
     const userId = tx(db, () => {
       // 1. Known Google account.
@@ -94,9 +97,14 @@ export function googleRoutes(deps: Deps): Hono<AppEnv> {
           db.prepare('DELETE FROM email_tokens WHERE user_id = ?').run(byEmail.id);
           deleteUserSessions(db, byEmail.id);
         } else {
-          db.prepare('UPDATE users SET google_sub = ? WHERE id = ?').run(g.sub, byEmail.id);
-          // Re-binding from a different Google account (the address changed hands): end whatever the old one had open.
-          if (byEmail.google_sub !== null && byEmail.google_sub !== g.sub) deleteUserSessions(db, byEmail.id);
+          const rebind = byEmail.google_sub !== null && byEmail.google_sub !== g.sub;
+          // A different Google account now holds this address (it changed hands): the previous holder's password,
+          // pending links and sessions must all die with the old binding.
+          db.prepare(`UPDATE users SET google_sub = ?${rebind ? ', password_hash = NULL' : ''} WHERE id = ?`).run(g.sub, byEmail.id);
+          if (rebind) {
+            db.prepare('DELETE FROM email_tokens WHERE user_id = ?').run(byEmail.id);
+            deleteUserSessions(db, byEmail.id);
+          }
         }
         return byEmail.id;
       }

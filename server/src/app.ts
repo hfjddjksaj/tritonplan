@@ -26,7 +26,7 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   // The limiter's sweep timer is unref'd, so it never holds the process or a test run open.
   const limiter = createRateLimiter(deps.now);
   app.route('/api/auth', authRoutes(deps, limiter));
-  app.route('/api/auth/google', googleRoutes(deps));
+  app.route('/api/auth/google', googleRoutes(deps, limiter));
   app.route('/api/me', meRoute(deps));
 
   // Never leak internals to the client; the log has the detail.
