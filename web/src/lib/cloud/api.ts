@@ -34,13 +34,18 @@ export async function fetchState(): Promise<WebSnapshot> {
   return (await r.json()) as WebSnapshot;
 }
 
+/** 20 s plus 1 s per 25 KB: a big body on a slow uplink must not time out while it is still uploading. */
+export const syncTimeoutMs = (bytes: number): number => SYNC_TIMEOUT_MS + Math.ceil(bytes / 25_000) * 1_000;
+
 export async function postSync(ops: SyncOp[]): Promise<SendResult> {
   let r: Response;
+  const body = JSON.stringify({ ops });
   try {
     r = await fetch('/api/sync', {
-      method: 'POST', credentials: 'same-origin', headers: JSON_HEADERS, body: JSON.stringify({ ops }),
+      method: 'POST', credentials: 'same-origin', headers: JSON_HEADERS, body,
       // A hung request would hold the engine's one in-flight slot forever; an abort counts as a network failure.
-      ...(typeof AbortSignal.timeout === 'function' ? { signal: AbortSignal.timeout(SYNC_TIMEOUT_MS) } : {}),
+      ...(typeof AbortSignal.timeout === 'function'
+        ? { signal: AbortSignal.timeout(syncTimeoutMs(new TextEncoder().encode(body).length)) } : {}),
     });
   } catch {
     return { ok: false, kind: 'network' };

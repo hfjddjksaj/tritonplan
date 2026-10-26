@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiDelete, apiPost, fetchMe, fetchState, postSync, UnauthorizedError } from './api';
+import { apiDelete, apiPost, fetchMe, fetchState, postSync, syncTimeoutMs, UnauthorizedError } from './api';
 
 const res = (status: number, body: unknown = {}) =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
@@ -41,6 +41,12 @@ describe('postSync', () => {
     expect(url).toBe('/api/sync');
     expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } });
     expect(JSON.parse(init.body as string)).toEqual({ ops: [{ op: 'deleteCourses', ids: ['a'] }] });
+  });
+  it('the timeout grows with the body: 20 s + 1 s per 25 KB', () => {
+    expect(syncTimeoutMs(0)).toBe(20_000);
+    expect(syncTimeoutMs(25_000)).toBe(21_000);
+    expect(syncTimeoutMs(25_001)).toBe(22_000);
+    expect(syncTimeoutMs(1_000_000)).toBe(60_000);
   });
   it('passes a timeout signal, and an abort maps to network', async () => {
     stub(async () => { throw new DOMException('timed out', 'TimeoutError'); });

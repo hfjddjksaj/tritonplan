@@ -199,7 +199,7 @@ describe('createSyncEngine', () => {
     expect(f.calls.length).toBeGreaterThanOrEqual(3);
     for (const ops of f.calls) {
       expect(ops.length).toBeLessThanOrEqual(500);
-      expect(JSON.stringify({ ops }).length).toBeLessThanOrEqual(4_000_000);
+      expect(JSON.stringify({ ops }).length).toBeLessThanOrEqual(1_000_000);
       for (const o of ops) if (o.op === 'putCourses') expect(o.courses.length).toBeLessThanOrEqual(2000);
     }
     expect(f.calls[0]!.map((o) => o.op)).toEqual(expect.arrayContaining(['putTerm', 'putPlan']));
@@ -281,7 +281,7 @@ describe('realistic course sizes', () => {
     await vi.advanceTimersByTimeAsync(800);
     expect(f.calls.length).toBeGreaterThan(1);
     for (const ops of f.calls) {
-      expect(enc({ ops })).toBeLessThanOrEqual(4_000_000);
+      expect(enc({ ops })).toBeLessThanOrEqual(1_000_000);
       expect(ops.length).toBeLessThanOrEqual(500);
       const n = ops.reduce((a, o) => a + (o.op === 'putCourses' ? o.courses.length : o.op === 'deleteCourses' ? o.ids.length : 0), 0);
       expect(n).toBeLessThanOrEqual(2000);
@@ -300,6 +300,45 @@ describe('realistic course sizes', () => {
     await vi.advanceTimersByTimeAsync(800);
     expect(f.impl).toHaveBeenCalledTimes(1);
     expect(f.calls[0]!.map((o) => o.op)).toEqual(['putPlan', 'putCourses']);
+  });
+
+  it('a plan edit travels in a small request and is acked even when the course batches cannot upload', async () => {
+    const f = fakeSend();
+    const slow = (ops: SyncOp[]) => (enc({ ops }) > 300_000 ? Promise.resolve(fail('network')) : f.base(ops));
+    const send = vi.fn(slow);
+    const e = createSyncEngine({ snapshot: snap(state()), send });
+    e.setTerms(state('b'));
+    e.setPool(Array.from({ length: 200 }, (_, i) => fatCourse(`c${i}`, 5))); // ~1 MB of changes
+    await vi.advanceTimersByTimeAsync(800 + 2000 + 5000 + 10_000);
+    expect(e.status()).toBe('offline');
+    expect(f.calls).toHaveLength(1); // only the plan batch ever got through
+    expect(f.calls[0]!.map((o) => o.op)).toEqual(['putPlan']);
+    const later = send.mock.calls.slice(1).map((c) => c[0]);
+    expect(later.length).toBeGreaterThanOrEqual(3);
+    for (const ops of later) expect(ops.every((o) => o.op === 'putCourses')).toBe(true);
+    expect(e.hasPending()).toBe(true);
+  });
+
+  it('plan ops share a request only with small course payloads', () => {
+    const plan: SyncOp = { op: 'putPlan', planId: 'a', termKey: 't', baseVersion: 1, data: {} };
+    const small = batchOps([plan, { op: 'putCourses', courses: [fatCourse('s', 5)] }]);
+    expect(small).toHaveLength(1);
+    const big = batchOps([plan, { op: 'putCourses', courses: Array.from({ length: 60 }, (_, i) => fatCourse(`b${i}`, 5)) }]);
+    expect(big[0]).toEqual([plan]);
+    expect(big.length).toBeGreaterThan(1);
+  });
+
+  it('stops in error (and logs without data) if building a request throws', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const f = fakeSend();
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    e.setPool([{ id: 'x', n: 1n } as unknown as CourseOffering]); // JSON.stringify throws on BigInt
+    await vi.advanceTimersByTimeAsync(800);
+    expect(e.status()).toBe('error');
+    expect(f.impl).not.toHaveBeenCalled();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(String(spy.mock.calls[0])).not.toContain('"x"');
+    spy.mockRestore();
   });
 
   it('a single oversized course goes alone', () => {
@@ -427,6 +466,6 @@ describe('batchOps', () => {
     const fat: SyncOp[] = Array.from({ length: 5 }, (_, i) => ({ op: 'putPlan', planId: `p${i}`, termKey: 't', baseVersion: 0, data: 'x'.repeat(900_000) }));
     const fb = batchOps(fat);
     expect(fb.length).toBeGreaterThan(1);
-    for (const x of fb) expect(JSON.stringify({ ops: x }).length).toBeLessThanOrEqual(4_000_000);
+    for (const x of fb) expect(JSON.stringify({ ops: x }).length).toBeLessThanOrEqual(1_000_000);
   });
 });

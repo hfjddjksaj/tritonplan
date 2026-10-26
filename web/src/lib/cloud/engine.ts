@@ -21,6 +21,7 @@ export interface SyncEngine {
   setAppt(a: ApptTimes[]): void;
   flush(): Promise<void>;
   status(): SyncStatus;
+  /** False once the engine has stopped (conflict / signed-out / error / disposed): such edits can no longer be saved, and the page reload replaces the engine. */
   hasPending(): boolean;
   /** The ops the next request would carry; empty while one is in flight or the engine has stopped (used by the unload guard). */
   pendingOps(): SyncOp[];
@@ -30,7 +31,11 @@ export interface SyncEngine {
 
 // Well under the server's SYNC_LIMITS (500 ops / 8 MB body); the byte budget leaves headroom for the envelope.
 const MAX_OPS = 500;
-const MAX_BATCH_BYTES = 4_000_000;
+// ~1 MB keeps a request finishable within postSync's size-scaled timeout on a slow uplink; a timeout that
+// follows a server commit would resend stale baseVersions and read as a false conflict.
+const MAX_BATCH_BYTES = 1_000_000;
+// term/plan ops only share a request with this much course data, so a plan edit is never stuck behind an upload.
+const SMALL_COURSE_BYTES = 256_000;
 const MAX_ITEMS = 2000;
 const UNLOAD_MAX_BYTES = 60_000;
 // Slack for the op wrapper and the `{"ops":[...]}` envelope around a list piece.
@@ -62,28 +67,34 @@ function listPieces<T>(items: T[], make: (chunk: T[]) => SyncOp): { op: SyncOp; 
 
 /**
  * Pack ops, in order (term/plan ops stay first), into batches of <= 500 ops,
- * <= 2 000 course items/ids and <= ~4 MB of JSON. Course lists are chunked by
+ * <= 2 000 course items/ids and <= ~1 MB of JSON. Course lists are chunked by
  * count AND bytes first: real courses average several KB, so a 2 000-course
- * chunk by count alone would blow the server's body limit.
+ * chunk by count alone would blow the server's body limit. Non-list ops
+ * (term/plan/appt) only share a batch with < 256 KB of course data.
+ * Also the entry point for one-off bulk imports (Task 15): send these in order.
  */
 export function batchOps(ops: SyncOp[]): SyncOp[][] {
   const out: SyncOp[][] = [];
   let cur: SyncOp[] = [];
   let bytes = 0;
   let items = 0;
-  const close = () => { if (cur.length) { out.push(cur); cur = []; bytes = 0; items = 0; } };
-  const push = (op: SyncOp, b: number, n: number) => {
-    if (cur.length > 0 && (cur.length >= MAX_OPS || bytes + b > MAX_BATCH_BYTES || items + n > MAX_ITEMS)) close();
+  let courseBytes = 0;
+  let meta = 0;
+  const close = () => { if (cur.length) { out.push(cur); cur = []; bytes = 0; items = 0; courseBytes = 0; meta = 0; } };
+  const push = (op: SyncOp, b: number, n: number, list: boolean) => {
+    const mixes = list ? meta > 0 && courseBytes + b >= SMALL_COURSE_BYTES : courseBytes >= SMALL_COURSE_BYTES;
+    if (cur.length > 0 && (mixes || cur.length >= MAX_OPS || bytes + b > MAX_BATCH_BYTES || items + n > MAX_ITEMS)) close();
     cur.push(op);
     bytes += b;
     items += n;
+    if (list) courseBytes += b; else meta++;
   };
   for (const op of ops) {
     if (op.op === 'putCourses') {
-      for (const p of listPieces(op.courses, (courses) => ({ op: 'putCourses', courses }))) push(p.op, p.bytes, p.items);
+      for (const p of listPieces(op.courses, (courses) => ({ op: 'putCourses', courses }))) push(p.op, p.bytes, p.items, true);
     } else if (op.op === 'deleteCourses') {
-      for (const p of listPieces(op.ids, (ids) => ({ op: 'deleteCourses', ids }))) push(p.op, p.bytes, p.items);
-    } else push(op, byteLen(JSON.stringify(op)) + 1, 0);
+      for (const p of listPieces(op.ids, (ids) => ({ op: 'deleteCourses', ids }))) push(p.op, p.bytes, p.items, true);
+    } else push(op, byteLen(JSON.stringify(op)) + 1, 0, false);
   }
   close();
   return out;
@@ -135,9 +146,18 @@ export function createSyncEngine(o: {
     // so an edit made on the 'idle' notification sees busy === false and schedules its own send.
     try {
       while (!stopped) {
-        const ops = diffOps(acked, desired);
-        if (ops.length === 0) { setStatus('idle'); return; }
-        const batch = batchOps(ops)[0]!;
+        let batch: SyncOp[];
+        try {
+          const ops = diffOps(acked, desired);
+          if (ops.length === 0) { setStatus('idle'); return; }
+          batch = batchOps(ops)[0]!;
+        } catch {
+          // Unserializable state: retrying cannot help. Log without the data.
+          console.error('TritonPlan sync: could not build a request; sync stopped');
+          stopped = true;
+          setStatus('error');
+          return;
+        }
         setStatus('saving');
         let res: SendResult;
         try { res = await o.send(batch); } catch { res = { ok: false, kind: 'network' }; }
