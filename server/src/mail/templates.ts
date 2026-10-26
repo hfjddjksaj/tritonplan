@@ -7,6 +7,14 @@ export function verifyEmailMail(link: string): { subject: string; text: string }
   };
 }
 
+/** Sent when someone submits sign-up for a Google-only account: only the mailbox owner can choose the password. */
+export function addPasswordMail(link: string): { subject: string; text: string } {
+  return {
+    subject: 'Set a password for TritonPlan',
+    text: `Your TritonPlan account signs in with Google. To also sign in with a password, choose one here:\n\n${link}\n\n${IGNORE}\n`,
+  };
+}
+
 export function resetPasswordMail(link: string): { subject: string; text: string } {
   return {
     subject: 'Reset your TritonPlan password',
