@@ -3,6 +3,7 @@ node_modules/
 
 # build output
 dist/
+web/dist-migrate/
 *.tsbuildinfo
 
 # API server bundle and local SQLite data
