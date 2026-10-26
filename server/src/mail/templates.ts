@@ -15,6 +15,14 @@ export function addPasswordMail(link: string): { subject: string; text: string }
   };
 }
 
+/** Sent on repeat sign-up for an unverified address: the mailbox owner, not the form submitter, chooses the password. */
+export function finishSignupMail(link: string): { subject: string; text: string } {
+  return {
+    subject: 'Choose your TritonPlan password',
+    text: `To finish signing up for TritonPlan, choose your password here:\n\n${link}\n\n${IGNORE}\n`,
+  };
+}
+
 export function resetPasswordMail(link: string): { subject: string; text: string } {
   return {
     subject: 'Reset your TritonPlan password',

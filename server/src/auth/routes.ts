@@ -4,7 +4,7 @@ import type { Deps } from '../app';
 import { tx } from '../db/db';
 import { clientIp, requireUser, type AppEnv } from '../http/guard';
 import type { RateLimiter } from '../http/rate-limit';
-import { addPasswordMail, resetPasswordMail, verifyEmailMail } from '../mail/templates';
+import { addPasswordMail, finishSignupMail, resetPasswordMail, verifyEmailMail } from '../mail/templates';
 import { hashPassword, passwordProblem, verifyPassword } from './passwords';
 import { clearSessionCookie, createSession, deleteSession, deleteUserSessions, SESSION_COOKIE, sessionCookie } from './sessions';
 import { consumeEmailToken, createUser, findUserByEmail, findUserById, issueEmailToken, normalizeEmail } from './users';
@@ -16,6 +16,7 @@ type Bucket = [key: string, limit: number, windowMs: number];
 
 // Verified against when the account does not exist or has no password, so "no such user" costs the same argon2 run
 // as "wrong password". Created at load; the promise is awaited at use so startup never blocks on it.
+// An import-time rejection (no argon2 on this Node) is intentional fail-fast.
 const DUMMY_HASH = hashPassword('tritonplan-dummy-password');
 
 async function body(c: Context): Promise<Record<string, unknown>> {
@@ -46,9 +47,20 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     c.header('Set-Cookie', sessionCookie(createSession(db, userId, deps.now()), config), { append: true });
   };
 
-  const sendVerify = async (email: string, userId: string): Promise<void> => {
+  // The token is issued synchronously; the caller decides whether to await the send.
+  const sendVerify = (email: string, userId: string): Promise<void> => {
     const t = issueEmailToken(db, userId, 'verify', deps.now());
-    await deps.mailer.send({ to: email, ...verifyEmailMail(`${config.origin}/api/auth/verify?token=${t}`) });
+    return deps.mailer.send({ to: email, ...verifyEmailMail(`${config.origin}/api/auth/verify?token=${t}`) });
+  };
+
+  /** Fire-and-forget: response time and status must not reveal whether a mail was sent. Never log the address. */
+  const sendDetached = (what: string, send: () => Promise<void>): void => {
+    const fail = (err: unknown): void => console.error(`[mail] ${what} send failed:`, err instanceof Error ? err.message : 'unknown');
+    try {
+      void send().catch(fail);
+    } catch (err) {
+      fail(err);
+    }
   };
 
   r.post('/signup', async (c) => {
@@ -67,21 +79,17 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     const existing = findUserByEmail(db, email);
     if (existing?.email_verified && existing.password_hash) return c.json({ error: 'email_taken' }, 409);
 
-    if (existing?.email_verified) {
-      // Google-only: the submitted password is discarded. Whoever fills this form does not own the mailbox, so the
-      // owner picks the password through a reset-style link instead.
+    if (existing) {
+      // Google-only or still unverified: the submitted password is discarded. Whoever fills this form does not
+      // necessarily own the mailbox, so the owner picks the password through a reset-style link instead. The
+      // outstanding verify link is left alone so a repeat signup cannot invalidate the owner's first mail.
       const t = issueEmailToken(db, existing.id, 'reset', deps.now());
-      await deps.mailer.send({ to: email, ...addPasswordMail(`${config.origin}/reset#token=${t}`) });
+      const link = `${config.origin}/reset#token=${t}`;
+      await deps.mailer.send({ to: email, ...(existing.email_verified ? addPasswordMail(link) : finishSignupMail(link)) });
       return c.json({ ok: true });
     }
-    let userId: string;
-    if (existing) {
-      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, existing.id);
-      userId = existing.id;
-    } else {
-      userId = createUser(db, { email, verified: false, passwordHash: hash }, deps.now()).id;
-    }
-    await sendVerify(email, userId);
+    const user = createUser(db, { email, verified: false, passwordHash: hash }, deps.now());
+    await sendVerify(email, user.id);
     return c.json({ ok: true });
   });
 
@@ -91,10 +99,11 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     if (!t) return c.redirect('/?auth=link-expired', 302);
     tx(db, () => {
       db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(t.userId);
-      if (t.pendingPasswordHash) db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(t.pendingPasswordHash, t.userId);
+      db.prepare("DELETE FROM email_tokens WHERE user_id = ? AND kind = 'verify'").run(t.userId);
     });
-    startSession(c, t.userId);
-    return c.redirect('/', 302);
+    // No session: a GET link anyone can be lured into clicking must not sign a browser in (login CSRF), and the
+    // password on a self-signup may have been chosen by someone other than the mailbox owner.
+    return c.redirect('/?auth=verified', 302);
   });
 
   r.post('/login', async (c) => {
@@ -115,10 +124,13 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   r.post('/resend', async (c) => {
     const email = normalizeEmail(str((await body(c)).email));
     if (!email) return c.json({ ok: true });
-    const blocked = limited(c, [[`resend:email:${email}`, 3, HOUR]]);
+    const blocked = limited(c, [
+      [`resend:ip:${clientIp(c)}`, 20, HOUR],
+      [`resend:email:${email}`, 3, HOUR],
+    ]);
     if (blocked) return blocked;
     const user = findUserByEmail(db, email);
-    if (user && !user.email_verified) await sendVerify(email, user.id);
+    if (user && !user.email_verified) sendDetached('resend', () => sendVerify(email, user.id));
     return c.json({ ok: true });
   });
 
@@ -134,7 +146,7 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     if (user) {
       // Token in the URL fragment: browsers never send it to the server, so it stays out of access logs and Referer.
       const t = issueEmailToken(db, user.id, 'reset', deps.now());
-      await deps.mailer.send({ to: email, ...resetPasswordMail(`${config.origin}/reset#token=${t}`) });
+      sendDetached('forgot', () => deps.mailer.send({ to: email, ...resetPasswordMail(`${config.origin}/reset#token=${t}`) }));
     }
     return c.json({ ok: true });
   });
