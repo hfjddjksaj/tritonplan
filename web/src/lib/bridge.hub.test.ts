@@ -156,6 +156,80 @@ describe('bridge hub', () => {
     expect(h).toHaveBeenCalledTimes(1);
   });
 
+  it('unsubscribing during replay keeps the rest queued for the next subscriber', () => {
+    installBridgeHub();
+    post(planAdd('A'));
+    post(planAdd('B'));
+    post(planAdd('C'));
+    const first: string[] = [];
+    // The handler cannot hold its own unsubscribe before subscribeBridge returns, so a
+    // teardown mid-replay (sign-out) is simulated by dropping every subscriber.
+    subscribeBridge(['plan-add'], (d) => {
+      first.push(idOf(d));
+      resetBridgeHubForTests();
+    });
+    expect(first).toEqual(['A']);
+    expect(JSON.parse(sessionStorage.getItem(PENDING_ADDS_KEY) as string)).toHaveLength(2);
+    const next: string[] = [];
+    subscribeBridge(['plan-add'], (d) => next.push(idOf(d)));
+    expect(next).toEqual(['B', 'C']);
+    expect(sessionStorage.getItem(PENDING_ADDS_KEY)).toBeNull();
+  });
+
+  it('a handler that throws keeps the plan-add queued and mirrored for the next subscriber', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    installBridgeHub();
+    post(planAdd('A'));
+    const off = subscribeBridge(['plan-add'], () => {
+      throw new Error('boom');
+    });
+    expect(sessionStorage.getItem(PENDING_ADDS_KEY)).not.toBeNull();
+    off();
+    const h = vi.fn();
+    subscribeBridge(['plan-add'], h);
+    expect(h).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.getItem(PENDING_ADDS_KEY)).toBeNull();
+  });
+
+  it('keeps only the latest booked / appt-times snapshot', () => {
+    installBridgeHub();
+    post(apptMsg);
+    post({ ...apptMsg, payload: [{ ...APPT, sessionText: 'Winter Quarter' }] });
+    const h = vi.fn();
+    subscribeBridge(['appt-times'], h);
+    expect(h).toHaveBeenCalledTimes(1);
+    expect(h.mock.calls[0][0].payload[0].sessionText).toBe('Winter Quarter');
+  });
+
+  it('evicting one kind never drops another, and warns once without data', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    installBridgeHub();
+    post(apptMsg);
+    const courses = (n: number) => ({ source: BRIDGE_SOURCE, type: 'courses', version: 1, payload: [makeCourse(`k${n}`)] });
+    for (let i = 0; i < 210; i++) post(courses(i));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).not.toContain('k0');
+    const a = vi.fn();
+    subscribeBridge(['appt-times'], a);
+    expect(a).toHaveBeenCalledTimes(1);
+  });
+
+  it('mirrors only the newest 50 plan-adds and clears a mirror it cannot write', () => {
+    installBridgeHub();
+    for (let i = 0; i < 60; i++) post(planAdd(`m${i}`));
+    const mirrored = JSON.parse(sessionStorage.getItem(PENDING_ADDS_KEY) as string);
+    expect(mirrored).toHaveLength(50);
+    expect(idOf(mirrored[0])).toBe('m10');
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+    post(planAdd('late'));
+    expect(sessionStorage.getItem(PENDING_ADDS_KEY)).toBeNull();
+    const ids: string[] = [];
+    subscribeBridge(['plan-add'], (d) => ids.push(idOf(d)));
+    expect(ids).toHaveLength(61);
+  });
+
   it('caps each kind queue at the latest 200 messages', () => {
     installBridgeHub();
     for (let i = 0; i < 205; i++) post(planAdd(`c${i}`));

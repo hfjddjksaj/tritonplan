@@ -137,6 +137,10 @@ export const PENDING_ADDS_KEY = 'triton-planner:pending-adds:v1';
 /** Per-kind queue cap: keeps the latest N. `courses` pushes can be large, and a student who
  *  never signs in must not grow memory without bound; older ones are superseded anyway. */
 const MAX_QUEUED_PER_KIND = 200;
+const MAX_MIRRORED_ADDS = 50;
+/** Each push of these is a full snapshot, so only the latest is worth keeping. */
+const LATEST_ONLY: ReadonlySet<BridgeKind> = new Set<BridgeKind>(['booked', 'appt-times']);
+let warnedEviction = false;
 
 function classify(data: unknown): BridgeKind | null {
   if (isPlanAddMessage(data)) return 'plan-add';
@@ -156,11 +160,14 @@ const subscribers = new Set<Subscriber>();
 
 function persistPendingAdds(): void {
   try {
-    const adds = queue.filter((q) => q.kind === 'plan-add').map((q) => q.data);
+    // Newest only: stays well under the sessionStorage quota.
+    const adds = queue.filter((q) => q.kind === 'plan-add').map((q) => q.data).slice(-MAX_MIRRORED_ADDS);
     if (adds.length === 0) sessionStorage.removeItem(PENDING_ADDS_KEY);
     else sessionStorage.setItem(PENDING_ADDS_KEY, JSON.stringify(adds));
   } catch {
-    // Private mode / blocked storage / quota: the hub keeps working in memory.
+    // Private mode / blocked storage / quota: the hub keeps working in memory. Don't leave
+    // a stale mirror behind (it would resurrect already-delivered adds after a reload).
+    try { sessionStorage.removeItem(PENDING_ADDS_KEY); } catch { /* blocked */ }
   }
 }
 
@@ -178,21 +185,29 @@ function restorePendingAdds(): void {
   }
 }
 
-function deliver(handler: (data: unknown) => void, data: unknown): void {
+/** Returns false when the handler threw, so replay can keep the message for the next subscriber. */
+function deliver(handler: (data: unknown) => void, data: unknown): boolean {
   try {
     handler(data);
+    return true;
   } catch (err) {
     // One failing subscriber must not lose the rest of a replay.
     console.error('bridge subscriber threw', err);
+    return false;
   }
 }
 
 function enqueue(item: Queued): void {
+  if (LATEST_ONLY.has(item.kind)) queue = queue.filter((q) => q.kind !== item.kind);
   queue.push(item);
   let count = 0;
   for (const q of queue) if (q.kind === item.kind) count++;
   if (count > MAX_QUEUED_PER_KIND) {
     queue.splice(queue.findIndex((q) => q.kind === item.kind), 1);
+    if (!warnedEviction) {
+      warnedEviction = true;
+      console.warn(`bridge queue full for "${item.kind}"; dropping the oldest`);
+    }
   }
   if (item.kind === 'plan-add') persistPendingAdds();
 }
@@ -228,12 +243,20 @@ export function installBridgeHub(): void {
 export function subscribeBridge(kinds: BridgeKind[], handler: (data: unknown) => void): () => void {
   const sub: Subscriber = { kinds: new Set(kinds), handler };
   const replay = queue.filter((q) => sub.kinds.has(q.kind));
-  if (replay.length > 0) {
-    queue = queue.filter((q) => !sub.kinds.has(q.kind));
-    if (replay.some((q) => q.kind === 'plan-add')) persistPendingAdds();
-  }
+  if (replay.length > 0) queue = queue.filter((q) => !sub.kinds.has(q.kind));
   subscribers.add(sub);
-  for (const q of replay) deliver(handler, q.data);
+  // Entries stay mirrored in sessionStorage until the loop ends: a handler that throws or
+  // unsubscribes mid-replay must not cost the student a queued "+ TritonPlan" click.
+  const undelivered: Queued[] = [];
+  for (const q of replay) {
+    if (!subscribers.has(sub) || !deliver(handler, q.data)) undelivered.push(q);
+  }
+  if (undelivered.length > 0) {
+    // Back to the front in original order; a newer snapshot that arrived meanwhile wins.
+    const newer = new Set(queue.filter((q) => LATEST_ONLY.has(q.kind)).map((q) => q.kind));
+    queue = [...undelivered.filter((q) => !newer.has(q.kind)), ...queue];
+  }
+  if (replay.some((q) => q.kind === 'plan-add')) persistPendingAdds();
   return () => {
     subscribers.delete(sub);
   };
@@ -245,6 +268,7 @@ export function resetBridgeHubForTests(): void {
   hubListener = null;
   hubInstalled = false;
   queue = [];
+  warnedEviction = false;
   subscribers.clear();
 }
 
