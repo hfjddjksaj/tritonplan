@@ -1,5 +1,19 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { createRateLimiter } from './rate-limit';
+
+test('R9: idle keys are swept by the timer even with no further hits', () => {
+  vi.useFakeTimers();
+  try {
+    const rl = createRateLimiter(() => new Date());
+    for (let i = 0; i < 10; i++) rl.hit(`ip-${i}`, 5, 60_000);
+    expect(rl.size()).toBe(10);
+    vi.advanceTimersByTime(180_000);
+    expect(rl.size()).toBe(0);
+    rl.dispose();
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 test('rate limiter blocks after the limit and resets after the window', () => {
   let t = 0;

@@ -42,12 +42,20 @@ export async function verifyPassword(pw: string, phc: string): Promise<boolean> 
     const parallelism = Number(m[3]);
     const salt = Buffer.from(m[4]!, 'base64');
     const expected = Buffer.from(m[5]!, 'base64');
-    // Never let a corrupted row turn into an unbounded-cost derivation.
-    if (memory > 1 << 20 || passes > 10 || parallelism > 16 || salt.length < 8 || expected.length < 4) return false;
-    const actual = await derive(pw, salt, memory, passes, parallelism, expected.length);
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
+    // Pin to our one profile: a corrupted or planted row must never choose its own derivation cost.
+    if (memory !== MEMORY || passes !== PASSES || parallelism !== PARALLELISM) return false;
+    if (salt.length !== SALT_LENGTH || expected.length !== TAG_LENGTH) return false;
+    const actual = await derive(pw, salt, MEMORY, PASSES, PARALLELISM, TAG_LENGTH);
+    return timingSafeEqual(actual, expected);
   } catch {
     return false;
+  }
+}
+
+/** crypto.argon2 arrived in Node 24.7; on older 24.x every login would silently read as "wrong password". */
+export function assertArgon2Available(): void {
+  if (typeof argon2 !== 'function') {
+    throw new Error('crypto.argon2 is unavailable: TritonPlan server needs Node >= 24.7');
   }
 }
 

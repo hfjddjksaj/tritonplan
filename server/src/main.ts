@@ -1,10 +1,12 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app';
+import { assertArgon2Available } from './auth/passwords';
 import { loadConfig } from './config';
 import { openDb } from './db/db';
 import { createConsoleMailer, createMemoryMailer, type Mailer } from './mail/mailer';
 import { createResendMailer } from './mail/resend';
 
+assertArgon2Available();
 const config = loadConfig(process.env);
 const db = openDb(config.dbPath);
 

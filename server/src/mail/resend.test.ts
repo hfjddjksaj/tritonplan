@@ -1,6 +1,20 @@
 import { expect, test } from 'vitest';
 import { createResendMailer } from './resend';
 
+test('resend request has a timeout signal and a failed response body is released', async () => {
+  let signal: AbortSignal | null | undefined;
+  let cancelled = false;
+  const fakeFetch = (async (_u: string, init: RequestInit) => {
+    signal = init.signal;
+    const body = new ReadableStream({ cancel() { cancelled = true; } });
+    return new Response(body, { status: 500 });
+  }) as unknown as typeof fetch;
+  const m = createResendMailer('k', 'f', fakeFetch);
+  await expect(m.send({ to: 'a@b.com', subject: 's', text: 't' })).rejects.toThrow('Resend responded 500');
+  expect(signal).toBeInstanceOf(AbortSignal);
+  expect(cancelled).toBe(true);
+});
+
 test('resend mailer posts the documented payload and throws on failure', async () => {
   const calls: { url: string; init: RequestInit }[] = [];
   let status = 200;

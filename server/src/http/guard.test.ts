@@ -66,6 +66,17 @@ test('requireUser: 401 without a valid cookie, sets vars, re-sends cookie on ref
   expect(noRefresh.headers.get('set-cookie')).toBeNull();
 });
 
+test('clientIp buckets IPv6 to /64 and unwraps IPv4-mapped addresses', async () => {
+  const app = new Hono();
+  app.get('/ip', (c) => c.text(clientIp(c)));
+  const ip = async (v: string) => (await app.request('/ip', { headers: { 'X-Real-IP': v } })).text();
+  expect(await ip('203.0.113.9')).toBe('203.0.113.9');
+  const a = await ip('2001:db8:1:2:aaaa:bbbb:cccc:dddd');
+  expect(a).toBe(await ip('2001:0DB8:1:2::1'));
+  expect(a).not.toBe(await ip('2001:db8:1:3::1'));
+  expect(await ip('::ffff:1.2.3.4')).toBe('1.2.3.4');
+});
+
 test('clientIp reads X-Real-IP, else "local"', async () => {
   const app = new Hono();
   app.get('/ip', (c) => c.text(clientIp(c)));

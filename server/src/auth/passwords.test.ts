@@ -1,5 +1,20 @@
 import { expect, test } from 'vitest';
-import { hashPassword, passwordProblem, verifyPassword } from './passwords';
+import { assertArgon2Available, hashPassword, passwordProblem, verifyPassword } from './passwords';
+
+test('verifyPassword only accepts our exact profile and rejects hostile params fast', async () => {
+  const good = await hashPassword('correct horse');
+  const [, , , , salt, hash] = good.split('$');
+  const t0 = Date.now();
+  expect(await verifyPassword('correct horse', `$argon2id$v=19$m=4294967295,t=2,p=1$${salt}$${hash}`)).toBe(false);
+  expect(await verifyPassword('correct horse', `$argon2id$v=19$m=19456,t=3,p=1$${salt}$${hash}`)).toBe(false);
+  expect(await verifyPassword('correct horse', `$argon2id$v=19$m=19456,t=2,p=1$${salt}$${hash!.slice(0, 20)}`)).toBe(false);
+  expect(await verifyPassword('correct horse', `$argon2id$v=19$m=19456,t=2,p=1$${salt!.slice(0, 8)}$${hash}`)).toBe(false);
+  expect(Date.now() - t0).toBeLessThan(500);
+});
+
+test('assertArgon2Available passes on a supported Node', () => {
+  expect(() => assertArgon2Available()).not.toThrow();
+});
 
 test('password round trip and rejection', async () => {
   const h = await hashPassword('correct horse');
