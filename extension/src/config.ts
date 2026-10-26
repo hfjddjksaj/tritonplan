@@ -9,8 +9,8 @@
 export const PRODUCT_NAME = 'TritonPlan';
 
 /**
- * The planner website. Production is GitHub Pages (a PROJECT site, so it lives under
- * the `/tritonplan/` subpath). Dev builds (`node build.mjs --dev`) target the local
+ * The planner website. Production is https://tritonplan.cn/ (served at the root
+ * path). Dev builds (`node build.mjs --dev`) target the local
  * Vite server instead: build.mjs `define`s the two globals below as string literals
  * (so a production bundle never even contains the localhost URL) and injects the
  * localhost matches into the dist manifest — the source manifest.json stays
@@ -24,13 +24,13 @@ declare const __PLANNER_MATCH__: string | undefined;
 export const PLANNER_URL =
   typeof __PLANNER_URL__ !== 'undefined'
     ? __PLANNER_URL__
-    : 'https://hfjddjksaj.github.io/tritonplan/';
+    : 'https://tritonplan.cn/';
 
 /** Match pattern for chrome.tabs.query (kept in sync with the manifest content-script glob). */
 export const PLANNER_MATCH =
   typeof __PLANNER_MATCH__ !== 'undefined'
     ? __PLANNER_MATCH__
-    : 'https://hfjddjksaj.github.io/tritonplan/*';
+    : 'https://tritonplan.cn/*';
 
 /**
  * window.postMessage channel used by the MAIN-world interceptor → isolated relay.
