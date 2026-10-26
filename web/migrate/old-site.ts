@@ -6,7 +6,8 @@
  * payload over only when the tab it opened asks for it (`ready`), never
  * unprompted, and only to SITE_ORIGIN.
  */
-import { collectLegacyPayload, mergeMigration, MIGRATE_MSG } from '../src/lib/migration';
+import { pluralize } from '../src/lib/format';
+import { collectLegacyPayload, mergeMigration, MIGRATE_MSG, type MigrationPayload } from '../src/lib/migration';
 import { SITE_ORIGIN } from '../src/lib/site';
 
 const BLOCKED =
@@ -36,8 +37,15 @@ export function runOldSite(doc: Document, win: Window, nowIso: string): void {
     return;
   }
 
-  const payload = collectLegacyPayload(win.location.hash, nowIso);
-  const n = mergeMigration({ terms: null, pool: [], appt: null }, payload, nowIso).added.plans;
+  // Corrupt storage must not strand the student on a blank page: degrade to what we could gather.
+  let payload: MigrationPayload | null = null;
+  let n: number | null = null; // null = could not count, so offer the move anyway
+  try {
+    payload = collectLegacyPayload(win.location.hash, nowIso);
+    n = mergeMigration({ terms: null, pool: [], appt: null }, payload, nowIso).added.plans;
+  } catch {
+    /* keep whatever was collected */
+  }
 
   const root = doc.getElementById('app') ?? doc.body;
   root.textContent = '';
@@ -52,12 +60,13 @@ export function runOldSite(doc: Document, win: Window, nowIso: string): void {
   const status = el(doc, 'p', undefined, 'status');
   status.setAttribute('role', 'status');
 
-  if (n > 0) {
+  if (payload && (n === null || n > 0)) {
+    const data = payload;
     const move = el(doc, 'button', 'Move my plans to tritonplan.cn', 'btn btn--primary');
     move.type = 'button';
     const backup = el(doc, 'button', 'Download a backup file', 'btn');
     backup.type = 'button';
-    card.append(el(doc, 'p', `This browser has ${n} saved plans.`, 'count'));
+    if (n !== null) card.append(el(doc, 'p', `This browser has ${n} saved ${pluralize(n, 'plan')}.`, 'count'));
     const row = el(doc, 'div', undefined, 'actions');
     row.append(move, backup);
     card.append(row, status);
@@ -65,19 +74,19 @@ export function runOldSite(doc: Document, win: Window, nowIso: string): void {
     let stop: (() => void) | null = null;
     move.addEventListener('click', () => {
       stop?.(); // a fresh click is a fresh handshake with a fresh tab
-      status.textContent = '';
+      status.textContent = 'Opening tritonplan.cn…';
       let tab: Window | null = null;
       const onMessage = (e: Event) => {
         const m = e as MessageEvent;
         if (!tab || m.origin !== SITE_ORIGIN || m.source !== tab) return;
         const type = (m.data as { type?: unknown } | null)?.type;
         if (type === MIGRATE_MSG.ready) {
-          tab.postMessage({ type: MIGRATE_MSG.payload, payload }, SITE_ORIGIN);
+          tab.postMessage({ type: MIGRATE_MSG.payload, payload: data }, SITE_ORIGIN);
         } else if (type === MIGRATE_MSG.ack) {
           status.textContent = 'Done — finish in the new tab.';
         }
       };
-      // Listen first: the new tab's `ready` can arrive before open() returns control.
+      // Listener first, so no message from the new tab can ever find us unattached.
       win.addEventListener('message', onMessage);
       stop = () => win.removeEventListener('message', onMessage);
       // No noopener: the receiver needs window.opener to find us.
@@ -90,14 +99,15 @@ export function runOldSite(doc: Document, win: Window, nowIso: string): void {
     });
 
     backup.addEventListener('click', () => {
-      const url = URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
       const a = el(doc, 'a');
       a.href = url;
       a.download = `tritonplan-backup-${localDate(nowIso)}.json`;
       doc.body.append(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      // Not right away: Safari starts the download asynchronously and fails if the URL is already gone.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     });
   } else {
     const go = el(doc, 'a', 'Go to tritonplan.cn', 'btn btn--primary');

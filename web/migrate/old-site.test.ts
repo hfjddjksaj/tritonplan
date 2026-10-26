@@ -49,7 +49,10 @@ beforeEach(() => {
   document.body.innerHTML = '<div id="app"></div>';
   clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 });
-afterEach(() => clickSpy.mockRestore());
+afterEach(() => {
+  clickSpy.mockRestore();
+  vi.useRealTimers();
+});
 
 function seedPlans() {
   localStorage.setItem('triton-planner:plan:v1', JSON.stringify(planState()));
@@ -68,7 +71,7 @@ describe('old site migration page', () => {
     const w = fakeWin('#m=' + token);
     run(w);
     expect(w.location.replace).not.toHaveBeenCalled();
-    expect(text()).toContain('This browser has 1 saved plans.');
+    expect(text()).toContain('This browser has 1 saved plan.');
   });
 
   test('plans found → move button; none found → plain link to the new site', () => {
@@ -84,7 +87,7 @@ describe('old site migration page', () => {
     document.body.innerHTML = '<div id="app"></div>';
     seedPlans();
     run(fakeWin());
-    expect(text()).toContain('This browser has 1 saved plans.');
+    expect(text()).toContain('This browser has 1 saved plan.');
     expect(btn('Move my plans to tritonplan.cn')).toBeDefined();
     expect(btn('Download a backup file')).toBeDefined();
     expect(btn('Go to tritonplan.cn')).toBeUndefined();
@@ -158,6 +161,7 @@ describe('old site migration page', () => {
   });
 
   test('the backup file is the payload JSON, dated locally, and round-trips the receiver check', async () => {
+    vi.useFakeTimers();
     seedPlans();
     const w = fakeWin();
     let blob: Blob | undefined;
@@ -174,7 +178,10 @@ describe('old site migration page', () => {
     const d = new Date(NOW);
     const pad = (n: number) => String(n).padStart(2, '0');
     expect(name).toBe(`tritonplan-backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`);
+    expect(urlFns.revokeObjectURL).not.toHaveBeenCalled(); // Safari needs the URL alive while it starts the download
+    vi.advanceTimersByTime(60_000);
     expect(urlFns.revokeObjectURL).toHaveBeenCalledWith('blob:x');
+    vi.useRealTimers(); // jsdom's FileReader needs real timers
     const raw = await new Promise<string>((res) => {
       const r = new FileReader(); // jsdom's Blob has no text()
       r.onload = () => res(String(r.result));
@@ -187,13 +194,27 @@ describe('old site migration page', () => {
     expect(document.querySelector('a[download]')).toBeNull(); // temporary anchor removed
   });
 
-  test('the old localStorage is left exactly as it was', () => {
-    seedPlans();
-    localStorage.setItem('triton-planner:cal-view:v1', '"week"');
-    localStorage.setItem('unrelated', 'x');
-    const snap = () => JSON.stringify(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)]));
-    const before = snap();
-    const w = fakeWin('#m=' + encodePlan(planState() as never, 'full'));
+  test('every legacy key is byte-identical after a full run, backup, move, ready and ack', () => {
+    const fall = planState();
+    const entry = { id: 'p1', name: 'My plan', createdAt: NOW, updatedAt: NOW, plan: fall };
+    const plans = { activeId: 'p1', plans: [entry] };
+    const seed: Record<string, string> = {
+      'triton-planner:terms:v1': JSON.stringify({
+        version: 1, activeTermKey: '2026-2', terms: { '2026-2': { term: FALL, plans } },
+      }),
+      'triton-planner:plans:v1': JSON.stringify(plans),
+      'triton-planner:plan:v1': JSON.stringify(fall),
+      'triton-planner:pool:v1': JSON.stringify([fall.entries[0]!.course]),
+      'triton-planner:appt:v1': JSON.stringify([]),
+      'triton-planner:received:v1': JSON.stringify({ plan: fall, source: 'link', receivedAt: NOW }),
+      'triton-planner:cal-view:v1': '"week"',
+      'triton-planner:map-booked-only:v1': 'true',
+      'triton-planner:sample-purged:v1': '1',
+      'triton-planner:synced-hash:v1': 'abc',
+      unrelated: 'x',
+    };
+    for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v);
+    const w = fakeWin('#m=' + encodePlan(fall as never, 'full'));
     const tab = fakeTab();
     w.open.mockReturnValue(tab);
     run(w);
@@ -201,7 +222,50 @@ describe('old site migration page', () => {
     btn('Move my plans to tritonplan.cn')!.click();
     send(w, { type: MIGRATE_MSG.ready }, SITE_ORIGIN, tab);
     send(w, { type: MIGRATE_MSG.ack }, SITE_ORIGIN, tab);
-    expect(snap()).toBe(before);
+    expect(Object.fromEntries(Object.keys(localStorage).map((k) => [k, localStorage.getItem(k)]))).toEqual(seed);
+  });
+
+  test('an ack from the right origin but another window is ignored', () => {
+    seedPlans();
+    const w = fakeWin();
+    const tab = fakeTab();
+    w.open.mockReturnValue(tab);
+    run(w);
+    btn('Move my plans to tritonplan.cn')!.click();
+    send(w, { type: MIGRATE_MSG.ack }, SITE_ORIGIN, fakeTab());
+    expect(text()).not.toContain('Done');
+  });
+
+  test('says it is opening the new site until the ack arrives', () => {
+    seedPlans();
+    const w = fakeWin();
+    const tab = fakeTab();
+    w.open.mockReturnValue(tab);
+    run(w);
+    btn('Move my plans to tritonplan.cn')!.click();
+    expect(text()).toContain('Opening tritonplan.cn…');
+    send(w, { type: MIGRATE_MSG.ack }, SITE_ORIGIN, tab);
+    expect(text()).not.toContain('Opening');
+  });
+
+  test('a single plan reads "1 saved plan."', () => {
+    seedPlans();
+    run(fakeWin());
+    expect(text()).toContain('This browser has 1 saved plan.');
+  });
+
+  test('unreadable storage still renders the move and backup buttons', () => {
+    seedPlans();
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    try {
+      run(fakeWin());
+    } finally {
+      spy.mockRestore();
+    }
+    expect(text()).toContain('TritonPlan has moved to tritonplan.cn');
+    expect(btn('Go to tritonplan.cn') ?? btn('Move my plans to tritonplan.cn')).toBeDefined();
   });
 
   test('never posts to a wildcard origin', () => {

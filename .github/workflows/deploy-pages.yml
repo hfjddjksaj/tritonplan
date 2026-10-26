@@ -1,4 +1,4 @@
-name: Deploy planner to GitHub Pages
+name: Deploy the migration page to GitHub Pages
 
 # The GitHub Pages site is now ONLY the old-site migration page (web/migrate/): it hands the
 # plans saved in a browser over to https://tritonplan.cn. It publishes web/dist-migrate, not the

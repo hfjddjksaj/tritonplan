@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/verify-build.mjs",
-    "build:migrate": "vite build --config vite.migrate.config.ts",
+    "build:migrate": "tsc --noEmit && vite build --config vite.migrate.config.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
