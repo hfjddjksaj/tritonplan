@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Config } from './config';
 import type { Db } from './db/db';
 import { authRoutes, meRoute } from './auth/routes';
+import { googleRoutes } from './auth/google-routes';
 import { createRateLimiter } from './http/rate-limit';
 import { sameOriginJson, type AppEnv } from './http/guard';
 import type { Mailer } from './mail/mailer';
@@ -25,6 +26,7 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   // The limiter's sweep timer is unref'd, so it never holds the process or a test run open.
   const limiter = createRateLimiter(deps.now);
   app.route('/api/auth', authRoutes(deps, limiter));
+  app.route('/api/auth/google', googleRoutes(deps));
   app.route('/api/me', meRoute(deps));
 
   // Never leak internals to the client; the log has the detail.
