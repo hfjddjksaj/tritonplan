@@ -152,3 +152,17 @@ describe('applyAck', () => {
     expect(() => applyAck(acked, ops, { terms: {}, plans: {} })).toThrow();
   });
 });
+
+describe('diffOps duplicate pool ids', () => {
+  it('sends a duplicated id once, last occurrence wins, and settles after ack', () => {
+    const s = state();
+    const acked = ackedFromSnapshot(snapshot(s, [], null));
+    const d = want(s, [course('x', 1), course('y', 1), course('x', 2)]);
+    const ops = diffOps(acked, d);
+    const put = ops.find((o) => o.op === 'putCourses') as { courses: CourseOffering[] };
+    expect(put.courses.map((c) => c.id)).toEqual(['x', 'y']);
+    expect((put.courses.find((c) => c.id === 'x') as unknown as { title: string }).title).toBe('t2');
+    const after = applyAck(acked, ops, { terms: {}, plans: {} });
+    expect(diffOps(after, d)).toEqual([]);
+  });
+});

@@ -50,9 +50,11 @@ export function diffOps(acked: Acked, desired: Desired): SyncOp[] {
     }
   }
 
-  const changed = desired.pool.filter((c) => acked.pool.get(c.id) !== JSON.stringify(c));
+  // Dedupe by id (last wins): a repeated id would otherwise be re-sent on every diff.
+  const pool = [...new Map(desired.pool.map((c) => [c.id, c] as const)).values()];
+  const changed = pool.filter((c) => acked.pool.get(c.id) !== JSON.stringify(c));
   if (changed.length > 0) ops.push({ op: 'putCourses', courses: changed });
-  const keep = new Set(desired.pool.map((c) => c.id));
+  const keep = new Set(pool.map((c) => c.id));
   const dropped = [...acked.pool.keys()].filter((id) => !keep.has(id));
   if (dropped.length > 0) ops.push({ op: 'deleteCourses', ids: dropped });
 
