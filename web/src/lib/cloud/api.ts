@@ -16,6 +16,7 @@ export class UnauthorizedError extends Error {
   constructor() { super('unauthorized'); this.name = 'UnauthorizedError'; }
 }
 
+const SYNC_TIMEOUT_MS = 20_000;
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /** 401 → null (signed out); anything else unexpected throws so the caller can show "offline" rather than "signed out". */
@@ -38,13 +39,16 @@ export async function postSync(ops: SyncOp[]): Promise<SendResult> {
   try {
     r = await fetch('/api/sync', {
       method: 'POST', credentials: 'same-origin', headers: JSON_HEADERS, body: JSON.stringify({ ops }),
+      // A hung request would hold the engine's one in-flight slot forever; an abort counts as a network failure.
+      ...(typeof AbortSignal.timeout === 'function' ? { signal: AbortSignal.timeout(SYNC_TIMEOUT_MS) } : {}),
     });
   } catch {
     return { ok: false, kind: 'network' };
   }
   if (r.status === 409) return { ok: false, kind: 'conflict' };
   if (r.status === 401) return { ok: false, kind: 'unauthorized' };
-  if (r.status === 400 || r.status === 413) return { ok: false, kind: 'rejected' };
+  // 403 is the server's same-origin guard: retrying will not fix it.
+  if (r.status === 400 || r.status === 403 || r.status === 413) return { ok: false, kind: 'rejected' };
   if (r.status !== 200) return { ok: false, kind: 'network' };
   try {
     const body = (await r.json()) as { ok?: boolean; versions?: unknown };

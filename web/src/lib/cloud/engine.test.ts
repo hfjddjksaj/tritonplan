@@ -269,6 +269,155 @@ describe('installUnloadGuard', () => {
   });
 });
 
+/** A course of roughly `kb` kilobytes of JSON, like the real ones (1.4-15.7 KB). */
+const fatCourse = (id: string, kb: number) => ({ id, title: id, pad: 'x'.repeat(kb * 1000) }) as unknown as CourseOffering;
+const enc = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length;
+
+describe('realistic course sizes', () => {
+  it('2 500 courses of 3-7 KB: every request within 4 MB and 2 000 items, all sent, idle at the end', async () => {
+    const f = fakeSend();
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    e.setPool(Array.from({ length: 2500 }, (_, i) => fatCourse(`c${i}`, 3 + (i % 5))));
+    await vi.advanceTimersByTimeAsync(800);
+    expect(f.calls.length).toBeGreaterThan(1);
+    for (const ops of f.calls) {
+      expect(enc({ ops })).toBeLessThanOrEqual(4_000_000);
+      expect(ops.length).toBeLessThanOrEqual(500);
+      const n = ops.reduce((a, o) => a + (o.op === 'putCourses' ? o.courses.length : o.op === 'deleteCourses' ? o.ids.length : 0), 0);
+      expect(n).toBeLessThanOrEqual(2000);
+    }
+    const ids = new Set(f.calls.flat().flatMap((o) => (o.op === 'putCourses' ? o.courses.map((c) => c.id) : [])));
+    expect(ids.size).toBe(2500);
+    expect(e.status()).toBe('idle');
+    expect(e.hasPending()).toBe(false);
+  });
+
+  it('one plan edit plus one course change is a single request', async () => {
+    const f = fakeSend();
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    e.setTerms(state('b'));
+    e.setPool([fatCourse('x', 7)]);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(f.impl).toHaveBeenCalledTimes(1);
+    expect(f.calls[0]!.map((o) => o.op)).toEqual(['putPlan', 'putCourses']);
+  });
+
+  it('a single oversized course goes alone', () => {
+    const b = batchOps([{ op: 'putCourses', courses: [fatCourse('a', 1), fatCourse('big', 4200), fatCourse('c', 1)] }]);
+    expect(b.flat().flatMap((o) => (o.op === 'putCourses' ? o.courses.map((c) => c.id) : []))).toEqual(['a', 'big', 'c']);
+    const withBig = b.find((x) => x.some((o) => o.op === 'putCourses' && o.courses.some((c) => c.id === 'big')))!;
+    expect(withBig).toHaveLength(1);
+    expect((withBig[0] as { courses: unknown[] }).courses).toHaveLength(1);
+  });
+});
+
+describe('re-entrancy and lifecycle', () => {
+  it('an edit made by a subscriber on the idle notification is still sent', async () => {
+    const f = fakeSend();
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    let edited = false;
+    e.subscribe(() => { if (e.status() === 'idle' && !edited) { edited = true; e.setTerms(state('late')); } });
+    e.setTerms(state('b'));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.impl).toHaveBeenCalledTimes(2);
+    expect(f.calls[1]).toMatchObject([{ op: 'putPlan', data: { name: 'late' } }]);
+    expect(e.hasPending()).toBe(false);
+  });
+
+  it('a subscriber calling flush() on saving does not start a second concurrent request', async () => {
+    const f = fakeSend();
+    let inFlight = 0;
+    let maxInFlight = 0;
+    f.impl.mockImplementation(async (ops) => {
+      inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+      const r = await f.base(ops);
+      await Promise.resolve();
+      inFlight--;
+      return r;
+    });
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    e.subscribe(() => { if (e.status() === 'saving') void e.flush(); });
+    e.setTerms(state('b'));
+    await vi.advanceTimersByTimeAsync(800);
+    expect(f.impl).toHaveBeenCalledTimes(1);
+    expect(maxInFlight).toBe(1);
+  });
+
+  it('an edit while offline keeps the backoff schedule instead of the debounce', async () => {
+    const f = fakeSend();
+    f.impl.mockResolvedValueOnce(fail('network'));
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    e.setTerms(state('b'));
+    await vi.advanceTimersByTimeAsync(800);
+    expect(e.status()).toBe('offline');
+    e.setTerms(state('c'));
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(f.impl).toHaveBeenCalledTimes(1); // not retried after the 800 ms debounce
+    await vi.advanceTimersByTimeAsync(500); // the 2 s backoff
+    expect(f.impl).toHaveBeenCalledTimes(2);
+    expect(f.calls[0]).toMatchObject([{ data: { name: 'c' } }]); // the failed attempt never reached base()
+  });
+
+  it('dispose during a request: no further sends, no status change, hasPending false', async () => {
+    const f = fakeSend();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    f.impl.mockImplementationOnce(async (ops) => { const r = await f.base(ops); await gate; return r; });
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    e.setTerms(state('b'));
+    await vi.advanceTimersByTimeAsync(800);
+    e.setTerms(state('c'));
+    e.dispose();
+    expect(e.hasPending()).toBe(false);
+    release();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(f.impl).toHaveBeenCalledTimes(1);
+    expect(e.status()).toBe('saving');
+  });
+
+  it('notifies subscribers once per status change, not per edit', async () => {
+    const f = fakeSend();
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    const fn = vi.fn();
+    const off = e.subscribe(fn);
+    e.setTerms(state('b')); e.setTerms(state('c'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fn).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(800);
+    expect(fn).toHaveBeenCalledTimes(2); // saving, idle
+    off();
+    e.setTerms(state('d'));
+    await vi.advanceTimersByTimeAsync(800);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('unload guard and bfcache', () => {
+  it('a keepalive send is followed by a reload on a persisted pageshow only', async () => {
+    const fetchMock = vi.fn(async (..._a: unknown[]) => new Response('{}'));
+    vi.stubGlobal('fetch', fetchMock);
+    const f = fakeSend();
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    const reload = vi.fn();
+    const off = installUnloadGuard(e, reload);
+    const show = (persisted: boolean) => { const ev = new Event('pageshow') as Event & { persisted: boolean }; ev.persisted = persisted; window.dispatchEvent(ev); };
+    show(true); // no keepalive happened yet: nothing to reload for
+    expect(reload).not.toHaveBeenCalled();
+    e.setTerms(state('b'));
+    window.dispatchEvent(new Event('pagehide'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.ops).toMatchObject([{ op: 'putPlan', data: { name: 'b' } }]);
+    show(false);
+    expect(reload).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event('pagehide'));
+    show(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+    off();
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('batchOps', () => {
   it('caps ops per batch and bytes per batch, keeping order', () => {
     const many: SyncOp[] = Array.from({ length: 1200 }, (_, i) => ({ op: 'deletePlan', planId: `p${i}`, baseVersion: 1 }));

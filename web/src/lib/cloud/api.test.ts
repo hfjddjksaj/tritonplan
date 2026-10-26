@@ -29,7 +29,7 @@ describe('fetchMe / fetchState', () => {
 });
 
 describe('postSync', () => {
-  it.each([[409, 'conflict'], [401, 'unauthorized'], [400, 'rejected'], [413, 'rejected'], [500, 'network'], [503, 'network']])(
+  it.each([[409, 'conflict'], [401, 'unauthorized'], [400, 'rejected'], [403, 'rejected'], [413, 'rejected'], [429, 'network'], [500, 'network'], [503, 'network']])(
     'status %i → %s', async (status, kind) => {
       stub(async () => res(status, {}));
       expect(await postSync([])).toEqual({ ok: false, kind });
@@ -41,6 +41,11 @@ describe('postSync', () => {
     expect(url).toBe('/api/sync');
     expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } });
     expect(JSON.parse(init.body as string)).toEqual({ ops: [{ op: 'deleteCourses', ids: ['a'] }] });
+  });
+  it('passes a timeout signal, and an abort maps to network', async () => {
+    stub(async () => { throw new DOMException('timed out', 'TimeoutError'); });
+    expect(await postSync([])).toEqual({ ok: false, kind: 'network' });
+    expect(calls()[0]![1].signal).toBeInstanceOf(AbortSignal);
   });
   it('network error and bad JSON → network', async () => {
     stub(async () => { throw new TypeError('x'); });
