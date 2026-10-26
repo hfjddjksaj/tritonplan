@@ -79,7 +79,7 @@ This passive design is the product's hard rule:
 
 ## Privacy
 
-You sign in with email + password or Google. We store your email, your plans, the courses you browsed, your booked / waitlisted marks, and your appointment times on one server (Tencent Cloud, Silicon Valley, USA). Never sold, no ads, no analytics, no third-party trackers. Delete your account from the Account menu at any time. The extension still only reads what the TSS page already received and sends no requests to TSS. Full details: [PRIVACY.md](./PRIVACY.md) or <https://tritonplan.cn/privacy.html>.
+You sign in with email + password or Google. We store your email (and Google account ID if you use Google sign-in), your plans, the courses you browsed, your booked / waitlisted / enrolled marks, and your appointment times on one server (Tencent Cloud, Silicon Valley, USA). Never sold, no ads, no analytics, no third-party trackers. Delete your account from the Account menu at any time. The extension still only reads what the TSS page already received and sends no requests to TSS. Full details: [PRIVACY.md](./PRIVACY.md) or <https://tritonplan.cn/privacy.html>.
 
 ## Developing
 

@@ -14,7 +14,7 @@ This policy covers the planner website at `https://tritonplan.cn` and the Triton
 
 When you create an account and use the planner, we store:
 
-- **Account details:** your email address and whether it is verified. If you sign up with a password, we store it only as an irreversible hash (argon2id) — never the password itself. If you use **Sign in with Google**, we also store Google's account ID for you (`sub`). We request only the `openid`, `email`, and `profile` scopes, and we do **not** store your name or profile photo.
+- **Account details:** your email address and whether it is verified. If you sign up with a password, we store it only as an irreversible hash (argon2id) — never the password itself. If you use **Sign in with Google**, we also store Google's account ID (`sub`). We request only the `openid`, `email`, and `profile` scopes, and we do **not** store your name or profile photo.
 - **Your plans:** terms and plans (the courses you added, the sections you chose, plan names).
 - **Browsed courses:** the courses you looked at on TSS that the extension captured (the "Browsed" pool in the planner).
 - **Enrollment marks:** which courses you marked as booked, waitlisted, or enrolled.
@@ -28,11 +28,11 @@ On a single server hosted by Tencent Cloud in Silicon Valley, United States. Nig
 
 ## Who can see it
 
-Only you. We do not look through your plans. The one exception is sharing: when you create a share link and send it to someone, whoever has that link can see a snapshot of that plan. Your booked / waitlisted / enrolled marks and appointment times are never part of a shared snapshot.
+Only you, in the sense that no other user can see your data. The person who runs TritonPlan has technical access to the server and its database, and uses it only to keep the service running and to fix problems. The one other exception is sharing: when you create a share link and send it to someone, whoever has that link can see a snapshot of that plan. A share link contains only the plan itself (term, courses, chosen sections, colors); your booked / waitlisted / enrolled marks and appointment times are stored separately and are never part of it.
 
 ## The extension
 
-The extension is a *passive observer*. On `tss.ucsd.edu`, it reads the course data that the Triton Student System (TSS) has **already loaded into your browser** and displayed to you, by observing the page's own network responses. It **never makes its own requests to TSS**, never automates the site, and never sends anything to us itself. It keeps the captured courses in the browser's extension storage and passes them to the TritonPlan planner page open in your browser; the planner then saves them to your account. The extension never sees your account email or password.
+The extension is a *passive observer*. On `tss.ucsd.edu`, it reads the course data that the Triton Student System (TSS) has **already loaded into your browser** and displayed to you, by observing the page's own network responses. It **never makes its own requests to TSS**, never automates the site, and never sends anything to us itself. It keeps the captured courses in the browser's extension storage and passes them to the TritonPlan planner page open in your browser; the planner then saves them to your account. The extension doesn't read your TritonPlan account details.
 
 ### Permissions the extension requests, and why
 
@@ -49,6 +49,10 @@ The extension requests **no** broad web access and **no** access to any other si
 
 The planner sets one sign-in session cookie, `tp_session`, which lasts 30 days and is renewed while you use the site. During Google sign-in it also sets short-lived cookies that exist only to complete that sign-in. We use no advertising or analytics cookies.
 
+## Logs and IP addresses
+
+We don't log the pages you visit. Like any web server, ours sees your IP address: it is held in memory for up to an hour to limit sign-in attempts, and it can appear in the server's error logs, which are deleted automatically within 14 days.
+
 ## Third parties
 
 - **Tencent Cloud** hosts the server.
@@ -59,7 +63,7 @@ We do not sell your data or share it for advertising. There are no ads, no analy
 
 ## Your control and deleting your data
 
-In the planner, open the Account menu and choose **Delete account**. This removes your account and every plan immediately. Server backups made before the deletion are kept for at most 14 days and then deleted on a rolling basis. You can also remove the extension's locally stored data by uninstalling the extension.
+In the planner, open the Account menu and choose **Delete account**. This immediately removes your account, every plan, your browsed courses, your booked / waitlisted / enrolled marks, and your appointment windows. Server backups made before the deletion roll off within 14 days. Share links you already sent carry their snapshot inside the link itself, so they keep working for whoever has them. You can also remove the extension's locally stored data by uninstalling the extension.
 
 The old site at `https://hfjddjksaj.github.io/tritonplan/` is now a migration page. It reads the plans saved in that browser and hands them to the new site only when you click the migrate button; it never deletes them.
 

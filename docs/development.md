@@ -201,7 +201,7 @@ click.
 
 `server/` (`@triton/server`) is a Hono app on Node 24 using `node:sqlite`. It handles
 accounts (email + password, Google sign-in), sessions, and plan storage. It never contacts
-tss.ucsd.edu. Deploy and ops are documented separately under `server/deploy/`.
+tss.ucsd.edu. Deploy and ops live in `server/deploy/README.md`.
 
 Local loop: run the server and the planner dev server side by side.
 
@@ -234,4 +234,4 @@ Configure the server through `server/.env.local`. It is gitignored; secrets neve
 - Privacy policy: [`PRIVACY.md`](../PRIVACY.md), mirrored as the standalone page
   `web/public/privacy.html` (served at `/privacy.html`); keep the two in sync.
 - The Pages workflow ([`deploy-pages.yml`](../.github/workflows/deploy-pages.yml)) runs on
-  every push to `main`; see the server deploy docs for how the new site is served.
+  every push to `main`.
