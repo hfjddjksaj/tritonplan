@@ -116,11 +116,148 @@ export function isBookedMessage(data: unknown): data is BookedMessage {
   );
 }
 
+/* ---- message hub ------------------------------------------------------------ */
+
+/*
+ * Why a hub: planner-bridge.ts (extension) drains the "+ TritonPlan" queue exactly once at
+ * document_idle and posts it into the page; after that the extension's queue is empty. The
+ * planner only renders after sign-in and the account snapshot load, so listeners installed
+ * by usePlan / useApptTimes come too late and the pushes would be dropped (and a Google
+ * sign-in is a full-page round trip that throws away the whole page). The hub listens from
+ * the first statement of main.tsx, holds what nobody has subscribed to yet, and replays it
+ * on subscribe. We fix this page-side rather than in the extension because the new
+ * extension build has to go to review as early as possible (Task 1).
+ */
+
+export type BridgeKind = 'courses' | 'plan-add' | 'booked' | 'appt-times';
+
+/** Queued plan-adds mirror here so they survive the sign-in page navigation (same tab). */
+export const PENDING_ADDS_KEY = 'triton-planner:pending-adds:v1';
+
+/** Per-kind queue cap: keeps the latest N. `courses` pushes can be large, and a student who
+ *  never signs in must not grow memory without bound; older ones are superseded anyway. */
+const MAX_QUEUED_PER_KIND = 200;
+
+function classify(data: unknown): BridgeKind | null {
+  if (isPlanAddMessage(data)) return 'plan-add';
+  if (isCoursesMessage(data)) return 'courses';
+  if (isBookedMessage(data)) return 'booked';
+  if (isApptTimesMessage(data)) return 'appt-times';
+  return null;
+}
+
+interface Queued { kind: BridgeKind; data: unknown }
+interface Subscriber { kinds: ReadonlySet<BridgeKind>; handler: (data: unknown) => void }
+
+let hubInstalled = false;
+let hubListener: ((event: MessageEvent) => void) | null = null;
+let queue: Queued[] = [];
+const subscribers = new Set<Subscriber>();
+
+function persistPendingAdds(): void {
+  try {
+    const adds = queue.filter((q) => q.kind === 'plan-add').map((q) => q.data);
+    if (adds.length === 0) sessionStorage.removeItem(PENDING_ADDS_KEY);
+    else sessionStorage.setItem(PENDING_ADDS_KEY, JSON.stringify(adds));
+  } catch {
+    // Private mode / blocked storage / quota: the hub keeps working in memory.
+  }
+}
+
+function restorePendingAdds(): void {
+  try {
+    const raw = sessionStorage.getItem(PENDING_ADDS_KEY);
+    if (!raw) return;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    // Restored entries go first: they arrived before anything posted on this page load.
+    const restored = parsed.filter(isPlanAddMessage).map((data) => ({ kind: 'plan-add' as const, data }));
+    queue = [...restored, ...queue].slice(-MAX_QUEUED_PER_KIND);
+  } catch {
+    // Corrupt or unreadable: start empty.
+  }
+}
+
+function deliver(handler: (data: unknown) => void, data: unknown): void {
+  try {
+    handler(data);
+  } catch (err) {
+    // One failing subscriber must not lose the rest of a replay.
+    console.error('bridge subscriber threw', err);
+  }
+}
+
+function enqueue(item: Queued): void {
+  queue.push(item);
+  let count = 0;
+  for (const q of queue) if (q.kind === item.kind) count++;
+  if (count > MAX_QUEUED_PER_KIND) {
+    queue.splice(queue.findIndex((q) => q.kind === item.kind), 1);
+  }
+  if (item.kind === 'plan-add') persistPendingAdds();
+}
+
+/** Install the page's single bridge `message` listener. Idempotent; call it before render. */
+export function installBridgeHub(): void {
+  if (hubInstalled) return;
+  hubInstalled = true;
+  restorePendingAdds();
+  hubListener = (event: MessageEvent) => {
+    // The extension's content script posts from this page's own window/origin; anything
+    // else (iframes, other windows) is untrusted.
+    if (event.source !== window || event.origin !== window.location.origin) return;
+    const data = event.data;
+    if (!data || typeof data !== 'object' || (data as { source?: unknown }).source !== BRIDGE_SOURCE) return;
+    const kind = classify(data);
+    if (!kind) return;
+    const targets = [...subscribers].filter((s) => s.kinds.has(kind));
+    if (targets.length === 0) {
+      enqueue({ kind, data });
+      return;
+    }
+    for (const s of targets) deliver(s.handler, data);
+  };
+  window.addEventListener('message', hubListener);
+}
+
+/**
+ * Subscribe to these kinds: queued messages of them are replayed first, in arrival order
+ * (and removed, so each is delivered once), then live ones follow. Kinds nobody subscribes
+ * to keep queueing. Returns the unsubscribe function.
+ */
+export function subscribeBridge(kinds: BridgeKind[], handler: (data: unknown) => void): () => void {
+  const sub: Subscriber = { kinds: new Set(kinds), handler };
+  const replay = queue.filter((q) => sub.kinds.has(q.kind));
+  if (replay.length > 0) {
+    queue = queue.filter((q) => !sub.kinds.has(q.kind));
+    if (replay.some((q) => q.kind === 'plan-add')) persistPendingAdds();
+  }
+  subscribers.add(sub);
+  for (const q of replay) deliver(handler, q.data);
+  return () => {
+    subscribers.delete(sub);
+  };
+}
+
+/** Test seam: forget everything, as a full page reload would (sessionStorage is left alone). */
+export function resetBridgeHubForTests(): void {
+  if (hubListener) window.removeEventListener('message', hubListener);
+  hubListener = null;
+  hubInstalled = false;
+  queue = [];
+  subscribers.clear();
+}
+
 /** Same-window/same-origin listener for `appt-times` pushes. Separate from
  *  installBridgeListener so the appt hook subscribes independently of usePlan. */
 export function installApptTimesListener(
   onApptTimes: (appt: ApptTimes[]) => void,
 ): () => void {
+  if (hubInstalled) {
+    return subscribeBridge(['appt-times'], (data) => {
+      if (isApptTimesMessage(data)) onApptTimes(data.payload);
+    });
+  }
   const handler = (event: MessageEvent) => {
     if (event.source !== window || event.origin !== window.location.origin) return;
     if (isApptTimesMessage(event.data)) onApptTimes(event.data.payload);
@@ -264,15 +401,19 @@ export interface BridgeHandlers {
  * own window/origin, so anything else (iframes, other windows) is untrusted.
  */
 export function installBridgeListener(handlers: BridgeHandlers): () => void {
+  const dispatch = (data: unknown) => {
+    if (isPlanAddMessage(data)) {
+      handlers.onPlanAdd(data.payload.course, data.payload.selectedOptionId);
+    } else if (isCoursesMessage(data)) {
+      handlers.onCourses(data.payload);
+    } else if (isBookedMessage(data)) {
+      handlers.onBooked?.(data.payload, data.capturedAt, data.captured);
+    }
+  };
+  if (hubInstalled) return subscribeBridge(['plan-add', 'courses', 'booked'], dispatch);
   const handler = (event: MessageEvent) => {
     if (event.source !== window || event.origin !== window.location.origin) return;
-    if (isPlanAddMessage(event.data)) {
-      handlers.onPlanAdd(event.data.payload.course, event.data.payload.selectedOptionId);
-    } else if (isCoursesMessage(event.data)) {
-      handlers.onCourses(event.data.payload);
-    } else if (isBookedMessage(event.data)) {
-      handlers.onBooked?.(event.data.payload, event.data.capturedAt, event.data.captured);
-    }
+    dispatch(event.data);
   };
   window.addEventListener('message', handler);
   return () => window.removeEventListener('message', handler);

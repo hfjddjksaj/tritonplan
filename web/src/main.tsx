@@ -2,6 +2,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles/app.css';
+import { installBridgeHub } from './lib/bridge';
+
+// Before anything renders: the extension pushes once at document_idle, and the planner
+// may not mount until sign-in finishes.
+installBridgeHub();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element #root not found');
