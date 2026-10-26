@@ -126,6 +126,8 @@ const BOOKED_FIELDS = ['bookedAuto', 'bookedOn', 'bookedOff', 'waitlistedAuto'] 
  *     plan), because a random UUID would be re-imported as new every time.
  *  2. A legacy workspace that is pristine (the single default empty "My plan")
  *     is not imported: migrateToTermsState invents one when there is no data.
+ *     Only the plans of a pristine workspace are dropped, and its single plan
+ *     may carry a custom name (isPristine ignores names).
  *     Other empty plans (e.g. a renamed "Plan B") are real and are imported.
  *  3. Extras: `received` -> "Shared plan (old site)", `hashPlan` -> "Plan from
  *     bookmark", both with id 'm-' + fnv1a(encodePlan(plan, 'full')). Each is
@@ -133,7 +135,8 @@ const BOOKED_FIELDS = ['bookedAuto', 'bookedOn', 'bookedOff', 'waitlistedAuto'] 
  *     (or an extra already added); an extra whose term is malformed is skipped.
  *  4. Per term: absent from the account -> the whole workspace comes in; a
  *     pristine account workspace (bootstrapped by the app) is replaced by the
- *     legacy one when that has plans to import; otherwise plans whose id is not
+ *     legacy one when that has plans to import (counted in added.terms, and it
+ *     keeps its own booked lists under the rule below); otherwise plans whose id is not
  *     in the account are appended and the account's activeId is unchanged.
  *     Booked lists: bookedAuto/waitlistedAuto are TSS snapshots and bookedOff
  *     is an override the next feed clears, so when the account already has a
@@ -177,16 +180,22 @@ export function mergeMigration(
   const added = { terms: 0, plans: 0 };
   let skipped = 0;
 
+  // Account workspaces the app bootstrapped and nobody touched. Judged on the ACCOUNT side only and
+  // consumed by the first write, so a plan we just imported can never be mistaken for a placeholder.
+  const replaceable = new Set<string>();
+  for (const [k, w] of out) if (isPristine(w)) replaceable.add(k);
+
   const appendTo = (key: string, w: TermWorkspace, fresh: NamedPlan[], bookedFrom?: TermWorkspace) => {
     const existing = out.get(key);
     const activeId = fresh.some((p) => p.id === w.plans.activeId) ? w.plans.activeId : fresh[0]?.id;
-    if (existing && isPristine(existing) && fresh.length > 0) {
-      const next: TermWorkspace = { ...w, plans: { activeId: activeId!, plans: fresh } };
-      if (bookedFrom) for (const f of BOOKED_FIELDS) if (bookedFrom[f]) next[f] = [...bookedFrom[f]!];
-      out.set(key, next);
-    } else if (existing) {
-      const next: TermWorkspace = { ...existing, plans: { ...existing.plans, plans: [...existing.plans.plans, ...fresh] } };
+    if (existing) {
+      const replace = replaceable.delete(key) && fresh.length > 0;
+      const plans = replace
+        ? { activeId: activeId!, plans: fresh }
+        : { ...existing.plans, plans: [...existing.plans.plans, ...fresh] };
+      const next: TermWorkspace = { ...existing, plans };
       if (bookedFrom) {
+        // A feed the account already has is newer than the old site's snapshot (bookedOff is cleared by the next feed too).
         const fields = existing.bookedAuto !== undefined ? (['bookedOn'] as const) : BOOKED_FIELDS;
         for (const f of fields) {
           const u = union(existing[f], bookedFrom[f]);
@@ -194,6 +203,7 @@ export function mergeMigration(
         }
       }
       out.set(key, next);
+      if (replace) added.terms++;
     } else {
       const next: TermWorkspace = { ...w, plans: { activeId: activeId!, plans: fresh } };
       if (bookedFrom) for (const f of BOOKED_FIELDS) if (bookedFrom[f]) next[f] = [...bookedFrom[f]!];

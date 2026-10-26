@@ -314,10 +314,57 @@ describe('mergeMigration', () => {
     const fall = r.terms.terms['2026|2']!;
     expect(fall.plans.plans.map((x) => x.id)).toEqual(['a1', 'a2']);
     expect(fall.plans.activeId).toBe('a2');
-    expect(r.added).toEqual({ terms: 1, plans: 3 });
+    expect(r.added).toEqual({ terms: 2, plans: 3 }); // the replaced Fall term and the new Winter term
     // nothing importable for that term: the account's pristine workspace stays
     const r2 = mergeMigration({ terms: acct, pool: [], appt: null }, payload({ terms: terms(['2027|3', t.terms['2027|3']!]) }), NOW);
     expect(r2.terms.terms['2026|2']!.plans.plans.map((x) => x.id)).toEqual(['boot']);
+  });
+
+  it('N1: a replaced pristine account workspace keeps the account feed and unions only bookedOn', () => {
+    const acct = terms(['2026|2', ws(FALL, [named('boot', FALL, [])], {
+      bookedAuto: ['CSE-8A|2026|2'], bookedOn: ['b'], bookedOff: [], waitlistedAuto: ['wl'],
+    })]);
+    const old = terms(['2026|2', ws(FALL, [named('a1', FALL, ['C'])], {
+      bookedAuto: ['stale'], bookedOn: ['x'], bookedOff: ['CSE-8A|2026|2'], waitlistedAuto: ['old-wl'],
+    })]);
+    const r = mergeMigration({ terms: acct, pool: [], appt: null }, payload({ terms: old }), NOW);
+    const w = r.terms.terms['2026|2']!;
+    expect(w.plans.plans.map((x) => x.id)).toEqual(['a1']);
+    expect(w.bookedAuto).toEqual(['CSE-8A|2026|2']);
+    expect(w.bookedOff).toEqual([]);
+    expect(w.waitlistedAuto).toEqual(['wl']);
+    expect(w.bookedOn).toEqual(['b', 'x']);
+  });
+
+  it('N1: an extra replacing a pristine account workspace keeps that workspace\'s booked lists', () => {
+    const acct = terms(['2026|2', ws(FALL, [named('boot', FALL, [])], { bookedAuto: ['k'], bookedOn: ['b'] })]);
+    const r = mergeMigration({ terms: acct, pool: [], appt: null }, payload({ hashPlan: planWith(FALL, 'NEW') }), NOW);
+    const w = r.terms.terms['2026|2']!;
+    expect(w.plans.plans.map((x) => x.name)).toEqual(['Plan from bookmark']);
+    expect(w.bookedAuto).toEqual(['k']);
+    expect(w.bookedOn).toEqual(['b']);
+  });
+
+  it('N4: an imported empty renamed plan is not dropped by an extra landing in the same term', () => {
+    const acct = terms(['2026|2', ws(FALL, [named('boot', FALL, [])])]);
+    const old = terms(['2026|2', ws(FALL, [named('planb', FALL, [], 'Plan B'), named('planc', FALL, [], 'Plan C')])]);
+    const r = mergeMigration({ terms: acct, pool: [], appt: null }, payload({
+      terms: old, hashPlan: planWith(FALL, 'NEW'),
+    }), NOW);
+    expect(r.terms.terms['2026|2']!.plans.plans.map((x) => x.id).sort()).toEqual(
+      ['planb', 'planc', allIds(r.terms).find((i) => i.startsWith('m-'))!].sort(),
+    );
+    expect(r.added.plans).toBe(3);
+  });
+
+  it('M1: isMigrationPayload rejects a bad appt list, a malformed received and a bad waitlistedAuto', () => {
+    expect(isMigrationPayload({ ...payload(), appt: [{ academicYear: 1 }] })).toBe(false);
+    expect(isMigrationPayload({ ...payload(), appt: 'x' })).toBe(false);
+    expect(isMigrationPayload({ ...payload(), received: { plan: planWith(FALL, 'A'), source: 'nope', receivedAt: NOW } })).toBe(false);
+    expect(isMigrationPayload({ ...payload(), received: { plan: planWith(FALL, 'A'), source: 'link' } })).toBe(false);
+    const bad = legacy();
+    (bad.terms['2026|2'] as unknown as Record<string, unknown>).waitlistedAuto = [1, 2];
+    expect(isMigrationPayload({ ...payload(), terms: bad })).toBe(false);
   });
 
   it('M5: a real #m= token decoded via mirrorTokenFromHash/decodePlan is deduped against a saved plan', () => {
