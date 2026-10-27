@@ -203,7 +203,7 @@ export default function App({ boot, initialFlash }: { boot: CloudBoot; initialFl
         />
       )}
       <div className="app__body">
-        <CoursePanel ctl={ctl} focus={focusReq} hidden={isMobile && view !== 'courses'} />
+        <CoursePanel ctl={ctl} focus={focusReq} onFlash={flash} hidden={isMobile && view !== 'courses'} />
 
         {(!isMobile || view !== 'courses') && (
           <main className="main">

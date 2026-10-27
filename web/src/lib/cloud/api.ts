@@ -3,7 +3,7 @@
  * session cookie (credentials: 'same-origin'); writes are JSON. Nothing here
  * talks to tss.ucsd.edu.
  */
-import type { PlanState, SyncOp } from '@triton/shared';
+import type { PlanState, RmpLookup, SyncOp } from '@triton/shared';
 import type { SendResult } from './engine';
 import type { WebSnapshot } from './records';
 
@@ -202,3 +202,41 @@ function links(r: ApiResult): CalendarLinks | null {
 export const createCalendarLink = async (): Promise<CalendarLinks | null> => links(await apiPost('/api/calendar/link', {}));
 /** A NEW secret; the old link stops working at once. */
 export const resetCalendarLink = async (): Promise<CalendarLinks | null> => links(await apiPost('/api/calendar/reset', {}));
+
+const RMP_MAX_NAMES = 20; // the server's per-request limit
+const rmpCache = new Map<string, RmpLookup>();
+/** Tests only: the cache is page-session state, so each test starts from nothing. */
+export const clearRmpCache = (): void => rmpCache.clear();
+
+/**
+ * Ratings change monthly, so a name looked up once stays answered for the page session.
+ * Failures are never cached: the next click should get another try. null = the lookup
+ * failed (signed out, offline, server error); callers fall back to RMP's search.
+ */
+export async function lookupRmp(names: string[]): Promise<RmpLookup[] | null> {
+  const wanted = names.map((n) => n.trim());
+  const missing = [...new Set(wanted.filter((n) => !rmpCache.has(n)))];
+  try {
+    for (let i = 0; i < missing.length; i += RMP_MAX_NAMES) {
+      const q = new URLSearchParams();
+      const chunk = missing.slice(i, i + RMP_MAX_NAMES);
+      for (const n of chunk) q.append('name', n);
+      const r = await getWithTimeout(`/api/rmp?${q}`);
+      if (!r.ok) return null;
+      const b = (await r.json()) as { results?: unknown };
+      if (!Array.isArray(b.results)) return null;
+      // Results come back in request order; key by what we asked, not by what the server echoes.
+      const results = b.results as RmpLookup[];
+      chunk.forEach((n, j) => { if (results[j]) rmpCache.set(n, results[j]); });
+    }
+  } catch {
+    return null;
+  }
+  const out: RmpLookup[] = [];
+  for (const n of wanted) {
+    const hit = rmpCache.get(n);
+    if (!hit) return null;
+    out.push(hit);
+  }
+  return out;
+}

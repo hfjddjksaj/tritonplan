@@ -495,6 +495,14 @@ p {
   border-radius: 4px;
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
+.course-card__tss--off {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.course-card__tss--off:hover {
+  border-color: var(--c-border, var(--line));
+  box-shadow: none;
+}
 .course-card__tss:hover {
   border-color: var(--c-spine, var(--gold));
   box-shadow: 0 0 0 1px var(--c-spine, var(--gold));
@@ -2687,6 +2695,27 @@ button.menu__item:hover {
 .planpick__count {
   font-size: 12px;
   color: var(--text-muted);
+}
+.rmp__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rmp__score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+.rmp__avg {
+  font-weight: 600;
+}
+.rmp__note {
+  margin: 0 0 12px;
+  font-size: 12px;
 }
 .planpick__cancel {
   width: 100%;

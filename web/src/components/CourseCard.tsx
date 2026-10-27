@@ -8,6 +8,7 @@ import { PrereqPopover } from './PrereqPopover';
 import { BookedSectionPopover } from './BookedSectionPopover';
 import { Trash, External, WarnCircle, WarnTriangle } from './icons';
 import { tip } from './Tooltip';
+import { RmpButton } from './RmpButton';
 
 interface Props {
   entry: PlanEntry;
@@ -34,9 +35,11 @@ interface Props {
    *  (e.g. "P-002-004"). Absent whenever they agree or nothing is certain. */
   bookedOptionCode?: string;
   onToggleBooked?: () => void;
+  /** Toast line for the rate-my-professor button (blocked pop-up). */
+  onFlash?: (msg: string) => void;
 }
 
-export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, waitlisted = false, bookedByTss = false, bookedOptionCode, onToggleBooked }: Props) {
+export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, waitlisted = false, bookedByTss = false, bookedOptionCode, onToggleBooked, onFlash }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
@@ -239,6 +242,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
           >
             prerequisites
           </button>
+          <RmpButton course={course} onFlash={onFlash} />
           {/* Manual marking exists for courses TSS has not spoken about. Once it
               reports one, there is nothing here to decide — enrolment is its fact, not
               a preference — and the toggle would only offer a way to contradict it

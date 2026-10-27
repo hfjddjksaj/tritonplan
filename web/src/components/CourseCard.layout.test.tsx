@@ -48,12 +48,13 @@ describe('CourseCard head/action split', () => {
       b.textContent!.trim(),
     );
 
-  it('orders the actions open in TSS, book section, prerequisites, mark enrolled', () => {
+  it('orders the actions open in TSS, book section, prerequisites, rate my professor, mark enrolled', () => {
     render();
     expect(actionLabels()).toEqual([
       'open in TSS',
       'book section',
       'prerequisites',
+      'rate my professor',
       'mark enrolled',
     ]);
   });
@@ -81,7 +82,7 @@ describe('CourseCard head/action split', () => {
 
   it('drops the buttons it has no callback for instead of leaving a hole', () => {
     render({ onBook: undefined, readOnly: true, onToggleBooked: undefined });
-    expect(actionLabels()).toEqual(['open in TSS', 'prerequisites']);
+    expect(actionLabels()).toEqual(['open in TSS', 'prerequisites', 'rate my professor']);
   });
 
   it('omits the facts line when the course carries no unit count', () => {
