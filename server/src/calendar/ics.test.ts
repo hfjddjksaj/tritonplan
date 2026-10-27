@@ -120,3 +120,77 @@ test('lines are CRLF, folded at 75 octets and text is escaped', () => {
   for (const l of lines) expect(Buffer.from(l, 'utf8').toString('utf8')).toBe(l);
   expect(lines.some((l) => l.startsWith(' '))).toBe(true);
 });
+
+// Plans reach the feed from /api/sync, which stores whatever a client sent (a crafted share saved as a plan, say).
+const uids = (ics: string) => events(ics).map((e) => /\r\nUID:([^@]*)@/.exec(`\r\n${e}`)![1]);
+
+test('a meeting or exam whose date, time or weekday is not well formed is left out, never written raw', () => {
+  const o = option();
+  const c = o.components[0]!;
+  const m = c.meetings[0]!;
+  o.components = [
+    { ...c, id: 'crlf', meetings: [{ ...m, start: '11:00\r\nBEGIN:VEVENT\r\nSUMMARY:INJECTED' }] },
+    { ...c, id: 'lf', meetings: [{ ...m, end: '12:20\nX-INJECTED:1' }] },
+    { ...c, id: 'hour', meetings: [{ ...m, end: '24:00' }] },
+    { ...c, id: 'minute', meetings: [{ ...m, start: '11:60' }] },
+    { ...c, id: 'short', meetings: [{ ...m, start: '9:00' }] },
+    { ...c, id: 'num', meetings: [{ ...m, start: 1100 as never }] },
+    { ...c, id: 'garbage', beginDate: 'soon' },
+    { ...c, id: 'feb30', endDate: '2026-02-30' },
+    { ...c, id: 'month13', beginDate: '2026-13-01' },
+    { ...c, id: 'stamp', beginDate: '2026-09-24T00:00' },
+    { ...c, id: 'crlf-date', endDate: '2026-12-04\r\nX-INJECTED:2' },
+    { ...c, id: 'day', meetings: [{ ...m, days: ['Tue', 'Funday'] as never }] },
+    { ...c, id: 'proto', meetings: [{ ...m, days: ['constructor'] as never }] },
+    { ...c, id: 'notlist', meetings: [{ ...m, days: 'Tue' as never }] },
+    { ...c, id: 'ok' },
+  ];
+  o.final = { date: '2026-12-08', start: '11:30\nX-INJECTED:3', end: '14:29' };
+  o.midterms = [
+    { date: '10/31/2026', start: '10:00', end: '11:50' },
+    { date: '2026-11-03', start: '10:00', end: '11:50' },
+    { date: '2026-11-05', start: '10:00', end: '' },
+  ];
+  let ics = '';
+  expect(() => { ics = build([plan(o)]); }).not.toThrow();
+  expect(uids(ics)).toEqual(['CSE_8A_2026_2-ok-0', 'midterm-CSE_8A_2026_2-20261103-1']);
+  expect(ics).not.toMatch(/INJECTED|undefined|NaN/);
+  // Every physical line is a property of ours or a folded continuation.
+  for (const l of ics.split('\r\n').slice(0, -1)) expect(l).toMatch(/^([A-Z-]+[;:]| )/);
+
+  const badFinal = option({ final: { date: '2026-12-08', start: '11:30', end: '14:29\r\nX-INJECTED:4' } });
+  expect(uids(build([plan(badFinal)]))).toEqual(['CSE_8A_2026_2-E_1-0']);
+});
+
+test('a component with no instructors list still gets its event, without the names line', () => {
+  const o = option({ final: undefined });
+  o.components[0]!.instructors = undefined as never;
+  const evs = events(build([plan(o)]));
+  expect(evs).toHaveLength(1);
+  expect(evs[0]).toContain('DESCRIPTION:Section 001-000-LE\r\n');
+  expect(evs[0]).not.toContain('undefined');
+});
+
+test('a plan that throws is left out and the other plans still make the feed', () => {
+  const withNull = plan(option(), { id: 'NULL 1|2026|2' });
+  withNull.entries.push(null as never);
+  const noList = plan(option({ components: 'x' as never }), { id: 'NOLIST 1|2026|2' });
+  const noOptions = plan(option(), { id: 'NOOPT 1|2026|2', options: undefined as never });
+  // The first course is fine and the second throws while its events are written: none of the plan may be half in the feed.
+  const partial = plan(option(), { id: 'PART 1|2026|2' });
+  partial.entries.push(plan(option(), { id: 'PART 2|2026|2', number: 8 as never }).entries[0]!);
+  let ics = '';
+  expect(() => { ics = build([withNull, noList, noOptions, partial, plan()]); }).not.toThrow();
+  expect(uids(ics)).toEqual(['CSE_8A_2026_2-E_1-0', 'final-CSE_8A_2026_2']);
+  expect(ics).not.toMatch(/NULL|NOLIST|NOOPT|PART/);
+  expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+});
+
+test('the term-over rule ignores dates it cannot read', () => {
+  const p = plan(option({ final: { date: 'garbage', start: '11:30', end: '14:29' } }));
+  // Without the final, the component's end date (2026-12-04) is the last real date.
+  expect(calendarTermIsOver(p, new Date('2026-12-04T23:58:00-08:00'))).toBe(false);
+  expect(calendarTermIsOver(p, new Date('2026-12-05T09:00:00-08:00'))).toBe(true);
+  const far = plan(option({ final: { date: '9999-99-99', start: '11:30', end: '14:29' } }));
+  expect(calendarTermIsOver(far, new Date('2026-12-05T09:00:00-08:00'))).toBe(true);
+});

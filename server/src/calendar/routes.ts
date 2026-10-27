@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import type { PlanState } from '@triton/shared';
+import type { PlanState, StoredPlanDoc } from '@triton/shared';
 import type { Deps } from '../app';
 import { randomToken } from '../auth/tokens';
 import type { Db } from '../db/db';
@@ -11,6 +12,8 @@ import { UCSD_HOLIDAYS } from './holidays';
 
 const QUARTER = 900_000;
 const MAX_TERMS = 40;
+// Twice the largest valid body (40 picks of 100-character keys and ids, about 8 KB).
+const BODY_LIMIT = 16 * 1024;
 const FILE_RE = /^([A-Za-z0-9_-]{43})\.ics$/;
 
 // Keys become object keys in responses; these names would poke at Object.prototype.
@@ -33,13 +36,14 @@ function readTerms(db: Db, userId: string): Record<string, string> {
   return out;
 }
 
-/** A pick counts only if the plan still exists for this user and still belongs to that term. */
+/** A pick counts only if the plan still exists for this user, still belongs to that term, and holds a PlanState. */
 function loadPick(db: Db, userId: string, termKey: string, planId: string): PlanState | null {
   const row = db.prepare('SELECT data FROM plan_docs WHERE user_id = ? AND plan_id = ? AND term_key = ?').get(userId, planId, termKey) as { data: string } | undefined;
   if (!row) return null;
   try {
-    const plan = JSON.parse(row.data) as PlanState;
-    return plan && Array.isArray(plan.entries) ? plan : null;
+    // The row is the client's whole named plan; the calendar wants the PlanState inside it. Nothing here is trusted.
+    const plan = (JSON.parse(row.data) as Partial<StoredPlanDoc> | null)?.plan;
+    return plan && typeof plan === 'object' && Array.isArray(plan.entries) ? plan : null;
   } catch {
     return null;
   }
@@ -65,7 +69,7 @@ export function calendarRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     return c.json({ ...(secret ? links(secret) : { https: null, webcal: null }), terms, missing });
   });
 
-  r.put('/calendar', auth, async (c) => {
+  r.put('/calendar', auth, bodyLimit({ maxSize: BODY_LIMIT, onError: (c) => c.json({ error: 'too_large' }, 413) }), async (c) => {
     let raw: unknown;
     try {
       raw = await c.req.json();

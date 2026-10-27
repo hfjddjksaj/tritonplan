@@ -72,6 +72,21 @@ function icsUtc(d: Date): string {
 const icsDate = (date: string) => date.replace(/-/g, '');
 const icsLocal = (date: string, hhmm: string) => `${icsDate(date)}T${hhmm.replace(':', '')}00`;
 
+// ---- input checks: plans come from /api/sync, which stores whatever a client sent (a crafted share saved as a plan) ----
+
+/** A real calendar date written 'YYYY-MM-DD'. Anything else would throw in the date math or land raw in the feed. */
+function isIsoDate(v: unknown): v is string {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const [y, m, d] = parseIso(v);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+}
+const isHhmm = (v: unknown): v is string => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+const isWeekdays = (v: unknown): v is Weekday[] =>
+  Array.isArray(v) && v.length > 0 && v.every((d) => typeof d === 'string' && Object.hasOwn(BYDAY, d));
+const isExam = (x: FinalExam | undefined): x is FinalExam =>
+  !!x && typeof x === 'object' && isIsoDate(x.date) && isHhmm(x.start) && isHhmm(x.end);
+
 // ---- text ----
 
 /** RFC 5545 TEXT escaping. */
@@ -113,7 +128,7 @@ export function calendarTermIsOver(plan: PlanState, now: Date): boolean {
     const opt = entry.course.options.find((o) => o.id === entry.selectedOptionId);
     if (!opt) continue;
     const dates = [opt.final?.date, ...opt.components.map((c) => c.endDate)];
-    for (const d of dates) if (d && d > last) last = d;
+    for (const d of dates) if (isIsoDate(d) && d > last) last = d;
   }
   if (!last) return false;
   return now.getTime() > laInstant(last, 23, 59, 59).getTime();
@@ -126,9 +141,10 @@ function eventLines(uid: string, now: Date, props: string[]): string[] {
 }
 
 function meetingEvent(course: CourseOffering, comp: Component, m: Meeting, index: number, holidays: readonly string[], now: Date): string[] | null {
-  const begin = comp.beginDate!;
-  const end = comp.endDate!;
-  if (m.days.length === 0) return null;
+  const begin = comp.beginDate;
+  const end = comp.endDate;
+  // Never guess at a value that isn't well formed: the meeting is left out.
+  if (!isIsoDate(begin) || !isIsoDate(end) || !m || !isHhmm(m.start) || !isHhmm(m.end) || !isWeekdays(m.days)) return null;
   let first = begin;
   for (let i = 0; i < 7 && !m.days.includes(weekdayOf(first)); i++) first = addDays(first, 1);
   if (!m.days.includes(weekdayOf(first)) || first > end) return null;
@@ -143,11 +159,13 @@ function meetingEvent(course: CourseOffering, comp: Component, m: Meeting, index
   props.push(`SUMMARY:${esc(`${course.subject} ${shortNumber(course.number)} ${comp.typeText}`)}`);
   const where = [m.building, m.room].filter(Boolean).join(' ') || m.location;
   if (where) props.push(`LOCATION:${esc(where)}`);
-  const desc = [`Section ${comp.sectionCode}`, ...(comp.instructors.length ? [comp.instructors.join(', ')] : [])].join('\n');
+  const names = Array.isArray(comp.instructors) ? comp.instructors.filter((n) => typeof n === 'string') : [];
+  const desc = [`Section ${comp.sectionCode}`, ...(names.length ? [names.join(', ')] : [])].join('\n');
   props.push(`DESCRIPTION:${esc(desc)}`);
   return eventLines(`${uidPart(course.id)}-${uidPart(comp.id)}-${index}`, now, props);
 }
 
+/** `x` must have passed isExam. */
 function examEvent(course: CourseOffering, kind: 'Final' | 'Midterm', uid: string, x: FinalExam, now: Date): string[] {
   const props = [
     `DTSTART;TZID=${TZID}:${icsLocal(x.date, x.start)}`,
@@ -174,8 +192,7 @@ export function buildCalendar(input: { plans: { plan: PlanState }[]; now: Date; 
   ];
   // The same course could appear in two picked plans; a UID may appear once per feed.
   const seen = new Set<string>();
-  const add = (ev: string[] | null) => {
-    if (!ev) return;
+  const add = (ev: string[]) => {
     const uid = ev[1]!;
     if (seen.has(uid)) return;
     seen.add(uid);
@@ -183,20 +200,37 @@ export function buildCalendar(input: { plans: { plan: PlanState }[]; now: Date; 
   };
 
   for (const { plan } of input.plans) {
-    if (calendarTermIsOver(plan, now)) continue;
-    for (const entry of plan.entries) {
-      const course = entry.course;
-      const opt = course.options.find((o) => o.id === entry.selectedOptionId);
-      if (!opt) continue;
-      for (const comp of opt.components) {
-        if (comp.unscheduled || !comp.beginDate || !comp.endDate || !comp.meetings?.length) continue;
-        comp.meetings.forEach((m, i) => add(meetingEvent(course, comp, m, i, holidays, now)));
-      }
-      const id = uidPart(course.id);
-      if (opt.final) add(examEvent(course, 'Final', `final-${id}`, opt.final, now));
-      optionMidterms(opt).forEach((x, i) => add(examEvent(course, 'Midterm', `midterm-${id}-${icsDate(x.date)}-${i}`, x, now)));
+    let events: string[][];
+    try {
+      if (calendarTermIsOver(plan, now)) continue;
+      events = planEvents(plan, holidays, now);
+    } catch {
+      // A plan whose shape is broken drops out whole; the student's other terms still reach their calendar.
+      continue;
     }
+    for (const ev of events) add(ev);
   }
   lines.push('END:VCALENDAR');
   return lines.flatMap(fold).join(CRLF) + CRLF;
+}
+
+/** Every event of one plan. Collected before any of them is added, so a plan that throws halfway adds nothing. */
+function planEvents(plan: PlanState, holidays: readonly string[], now: Date): string[][] {
+  const out: string[][] = [];
+  const push = (ev: string[] | null) => { if (ev) out.push(ev); };
+  for (const entry of plan.entries) {
+    const course = entry.course;
+    const opt = course.options.find((o) => o.id === entry.selectedOptionId);
+    if (!opt) continue;
+    for (const comp of opt.components) {
+      if (comp.unscheduled || !comp.beginDate || !comp.endDate || !Array.isArray(comp.meetings)) continue;
+      comp.meetings.forEach((m, i) => push(meetingEvent(course, comp, m, i, holidays, now)));
+    }
+    const id = uidPart(course.id);
+    if (isExam(opt.final)) push(examEvent(course, 'Final', `final-${id}`, opt.final, now));
+    optionMidterms(opt).forEach((x, i) => {
+      if (isExam(x)) push(examEvent(course, 'Midterm', `midterm-${id}-${icsDate(x.date)}-${i}`, x, now));
+    });
+  }
+  return out;
 }

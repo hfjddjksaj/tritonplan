@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import type { CourseOffering, PlanState } from '@triton/shared';
+import type { CourseOffering, PlanState, StoredPlanDoc, SyncOp, SyncVersions } from '@triton/shared';
 import { createApp } from '../app';
 import { createSession } from '../auth/sessions';
 import { createUser } from '../auth/users';
@@ -24,6 +24,12 @@ function planFor(subject: string, id: string): PlanState {
   return { version: 1, term: course.term, entries: [{ course, selectedOptionId: 'o1' }] };
 }
 
+/** A plan doc as the web app's NamedPlan stores it: the PlanState sits under `plan`. */
+function namedPlan(id: string, plan: PlanState): StoredPlanDoc & { browsed: string[] } {
+  const doc: StoredPlanDoc = { id, name: 'My plan', plan, createdAt: T, updatedAt: T };
+  return { ...doc, browsed: [] };
+}
+
 function setup() {
   const deps = testDeps();
   const app = createApp(deps);
@@ -38,18 +44,39 @@ function setup() {
       body: JSON.stringify(body),
     });
   const get = (path: string, token?: string) => app.request(path, { headers: token ? { Cookie: `tp_session=${token}` } : {} });
-  const putPlan = (userId: string, planId: string, termKey: string, p: PlanState) =>
-    deps.db.prepare('INSERT INTO plan_docs VALUES (?, ?, ?, 1, ?, ?)').run(userId, planId, termKey, JSON.stringify(p), T);
+
+  // Plans reach the server only through /api/sync, as the web app sends them; versions are whatever the server last handed out.
+  const versions = new Map<string, number>();
+  const base = (token: string, kind: 'term' | 'plan', id: string) => versions.get(`${token} ${kind} ${id}`) ?? 0;
+  const sync = async (token: string, ops: SyncOp[]) => {
+    const res = await send('POST', '/api/sync', { ops }, token);
+    expect(res.status).toBe(200);
+    const v = ((await res.json()) as { versions: SyncVersions }).versions;
+    for (const [k, n] of Object.entries(v.terms)) versions.set(`${token} term ${k}`, n);
+    for (const [k, n] of Object.entries(v.plans)) versions.set(`${token} plan ${k}`, n);
+  };
+  /** One plan saved the way the web app saves it: a TermMeta for its term, then the NamedPlan itself. */
+  const savePlan = (token: string, planId: string, termKey: string, p: PlanState) =>
+    sync(token, [
+      { op: 'putTerm', termKey, baseVersion: base(token, 'term', termKey), data: { term: p.term, activeId: planId, planOrder: [planId] } },
+      { op: 'putPlan', planId, termKey, baseVersion: base(token, 'plan', planId), data: namedPlan(planId, p) },
+    ]);
+  const deletePlan = (token: string, planId: string) =>
+    sync(token, [{ op: 'deletePlan', planId, baseVersion: base(token, 'plan', planId) }]);
+
   const link = async (token: string) => (await (await send('POST', '/api/calendar/link', {}, token)).json()) as { https: string; webcal: string };
   const path = (https: string) => new URL(https).pathname;
-  return { deps, mk, send, get, putPlan, link, path };
+  const missing = async (token: string) => ((await (await get('/api/calendar', token)).json()) as { missing: string[] }).missing;
+  return { deps, mk, send, get, savePlan, deletePlan, link, path, missing };
 }
+const events = (ics: string) => ics.split('BEGIN:VEVENT\r\n').slice(1).map((e) => e.split('END:VEVENT')[0]!);
 
 test('the feed works without signing in and contains no email or user id', async () => {
-  const { mk, send, get, putPlan, link, path } = setup();
+  const { mk, send, get, savePlan, link, path, missing } = setup();
   const u = mk('owner@ucsd.edu');
-  putPlan(u.id, 'plan-abc', 'FA26', planFor('CSE', 'CSE 100|2026|2'));
+  await savePlan(u.token, 'plan-abc', 'FA26', planFor('CSE', 'CSE 100|2026|2'));
   expect((await send('PUT', '/api/calendar', { terms: { FA26: 'plan-abc' } }, u.token)).status).toBe(200);
+  expect(await missing(u.token)).toEqual([]);
   const { https, webcal } = await link(u.token);
   expect(https).toMatch(/^https:\/\/tritonplan\.cn\/api\/cal\/[A-Za-z0-9_-]{43}\.ics$/);
   expect(webcal).toBe(https.replace('https://', 'webcal://'));
@@ -59,47 +86,130 @@ test('the feed works without signing in and contains no email or user id', async
   expect(res.headers.get('content-type')).toBe('text/calendar; charset=utf-8');
   expect(res.headers.get('cache-control')).toBe('no-cache');
   const body = await res.text();
-  expect(body).toContain('SUMMARY:CSE 100 Lecture');
+  const evs = events(body);
+  expect(evs).toHaveLength(1);
+  expect(evs[0]).toContain('SUMMARY:CSE 100 Lecture');
+  expect(evs[0]).toContain('RRULE:FREQ=WEEKLY;BYDAY=TU;');
   expect(body).not.toContain('owner@ucsd.edu');
   expect(body).not.toContain(u.id);
   expect(body).not.toContain('plan-abc');
+  expect(body).not.toContain('My plan');
 });
 
 test('only the selected plan per term is in the feed', async () => {
-  const { mk, send, get, putPlan, link, path } = setup();
+  const { mk, send, get, savePlan, link, path } = setup();
   const u = mk('a@ucsd.edu');
-  putPlan(u.id, 'p1', 'FA26', planFor('CSE', 'CSE 100|2026|2'));
-  putPlan(u.id, 'p2', 'FA26', planFor('MATH', 'MATH 100|2026|2'));
+  await savePlan(u.token, 'p1', 'FA26', planFor('CSE', 'CSE 100|2026|2'));
+  await savePlan(u.token, 'p2', 'FA26', planFor('MATH', 'MATH 100|2026|2'));
   await send('PUT', '/api/calendar', { terms: { FA26: 'p2' } }, u.token);
   const { https } = await link(u.token);
   const body = await (await get(path(https))).text();
+  expect(events(body)).toHaveLength(1);
   expect(body).toContain('SUMMARY:MATH 100 Lecture');
   expect(body).not.toContain('CSE 100');
   const state = await (await get('/api/calendar', u.token)).json();
   expect(state).toEqual({ https, webcal: https.replace('https://', 'webcal://'), terms: { FA26: 'p2' }, missing: [] });
 });
 
-test('a selected plan that was deleted is reported missing and left out', async () => {
-  const { deps, mk, send, get, putPlan, link, path } = setup();
+test('a selected plan that was deleted or moved to another term is reported missing and left out', async () => {
+  const { mk, send, get, savePlan, deletePlan, link, path, missing } = setup();
   const u = mk('a@ucsd.edu');
-  putPlan(u.id, 'p1', 'FA26', planFor('CSE', 'CSE 100|2026|2'));
-  putPlan(u.id, 'p2', 'WI27', planFor('MATH', 'MATH 100|2026|2'));
+  await savePlan(u.token, 'p1', 'FA26', planFor('CSE', 'CSE 100|2026|2'));
+  await savePlan(u.token, 'p2', 'WI27', planFor('MATH', 'MATH 100|2026|2'));
   await send('PUT', '/api/calendar', { terms: { FA26: 'p1', WI27: 'p2', SP27: 'ghost' } }, u.token);
   const { https } = await link(u.token);
 
+  expect(await missing(u.token)).toEqual(['SP27']);
   // A plan id that exists but under another term does not count either (P4).
-  expect(((await (await get('/api/calendar', u.token)).json()) as { missing: string[] }).missing).toEqual(['SP27']);
   await send('PUT', '/api/calendar', { terms: { FA26: 'p2' } }, u.token);
-  expect(((await (await get('/api/calendar', u.token)).json()) as { missing: string[] }).missing).toEqual(['FA26']);
+  expect(await missing(u.token)).toEqual(['FA26']);
 
   await send('PUT', '/api/calendar', { terms: { FA26: 'p1', WI27: 'p2' } }, u.token);
-  deps.db.prepare('DELETE FROM plan_docs WHERE plan_id = ?').run('p1');
+  expect(await missing(u.token)).toEqual([]);
+  let body = await (await get(path(https))).text();
+  expect(body).toContain('SUMMARY:CSE 100 Lecture');
+  expect(body).toContain('SUMMARY:MATH 100 Lecture');
+
+  await deletePlan(u.token, 'p1');
   const state = (await (await get('/api/calendar', u.token)).json()) as { missing: string[]; terms: object };
   expect(state.missing).toEqual(['FA26']);
   expect(state.terms).toEqual({ FA26: 'p1', WI27: 'p2' });
-  const body = await (await get(path(https))).text();
+  body = await (await get(path(https))).text();
   expect(body).not.toContain('CSE 100');
   expect(body).toContain('SUMMARY:MATH 100 Lecture');
+
+  // The picked plan is saved again under another term: the old term's pick no longer counts.
+  await savePlan(u.token, 'p2', 'SP27', planFor('MATH', 'MATH 100|2026|2'));
+  expect(await missing(u.token)).toEqual(['FA26', 'WI27']);
+  expect(events(await (await get(path(https))).text())).toEqual([]);
+});
+
+test('a stored plan doc without a usable PlanState counts as missing', async () => {
+  const { mk, send, savePlan, missing } = setup();
+  const u = mk('a@ucsd.edu');
+  const res = await send('POST', '/api/sync', { ops: [
+    { op: 'putPlan', planId: 'flat', termKey: 'FA26', baseVersion: 0, data: planFor('CSE', 'CSE 100|2026|2') },
+    { op: 'putPlan', planId: 'none', termKey: 'WI27', baseVersion: 0, data: { id: 'none', name: 'x', plan: { entries: 'nope' } } },
+    { op: 'putPlan', planId: 'str', termKey: 'SP27', baseVersion: 0, data: 'just text' },
+  ] }, u.token);
+  expect(res.status).toBe(200);
+  await savePlan(u.token, 'ok', 'FA27', planFor('MATH', 'MATH 100|2027|2'));
+  await send('PUT', '/api/calendar', { terms: { FA26: 'flat', WI27: 'none', SP27: 'str', FA27: 'ok' } }, u.token);
+  expect(await missing(u.token)).toEqual(['FA26', 'WI27', 'SP27']);
+});
+
+test('a malformed synced plan never breaks the feed or writes raw values into it', async () => {
+  const { mk, send, get, savePlan, link, path } = setup();
+  const u = mk('a@ucsd.edu');
+  // As a crafted share would arrive after "Save as a new plan": /api/sync stores whatever the client sends.
+  const bad = planFor('BAD', 'BAD 100|2026|2');
+  const opt = bad.entries[0]!.course.options[0]!;
+  const comp = opt.components[0]!;
+  const meeting = comp.meetings[0]!;
+  opt.components = [
+    { ...comp, id: 'crlf', meetings: [{ ...meeting, start: '09:00\r\nBEGIN:VEVENT\r\nSUMMARY:INJECTED' }] },
+    { ...comp, id: 'crlf-end', meetings: [{ ...meeting, end: '10:00\nX-INJECTED:1' }] },
+    { ...comp, id: 'date', beginDate: 'garbage' },
+    { ...comp, id: 'feb30', endDate: '2026-02-30' },
+    { ...comp, id: 'day', meetings: [{ ...meeting, days: ['Tue', 'Funday'] as never }] },
+    { ...comp, id: 'proto', meetings: [{ ...meeting, days: ['toString'] as never }] },
+    { ...comp, id: 'nomeet', meetings: undefined as never },
+    { ...comp, id: 'noinst', instructors: undefined as never },
+  ];
+  opt.final = { date: '2026-12-08\r\nX-INJECTED:2', start: '11:30', end: '14:29' };
+  opt.midterms = [
+    { date: '2026-10-31', start: '25:00', end: '26:00' },
+    { date: '2026-11-02', start: '10:00', end: '10:50' },
+  ];
+
+  // A plan whose shape throws outright (entries hold null; components is not a list) drops out on its own.
+  const broken = planFor('BRK', 'BRK 100|2026|2');
+  broken.entries.push(null as never);
+  const brokenEnd = planFor('BRE', 'BRE 100|2026|2');
+  brokenEnd.entries[0]!.course.options[0]!.components = 'x' as never;
+
+  await savePlan(u.token, 'bad', 'FA26', bad);
+  await savePlan(u.token, 'broken', 'WI27', broken);
+  await savePlan(u.token, 'broken-end', 'SP27', brokenEnd);
+  await savePlan(u.token, 'good', 'FA27', planFor('GOOD', 'GOOD 100|2027|2'));
+  await send('PUT', '/api/calendar', { terms: { FA26: 'bad', WI27: 'broken', SP27: 'broken-end', FA27: 'good' } }, u.token);
+  const { https } = await link(u.token);
+
+  const res = await get(path(https));
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  const lines = body.split('\r\n');
+  expect(body).toContain('SUMMARY:GOOD 100 Lecture');
+  expect(body).not.toContain('INJECTED');
+  expect(body).not.toContain('undefined');
+  expect(body).not.toContain('NaN');
+  expect(body).not.toContain('BRK');
+  expect(body).not.toContain('BRE');
+  expect(lines.filter((l) => l === 'BEGIN:VEVENT')).toHaveLength(lines.filter((l) => l === 'END:VEVENT').length);
+  // From the bad plan only what is fully valid is left: the component with no instructors list, and the one sound midterm.
+  const uids = events(body).map((e) => /UID:(.*)@/.exec(e)![1]);
+  expect(uids.sort()).toEqual(['BAD_100_2026_2-noinst-0', 'GOOD_100_2027_2-E_1-0', 'midterm-BAD_100_2026_2-20261102-1']);
+  expect(await (await get('/api/calendar', u.token)).json()).toMatchObject({ missing: [] });
 });
 
 test('reset makes the old link 404 immediately', async () => {
@@ -178,6 +288,18 @@ test('PUT validates the picks', async () => {
   }
   expect((await send('PUT', '/api/calendar', { terms: { k: 'p'.repeat(100), [`${'k'.repeat(100)}`]: 'p' } }, u.token)).status).toBe(200);
   expect(Object.keys(((await (await get('/api/calendar', u.token)).json()) as { terms: object }).terms)).toHaveLength(2);
+});
+
+test('PUT refuses a body over 16 KB before reading it', async () => {
+  const { mk, send, get } = setup();
+  const u = mk('a@ucsd.edu');
+  // The largest valid body (40 picks of 100-character keys and ids) is about 8 KB.
+  const full = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`${i}`.padStart(100, 'k'), 'p'.repeat(100)]));
+  expect((await send('PUT', '/api/calendar', { terms: full }, u.token)).status).toBe(200);
+  const res = await send('PUT', '/api/calendar', { terms: { k: 'p' }, pad: 'x'.repeat(16 * 1024) }, u.token);
+  expect(res.status).toBe(413);
+  expect(await res.json()).toEqual({ error: 'too_large' });
+  expect(Object.keys(((await (await get('/api/calendar', u.token)).json()) as { terms: object }).terms)).toHaveLength(40);
 });
 
 test('the feed is limited to 600 requests per 15 minutes per IP', async () => {

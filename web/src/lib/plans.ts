@@ -7,15 +7,11 @@
  * Every mutator preserves them (deletePlan refuses the last plan; migratePlans
  * repairs a dangling activeId).
  */
-import type { PlanState } from '@triton/shared';
+import type { PlanState, StoredPlanDoc } from '@triton/shared';
 import { emptyPlan } from './plan';
 
-export interface NamedPlan {
-  id: string;
-  name: string;
-  plan: PlanState;
-  createdAt: string;
-  updatedAt: string;
+/** Synced as-is as one plan doc; the server's calendar feed reads the StoredPlanDoc fields. */
+export interface NamedPlan extends StoredPlanDoc {
   /**
    * LEGACY (pre-terms migration input only): course ids the plan used to hide
    * from the shared browsed pool. Read once by `migrateToTermsState` to seed

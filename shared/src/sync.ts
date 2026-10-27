@@ -1,6 +1,18 @@
-import type { ApptTimes, CourseOffering } from './types.js';
+import type { ApptTimes, CourseOffering, PlanState } from './types.js';
 
 // Wire contract of POST /api/sync and GET /api/state, shared by server and web. Types only (plus one const): no runtime deps.
+
+/**
+ * What a putPlan op stores as `data`: one named plan (the web app's NamedPlan), with its PlanState in `plan`.
+ * The server otherwise stores it unread; the calendar feed reads `plan` and must not trust it.
+ */
+export interface StoredPlanDoc {
+  id: string;
+  name: string;
+  plan: PlanState;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type SyncOp =
   | { op: 'putTerm'; termKey: string; baseVersion: number; data: unknown }
