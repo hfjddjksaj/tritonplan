@@ -33,4 +33,9 @@ CREATE TABLE shares (code TEXT PRIMARY KEY,
   name TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX shares_by_user ON shares(user_id, created_at);
 `,
+  // The secret in the feed URL is the only credential of the public .ics; one per user, replaced on reset.
+  `
+CREATE TABLE calendar_feeds (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  secret TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+`,
 ];
