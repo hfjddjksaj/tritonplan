@@ -69,6 +69,21 @@ describe('ShareMenu', () => {
     expect(flash).toHaveBeenCalledWith('Link copied — anyone with it can view this plan.');
   });
 
+  it.each([
+    ['150 characters', 'x'.repeat(150)],
+    ['an emoji straddling the 100th code unit', 'x'.repeat(99) + '😀' + 'tail'],
+  ])('a long plan name (%s) is cut to 100 code units and still shares', async (_label, longName) => {
+    await act(async () => root.render(<ShareMenu plan={plan} planName={longName} onFlash={flash} />));
+    await click('Share');
+    await click('Copy link');
+    const sent = JSON.parse((posts()[0]![1] as RequestInit).body as string);
+    expect(sent.name.length).toBeGreaterThan(0);
+    expect(sent.name.length).toBeLessThanOrEqual(100);
+    expect(sent.name).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
+    expect(writeText).toHaveBeenCalledWith(LINK);
+    expect(flash).toHaveBeenCalledWith('Link copied — anyone with it can view this plan.');
+  });
+
   it('a failed create flashes the line and writes nothing to the clipboard', async () => {
     answer = () => json(500, { error: 'server' });
     await render();

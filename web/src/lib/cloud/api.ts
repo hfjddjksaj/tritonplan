@@ -102,9 +102,23 @@ export const apiDelete = (path: string, body: unknown): Promise<ApiResult> => se
 
 export interface ShareRow { code: string; name: string; url: string; createdAt: string }
 
+const SHARE_NAME_MAX = 100; // the server's limit, counted in UTF-16 code units
+
+/** Plan names are uncapped locally, but the server refuses a share name over 100; cut it, never mid-emoji. */
+export function clampShareName(name: string): string {
+  let s = name.trim();
+  if (s.length > SHARE_NAME_MAX) {
+    s = s.slice(0, SHARE_NAME_MAX);
+    const last = s.charCodeAt(s.length - 1);
+    if (last >= 0xd800 && last <= 0xdbff) s = s.slice(0, -1); // a high surrogate whose pair was cut off
+    s = s.trimEnd();
+  }
+  return s || 'Shared plan';
+}
+
 /** The server only checks the snapshot loosely, so callers must hand over a bare PlanState (no booked/appointment marks). */
 export async function createShare(name: string, plan: PlanState): Promise<{ code: string; url: string } | null> {
-  const r = await apiPost('/api/shares', { name, plan });
+  const r = await apiPost('/api/shares', { name: clampShareName(name), plan });
   if (!r.ok) return null;
   const b = (r.body ?? {}) as { code?: unknown; url?: unknown };
   return typeof b.code === 'string' && typeof b.url === 'string' ? { code: b.code, url: b.url } : null;
