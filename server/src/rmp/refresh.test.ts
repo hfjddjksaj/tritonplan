@@ -114,6 +114,72 @@ test('after a failure the next attempt waits for the daily check, and one fetch 
   err.mockRestore();
 });
 
+const pageOf = (n: number, startId = 100) =>
+  new Response(JSON.stringify({
+    data: { search: { teachers: {
+      edges: Array.from({ length: n }, (_, i) => ({ node: { legacyId: startId + i, firstName: 'F', lastName: `L${i}`, department: null, avgRating: null, numRatings: 0 } })),
+      pageInfo: { hasNextPage: false, endCursor: null },
+    } } },
+  }));
+const seed = (db: ReturnType<typeof openDb>, n: number) =>
+  replaceTeachers(db, Array.from({ length: n }, (_, i) => ({ legacyId: i + 1, firstName: 'Old', lastName: `P${i}`, department: null, avgRating: null, numRatings: 0 })), new Date(clock - 40 * DAY).toISOString());
+
+test('an empty or less-than-half roster keeps the old rows and the old timestamp', async () => {
+  const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+  for (const [n, msg] of [[0, /empty/], [4, /shrunk/]] as const) {
+    err.mockClear();
+    const { db, deps } = setup(async () => pageOf(n));
+    seed(db, 10);
+    const before = rmpFetchedAt(db);
+    const stop = startRmpRefresh(deps);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids(db)).toHaveLength(10);
+    expect(rmpFetchedAt(db)).toBe(before);
+    expect(err).toHaveBeenCalledTimes(1);
+    expect(String(err.mock.calls[0]![0])).toMatch(msg);
+    stop();
+  }
+  // Exactly half is allowed through.
+  const { db, deps } = setup(async () => pageOf(5));
+  seed(db, 10);
+  const stop = startRmpRefresh(deps);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(db)).toHaveLength(5);
+  expect(rmpFetchedAt(db)).toBe(T0.toISOString());
+  stop();
+  err.mockRestore();
+});
+
+test('a 200 HTML page logs one fixed line with nothing from the body', async () => {
+  const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const { deps } = setup(async () => new Response('<!DOCTYPE html><title>challenge</title>', { status: 200 }));
+  const stop = startRmpRefresh(deps);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(err.mock.calls).toEqual([['RMP refresh failed: RMP response was not JSON']]);
+  expect(String(err.mock.calls[0]![0])).not.toContain('<');
+  stop();
+  err.mockRestore();
+});
+
+test('a throwing db read ends as one log line and the next daily check still runs', async () => {
+  const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const { db, deps, fetch } = setup(async () => okPage(8));
+  const unhandled = vi.fn();
+  process.on('unhandledRejection', unhandled);
+  vi.spyOn(db, 'prepare').mockImplementationOnce(() => { throw new Error('db is locked'); });
+  const stop = startRmpRefresh(deps);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(err.mock.calls).toEqual([['RMP refresh failed: db is locked']]);
+  expect(fetch).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(DAY);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(ids(db)).toEqual([8]);
+  expect(unhandled).not.toHaveBeenCalled();
+  process.off('unhandledRejection', unhandled);
+  stop();
+  err.mockRestore();
+});
+
 test('stop cancels the daily check, and the timer does not hold the process open', async () => {
   const { deps, fetch } = setup(async () => okPage(1));
   const unref = vi.spyOn(global, 'setInterval');

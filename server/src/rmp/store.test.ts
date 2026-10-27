@@ -54,3 +54,15 @@ test('replaceTeachers swaps the whole snapshot and stamps the time, atomically',
   expect(db.prepare('SELECT legacy_id FROM rmp_teachers').all()).toEqual([{ legacy_id: 3 }]);
   expect(rmpFetchedAt(db)).toBe('2026-02-01T00:00:00.000Z');
 });
+
+test('partial names never match, even when they are a unique substring or prefix of one stored name (Review Focus 4)', () => {
+  const db = openDb(':memory:');
+  replaceTeachers(db, [t(1, 'Leo', 'Porter'), t(2, 'Mia Ann', 'Chen'), t(3, 'Mia', 'Chen')], '2026-01-15T00:00:00.000Z');
+  const names = ['Porter', 'Leo', 'Mia Ann', 'Leo Porter Jr', 'Leo Port', 'eo Porter', 'Mia Ann Chen Jr'];
+  for (const r of lookupTeachers(db, names)) {
+    expect(r.match, r.name).toBeNull();
+    expect(r.searchUrl).toBe(`https://www.ratemyprofessors.com/search/professors/1079?q=${encodeURIComponent(r.name)}`);
+  }
+  expect(lookupTeachers(db, ['Mia Ann Chen'])[0]!.match?.legacyId).toBe(2);
+  expect(lookupTeachers(db, ['Leo Porter'])[0]!.match?.legacyId).toBe(1);
+});

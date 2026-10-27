@@ -49,3 +49,14 @@ test('a bad status, a wrong shape or a never-ending roster throws instead of ret
   const flaky = (async () => (k++ === 0 ? json(body([node(1)], true, 'c')) : json({}, 502))) as unknown as typeof fetch;
   await expect(fetchAllTeachers(flaky)).rejects.toThrow('RMP responded 502');
 });
+
+test('an empty roster throws: nothing back from RMP is a failure, not a roster of zero', async () => {
+  const empty = (async () => json(body([], false, null))) as unknown as typeof fetch;
+  await expect(fetchAllTeachers(empty)).rejects.toThrow(/empty/);
+});
+
+test('a 200 that is not JSON throws a fixed message that quotes nothing from the body', async () => {
+  const html = (async () => new Response('<!DOCTYPE html><title>Just a moment...</title>', { status: 200 })) as unknown as typeof fetch;
+  const err = await fetchAllTeachers(html).then(() => null, (e: Error) => e);
+  expect(err?.message).toBe('RMP response was not JSON');
+});

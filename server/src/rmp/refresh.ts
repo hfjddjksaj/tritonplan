@@ -11,12 +11,16 @@ export function startRmpRefresh(deps: Pick<Deps, 'db' | 'now' | 'fetch'>): () =>
 
   const check = async (): Promise<void> => {
     if (running) return;
-    const at = rmpFetchedAt(deps.db);
-    const ts = at ? Date.parse(at) : NaN;
-    if (Number.isFinite(ts) && deps.now().getTime() - ts < MAX_AGE) return;
     running = true;
     try {
+      // Inside the try: a throw here would be an unhandled rejection from the timer, which exits Node.
+      const at = rmpFetchedAt(deps.db);
+      const ts = at ? Date.parse(at) : NaN;
+      if (Number.isFinite(ts) && deps.now().getTime() - ts < MAX_AGE) return;
       const rows = await fetchAllTeachers(deps.fetch);
+      const stored = (deps.db.prepare('SELECT COUNT(*) AS n FROM rmp_teachers').get() as { n: number }).n;
+      // A roster that lost over half its people is more likely a broken answer than a real change.
+      if (rows.length < stored / 2) throw new Error(`RMP roster shrunk from ${stored} to ${rows.length}`);
       replaceTeachers(deps.db, rows, deps.now().toISOString());
     } catch (e) {
       // One line, message only: no body, no stack. The old snapshot stays and the next daily check retries.

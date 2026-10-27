@@ -62,11 +62,19 @@ export async function fetchAllTeachers(fetchFn: typeof fetch): Promise<RmpTeache
       await res.body?.cancel().catch(() => {});
       throw new Error(`RMP responded ${res.status}`);
     }
-    const parsed = page.safeParse(await res.json());
+    // V8's own JSON error quotes the start of the body, which must not reach a log line.
+    const raw: unknown = await res.json().catch(() => {
+      throw new Error('RMP response was not JSON');
+    });
+    const parsed = page.safeParse(raw);
     if (!parsed.success) throw new Error('RMP response had an unexpected shape');
     const { edges, pageInfo } = parsed.data.data.search.teachers;
     for (const { node } of edges) out.push(node);
-    if (!pageInfo.hasNextPage) return out;
+    if (!pageInfo.hasNextPage) {
+      // A valid but empty answer (e.g. RMP ignoring the school id) must not replace a real snapshot.
+      if (out.length === 0) throw new Error('RMP roster was empty');
+      return out;
+    }
     if (!pageInfo.endCursor) throw new Error('RMP page has more results but no cursor');
     cursor = pageInfo.endCursor;
   }
