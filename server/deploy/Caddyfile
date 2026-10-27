@@ -22,11 +22,13 @@ tritonplan.cn {
 			header_up X-Real-IP {remote_host}
 		}
 	}
-	# Hashed assets: a missing one must 404, not fall back to index.html with a
-	# one-year immutable header (so no try_files here).
+	# Hashed assets: a missing one must 404, not fall back to index.html (so no
+	# try_files here), and the 404 must not carry the one-year immutable header
+	# either, or a browser could keep it for a chunk a later deploy does ship.
 	handle /assets/* {
 		root * /srv/tritonplan/web
-		header Cache-Control "public, max-age=31536000, immutable"
+		@exists file
+		header @exists Cache-Control "public, max-age=31536000, immutable"
 		file_server
 	}
 	handle {
