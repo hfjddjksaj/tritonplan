@@ -228,6 +228,28 @@ describe('AccountMenu calendar item', () => {
     expect(dot()).not.toBeNull();
   });
 
+  it('has no dot without a calendar link, even with an unpicked term', async () => {
+    answers['GET /api/calendar'] = cal({ ...unlinked, terms: {} });
+    await renderMenu();
+    await open();
+    expect(dot()).toBeNull();
+  });
+
+  it('shows the dot once the link is created in the dialog while a term is unpicked', async () => {
+    let made = false;
+    answers['GET /api/calendar'] = () =>
+      json(200, { ...(made ? linked : unlinked), terms: { '2026|2': 'a' }, missing: [] });
+    answers['POST /api/calendar/link'] = () => { made = true; return json(200, linked); };
+    await renderMenu();
+    await open();
+    expect(dot()).toBeNull();
+    await click(btns('Calendar subscription')[0]!);
+    await click(btns('Create my calendar link')[0]!);
+    await click(btns('Close')[0]!);
+    await open();
+    expect(dot()).not.toBeNull();
+  });
+
   it('has a dot when a pick is missing', async () => {
     answers['GET /api/calendar'] = cal({ missing: ['2027|3'] });
     await renderMenu();

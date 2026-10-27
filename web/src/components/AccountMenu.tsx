@@ -50,7 +50,8 @@ export function AccountMenu({
     void refreshCalendar();
     return () => { liveRef.current = false; };
   }, [refreshCalendar]);
-  const calendarDot = cal !== null && calendarNeedsPick(calendarRows(terms), cal);
+  // Only subscribers get nudged: someone who never made a link has no calendar to keep current.
+  const calendarDot = cal !== null && cal.https !== null && calendarNeedsPick(calendarRows(terms), cal);
 
   const choose = (fn: () => void | Promise<void>) => () => {
     setOpen(false);
