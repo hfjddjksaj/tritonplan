@@ -392,8 +392,9 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
     case 'import':
       return <ImportConfirm snapshot={screen.snapshot} payload={screen.payload} onDone={(o) => void importDone(screen, o)} />;
     case 'planner':
+      // The tab keeps viewing a received plan across reloads; if that plan is what crashed, Reload would crash again.
       return (
-        <ErrorBoundary key={screen.nonce}>
+        <ErrorBoundary key={screen.nonce} onReload={() => saveViewing('mine')}>
           <App boot={screen.boot} initialFlash={screen.flash} />
         </ErrorBoundary>
       );

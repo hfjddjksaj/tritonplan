@@ -232,6 +232,19 @@ describe('RmpButton with several instructors', () => {
     expect(openSpy).toHaveBeenCalledWith(search('Ada Lovelace'), '_blank', 'noopener');
   });
 
+  it('shows no score at all when the lookup fails, rather than a "no ratings" it does not know', async () => {
+    fetchMock.mockRejectedValue(new TypeError('offline'));
+    await mount(two());
+    await click(button());
+    const text = dialog()!.textContent!;
+    expect(text).not.toContain('Loading ratings…');
+    expect(text).toContain('Ada Lovelace');
+    expect(text).toContain('Leo Porter');
+    expect(text).not.toContain('no ratings');
+    expect(text).not.toContain('★');
+    expect(dialog()!.querySelector('.rmp__score')).toBeNull();
+  });
+
   it('closes on Escape and on the backdrop', async () => {
     fetchMock.mockResolvedValue(reply([unmatched('Ada Lovelace'), unmatched('Leo Porter')]));
     await mount(two());

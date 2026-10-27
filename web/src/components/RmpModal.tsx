@@ -59,7 +59,8 @@ export function RmpModal({ courseCode, instructors, onClose }: Props) {
                   <span className="planpick__name">{who.name}</span>
                   <span className="planpick__count">Sections {who.sections.join(', ')}</span>
                 </span>
-                {!loading && (
+                {/* No answer (the lookup failed) says nothing: "no ratings" would claim a zero we don't know. */}
+                {hit && (
                   <span className="rmp__score">
                     {rated ? (
                       <>
