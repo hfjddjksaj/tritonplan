@@ -133,18 +133,21 @@ over the restored file.
 
 1. Register a test account and save a plan.
 2. `systemctl start tritonplan-backup`
-3. `cp /srv/tritonplan/backups/tritonplan-$(date -u +%F).db /tmp/restore.db`
-4. `sqlite3 -readonly /tmp/restore.db 'pragma integrity_check'` must print `ok`.
-   Always open backup copies read-only (or as `tritonplan` via `runuser`), so
-   root never leaves `-wal`/`-shm` files the app cannot open.
+3. `runuser -u tritonplan -- cp /srv/tritonplan/backups/tritonplan-$(date -u +%F).db /tmp/restore.db`
+4. `runuser -u tritonplan -- sqlite3 -readonly /tmp/restore.db 'pragma integrity_check'`
+   must print `ok`.
+   Touch the copy only as `tritonplan`. Backups are WAL-mode files, so even a
+   `-readonly` open creates `-wal`/`-shm` next to the copy; as root those would
+   be root-owned, and Debian's `fs.protected_regular=2` then stops `tritonplan`
+   from opening them in `/tmp` (the second instance dies with "unable to open
+   database file").
 5. Start a second instance on the copy, as `tritonplan` (the env file is
-   readable by that group; the later assignments override port and db, and the
-   copy must be owned by `tritonplan`):
-   `chown tritonplan /tmp/restore.db && sudo -u tritonplan bash -c 'set -a; . /etc/tritonplan/env; TP_PORT=8788 TP_DB_PATH=/tmp/restore.db exec node /srv/tritonplan/app/main.mjs'`
-   (`sudo` is not installed on a minimal Debian: use `runuser -u tritonplan -- bash -c '...'`.)
+   readable by that group; the later assignments override port and db):
+   `runuser -u tritonplan -- bash -c 'set -a; . /etc/tritonplan/env; TP_PORT=8788 TP_DB_PATH=/tmp/restore.db exec node /srv/tritonplan/app/main.mjs' &`
 6. `curl -fsS http://127.0.0.1:8788/api/health` is `{"ok":true}`, and
-   `select count(*) from plan_docs` matches the live database.
-7. Stop the second instance, `rm /tmp/restore.db*`.
+   `runuser -u tritonplan -- sqlite3 -readonly /tmp/restore.db 'select count(*) from plan_docs'`
+   matches the live database.
+7. Stop the second instance, `rm -f /tmp/restore.db*`.
 
 ## Logs
 
