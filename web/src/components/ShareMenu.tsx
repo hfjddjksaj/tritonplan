@@ -1,28 +1,32 @@
 import { useRef, useState } from 'react';
 import type { PlanState } from '@triton/shared';
 import { useClickAway } from '../hooks/useClickAway';
-import { encodePlan, shareUrl, tokenFromHash, type ShareFormat } from '../lib/share';
-import { saveSyncedToken } from '../lib/storage';
+import { createShare } from '../lib/cloud/api';
 import { ChevronDown, Link, QrCode, Share } from './icons';
 import { QrPopover } from './QrPopover';
 
 interface Props {
   /** The plan on screen — yours, or a received one you're passing along. */
   plan: PlanState;
+  /** What the link will be listed as under "Shared links". */
+  planName: string;
   onFlash: (msg: string) => void;
 }
 
+const CREATE_FAILED = "Couldn't create a link. Check your connection and try again.";
+
 /**
- * Share ▾ — Copy link / QR code, with a Full (default) vs Lite format toggle.
- * Full = v3 token, every section option included, editable after saving on the
- * other device. Lite = v2 slim snapshot, view-only. A link IS the whole plan,
- * so there is no JSON export/import path — pasting a link in the address bar
- * is the only way a plan comes in.
+ * Share ▾ — Copy link / QR code. Either one saves a snapshot of the plan on
+ * the server and hands out its short link; the student can turn the link off
+ * later from the account menu. The snapshot is the full plan, so whoever opens
+ * it can save and edit their own copy.
  */
-export function ShareMenu({ plan, onFlash }: Props) {
+export function ShareMenu({ plan, planName, onFlash }: Props) {
   const [open, setOpen] = useState(false);
-  const [format, setFormat] = useState<ShareFormat>('full');
-  const [qrOpen, setQrOpen] = useState(false);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  // One link per opening of the menu: a double click, or Copy then QR, shares the same snapshot
+  // instead of leaving stray links behind in the student's list.
+  const link = useRef<Promise<string | null> | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   // Only the dropdown closes on an outside click — the QR modal is portaled
   // to <body>, outside `ref`, so a click inside it would otherwise register
@@ -30,32 +34,42 @@ export function ShareMenu({ plan, onFlash }: Props) {
   // closes on its own terms (backdrop click, its close button, or Escape).
   useClickAway(open, ref, () => setOpen(false));
 
-  const close = () => {
-    setOpen(false);
-    setQrOpen(false);
+  const ensureLink = (): Promise<string | null> => {
+    if (!link.current) {
+      const p = createShare(planName, plan).then((r) => r?.url ?? null);
+      link.current = p;
+      // A failure must not be remembered, or Try again would just replay it.
+      void p.then((url) => { if (!url && link.current === p) link.current = null; });
+    }
+    return link.current;
   };
 
   const copyLink = async () => {
-    const token = encodePlan(plan, format);
-    const url = shareUrl(plan, format);
+    const url = await ensureLink();
+    if (!url) {
+      onFlash(CREATE_FAILED);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(url);
-      onFlash(
-        format === 'full'
-          ? 'Full link copied — every section option included'
-          : 'Lite link copied — view-only snapshot',
-      );
+      onFlash('Link copied — anyone with it can view this plan.');
     } catch {
-      // Clipboard unavailable — expose the link via the address bar instead.
-      // Mark it as our own write so the next load doesn't re-import it.
-      // Store the marker in the same form the consume effect will read back:
-      // URLSearchParams turns a literal '+' (present in lite/lz-string tokens)
-      // into a space, so normalize through the same parser.
-      saveSyncedToken(tokenFromHash(`#p=${token}`) ?? token);
-      window.history.replaceState(null, '', `#p=${token}`);
-      onFlash('Share link is in the address bar — copy it from there');
+      onFlash(`Couldn't copy automatically — your link is ${url}`);
     }
-    close();
+    setOpen(false);
+  };
+
+  const showQr = async () => {
+    const url = await ensureLink();
+    if (!url) {
+      onFlash(CREATE_FAILED);
+      return;
+    }
+    // Close the dropdown itself (z-index 40) so it doesn't sit dimmed and
+    // unclickable behind the modal's backdrop (z-index 90). The modal is a
+    // separate, portaled sibling — see the useClickAway comment above.
+    setOpen(false);
+    setQrUrl(url);
   };
 
   return (
@@ -66,61 +80,25 @@ export function ShareMenu({ plan, onFlash }: Props) {
           className="btn btn--sm btn--primary"
           aria-haspopup="menu"
           aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => {
+            if (!open) link.current = null;
+            setOpen((v) => !v);
+          }}
         >
           <Share size={15} /> Share <ChevronDown size={12} />
         </button>
         {open && (
           <div className="menu menu--right" role="menu">
-            <div className="menu__seg" role="group" aria-label="Share format">
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={format === 'full'}
-                className={`menu__seg-btn${format === 'full' ? ' menu__seg-btn--on' : ''}`}
-                onClick={() => setFormat('full')}
-              >
-                Full
-              </button>
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={format === 'lite'}
-                className={`menu__seg-btn${format === 'lite' ? ' menu__seg-btn--on' : ''}`}
-                onClick={() => setFormat('lite')}
-              >
-                Lite
-              </button>
-            </div>
-            <p className="menu__seg-desc">
-              {format === 'full'
-                ? 'All sections included — editable on the other device.'
-                : 'Selected sections only — smaller link, view-only.'}
-            </p>
-
             <button type="button" className="menu__item" role="menuitem" onClick={copyLink}>
               <span className="menu__item-title">
                 <Link size={14} /> Copy link
               </span>
               <span className="menu__item-desc">
-                Send it anywhere — the plan travels inside the link itself.
+                A short link to a snapshot of this plan. You can turn it off any time.
               </span>
             </button>
 
-            <button
-              type="button"
-              className="menu__item"
-              role="menuitem"
-              aria-expanded={qrOpen}
-              onClick={() => {
-                // Close the dropdown itself (z-index 40) so it doesn't sit dimmed and
-                // unclickable behind the modal's backdrop (z-index 90). The modal
-                // (qrOpen) is a separate, portaled sibling — see the useClickAway
-                // comment above for why closing `open` here must not touch it.
-                setOpen(false);
-                setQrOpen((v) => !v);
-              }}
-            >
+            <button type="button" className="menu__item" role="menuitem" onClick={showQr}>
               <span className="menu__item-title">
                 <QrCode size={14} /> QR code
               </span>
@@ -129,7 +107,7 @@ export function ShareMenu({ plan, onFlash }: Props) {
           </div>
         )}
       </div>
-      {qrOpen && <QrPopover plan={plan} format={format} onClose={() => setQrOpen(false)} />}
+      {qrUrl && <QrPopover url={qrUrl} onClose={() => setQrUrl(null)} />}
     </>
   );
 }

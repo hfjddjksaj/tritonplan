@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiDelete, apiPost, fetchMe, fetchState, postSync, syncTimeoutMs, UnauthorizedError } from './api';
+import type { PlanState } from '@triton/shared';
+import {
+  apiDelete, apiPost, createShare, fetchMe, fetchShare, fetchState, listShares, postSync, revokeShare,
+  syncTimeoutMs, UnauthorizedError,
+} from './api';
 
 const res = (status: number, body: unknown = {}) =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
@@ -151,5 +155,60 @@ describe('apiPost / apiDelete', () => {
     expect(calls()[0]![1].method).toBe('DELETE');
     stub(async () => { throw new TypeError('x'); });
     expect(await apiPost('/api/x', {})).toMatchObject({ ok: false, status: 0, error: 'network' });
+  });
+});
+
+describe('shares', () => {
+  const plan: PlanState = { version: 1, term: { year: '2026', period: '2', label: 'Fall 2026' }, entries: [] };
+
+  it('createShare posts name and plan, returns code and url; any failure is null', async () => {
+    stub(async () => res(200, { code: 'abc', url: 'https://x/s/abc' }));
+    expect(await createShare('Mine', plan)).toEqual({ code: 'abc', url: 'https://x/s/abc' });
+    expect(calls()[0]![0]).toBe('/api/shares');
+    expect(JSON.parse(calls()[0]![1].body as string)).toEqual({ name: 'Mine', plan });
+    stub(async () => res(409, { error: 'too_many_shares' }));
+    expect(await createShare('Mine', plan)).toBeNull();
+    stub(async () => res(200, { nope: 1 }));
+    expect(await createShare('Mine', plan)).toBeNull();
+    stub(async () => { throw new TypeError('offline'); });
+    expect(await createShare('Mine', plan)).toBeNull();
+  });
+
+  it('listShares returns the rows, null on failure', async () => {
+    const shares = [{ code: 'a', name: 'n', url: 'u', createdAt: '2026-01-01T00:00:00Z' }];
+    stub(async () => res(200, { shares }));
+    expect(await listShares()).toEqual(shares);
+    stub(async () => res(401));
+    expect(await listShares()).toBeNull();
+    stub(async () => { throw new TypeError('offline'); });
+    expect(await listShares()).toBeNull();
+  });
+
+  it('revokeShare is true on 200 and on 404 (already gone), false otherwise', async () => {
+    stub(async () => res(200, { ok: true }));
+    expect(await revokeShare('abc')).toBe(true);
+    expect(calls()[0]![0]).toBe('/api/shares/abc');
+    expect(calls()[0]![1].method).toBe('DELETE');
+    stub(async () => res(404, { error: 'not_found' }));
+    expect(await revokeShare('abc')).toBe(true);
+    stub(async () => res(500));
+    expect(await revokeShare('abc')).toBe(false);
+  });
+
+  it('fetchShare: data on 200, not-found on 404, null for everything else', async () => {
+    const data = { name: 'n', plan, createdAt: '2026-01-01T00:00:00Z' };
+    stub(async () => res(200, data));
+    expect(await fetchShare('abc')).toEqual(data);
+    expect(calls()[0]![0]).toBe('/api/s/abc');
+    stub(async () => res(404, { error: 'not_found' }));
+    expect(await fetchShare('abc')).toBe('not-found');
+    stub(async () => res(429, { error: 'rate_limited' }));
+    expect(await fetchShare('abc')).toBeNull();
+    stub(async () => res(503));
+    expect(await fetchShare('abc')).toBeNull();
+    stub(async () => { throw new TypeError('offline'); });
+    expect(await fetchShare('abc')).toBeNull();
+    stub(async () => res(200, 'not json'));
+    expect(await fetchShare('abc')).toBeNull();
   });
 });

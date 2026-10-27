@@ -76,6 +76,15 @@ describe('AccountMenu items', () => {
     expect(buttons()).not.toContain('Set a password');
   });
 
+  it('Shared links opens the list of links to turn off', async () => {
+    answers['undefined /api/shares'] = // this file's fetch mock keys a plain GET by its missing method
+() => json(200, { shares: [] });
+    await render();
+    await openMenu();
+    await click('Shared links');
+    expect(q('[role="dialog"]')!.textContent).toContain("You haven't shared any plans yet.");
+  });
+
   it('Google-only: Set a password, no Change password, no Disconnect Google', async () => {
     await render({ email: 'g@ucsd.edu', hasPassword: false, hasGoogle: true });
     await openMenu();

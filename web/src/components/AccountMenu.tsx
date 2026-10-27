@@ -7,9 +7,10 @@ import { useClickAway } from '../hooks/useClickAway';
 import { ChevronDown } from './icons';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
+import { SharedLinksDialog } from './SharedLinksDialog';
 import { failureText } from './auth/copy';
 
-type Dialog = 'password' | 'delete' | null;
+type Dialog = 'password' | 'shared' | 'delete' | null;
 
 /** How long sign-out waits for unsaved edits to reach the account before leaving anyway. */
 const SIGN_OUT_SAVE_MS = 3000;
@@ -89,6 +90,7 @@ export function AccountMenu({
             {me.hasGoogle && me.hasPassword && (
               <MenuButton onClick={choose(disconnectGoogle)}>Disconnect Google</MenuButton>
             )}
+            <MenuButton onClick={choose(() => setDialog('shared'))}>Shared links</MenuButton>
             <MenuButton onClick={choose(() => setDialog('delete'))}>Delete account…</MenuButton>
             <MenuButton onClick={choose(signOut)}>Sign out</MenuButton>
           </div>
@@ -97,7 +99,8 @@ export function AccountMenu({
       {dialog === 'password' && (
         <ChangePasswordDialog onClose={() => setDialog(null)} onFlash={onFlash} />
       )}
-      {dialog === 'delete' && <DeleteAccountDialog me={me} onClose={() => setDialog(null)} />}
+      {dialog === 'shared' && <SharedLinksDialog onClose={() => setDialog(null)} onFlash={onFlash} />}
+      {dialog === 'delete' &&<DeleteAccountDialog me={me} onClose={() => setDialog(null)} />}
     </>
   );
 }

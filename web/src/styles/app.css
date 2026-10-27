@@ -1214,36 +1214,40 @@ button.menu__item:hover {
 }
 
 /* Share menu: format segment + QR panel */
-.menu__seg {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 4px 6px 0;
+.sharedlinks {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 55vh;
+  overflow-y: auto;
 }
-.menu__seg-btn {
-  height: 26px;
-  font-size: 12px;
+.sharedlinks__row {
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+}
+.sharedlinks__row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.sharedlinks__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sharedlinks__name {
   font-weight: 600;
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  cursor: pointer;
+  overflow-wrap: anywhere;
 }
-.menu__seg-btn--on {
-  color: #fff;
-  background: var(--ink);
-  border-color: var(--ink);
-}
-.menu__seg-btn:hover:not(.menu__seg-btn--on) {
-  color: var(--ink);
-  border-color: var(--line-strong);
-}
-.menu__seg-desc {
-  margin: 4px 8px 2px;
-  font-size: 11px;
-  line-height: 1.45;
+.sharedlinks__date,
+.sharedlinks__ask {
+  font-size: 12px;
   color: var(--text-faint);
+}
+.sharedlinks__ask {
+  margin: 6px 0 0;
 }
 
 /* =============================== received plan (share link / imported JSON) banner */

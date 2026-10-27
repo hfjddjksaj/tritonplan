@@ -9,8 +9,7 @@ import { describe, expect, it, afterEach, beforeEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QrPopover } from './QrPopover';
-import { qrShareForPlan, qrSvg } from '../lib/qr';
-import { makePlan } from '../lib/fixtures';
+import { qrSvg } from '../lib/qr';
 
 // react-dom/client's createRoot requires this flag outside a testing-library-style
 // harness, or `act` warns that the environment isn't configured for it.
@@ -43,10 +42,10 @@ describe('QrPopover sizing (render)', () => {
 
   it('renders the code at a whole multiple of the viewBox extent, with an 8-module quiet zone', () => {
     setViewport(1440, 900);
-    const plan = makePlan();
+    const url = 'https://tritonplan.cn/s/abc123';
 
     act(() => {
-      root.render(<QrPopover plan={plan} format="full" onClose={() => {}} />);
+      root.render(<QrPopover url={url} onClose={() => {}} />);
     });
 
     const codeEl = document.querySelector('.qrpop__code') as HTMLElement | null;
@@ -62,7 +61,7 @@ describe('QrPopover sizing (render)', () => {
 
     // Independently computed (not derived from `extent`): the same pure
     // helpers the component calls internally, run fresh on the same input.
-    const expected = qrSvg(qrShareForPlan(plan, 'full')!.url);
+    const expected = qrSvg(url);
 
     // The bug this guards against: sizing by moduleCount instead of
     // viewBoxSize. If that regresses, width stops dividing evenly by extent.

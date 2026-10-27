@@ -3,7 +3,7 @@
  * session cookie (credentials: 'same-origin'); writes are JSON. Nothing here
  * talks to tss.ucsd.edu.
  */
-import type { SyncOp } from '@triton/shared';
+import type { PlanState, SyncOp } from '@triton/shared';
 import type { SendResult } from './engine';
 import type { WebSnapshot } from './records';
 
@@ -99,3 +99,47 @@ async function send(method: 'POST' | 'DELETE', path: string, body: unknown): Pro
 
 export const apiPost = (path: string, body: unknown): Promise<ApiResult> => send('POST', path, body);
 export const apiDelete = (path: string, body: unknown): Promise<ApiResult> => send('DELETE', path, body);
+
+export interface ShareRow { code: string; name: string; url: string; createdAt: string }
+
+/** The server only checks the snapshot loosely, so callers must hand over a bare PlanState (no booked/appointment marks). */
+export async function createShare(name: string, plan: PlanState): Promise<{ code: string; url: string } | null> {
+  const r = await apiPost('/api/shares', { name, plan });
+  if (!r.ok) return null;
+  const b = (r.body ?? {}) as { code?: unknown; url?: unknown };
+  return typeof b.code === 'string' && typeof b.url === 'string' ? { code: b.code, url: b.url } : null;
+}
+
+export async function listShares(): Promise<ShareRow[] | null> {
+  try {
+    const r = await getWithTimeout('/api/shares');
+    if (!r.ok) return null;
+    const b = (await r.json()) as { shares?: unknown };
+    return Array.isArray(b.shares) ? (b.shares as ShareRow[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A link that is already gone (404) counts as turned off: that is the state the student asked for. */
+export async function revokeShare(code: string): Promise<boolean> {
+  const r = await apiDelete(`/api/shares/${encodeURIComponent(code)}`, {});
+  return r.ok || r.status === 404;
+}
+
+/**
+ * Opening someone's link. Only a 404 means "this link is dead"; a rate limit, a 5xx or a dropped
+ * connection says nothing about the link, so those come back null and the caller can offer a retry.
+ */
+export async function fetchShare(
+  code: string,
+): Promise<{ name: string; plan: PlanState; createdAt: string } | 'not-found' | null> {
+  try {
+    const r = await getWithTimeout(`/api/s/${encodeURIComponent(code)}`);
+    if (r.status === 404) return 'not-found';
+    if (!r.ok) return null;
+    return (await r.json()) as { name: string; plan: PlanState; createdAt: string };
+  } catch {
+    return null;
+  }
+}

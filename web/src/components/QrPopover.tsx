@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { PlanState } from '@triton/shared';
-import { qrShareForPlan, qrSvg, qrScale } from '../lib/qr';
-import type { ShareFormat } from '../lib/share';
+import { qrSvg, qrScale } from '../lib/qr';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { X } from './icons';
 
@@ -18,20 +16,19 @@ function availablePx(): number {
 }
 
 interface Props {
-  plan: PlanState;
-  format: ShareFormat;
+  /** The short share link; it is short enough that the code is always a small, easily scanned one. */
+  url: string;
   onClose: () => void;
 }
 
 /**
  * Full-size share QR. It lives in a centered modal rather than in the Share
- * dropdown because the dropdown is 272px wide — a realistic plan is ~133 modules,
- * which came out at 1.68px per module there and would not scan.
+ * dropdown so the code can be sized to the screen and scan from across a table.
  *
  * Portaled to <body>: the topbar is a positioned ancestor, and a fixed overlay
  * inside it would be constrained by it.
  */
-export function QrPopover({ plan, format, onClose }: Props) {
+export function QrPopover({ url, onClose }: Props) {
   useEscapeKey(onClose);
   const [available, setAvailable] = useState(availablePx);
   useEffect(() => {
@@ -40,13 +37,12 @@ export function QrPopover({ plan, format, onClose }: Props) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const qr = useMemo(() => qrShareForPlan(plan, format), [plan, format]);
-  const code = useMemo(() => (qr ? qrSvg(qr.url) : null), [qr]);
+  const code = useMemo(() => qrSvg(url), [url]);
   // Size the whole SVG (code + quiet zone), not just the module grid — the
   // viewBox spans viewBoxSize units, so scaling by that (not moduleCount)
   // keeps px-per-module exactly equal to the scale.
-  const scale = code ? qrScale(code.viewBoxSize, available) : 0;
-  const sizePx = code ? code.viewBoxSize * scale : 0;
+  const scale = qrScale(code.viewBoxSize, available);
+  const sizePx = code.viewBoxSize * scale;
 
   return createPortal(
     <div className="mappop__backdrop" onClick={onClose}>
@@ -61,32 +57,13 @@ export function QrPopover({ plan, format, onClose }: Props) {
           <X size={14} />
         </button>
         <div className="eyebrow">Scan to open this plan</div>
-        {code ? (
-          <>
-            {/* qrSvg output is generated locally by qrcode-generator — trusted markup */}
-            <div
-              className="qrpop__code"
-              style={{ width: sizePx, height: sizePx }}
-              dangerouslySetInnerHTML={{ __html: code.svg }}
-            />
-            {qr!.mode === 'lite' && format === 'full' && (
-              <p className="qrpop__note">
-                The Full link was too large for a QR here — this code carries the Lite version
-                instead. Use Copy link to send everything.
-              </p>
-            )}
-            {qr!.mode === 'full' && format === 'lite' && (
-              <p className="qrpop__note">
-                The Lite link was too large for a QR here — this code carries the Full version
-                instead, editable on the other device, not view-only.
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="qrpop__note">
-            This plan is too large for a QR code — use Copy link instead.
-          </p>
-        )}
+        {/* qrSvg output is generated locally by qrcode-generator — trusted markup */}
+        <div
+          className="qrpop__code"
+          style={{ width: sizePx, height: sizePx }}
+          dangerouslySetInnerHTML={{ __html: code.svg }}
+        />
+        <p className="qrpop__note">Anyone with this link can view the plan.</p>
       </div>
     </div>,
     document.body,

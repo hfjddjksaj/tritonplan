@@ -19,6 +19,8 @@ interface Props {
   accountSlot?: ReactNode;
   /** The plan on screen, for the Share menu (link + QR). */
   sharePlan: PlanState;
+  /** Name the shared link is listed under. */
+  planName: string;
   onFlash: (msg: string) => void;
   onReset: () => void;
   onOpenMap: () => void;
@@ -32,6 +34,7 @@ export function Topbar({
   apptSlot,
   accountSlot,
   sharePlan,
+  planName,
   onFlash,
   onReset,
   onOpenMap,
@@ -78,7 +81,7 @@ export function Topbar({
           <MapPinIcon size={15} /> Map
         </button>
 
-        <ShareMenu plan={sharePlan} onFlash={onFlash} />
+        <ShareMenu plan={sharePlan} planName={planName} onFlash={onFlash} />
       </div>
 
       {accountSlot}

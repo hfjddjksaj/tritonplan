@@ -1,47 +1,8 @@
 /**
  * QR share codes, generated fully offline (bundled lib, zero requests).
- * A single QR holds at most ~2953 bytes (version 40, EC level L); we keep a
- * margin. When the requested format doesn't fit, the QR silently falls back
- * to the other one — the ShareMenu labels which one the code actually holds.
+ * The payload is always a short /s/<code> link, so the code stays small.
  */
 import qrcode from 'qrcode-generator';
-import type { PlanState } from '@triton/shared';
-import { shareUrl, type ShareFormat } from './share';
-
-export const QR_URL_BUDGET = 2900;
-
-export interface QrShare {
-  url: string;
-  /** Which format actually made it into the code. */
-  mode: ShareFormat;
-}
-
-/**
- * Honor the format the user picked in the Share dropdown whenever it fits the
- * QR budget — Full and Lite differ in what the receiving device can do with
- * them (Full stays editable; Lite is view-only), so that choice is the user's
- * to make, not ours to override for a denser code. The modal is sized to scan
- * fine even at the higher module count a fitting-but-longer link produces.
- *
- * Only fall back to the other format when the requested one doesn't fit —
- * and that fallback runs both directions: Full (deflate, options deduped by
- * shared component) is usually the shorter encoding, since Lite pays a flat
- * per-course cost regardless of option count. But Full encodes every section
- * option, so its size grows with total option count across the plan; once a
- * plan carries enough of those, Full outgrows Lite's flat cost and becomes
- * the one that overflows. Neither format is reliably shorter across every
- * plan shape, so a requested Lite can legitimately overflow and fall back to
- * Full. `null` means neither format fits; the caller points the user at Copy
- * link instead.
- */
-export function qrShareForPlan(plan: PlanState, requested: ShareFormat): QrShare | null {
-  const requestedUrl = shareUrl(plan, requested);
-  if (requestedUrl.length <= QR_URL_BUDGET) return { url: requestedUrl, mode: requested };
-  const other: ShareFormat = requested === 'full' ? 'lite' : 'full';
-  const otherUrl = shareUrl(plan, other);
-  if (otherUrl.length <= QR_URL_BUDGET) return { url: otherUrl, mode: other };
-  return null;
-}
 
 /**
  * Scalable SVG for a URL, plus the counts the caller needs to size the entire

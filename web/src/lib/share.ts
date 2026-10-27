@@ -278,8 +278,8 @@ export type HashIntent =
  * them came from another device or another person (a bookmark synced from a
  * laptop, a copied address bar), so it opens as a shared plan instead of being
  * silently replaced by whatever this device had active. `#p=` also counts as
- * mine when it matches this tab's echo marker (the ShareMenu clipboard fallback
- * parks a link in the address bar).
+ * mine when it matches this tab's echo marker (an older build's clipboard fallback
+ * parked a link in the address bar).
  */
 export function readHash(
   hash: string,
@@ -296,11 +296,4 @@ export function readHash(
   if (index >= 0) return { kind: 'mine', plan, index };
   if (!mirror && token === own.syncedToken) return { kind: 'mine', plan, index: null };
   return { kind: 'shared', plan };
-}
-
-/** A full absolute URL that restores this plan when opened. */
-export function shareUrl(plan: PlanState, format: ShareFormat = 'full', base = window.location.href): string {
-  const url = new URL(base);
-  url.hash = planToHash(plan, format);
-  return url.toString();
 }
