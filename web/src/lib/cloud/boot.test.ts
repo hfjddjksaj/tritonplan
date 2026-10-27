@@ -3,13 +3,15 @@ import type { Term } from '@triton/shared';
 import type { NamedPlan } from '../plans';
 import type { TermsState } from '../terms-state';
 import {
+  clearPendingShare,
+  dropPendingHash,
   makeBoot,
+  peekPendingShare,
   PENDING_HASH_KEY,
   PENDING_SHARE_KEY,
   restorePendingHash,
   stashPendingHash,
   stashPendingShare,
-  takePendingShare,
 } from './boot';
 import { splitTerms, type WebSnapshot } from './records';
 
@@ -110,8 +112,18 @@ describe('pending hash', () => {
   it('blocked storage is not an error', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('blocked'); });
     expect(() => stashPendingHash('#p=abc')).not.toThrow();
     expect(() => restorePendingHash()).not.toThrow();
+    expect(() => dropPendingHash()).not.toThrow();
+  });
+
+  it('drop forgets the stash without touching the address bar', () => {
+    window.history.replaceState(null, '', '/');
+    sessionStorage.setItem(PENDING_HASH_KEY, '#p=abc');
+    dropPendingHash();
+    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
+    expect(window.location.hash).toBe('');
   });
 });
 
@@ -129,18 +141,20 @@ describe('pending short link', () => {
     expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!)).toEqual({ code: 'AbCdEfGh12', at: '2026-10-26T12:00:00.000Z' });
   });
 
-  it('is read once, then forgotten', () => {
+  it('stays, with its first time, until it is cleared: a failed fetch leaves it for the next load', () => {
     stashPendingShare('AbCdEfGh12', new Date(T0));
-    expect(takePendingShare(T0 + HOUR)).toBe('AbCdEfGh12');
+    expect(peekPendingShare(T0 + HOUR)).toBe('AbCdEfGh12');
+    expect(peekPendingShare(T0 + 2 * HOUR)).toBe('AbCdEfGh12');
+    expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!).at).toBe('2026-10-26T12:00:00.000Z');
+    clearPendingShare();
     expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
-    expect(takePendingShare(T0 + HOUR)).toBeNull();
+    expect(peekPendingShare(T0 + 2 * HOUR)).toBeNull();
   });
 
-  it('older than 24 h is ignored, and forgotten all the same', () => {
+  it('older than 24 h is ignored, and dropped', () => {
     stashPendingShare('AbCdEfGh12', new Date(T0));
-    expect(takePendingShare(T0 + 24 * HOUR)).toBe('AbCdEfGh12');
-    stashPendingShare('AbCdEfGh12', new Date(T0));
-    expect(takePendingShare(T0 + 24 * HOUR + 1)).toBeNull();
+    expect(peekPendingShare(T0 + 24 * HOUR)).toBe('AbCdEfGh12');
+    expect(peekPendingShare(T0 + 24 * HOUR + 1)).toBeNull();
     expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
   });
 
@@ -148,7 +162,7 @@ describe('pending short link', () => {
     'a damaged entry %j is dropped',
     (raw) => {
       localStorage.setItem(PENDING_SHARE_KEY, raw);
-      expect(takePendingShare(T0)).toBeNull();
+      expect(peekPendingShare(T0)).toBeNull();
       expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
     },
   );
@@ -156,7 +170,9 @@ describe('pending short link', () => {
   it('blocked storage is not an error', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('blocked'); });
     expect(() => stashPendingShare('AbCdEfGh12')).not.toThrow();
-    expect(takePendingShare()).toBeNull();
+    expect(peekPendingShare()).toBeNull();
+    expect(() => clearPendingShare()).not.toThrow();
   });
 });

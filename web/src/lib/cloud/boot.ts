@@ -69,6 +69,15 @@ export function restorePendingHash(): void {
   window.history.replaceState(null, '', window.location.pathname + window.location.search + stashed);
 }
 
+/** Forget a stashed link without restoring it: a short link opened since is the newer one. */
+export function dropPendingHash(): void {
+  try {
+    sessionStorage.removeItem(PENDING_HASH_KEY);
+  } catch {
+    /* storage blocked: nothing was stashed either */
+  }
+}
+
 /**
  * A short link (/s/<code>) whose visitor chose "Save to my account" while
  * signed out. returnTo brings Google and a same-tab sign-in back to the link;
@@ -87,20 +96,37 @@ export function stashPendingShare(code: string, now: Date = new Date()): void {
   }
 }
 
-/** The stashed code if it is under a day old. Forgotten either way: one sign-in uses it once. */
-export function takePendingShare(now: number = Date.now()): string | null {
+/**
+ * The stashed code if it is under a day old; an older or damaged entry is dropped.
+ * A live one stays until clearPendingShare: a fetch that fails must leave it for the
+ * next load, its age still counted from the click.
+ */
+export function peekPendingShare(now: number = Date.now()): string | null {
   let raw: string | null;
   try {
     raw = localStorage.getItem(PENDING_SHARE_KEY);
-    localStorage.removeItem(PENDING_SHARE_KEY);
   } catch {
     return null;
   }
+  if (raw === null) return null;
+  let code: string | null = null;
   try {
-    const v = JSON.parse(raw ?? 'null') as { code?: unknown; at?: unknown } | null;
-    if (typeof v?.code !== 'string' || typeof v.at !== 'string') return null;
-    return now - Date.parse(v.at) <= PENDING_SHARE_MAX_AGE_MS ? v.code : null; // NaN (a bad date) fails too
+    const v = JSON.parse(raw) as { code?: unknown; at?: unknown } | null;
+    // NaN (a bad date) fails the age test too.
+    if (typeof v?.code === 'string' && typeof v.at === 'string' && now - Date.parse(v.at) <= PENDING_SHARE_MAX_AGE_MS) {
+      code = v.code;
+    }
   } catch {
-    return null;
+    /* not JSON: dropped below */
+  }
+  if (code === null) clearPendingShare();
+  return code;
+}
+
+export function clearPendingShare(): void {
+  try {
+    localStorage.removeItem(PENDING_SHARE_KEY);
+  } catch {
+    /* storage blocked: nothing was stashed either */
   }
 }

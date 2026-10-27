@@ -21,11 +21,13 @@ import { SharedPlanView } from './components/share/SharedPlanView';
 import { fetchMe, fetchShare, fetchState, UnauthorizedError, type Me } from './lib/cloud/api';
 import {
   carriesPlan,
+  clearPendingShare,
+  dropPendingHash,
   makeBoot,
+  peekPendingShare,
   restorePendingHash,
   stashPendingHash,
   stashPendingShare,
-  takePendingShare,
   type CloudBoot,
 } from './lib/cloud/boot';
 import { pluralize } from './lib/format';
@@ -142,7 +144,7 @@ async function loadAccount(): Promise<Loaded> {
 
 function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string }) {
   const [screen, setScreen] = useState<Screen>({ kind: 'loading' });
-  // The short link this tab is opening: the address bar's, or a saved one Try again has to fetch again.
+  // The address bar's short link, until it has been opened signed in.
   const share = useRef<string | null>(shareCode ?? null);
   // The ?auth= notice explains this page load only; a later sign-out must not repeat it.
   const [pageNotice, setPageNotice] = useState(notice);
@@ -209,6 +211,7 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
   const receive = useCallback((plan: PlanState) => {
     saveReceived({ plan, source: 'link', receivedAt: new Date().toISOString() });
     saveViewing('received');
+    clearPendingShare(); // whichever link this was, a stash still around is this one: it is done
     share.current = null;
     // The planner lives at "/", and a reload must not fetch the link again.
     if (SHARE_PATH.test(window.location.pathname)) window.history.replaceState(null, '', '/');
@@ -231,41 +234,41 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
       const unreachable = () => {
         if (why !== 'recheck' || current.current.kind === 'offline') show({ kind: 'offline' });
       };
+      /** A short link's snapshot, or null once the screen says why there is none. A dead link's stash goes with it. */
+      const openShare = async (code: string): Promise<Shared | null> => {
+        const s = await fetchShare(code);
+        if (!alive.current) return null;
+        if (s === 'not-found') {
+          clearPendingShare();
+          show({ kind: 'gone' });
+          return null;
+        }
+        if (s === null) unreachable(); // a stash stays for Try again or the next load
+        return s;
+      };
       try {
-        // A short link shows without a session, so it is fetched before asking who this is.
+        // A short link in the address bar shows without a session, so it is fetched before asking who this is.
+        // It is newer than any link stashed earlier, whatever this fetch brings, so those give way now. The one
+        // exception is its own "Save to my account": that stash waits to be opened once signed in.
         let shared: Shared | null = null;
-        if (share.current) {
-          const s = await fetchShare(share.current);
-          if (!alive.current) return;
-          if (s === 'not-found') {
-            show({ kind: 'gone' });
-            return;
-          }
-          if (s === null) {
-            unreachable();
-            return;
-          }
-          shared = s;
+        const link = share.current;
+        if (link) {
+          dropPendingHash();
+          if (peekPendingShare() !== link) clearPendingShare();
+          shared = await openShare(link);
+          if (!shared) return;
         }
         const r = await loadAccount();
         if (!alive.current) return;
         if (r.kind === 'ready') {
-          // A link saved before signing in, maybe in another tab. One this page load carries is newer and wins;
+          // A link saved before signing in, maybe in another tab, unless the hash is a (newer) link of its own;
           // after a planner has been mounted here, the hash is only that planner's mirror (see mountPlanner).
-          const pending = takePendingShare();
-          if (pending && !shared && !(nonce.current === 0 && carriesPlan(window.location.hash))) {
-            const s = await fetchShare(pending);
-            if (!alive.current) return;
-            if (s === 'not-found') {
-              show({ kind: 'gone' });
-              return;
-            }
-            if (s === null) {
-              share.current = pending; // Try again fetches it like a link in the address bar
-              unreachable();
-              return;
-            }
-            shared = s;
+          const pending = shared ? null : peekPendingShare();
+          if (pending && nonce.current === 0 && carriesPlan(window.location.hash)) {
+            clearPendingShare();
+          } else if (pending) {
+            shared = await openShare(pending);
+            if (!shared) return;
           }
           if (shared) receive(shared.plan);
           enter(r.me, r.snapshot);

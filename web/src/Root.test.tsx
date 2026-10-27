@@ -446,6 +446,21 @@ describe('Root: opening a shared plan', () => {
     expect(container.querySelector('.received--active')).not.toBeNull();
   });
 
+  it('a #p= stashed earlier in this tab does not override a short link opened since', async () => {
+    const hash = `#${planToHash(planWith('CSE-11'))}`;
+    await mount(`/${hash}`); // signed out: the hash waits in this tab's sessionStorage
+    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBe(hash);
+
+    reload(); // same tab, so the stash is still there
+    serveShare();
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount(`/s/${CODE}`);
+    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
+    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
+    expect(window.location.hash).toBe('');
+  });
+
   it('a signed-out #p= link shows the read-only view and survives sign-in', async () => {
     const hash = `#${planToHash(otherPlan())}`;
     await mount(`/${hash}`);
@@ -484,6 +499,11 @@ describe('Root: a short link saved before signing in', () => {
     serveShare();
     await mount(`/s/${CODE}`);
     await click('Save to my account');
+    expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!)).toMatchObject({ code: CODE });
+    // Coming back to this tab while waiting for the mail fetches the link again: its own stash stays.
+    await becomeVisible();
+    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(2);
+    expect(text()).toContain('Sign in to save this plan');
     expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!)).toMatchObject({ code: CODE });
 
     // The confirm mail opens a new tab (its own sessionStorage), and /verify sends it to "/", not to the link.
@@ -535,6 +555,46 @@ describe('Root: a short link saved before signing in', () => {
     await mount(path());
     expect(receivedIds()).toEqual(['MATH-18|2026|2']);
     expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(0);
+    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
+  });
+
+  it.each([
+    ['is turned off', 404, 'This link no longer works. The person who shared it may have turned it off.'],
+    ['cannot be reached', 503, "Can't reach TritonPlan right now."],
+  ])('is cleared by a short link in the address bar even when that one %s', async (_, status, screen) => {
+    serveShare(CODE, planWith('CSE-11'));
+    stashPendingShare(CODE);
+    srv.auth['GET /api/s/DeadDead00'] = () => json(status, { error: 'x' });
+    await mount('/s/DeadDead00');
+    expect(text()).toContain(screen);
+    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
+
+    // "Go to TritonPlan" (or any later visit), signed in: the older link does not open.
+    reload();
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    expect(container.querySelector('.app')).not.toBeNull();
+    expect(loadReceived()).toBeNull();
+    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(0);
+  });
+
+  it('one the server cannot answer yet stays stashed, first time and all, for the next load', async () => {
+    stashPendingShare(CODE);
+    const stashed = localStorage.getItem(PENDING_SHARE_KEY);
+    srv.auth[`GET /api/s/${CODE}`] = () => json(500, { error: 'boom' });
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    expect(text()).toContain("Can't reach TritonPlan right now.");
+    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBe(stashed);
+
+    // A reload rather than Try again: the link is still there to open.
+    reload();
+    serveShare();
+    await mount('/');
+    expect(container.querySelector('.received--active')).not.toBeNull();
+    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
     expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
   });
 
