@@ -16,6 +16,7 @@ export function testDeps(over: Partial<Deps> = {}): TestDeps {
       cookieSecure: true,
       googleClientId: 'test-google-id',
       googleClientSecret: 'test-google-secret',
+      rmpRefresh: false,
       mail: { transport: 'memory', from: 'TritonPlan <noreply@tritonplan.cn>' },
     },
     mailer: createMemoryMailer(),

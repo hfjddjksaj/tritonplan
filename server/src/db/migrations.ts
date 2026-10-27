@@ -38,4 +38,12 @@ CREATE INDEX shares_by_user ON shares(user_id, created_at);
 CREATE TABLE calendar_feeds (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   secret TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
 `,
+  // A monthly whole-campus RateMyProfessors snapshot; name_key is precomputed so a lookup is one index hit.
+  `
+CREATE TABLE rmp_teachers (legacy_id INTEGER PRIMARY KEY, first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL, department TEXT, avg_rating REAL, num_ratings INTEGER NOT NULL,
+  name_key TEXT NOT NULL);
+CREATE INDEX rmp_by_name ON rmp_teachers(name_key);
+CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+`,
 ];

@@ -6,6 +6,7 @@ export interface Config {
   cookieSecure: boolean;
   googleClientId: string;
   googleClientSecret: string;
+  rmpRefresh: boolean;
   mail: { transport: 'resend' | 'console' | 'memory'; resendApiKey?: string; from: string };
 }
 
@@ -49,6 +50,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     cookieSecure: env.TP_COOKIE_SECURE !== 'false',
     googleClientId: env.GOOGLE_CLIENT_ID ?? '',
     googleClientSecret: env.GOOGLE_CLIENT_SECRET ?? '',
+    // On by default; only the literal 'off' stops the monthly RateMyProfessors fetch (local dev, tests).
+    rmpRefresh: env.TP_RMP_REFRESH !== 'off',
     mail: {
       transport: transport as Config['mail']['transport'],
       resendApiKey: env.RESEND_API_KEY || undefined,

@@ -8,6 +8,13 @@ describe('loadConfig', () => {
     expect(() => loadConfig({})).toThrow(/TP_ORIGIN.*TP_DB_PATH|TP_DB_PATH.*TP_ORIGIN/s);
   });
 
+  test('rmpRefresh is on unless TP_RMP_REFRESH is the literal "off"', () => {
+    expect(loadConfig(base).rmpRefresh).toBe(true);
+    expect(loadConfig({ ...base, TP_RMP_REFRESH: 'on' }).rmpRefresh).toBe(true);
+    expect(loadConfig({ ...base, TP_RMP_REFRESH: 'OFF' }).rmpRefresh).toBe(true);
+    expect(loadConfig({ ...base, TP_RMP_REFRESH: 'off' }).rmpRefresh).toBe(false);
+  });
+
   test('cookieSecure is only disabled by the literal "false"', () => {
     expect(loadConfig(base).cookieSecure).toBe(true);
     expect(loadConfig({ ...base, TP_COOKIE_SECURE: '0' }).cookieSecure).toBe(true);

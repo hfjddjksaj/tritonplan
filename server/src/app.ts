@@ -8,6 +8,7 @@ import { googleRoutes } from './auth/google-routes';
 import { dataRoutes } from './data/routes';
 import { shareRoutes } from './share/routes';
 import { calendarRoutes } from './calendar/routes';
+import { rmpRoutes } from './rmp/routes';
 import { createRateLimiter } from './http/rate-limit';
 import { sameOriginJson, type AppEnv } from './http/guard';
 import type { Mailer } from './mail/mailer';
@@ -43,6 +44,7 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   app.route('/api', dataRoutes(deps));
   app.route('/api', shareRoutes(deps, limiter));
   app.route('/api', calendarRoutes(deps, limiter));
+  app.route('/api', rmpRoutes(deps));
 
   // Never leak internals to the client; the log has the detail.
   app.onError((err, c) => {
