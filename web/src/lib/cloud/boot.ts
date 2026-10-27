@@ -87,79 +87,135 @@ export function dropPendingHash(): void {
 }
 
 /**
- * The "Save to my account" this tab clicked while signed out: a short link's
+ * Every "Save to my account" this tab clicked while signed out: a short link's
  * code, or the shown plan of an old #p= link (which cannot be fetched again).
- * It outlives the confirm mail's tab saving the same link, so this tab can tell
+ * They outlive the confirm mail's tab saving the same link, so this tab can tell
  * "I asked for this" from "this was only opened" when it sees the sign-in.
  */
 export type SaveIntent = { code: string } | { hash: string };
+type StampedSave = SaveIntent & { at: string };
 export const PENDING_SAVE_KEY = 'triton-planner:pending-save:v1';
 
-export function stashPendingSave(intent: SaveIntent, now: Date = new Date()): void {
+const sameSave = (a: SaveIntent, b: SaveIntent): boolean =>
+  'code' in a ? 'code' in b && a.code === b.code : 'hash' in b && a.hash === b.hash;
+const fresh = (at: string, now: number): boolean => now - Date.parse(at) <= PENDING_SHARE_MAX_AGE_MS; // NaN fails too
+
+/** This tab's Saves under a day old, as short links' stash; older or damaged ones are dropped. */
+function readOwnSaves(now: number): StampedSave[] {
+  let raw: string | null;
   try {
-    sessionStorage.setItem(PENDING_SAVE_KEY, JSON.stringify({ ...intent, at: now.toISOString() }));
+    raw = sessionStorage.getItem(PENDING_SAVE_KEY);
+  } catch {
+    return [];
+  }
+  if (raw === null) return [];
+  const list: StampedSave[] = [];
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    /* not JSON: dropped below */
+  }
+  if (Array.isArray(parsed)) {
+    for (const v of parsed as { code?: unknown; hash?: unknown; at?: unknown }[]) {
+      if (typeof v?.at !== 'string' || !fresh(v.at, now)) continue;
+      if (typeof v.code === 'string') list.push({ code: v.code, at: v.at });
+      else if (typeof v.hash === 'string') list.push({ hash: v.hash, at: v.at });
+    }
+  }
+  if (!Array.isArray(parsed) || list.length !== parsed.length) writeOwnSaves(list);
+  return list;
+}
+
+function writeOwnSaves(list: StampedSave[]): void {
+  try {
+    if (list.length === 0) sessionStorage.removeItem(PENDING_SAVE_KEY);
+    else sessionStorage.setItem(PENDING_SAVE_KEY, JSON.stringify(list));
   } catch {
     /* storage blocked: a short link still has its localStorage stash; a #p= link waits for its own Save click */
   }
 }
 
-/** This tab's Save if under a day old, as short links' stash; an older or damaged one is dropped. */
-export function peekPendingSave(now: number = Date.now()): SaveIntent | null {
-  let raw: string | null;
-  try {
-    raw = sessionStorage.getItem(PENDING_SAVE_KEY);
-  } catch {
-    return null;
-  }
-  if (raw === null) return null;
-  let intent: SaveIntent | null = null;
-  try {
-    const v = JSON.parse(raw) as { code?: unknown; hash?: unknown; at?: unknown } | null;
-    if (typeof v?.at === 'string' && now - Date.parse(v.at) <= PENDING_SHARE_MAX_AGE_MS) {
-      if (typeof v.code === 'string') intent = { code: v.code };
-      else if (typeof v.hash === 'string') intent = { hash: v.hash };
-    }
-  } catch {
-    /* not JSON: dropped below */
-  }
-  if (intent === null) clearPendingSave();
-  return intent;
+/** Add a Save to this tab's list; clicking the same one again only renews its time. */
+export function stashPendingSave(intent: SaveIntent, now: Date = new Date()): void {
+  const list = readOwnSaves(now.getTime()).filter((s) => !sameSave(s, intent));
+  writeOwnSaves([...list, { ...intent, at: now.toISOString() } as StampedSave]);
 }
 
-export function clearPendingSave(): void {
+export function peekPendingSaves(now: number = Date.now()): SaveIntent[] {
+  return readOwnSaves(now).map(({ at: _, ...intent }) => intent as SaveIntent);
+}
+
+/**
+ * Short links some tab has already saved: code → when, kept a day. A tab whose
+ * own Save for that link is older drops it, even after the copy was edited or
+ * deleted. A Save clicked after that time is a new one and still counts.
+ */
+export const SAVED_SHARES_KEY = 'triton-planner:saved-shares:v1';
+
+function readSavedShares(now: number): Record<string, string> {
   try {
-    sessionStorage.removeItem(PENDING_SAVE_KEY);
+    const v = JSON.parse(localStorage.getItem(SAVED_SHARES_KEY) ?? '{}') as Record<string, unknown> | null;
+    const out: Record<string, string> = {};
+    for (const [code, at] of Object.entries(v ?? {})) if (typeof at === 'string' && fresh(at, now)) out[code] = at;
+    return out;
   } catch {
-    /* storage blocked: nothing was stashed either */
+    return {};
+  }
+}
+
+function markSharesSaved(codes: string[], now: Date): void {
+  if (codes.length === 0) return;
+  const saved = readSavedShares(now.getTime());
+  for (const code of codes) saved[code] = now.toISOString();
+  try {
+    localStorage.setItem(SAVED_SHARES_KEY, JSON.stringify(saved));
+  } catch {
+    /* storage blocked: the stashes are blocked too, so no other tab holds a Save for it */
   }
 }
 
 /**
  * Every Save still waiting: this tab's own, and the short link another tab left
  * for the confirm mail (when it is a different link). Viewing other links never
- * cancels one; only saving it, its link being turned off, or a day passing does.
+ * cancels one; only saving it (here or in another tab), its link being turned
+ * off, or a day passing does. `alreadySaved`: this tab's short-link Saves that
+ * another tab has honored since; they are dropped here.
  */
-export function pendingSaves(): SaveIntent[] {
-  const own = peekPendingSave();
-  const code = peekPendingShare();
-  const out: SaveIntent[] = own ? [own] : [];
-  if (code !== null && !(own && 'code' in own && own.code === code)) out.push({ code });
-  return out;
+export function pendingSaves(now: number = Date.now()): { intents: SaveIntent[]; alreadySaved: string[] } {
+  const saved = readSavedShares(now);
+  const done = (code: string, at: string) => saved[code] !== undefined && saved[code] >= at;
+  const own = readOwnSaves(now);
+  const alreadySaved: string[] = [];
+  const keep = own.filter((s) => {
+    if (!('code' in s) || !done(s.code, s.at)) return true;
+    alreadySaved.push(s.code);
+    return false;
+  });
+  if (keep.length !== own.length) writeOwnSaves(keep);
+  const intents = keep.map(({ at: _, ...intent }) => intent as SaveIntent);
+  const stash = readPendingShare(now);
+  if (stash && done(stash.code, stash.at)) clearPendingShare();
+  else if (stash && !intents.some((s) => 'code' in s && s.code === stash.code)) intents.push({ code: stash.code });
+  return { intents, alreadySaved };
 }
 
 /** A short link turned off: any Save waiting on it goes with it. */
 export function forgetSaves(code: string): void {
   if (peekPendingShare() === code) clearPendingShare();
-  const own = peekPendingSave();
-  if (own && 'code' in own && own.code === code) clearPendingSave();
+  const own = readOwnSaves(Date.now());
+  const rest = own.filter((s) => !('code' in s && s.code === code));
+  if (rest.length !== own.length) writeOwnSaves(rest);
 }
 
-/** The Saves just honored are done; a newer one stashed meanwhile (another tab) stays. */
-export function consumeSaves(done: SaveIntent[]): void {
-  const own = peekPendingSave();
-  if (own && done.some((d) => JSON.stringify(d) === JSON.stringify(own))) clearPendingSave();
-  const code = peekPendingShare();
+/** The Saves just honored are done, and their short links marked saved for other tabs; one stashed meanwhile stays. */
+export function consumeSaves(done: SaveIntent[], now: Date = new Date()): void {
+  const own = readOwnSaves(now.getTime());
+  const rest = own.filter((s) => !done.some((d) => sameSave(d, s)));
+  if (rest.length !== own.length) writeOwnSaves(rest);
+  const code = peekPendingShare(now.getTime());
   if (code !== null && done.some((d) => 'code' in d && d.code === code)) clearPendingShare();
+  markSharesSaved(done.flatMap((d) => ('code' in d ? [d.code] : [])), now);
 }
 
 /**
@@ -186,6 +242,10 @@ export function stashPendingShare(code: string, now: Date = new Date()): void {
  * next load, its age still counted from the click.
  */
 export function peekPendingShare(now: number = Date.now()): string | null {
+  return readPendingShare(now)?.code ?? null;
+}
+
+function readPendingShare(now: number): { code: string; at: string } | null {
   let raw: string | null;
   try {
     raw = localStorage.getItem(PENDING_SHARE_KEY);
@@ -193,18 +253,15 @@ export function peekPendingShare(now: number = Date.now()): string | null {
     return null;
   }
   if (raw === null) return null;
-  let code: string | null = null;
+  let stash: { code: string; at: string } | null = null;
   try {
     const v = JSON.parse(raw) as { code?: unknown; at?: unknown } | null;
-    // NaN (a bad date) fails the age test too.
-    if (typeof v?.code === 'string' && typeof v.at === 'string' && now - Date.parse(v.at) <= PENDING_SHARE_MAX_AGE_MS) {
-      code = v.code;
-    }
+    if (typeof v?.code === 'string' && typeof v.at === 'string' && fresh(v.at, now)) stash = { code: v.code, at: v.at };
   } catch {
     /* not JSON: dropped below */
   }
-  if (code === null) clearPendingShare();
-  return code;
+  if (stash === null) clearPendingShare();
+  return stash;
 }
 
 export function clearPendingShare(): void {

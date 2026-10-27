@@ -122,18 +122,27 @@ type Loaded = { kind: 'offline' } | { kind: 'signed-out' } | { kind: 'ready'; me
 /** A refocus refresh downloads the whole account; the TSS ↔ planner back-and-forth must not do that every few seconds. */
 const REFRESH_MIN_GAP_MS = 30_000;
 
-/** Saves clicked before signing in and their plans. The Saves stay stashed until a planner holding the plans mounts. */
-type Saving = { plans: AdoptPlan[]; intents: SaveIntent[] };
+/**
+ * Saves clicked before signing in: the plans to save and the Saves they answer (which stay stashed until a
+ * planner holding the plans mounts), plus how many another tab saved already and how many links died since.
+ */
+type Saving = { plans: AdoptPlan[]; intents: SaveIntent[]; already: number; gone: number };
 
-/** What the planner says about the Saves it just honored; `fresh` are the plans not already in the account. */
-function savedFlash(asked: number, fresh: AdoptPlan[]): string | undefined {
-  if (asked === 0) return undefined;
-  if (fresh.length === 0) return `${asked === 1 ? 'That shared plan is' : 'Those shared plans are'} already in your account`;
-  if (fresh.length > 1) return `Saved ${fresh.length} shared plans to your account`;
-  const term = fresh[0]!.plan.term;
-  return isArchived(term, new Date())
-    ? `Saved the shared plan to your account — ${displayTermLabel(term)} is over, so it is read-only`
-    : 'Saved the shared plan to your account — you can edit it now';
+/** What the planner says about the Saves it just honored. */
+function savedFlash({ plans, already, gone }: Saving): string | undefined {
+  const parts: string[] = [];
+  if (plans.length > 1) parts.push(`Saved ${plans.length} shared plans to your account`);
+  else if (plans.length === 1) {
+    const term = plans[0]!.plan.term;
+    parts.push(
+      isArchived(term, new Date())
+        ? `Saved the shared plan to your account — ${displayTermLabel(term)} is over, so it is read-only`
+        : 'Saved the shared plan to your account — you can edit it now',
+    );
+  }
+  if (already > 0) parts.push(`${already === 1 ? 'That shared plan is' : 'Those shared plans are'} already in your account`);
+  if (gone > 0) parts.push(`${gone === 1 ? 'A plan you chose to save is' : `${gone} plans you chose to save are`} no longer shared`);
+  return parts.length > 0 ? parts.join('. ') : undefined;
 }
 
 /**
@@ -196,15 +205,8 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
         // A #p= link that was saved must not also open as received, from the address bar or this tab's stash.
         const bar = planFromHash(window.location.hash);
         if (bar && saving.plans.some((a) => samePlanContent(a.plan, bar))) dropAddressHash();
-        // Already in the account (the confirm mail's tab saved it, or they had it): not saved twice.
-        const owned = Object.values(boot.terms?.terms ?? {}).flatMap((ws) => ws.plans.plans.map((p) => p.plan));
-        const fresh = saving.plans.filter(
-          (a, i) =>
-            !owned.some((p) => samePlanContent(p, a.plan)) &&
-            !saving.plans.slice(0, i).some((b) => samePlanContent(b.plan, a.plan)),
-        );
-        if (fresh.length > 0) boot.adopt = fresh;
-        flash ??= savedFlash(saving.plans.length, fresh);
+        if (saving.plans.length > 0) boot.adopt = saving.plans;
+        flash ??= savedFlash(saving);
       }
       show({ kind: 'planner', boot, nonce: nonce.current++, flash });
     },
@@ -311,26 +313,39 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
         if (!alive.current) return;
         if (r.kind === 'ready') {
           // Every "Save to my account" clicked before signing in is saved now, without a second click.
-          const intents = pendingSaves();
-          const plans: AdoptPlan[] = [];
+          const { intents, alreadySaved } = pendingSaves();
+          const saving: Saving = { plans: [], intents: [], already: alreadySaved.length, gone: 0 };
           for (const it of intents) {
             if ('hash' in it) {
               const plan = planFromHash(it.hash); // null once it no longer decodes
-              if (plan) plans.push({ name: 'Shared plan', plan });
+              if (plan) saving.plans.push({ name: 'Shared plan', plan });
+              saving.intents.push(it);
               continue;
             }
-            const s = it.code === link ? shared : await openShare(it.code);
-            if (!s) return;
-            plans.push({ name: s.name, plan: s.plan });
+            const s: Shared | 'not-found' | null = it.code === link ? shared : await fetchShare(it.code);
+            if (!alive.current) return;
+            if (s === 'not-found') {
+              // Turned off since: said on the planner, not a page that would hide the link being opened now.
+              forgetSaves(it.code);
+              saving.gone++;
+              continue;
+            }
+            if (!s) {
+              unreachable(); // the Saves stay stashed for Try again or the next load
+              return;
+            }
+            saving.plans.push({ name: s.name, plan: s.plan });
+            saving.intents.push(it);
           }
           // What they saved shows, not a plan received earlier in this tab; a link being opened right now
           // (below, or a #p= in the address bar) shows instead. Opened, not saved: the received slot.
           if (intents.length > 0) saveViewing('mine');
           if (link && shared) {
-            if (intents.some((it) => 'code' in it && it.code === link)) settleLink();
+            const saved = saving.intents.some((it) => 'code' in it && it.code === link) || alreadySaved.includes(link);
+            if (saved) settleLink();
             else receive(shared.plan);
           }
-          enter(r.me, r.snapshot, intents.length > 0 ? { plans, intents } : undefined);
+          enter(r.me, r.snapshot, intents.length + alreadySaved.length > 0 ? saving : undefined);
         } else if (r.kind === 'signed-out') {
           stashPendingHash(window.location.hash);
           if (current.current.kind === 'signed-out') return;

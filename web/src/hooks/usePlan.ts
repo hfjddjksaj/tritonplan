@@ -84,8 +84,9 @@ function initialState(boot: CloudBoot): { pool: CourseOffering[]; terms: TermsSt
   const pool = mergeCourses(SAMPLE, boot.pool);
   const adopt = boot.adopt ?? [];
   const adopted = adopt.flatMap((a) => a.plan.entries.map((e) => e.course));
-  // A new account that starts with plans they chose to save holds just those, not an empty "My plan" beside them.
-  if (!boot.terms && adopt.length > 0) {
+  // A new account that starts with plans they chose to save holds just those, not an empty "My plan" beside them —
+  // unless they are all from terms that are over, which leave nothing to edit.
+  if (!boot.terms && adopt.some((a) => !isArchived(a.plan.term, now))) {
     return { pool: mergeCourses(pool, adopted), terms: adoptInto(null, adopt, iso), forgetModuleIds: [] };
   }
   // An account with no terms yet starts from the same single empty plan a new device always did.

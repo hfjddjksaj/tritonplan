@@ -514,6 +514,18 @@ describe('Root: opening a shared plan', () => {
     expect(savedPlans()).toEqual({ 'My plan': ['MATH-18|2026|2'] }); // no empty "My plan" beside it
   });
 
+  it('a new account whose only Save is from a term that is over still gets a plan it can edit', async () => {
+    serveShare(CODE, planIn({ year: '2025', period: '2', label: 'Fall 2025' }, 'CSE-12'), 'Last year');
+    await mount(`/s/${CODE}`);
+    await click('Save to my account');
+    reload();
+    srv.me = 'in';
+    srv.state = snapshotOf();
+    await mount(`/s/${CODE}`);
+    await letSyncRun();
+    expect(savedPlans()).toEqual({ 'My plan': [], 'Last year': ['CSE-12|2025|2'] });
+  });
+
   it('a plan from a term that is over is saved, and the planner says it is read-only', async () => {
     const FA25: Term = { year: '2025', period: '2', label: 'Fall 2025' };
     serveShare(CODE, planIn(FA25, 'CSE-12'), 'Last year');
@@ -738,29 +750,71 @@ describe('Root: a short link saved before signing in', () => {
     await expectSavedAsNewPlan('Fall draft');
   });
 
-  it('the first tab, back after the confirm mail\'s tab saved the plan, does not offer it again', async () => {
+  it('the first tab, back after the confirm mail\'s tab saved it, neither saves nor offers it again — edited there or not', async () => {
     serveShare();
     await mount(`/s/${CODE}`);
     await click('Save to my account');
+    const tabA = sessionStorage.getItem(PENDING_SAVE_KEY);
 
-    // The confirm mail's tab signed up and saved "Fall draft" (and consumed the shared stash).
-    const saved = mine();
-    saved.terms['2026|2']!.plans.plans.push({
-      id: 'plan-2', name: 'Fall draft', plan: otherPlan(), createdAt: 'c', updatedAt: 'u', browsed: ['MATH-18|2026|2'],
-    });
-    localStorage.removeItem(PENDING_SHARE_KEY);
+    // The confirm mail's tab (its own sessionStorage) signs in and saves "Fall draft"...
+    reload();
+    sessionStorage.clear();
     srv.me = 'in';
-    srv.state = snapshotOf(saved);
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    await expectSavedAsNewPlan('Fall draft');
+    // ...which the student then changes there.
+    const [id, doc] = Object.entries(srv.state.plans).find(([, p]) => (p.data as NamedPlan).name === 'Fall draft')!;
+    const named = doc.data as NamedPlan;
+    const edited = { ...named, plan: { ...named.plan, entries: named.plan.entries.map((e) => ({ ...e, selectedOptionId: null })) } };
+    srv.state.plans[id] = { ...doc, version: doc.version + 100, data: edited };
 
-    await becomeVisible();
+    // Back in the first tab, which Google (or a refocus) brings to its link signed in.
+    reload();
+    sessionStorage.clear();
+    sessionStorage.setItem(PENDING_SAVE_KEY, tabA!);
+    await mount(`/s/${CODE}`);
     expect(container.querySelector('.app')).not.toBeNull();
     expect(container.querySelector('.received')).toBeNull();
     expect(loadReceived()).toBeNull();
     expect(text()).toContain('That shared plan is already in your account');
+    expect(text()).not.toContain('Saved the shared plan');
     expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
     expect(window.location.pathname).toBe('/');
     await letSyncRun();
-    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], 'Fall draft': ['MATH-18|2026|2'] });
+    expect(Object.keys(savedPlans()).sort()).toEqual(['Fall draft', 'Mine']);
+  });
+
+  it('a #p= link and then a short link, both saved in one tab before signing in, are both kept', async () => {
+    await mount(`/#${planToHash(otherPlan())}`);
+    await click('Save to my account');
+    reload(); // same tab
+    serveShare(CODE, planWith('CSE-11'), 'Short save');
+    await mount(`/s/${CODE}`);
+    await click('Save to my account');
+    await signInWithEmail();
+
+    reload();
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount(`/s/${CODE}`);
+    expect(text()).toContain('Saved 2 shared plans to your account');
+    await letSyncRun();
+    expect(savedPlans()).toEqual({
+      Mine: ['CSE-8A|2026|2'], 'Short save': ['CSE-11|2026|2'], 'Shared plan': ['MATH-18|2026|2'],
+    });
+  });
+
+  it('a Save whose link was turned off meanwhile does not hide the live link being opened', async () => {
+    stashPendingShare('DeadDead00');
+    serveShare();
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount(`/s/${CODE}`);
+    expect(container.querySelector('.received--active')).not.toBeNull();
+    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
+    expect(text()).toContain('A plan you chose to save is no longer shared');
+    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
   });
 
   it('a short link and then a #p= link, both saved in one tab before signing in, are both kept', async () => {
@@ -833,13 +887,16 @@ describe('Root: a short link saved before signing in', () => {
     await expectSavedAsNewPlan('Fall draft');
   });
 
-  it('one turned off meanwhile shows the "no longer works" page', async () => {
+  it('one turned off meanwhile is dropped, and the planner says so', async () => {
     stashPendingShare(CODE);
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    expect(text()).toContain('This link no longer works. The person who shared it may have turned it off.');
+    expect(container.querySelector('.app')).not.toBeNull();
+    expect(text()).toContain('A plan you chose to save is no longer shared');
     expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
+    await letSyncRun();
+    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'] });
   });
 });
 
