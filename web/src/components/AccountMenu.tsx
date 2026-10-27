@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { apiPost, type Me } from '../lib/cloud/api';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { apiPost, fetchCalendar, type CalendarState, type Me } from '../lib/cloud/api';
 import { nav } from '../lib/nav';
 import { clearPendingMigration } from '../lib/migration';
 import { clearReceived } from '../lib/storage';
@@ -8,19 +8,24 @@ import { ChevronDown } from './icons';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
 import { SharedLinksDialog } from './SharedLinksDialog';
+import { CalendarDialog, calendarNeedsPick, calendarRows } from './CalendarDialog';
+import type { TermsState } from '../lib/terms-state';
 import { failureText } from './auth/copy';
 
-type Dialog = 'password' | 'shared' | 'delete' | null;
+type Dialog = 'password' | 'shared' | 'calendar' | 'delete' | null;
 
 /** How long sign-out waits for unsaved edits to reach the account before leaving anyway. */
 const SIGN_OUT_SAVE_MS = 3000;
 
 export function AccountMenu({
   me: initial,
+  terms,
   onFlash,
   flush,
 }: {
   me: Me;
+  /** The student's plans, so the calendar item can tell when a term still needs a pick. */
+  terms: TermsState;
   onFlash: (msg: string) => void;
   /** Sends unsaved edits now (the sync engine's flush). */
   flush: () => Promise<void>;
@@ -30,8 +35,22 @@ export function AccountMenu({
   const [me, setMe] = useState(initial);
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [cal, setCal] = useState<CalendarState | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useClickAway(open, ref, () => setOpen(false));
+
+  // Once per mount (and after the dialog saves), never per render: the dot is a hint, not live data.
+  const liveRef = useRef(true);
+  const refreshCalendar = useCallback(async () => {
+    const c = await fetchCalendar();
+    if (c && liveRef.current) setCal(c);
+  }, []);
+  useEffect(() => {
+    liveRef.current = true;
+    void refreshCalendar();
+    return () => { liveRef.current = false; };
+  }, [refreshCalendar]);
+  const calendarDot = cal !== null && calendarNeedsPick(calendarRows(terms), cal);
 
   const choose = (fn: () => void | Promise<void>) => () => {
     setOpen(false);
@@ -91,6 +110,10 @@ export function AccountMenu({
               <MenuButton onClick={choose(disconnectGoogle)}>Disconnect Google</MenuButton>
             )}
             <MenuButton onClick={choose(() => setDialog('shared'))}>Shared links</MenuButton>
+            <MenuButton onClick={choose(() => setDialog('calendar'))}>
+              Calendar subscription
+              {calendarDot && <span className="acctmenu__dot" aria-label="needs attention" />}
+            </MenuButton>
             <MenuButton onClick={choose(() => setDialog('delete'))}>Delete account…</MenuButton>
             <MenuButton onClick={choose(signOut)}>Sign out</MenuButton>
           </div>
@@ -100,12 +123,20 @@ export function AccountMenu({
         <ChangePasswordDialog onClose={() => setDialog(null)} onFlash={onFlash} />
       )}
       {dialog === 'shared' && <SharedLinksDialog onClose={() => setDialog(null)} onFlash={onFlash} />}
+      {dialog === 'calendar' && (
+        <CalendarDialog
+          terms={terms}
+          onClose={() => setDialog(null)}
+          onFlash={onFlash}
+          onChanged={() => void refreshCalendar()}
+        />
+      )}
       {dialog === 'delete' &&<DeleteAccountDialog me={me} onClose={() => setDialog(null)} />}
     </>
   );
 }
 
-function MenuButton({ onClick, children }: { onClick: () => void; children: string }) {
+function MenuButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <button type="button" className="menu__item acctmenu__item" role="menuitem" onClick={onClick}>
       {children}

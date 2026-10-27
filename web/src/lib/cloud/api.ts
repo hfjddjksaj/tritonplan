@@ -81,7 +81,7 @@ export async function postSync(ops: SyncOp[]): Promise<SendResult> {
   }
 }
 
-async function send(method: 'POST' | 'DELETE', path: string, body: unknown): Promise<ApiResult> {
+async function send(method: 'POST' | 'PUT' | 'DELETE', path: string, body: unknown): Promise<ApiResult> {
   let r: Response;
   try {
     r = await fetch(path, { method, credentials: 'same-origin', headers: JSON_HEADERS, body: JSON.stringify(body) });
@@ -98,6 +98,7 @@ async function send(method: 'POST' | 'DELETE', path: string, body: unknown): Pro
 }
 
 export const apiPost = (path: string, body: unknown): Promise<ApiResult> => send('POST', path, body);
+export const apiPut = (path: string, body: unknown): Promise<ApiResult> => send('PUT', path, body);
 export const apiDelete = (path: string, body: unknown): Promise<ApiResult> => send('DELETE', path, body);
 
 export interface ShareRow { code: string; name: string; url: string; createdAt: string }
@@ -157,3 +158,47 @@ export async function fetchShare(
     return null;
   }
 }
+
+export interface CalendarLinks { https: string; webcal: string }
+export interface CalendarState {
+  https: string | null;
+  webcal: string | null;
+  /** termKey → the plan id the student picked for it. */
+  terms: Record<string, string>;
+  /** Term keys whose picked plan is gone (or moved to another term); the feed leaves them out. */
+  missing: string[];
+}
+
+/** null = could not load; callers show a retry-able message rather than an empty calendar. */
+export async function fetchCalendar(): Promise<CalendarState | null> {
+  try {
+    const r = await getWithTimeout('/api/calendar');
+    if (!r.ok) return null;
+    const b = (await r.json()) as Partial<CalendarState>;
+    const str = (v: unknown) => (typeof v === 'string' ? v : null);
+    return {
+      https: str(b.https),
+      webcal: str(b.webcal),
+      terms: b.terms && typeof b.terms === 'object' ? b.terms : {},
+      missing: Array.isArray(b.missing) ? b.missing : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The server replaces the whole map, so callers always send every pick, not just the one that changed. */
+export async function saveCalendarTerms(terms: Record<string, string>): Promise<boolean> {
+  return (await apiPut('/api/calendar', { terms })).ok;
+}
+
+function links(r: ApiResult): CalendarLinks | null {
+  if (!r.ok) return null;
+  const b = (r.body ?? {}) as { https?: unknown; webcal?: unknown };
+  return typeof b.https === 'string' && typeof b.webcal === 'string' ? { https: b.https, webcal: b.webcal } : null;
+}
+
+/** Idempotent: an existing link comes back unchanged. */
+export const createCalendarLink = async (): Promise<CalendarLinks | null> => links(await apiPost('/api/calendar/link', {}));
+/** A NEW secret; the old link stops working at once. */
+export const resetCalendarLink = async (): Promise<CalendarLinks | null> => links(await apiPost('/api/calendar/reset', {}));

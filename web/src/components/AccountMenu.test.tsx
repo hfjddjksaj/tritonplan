@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { Me } from '../lib/cloud/api';
 import { nav } from '../lib/nav';
+import type { TermsState } from '../lib/terms-state';
 import { AccountMenu } from './AccountMenu';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -40,9 +41,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const noTerms = { version: 1, activeTermKey: '', terms: {} } as TermsState;
 const both: Me = { email: 'Student@ucsd.edu', hasPassword: true, hasGoogle: true };
 async function render(me: Me = both) {
-  await act(async () => root.render(<AccountMenu me={me} onFlash={flash} flush={flush} />));
+  await act(async () => root.render(<AccountMenu me={me} terms={noTerms} onFlash={flash} flush={flush} />));
 }
 const q = (sel: string) => document.body.querySelector<HTMLElement>(sel);
 const buttons = () => [...document.body.querySelectorAll('button')].map((b) => b.textContent?.trim());

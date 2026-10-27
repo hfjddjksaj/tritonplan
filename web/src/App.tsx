@@ -182,7 +182,7 @@ export default function App({ boot, initialFlash }: { boot: CloudBoot; initialFl
           />
         }
         apptSlot={<ApptCapsule appt={appt} />}
-        accountSlot={<AccountMenu me={boot.me} onFlash={flash} flush={boot.engine.flush} />}
+        accountSlot={<AccountMenu me={boot.me} terms={ctl.termsState} onFlash={flash} flush={boot.engine.flush} />}
         sharePlan={ctl.viewPlan}
         planName={ctl.viewing === 'received' && ctl.received ? 'Shared plan' : ctl.activePlanName}
         onFlash={flash}

@@ -688,6 +688,7 @@ export function usePlan(boot: CloudBoot) {
     openBookingInTss,
     // terms
     activeTermKey: termsState.activeTermKey,
+    termsState,
     termList,
     archived,
     switchTerm,

@@ -3889,6 +3889,43 @@ button.termsw__cell:hover {
   gap: 8px;
   margin-top: 4px;
 }
+.acctmenu__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  vertical-align: middle;
+  background: var(--conflict);
+  border-radius: 50%;
+}
+.calterms {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.calterms__row {
+  margin-bottom: 8px;
+}
+.calterms__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.calterms__select {
+  min-width: 0;
+  max-width: 60%;
+  font: inherit;
+  font-weight: 500;
+}
+.calterms__hint {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
 .acctdlg__danger {
   color: #fff;
   background: var(--conflict);
