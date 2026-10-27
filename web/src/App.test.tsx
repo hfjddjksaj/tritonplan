@@ -60,3 +60,52 @@ describe('App → campus map', () => {
     vi.restoreAllMocks();
   });
 });
+
+describe('App → extension update note', () => {
+  const NOTE =
+    'After the TritonPlan extension updates, Chrome may switch it off until you allow its new site. ' +
+    'If the + TritonPlan button disappears from TSS, open chrome://extensions and turn TritonPlan back on.';
+  const KEY = 'triton-planner:ext-update-note:v1';
+  let container: HTMLDivElement;
+  let root: Root;
+  let boot: ReturnType<typeof makeTestBoot>;
+  beforeEach(() => {
+    boot = makeTestBoot();
+    localStorage.clear();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    boot.engine.dispose();
+  });
+  async function mount() {
+    root = createRoot(container);
+    await act(async () => root.render(<App boot={boot} />));
+  }
+
+  it('shows once per browser until dismissed', async () => {
+    await mount();
+    expect(container.textContent).toContain(NOTE);
+    const dismiss = [...container.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Dismiss')!;
+    await act(async () => dismiss.click());
+    expect(container.textContent).not.toContain(NOTE);
+    expect(localStorage.getItem(KEY)).not.toBeNull();
+    act(() => root.unmount());
+    await mount(); // the next sign-in on this browser
+    expect(container.textContent).not.toContain(NOTE);
+  });
+
+  it('is still shown when the browser cannot remember the dismissal', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    try {
+      await mount();
+      expect(container.textContent).toContain(NOTE);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+});

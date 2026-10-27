@@ -134,12 +134,12 @@ export type BridgeKind = 'courses' | 'plan-add' | 'booked' | 'appt-times';
 /** Queued plan-adds mirror here so they survive the sign-in page navigation (same tab). */
 export const PENDING_ADDS_KEY = 'triton-planner:pending-adds:v1';
 
-/** Per-kind queue cap: keeps the latest N. `courses` pushes can be large, and a student who
- *  never signs in must not grow memory without bound; older ones are superseded anyway. */
+/** Per-kind queue cap: keeps the latest N, so a student who never signs in does not grow memory
+ *  without bound (only `plan-add` queues more than one; the other kinds keep their latest). */
 const MAX_QUEUED_PER_KIND = 200;
 const MAX_MIRRORED_ADDS = 50;
-/** Each push of these is a full snapshot, so only the latest is worth keeping. */
-const LATEST_ONLY: ReadonlySet<BridgeKind> = new Set<BridgeKind>(['booked', 'appt-times']);
+/** Each push of these is a full snapshot (`courses` = the extension's whole captured pool), so only the latest is worth keeping. */
+const LATEST_ONLY: ReadonlySet<BridgeKind> = new Set<BridgeKind>(['courses', 'booked', 'appt-times']);
 let warnedEviction = false;
 
 function classify(data: unknown): BridgeKind | null {

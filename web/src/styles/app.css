@@ -1249,7 +1249,8 @@ button.menu__item:hover {
 /* =============================== received plan (share link / imported JSON) banner */
 /* Constant reminder that what's on screen (or parked nearby) is someone else's
    plan: read-only, stored apart, never clobbering the user's own. */
-.received {
+.received,
+.notebar {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1277,7 +1278,13 @@ button.menu__item:hover {
   color: var(--gold-ink);
   white-space: nowrap;
 }
-.received__text {
+/* A one-time notice (the extension-update note) wears the received bar's neutral look. */
+.notebar__text {
+  flex: 1;
+  min-width: 0;
+}
+.received__text,
+.notebar__text {
   color: var(--text-muted);
 }
 .received--active .received__text {

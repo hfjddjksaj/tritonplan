@@ -217,8 +217,14 @@ export function useSyncStatus(e: SyncEngine): SyncStatus {
  * send of a small remainder. The keepalive commits on the server behind the
  * engine's back, so if the page comes back from the bfcache it reloads to take
  * the server's versions instead of resending stale baseVersions (a 409).
+ * Hiding the tab sends at once rather than after the debounce: a mobile browser
+ * may freeze or discard a hidden tab before the timer fires, and hidden is often
+ * the last moment a page gets.
  */
 export function installUnloadGuard(e: SyncEngine, reload: () => void = () => location.reload()): () => void {
+  const onVisibility = () => {
+    if (document.visibilityState === 'hidden') void e.flush();
+  };
   const onPageShow = (ev: PageTransitionEvent) => {
     window.removeEventListener('pageshow', onPageShow);
     if (ev.persisted) reload();
@@ -241,9 +247,11 @@ export function installUnloadGuard(e: SyncEngine, reload: () => void = () => loc
   };
   window.addEventListener('beforeunload', onBeforeUnload);
   window.addEventListener('pagehide', onPageHide);
+  document.addEventListener('visibilitychange', onVisibility);
   return () => {
     window.removeEventListener('beforeunload', onBeforeUnload);
     window.removeEventListener('pagehide', onPageHide);
     window.removeEventListener('pageshow', onPageShow);
+    document.removeEventListener('visibilitychange', onVisibility);
   };
 }

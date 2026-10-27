@@ -11,7 +11,19 @@ import { failureText } from './auth/copy';
 
 type Dialog = 'password' | 'delete' | null;
 
-export function AccountMenu({ me: initial, onFlash }: { me: Me; onFlash: (msg: string) => void }) {
+/** How long sign-out waits for unsaved edits to reach the account before leaving anyway. */
+const SIGN_OUT_SAVE_MS = 3000;
+
+export function AccountMenu({
+  me: initial,
+  onFlash,
+  flush,
+}: {
+  me: Me;
+  onFlash: (msg: string) => void;
+  /** Sends unsaved edits now (the sync engine's flush). */
+  flush: () => Promise<void>;
+}) {
   // Local copy: disconnecting Google changes what the menu may offer, and the
   // boot's `me` is only read once per page.
   const [me, setMe] = useState(initial);
@@ -41,6 +53,9 @@ export function AccountMenu({ me: initial, onFlash }: { me: Me; onFlash: (msg: s
   }
 
   async function signOut() {
+    // An edit still inside the save debounce would otherwise go out after logout and be refused.
+    // Bounded: an unreachable server must not keep the student from signing out.
+    await Promise.race([flush().catch(() => {}), new Promise((r) => setTimeout(r, SIGN_OUT_SAVE_MS))]);
     await apiPost('/api/auth/logout', {}); // a failed logout still leaves: the next load re-checks the session
     clearPendingMigration(); // the old site's plans are this student's, not the next person's on a shared browser
     clearReceived(); // someone else's plan must not greet the next person on this browser
@@ -80,7 +95,7 @@ export function AccountMenu({ me: initial, onFlash }: { me: Me; onFlash: (msg: s
         )}
       </div>
       {dialog === 'password' && (
-        <ChangePasswordDialog me={me} onClose={() => setDialog(null)} onFlash={onFlash} />
+        <ChangePasswordDialog onClose={() => setDialog(null)} onFlash={onFlash} />
       )}
       {dialog === 'delete' && <DeleteAccountDialog me={me} onClose={() => setDialog(null)} />}
     </>

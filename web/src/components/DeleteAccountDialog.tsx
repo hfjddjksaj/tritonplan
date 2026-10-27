@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { apiDelete, type Me } from '../lib/cloud/api';
 import { nav } from '../lib/nav';
+import { clearPendingMigration } from '../lib/migration';
+import { clearReceived } from '../lib/storage';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { AuthField } from './auth/AuthCard';
 import { failureText } from './auth/copy';
@@ -21,6 +23,9 @@ export function DeleteAccountDialog({ me, onClose }: { me: Me; onClose: () => vo
     setError(null);
     const r = await apiDelete('/api/account', { confirmEmail: typed.trim() });
     if (r.ok) {
+      // As at sign-out: on a shared browser the next person must not inherit these.
+      clearPendingMigration();
+      clearReceived();
       nav.assign('/'); // stays busy: the page is leaving
       return;
     }

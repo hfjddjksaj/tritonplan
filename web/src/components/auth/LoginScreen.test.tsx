@@ -140,6 +140,7 @@ describe('LoginScreen', () => {
     [409, 'email_taken', 'An account with this email already exists. Sign in, or reset your password.'],
     [400, 'weak_password', 'Use at least 8 characters.'],
     [400, 'invalid_email', 'Enter a valid email address.'],
+    [503, 'mail_failed', "We couldn't send the confirmation email right now. Try again in a few minutes, or continue with Google."],
   ])('sign-up %i %s says so', async (status, error, copy) => {
     answers['/api/auth/signup'] = () => json(status, { error });
     await render();

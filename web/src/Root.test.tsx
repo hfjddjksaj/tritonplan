@@ -757,12 +757,14 @@ describe('Root: moving plans from the old site', () => {
     terms: mine('Old plan', otherPlan()), plans: null, plan: null, pool: [], appt: null, received: null, hashPlan: null,
   });
 
-  it('a signed-out visit to /migrate with a pending payload asks to sign in with returnTo=/migrate', async () => {
+  it('a signed-out visit to /migrate with a pending payload asks to sign in and returns to /', async () => {
     savePendingMigration(pending());
     await mount('/migrate');
     expect(text()).toContain('Sign in to finish moving your plans');
+    // Not /migrate: if the payload is gone by then (imported in another tab), /migrate would wait for the
+    // old site forever. Any path picks up a payload that is still pending.
     const google = [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'));
-    expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2Fmigrate');
+    expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2F');
     expect(container.querySelector('.app')).toBeNull();
     expect(loadPendingMigration()).not.toBeNull();
   });

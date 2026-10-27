@@ -22,6 +22,7 @@ const BY_ERROR: ReadonlyMap<string, string> = new Map([
   ['weak_password', 'Use at least 8 characters.'],
   ['invalid_email', 'Enter a valid email address.'],
   ['link_expired', LINK_EXPIRED],
+  ['mail_failed', "We couldn't send the confirmation email right now. Try again in a few minutes, or continue with Google."],
 ]);
 
 export function tooManyAttempts(retryAfterSec: number | undefined): string {

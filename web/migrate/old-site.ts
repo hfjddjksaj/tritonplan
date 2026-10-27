@@ -117,6 +117,15 @@ export function runOldSite(doc: Document, win: Window, nowIso: string): void {
     card.append(row);
   }
 
-  card.append(el(doc, 'p', 'The TritonPlan extension will update itself to the new site.', 'foot'));
+  // The extension update adds a host permission, and Chrome may disable it until the student accepts.
+  card.append(
+    el(
+      doc,
+      'p',
+      'After the TritonPlan extension updates, Chrome may switch it off until you allow its new site. ' +
+        'If the + TritonPlan button disappears from TSS, open chrome://extensions and turn TritonPlan back on.',
+      'foot',
+    ),
+  );
   root.append(card);
 }

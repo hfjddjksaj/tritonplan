@@ -348,3 +348,14 @@ export function loadMapBookedOnly(): boolean | null {
 export function saveMapBookedOnly(value: boolean): void {
   writeJson(MAP_BOOKED_ONLY_KEY, value);
 }
+
+/* --- one-time "the extension may be switched off" note (UI preference) ------ */
+const EXT_UPDATE_NOTE_KEY = 'triton-planner:ext-update-note:v1';
+
+export function loadExtUpdateNoteDismissed(): boolean {
+  return readJson(EXT_UPDATE_NOTE_KEY, (v): v is true => v === true) === true;
+}
+
+export function saveExtUpdateNoteDismissed(): void {
+  writeJson(EXT_UPDATE_NOTE_KEY, true);
+}

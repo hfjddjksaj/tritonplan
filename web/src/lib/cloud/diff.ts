@@ -77,7 +77,10 @@ export function sameAcked(a: Acked, b: Acked): boolean {
     const q = b.plans.get(id);
     if (!q || q.version !== p.version || q.termKey !== p.termKey) return false;
   }
-  // Relies on the server echoing each course's keys in the order the client sent them (it stores the JSON as given).
+  // Compares JSON text, so key order matters. The server's zod schema (`{id}.passthrough()`) re-serializes each
+  // course with `id` first and the rest in the order sent; this matches only because every course is built with
+  // `id` as its first key. A course built otherwise would never match its round-tripped copy, so every refocus
+  // refresh would remount the planner.
   for (const [id, json] of a.pool) if (b.pool.get(id) !== json) return false;
   return a.appt === b.appt;
 }

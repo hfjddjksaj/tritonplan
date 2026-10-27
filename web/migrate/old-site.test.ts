@@ -79,7 +79,11 @@ describe('old site migration page', () => {
     run(w0);
     expect(text()).toContain('TritonPlan has moved to tritonplan.cn');
     expect(text()).toContain('Sign in on the new site with Google or with your email.');
-    expect(text()).toContain('The TritonPlan extension will update itself to the new site.');
+    expect(text()).toContain(
+      'After the TritonPlan extension updates, Chrome may switch it off until you allow its new site. ' +
+        'If the + TritonPlan button disappears from TSS, open chrome://extensions and turn TritonPlan back on.',
+    );
+    expect(text()).not.toContain('will update itself');
     expect(btn('Move my plans to tritonplan.cn')).toBeUndefined();
     expect(btn('Download a backup file')).toBeUndefined();
     expect((btn('Go to tritonplan.cn') as HTMLAnchorElement).href).toBe(SITE_ORIGIN + '/');

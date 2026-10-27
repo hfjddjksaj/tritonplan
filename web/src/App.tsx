@@ -11,6 +11,7 @@ import { CalViewToggle } from './components/CalViewToggle';
 import { FinalsView } from './components/FinalsView';
 import { MidtermsView } from './components/MidtermsView';
 import { SyncBanner } from './components/SyncBanner';
+import { ExtensionUpdateNote } from './components/ExtensionUpdateNote';
 import { AccountMenu } from './components/AccountMenu';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
@@ -181,13 +182,14 @@ export default function App({ boot, initialFlash }: { boot: CloudBoot; initialFl
           />
         }
         apptSlot={<ApptCapsule appt={appt} />}
-        accountSlot={<AccountMenu me={boot.me} onFlash={flash} />}
+        accountSlot={<AccountMenu me={boot.me} onFlash={flash} flush={boot.engine.flush} />}
         sharePlan={ctl.viewPlan}
         onFlash={flash}
         onReset={handleReset}
         onOpenMap={() => setCampusOpen(true)}
       />
       <SyncBanner engine={boot.engine} />
+      <ExtensionUpdateNote />
       {ctl.received && (
         <ReceivedBanner
           received={ctl.received}

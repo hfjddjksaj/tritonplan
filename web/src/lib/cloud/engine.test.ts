@@ -267,6 +267,34 @@ describe('installUnloadGuard', () => {
     off2();
     vi.unstubAllGlobals();
   });
+
+  it('hiding the tab sends pending edits now instead of after the debounce; showing it does not', async () => {
+    const f = fakeSend();
+    const e = createSyncEngine({ snapshot: snap(state()), send: f.impl });
+    const off = installUnloadGuard(e);
+    const visibility = (v: 'hidden' | 'visible') => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    try {
+      e.setTerms(state('b'));
+      visibility('visible');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(f.impl).not.toHaveBeenCalled();
+      visibility('hidden');
+      await vi.advanceTimersByTimeAsync(0); // no debounce wait: the send went out on the event
+      expect(f.impl).toHaveBeenCalledTimes(1);
+      expect(e.hasPending()).toBe(false);
+      off();
+      e.setTerms(state('c'));
+      visibility('hidden');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(f.impl).toHaveBeenCalledTimes(1); // removed with the guard
+    } finally {
+      off();
+      delete (document as unknown as { visibilityState?: string }).visibilityState;
+    }
+  });
 });
 
 /** A course of roughly `kb` kilobytes of JSON, like the real ones (1.4-15.7 KB). */

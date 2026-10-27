@@ -201,12 +201,23 @@ describe('bridge hub', () => {
     expect(h.mock.calls[0][0].payload[0].sessionText).toBe('Winter Quarter');
   });
 
+  it('keeps only the latest courses push: each one is the whole captured pool', () => {
+    installBridgeHub();
+    const courses = (...ids: string[]) => ({ source: BRIDGE_SOURCE, type: 'courses', version: 1, payload: ids.map((id) => makeCourse(id)) });
+    post(courses('a'));
+    post(courses('a', 'b'));
+    post(planAdd('A'));
+    const seen: unknown[] = [];
+    const off = installBridgeListener({ onCourses: (c) => seen.push(c.map((x) => x.id)), onPlanAdd: vi.fn() });
+    expect(seen).toEqual([['a', 'b']]);
+    off();
+  });
+
   it('evicting one kind never drops another, and warns once without data', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     installBridgeHub();
     post(apptMsg);
-    const courses = (n: number) => ({ source: BRIDGE_SOURCE, type: 'courses', version: 1, payload: [makeCourse(`k${n}`)] });
-    for (let i = 0; i < 210; i++) post(courses(i));
+    for (let i = 0; i < 210; i++) post(planAdd(`k${i}`));
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0][0])).not.toContain('k0');
     const a = vi.fn();

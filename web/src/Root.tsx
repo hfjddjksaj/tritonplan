@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import App from './App';
 import { AuthCard } from './components/auth/AuthCard';
 import { AUTH_NOTICES } from './components/auth/copy';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { ImportConfirm, type ImportOutcome } from './components/migrate/ImportConfirm';
 import { MigrateReceiver } from './components/migrate/MigrateReceiver';
@@ -276,14 +277,20 @@ function SignInGate({ notice }: { notice?: string }) {
         </AuthCard>
       );
     case 'signed-out':
+      // Back to "/", not "/migrate": enter() picks a pending payload up on any path, while /migrate without one
+      // (imported meanwhile in another tab) would wait for the old site forever.
       return loadPendingMigration() ? (
-        <LoginScreen notice={pageNotice} heading="Sign in to finish moving your plans" returnTo="/migrate" />
+        <LoginScreen notice={pageNotice} heading="Sign in to finish moving your plans" returnTo="/" />
       ) : (
         <LoginScreen notice={pageNotice} returnTo={window.location.pathname} />
       );
     case 'import':
       return <ImportConfirm snapshot={screen.snapshot} payload={screen.payload} onDone={(o) => void importDone(screen, o)} />;
     case 'planner':
-      return <App boot={screen.boot} key={screen.nonce} initialFlash={screen.flash} />;
+      return (
+        <ErrorBoundary key={screen.nonce}>
+          <App boot={screen.boot} initialFlash={screen.flash} />
+        </ErrorBoundary>
+      );
   }
 }
