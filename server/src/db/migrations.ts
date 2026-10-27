@@ -26,4 +26,11 @@ CREATE TABLE user_docs (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CAS
 `,
   // Per-user monotonic counter for term/plan versions, so a delete + recreate never reuses a version a stale device still holds.
   `ALTER TABLE users ADD COLUMN version_seq INTEGER NOT NULL DEFAULT 0;`,
+  // Snapshots are copies, not links into plan_docs: later edits or deletes of the owner's plan never change what a code opens.
+  `
+CREATE TABLE shares (code TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX shares_by_user ON shares(user_id, created_at);
+`,
 ];
