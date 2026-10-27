@@ -21,7 +21,7 @@ import {
   toggleBooked as toggleBookedIn,
   waitlistedSet,
 } from '../lib/booked';
-import type { CloudBoot } from '../lib/cloud/boot';
+import type { AdoptPlan, CloudBoot } from '../lib/cloud/boot';
 import {
   loadReceived,
   saveReceived,
@@ -82,22 +82,30 @@ function initialState(boot: CloudBoot): { pool: CourseOffering[]; terms: TermsSt
   const now = new Date();
   const iso = now.toISOString();
   const pool = mergeCourses(SAMPLE, boot.pool);
+  const adopt = boot.adopt ?? [];
+  const adopted = adopt.flatMap((a) => a.plan.entries.map((e) => e.course));
+  // A new account that starts with plans they chose to save holds just those, not an empty "My plan" beside them.
+  if (!boot.terms && adopt.length > 0) {
+    return { pool: mergeCourses(pool, adopted), terms: adoptInto(null, adopt, iso), forgetModuleIds: [] };
+  }
   // An account with no terms yet starts from the same single empty plan a new device always did.
   const terms = boot.terms ?? migrateToTermsState(null, null, null, pool, iso);
   const swept = archiveSweep(terms, pool, now);
   // Default view is always the NEWEST term: the stored activeTermKey is
-  // ignored on load.
+  // ignored on load. Plans they chose to save before signing in are kept now, and shown.
   const state = switchTermIn(swept.state, newestTermKey(swept.state));
-  const adopt = boot.adopt;
-  if (!adopt) return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds };
-  // A plan they chose to save before signing in: kept now, and shown, as "Save as a new plan" would.
-  const withWs = ensureWorkspace(state, adopt.plan.term, iso);
-  const name = freeSharedName(withWs.terms[termKey(adopt.plan.term)]!.plans, adopt.name);
-  return {
-    pool: mergeCourses(swept.pool, adopt.plan.entries.map((e) => e.course)),
-    terms: adoptPlanIn(withWs, adopt.plan, name, iso),
-    forgetModuleIds: swept.forgetModuleIds,
-  };
+  if (adopt.length === 0) return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds };
+  return { pool: mergeCourses(swept.pool, adopted), terms: adoptInto(state, adopt, iso), forgetModuleIds: swept.forgetModuleIds };
+}
+
+/** Each plan they chose to save, as a new plan with a name of its own in its term; the planner opens on the last. */
+function adoptInto(state: TermsState | null, adopt: AdoptPlan[], iso: string): TermsState {
+  let s: TermsState = state ?? { version: 1, activeTermKey: termKey(adopt[0]!.plan.term), terms: {} };
+  for (const a of adopt) {
+    const names = s.terms[termKey(a.plan.term)]?.plans.plans.map((p) => p.name) ?? [];
+    s = adoptPlanIn(s, a.plan, freeSharedName(names, a.name), iso);
+  }
+  return s;
 }
 
 /** Append a fresh plan entry, coloring it with the next hue in the palette. */

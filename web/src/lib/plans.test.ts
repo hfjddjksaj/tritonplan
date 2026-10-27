@@ -7,6 +7,7 @@ import {
   createPlan,
   addPlan,
   freeSharedName,
+  samePlanContent,
   renamePlan,
   duplicatePlan,
   deletePlan,
@@ -131,12 +132,23 @@ describe('plan list operations', () => {
 
 describe('freeSharedName', () => {
   it('keeps a free name, and otherwise marks the copy as shared', () => {
-    const s = seeded(); // "My plan" + "Backup"
-    expect(freeSharedName(s, 'Fall draft')).toBe('Fall draft');
-    expect(freeSharedName(s, 'My plan')).toBe('My plan (shared)');
-    const again = addPlan(s, makePlan(), 'My plan (shared)', NOW);
-    expect(freeSharedName(again, 'My plan')).toBe('My plan (shared 2)');
-    expect(freeSharedName(s, '   ')).toBe('Shared plan');
+    const names = ['My plan', 'Backup'];
+    expect(freeSharedName(names, 'Fall draft')).toBe('Fall draft');
+    expect(freeSharedName(names, 'My plan')).toBe('My plan (shared)');
+    expect(freeSharedName([...names, 'My plan (shared)'], 'My plan')).toBe('My plan (shared 2)');
+    expect(freeSharedName(names, '   ')).toBe('Shared plan');
+    expect(freeSharedName([], 'My plan')).toBe('My plan');
+  });
+});
+
+describe('samePlanContent', () => {
+  it('compares term, courses and sections, not seat counts or colors', () => {
+    const a = makePlan();
+    const course = { ...a.entries[0]!.course, title: 'Seats moved' };
+    expect(samePlanContent(a, { ...a, entries: [{ ...a.entries[0]!, course, color: '12' }] })).toBe(true);
+    expect(samePlanContent(a, { ...a, entries: [{ ...a.entries[0]!, selectedOptionId: null }] })).toBe(false);
+    expect(samePlanContent(a, { ...a, entries: [] })).toBe(false);
+    expect(samePlanContent(a, { ...a, term: { year: '2027', period: '0', label: 'Winter 2027' } })).toBe(false);
   });
 });
 

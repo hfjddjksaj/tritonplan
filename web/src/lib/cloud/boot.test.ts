@@ -4,13 +4,19 @@ import type { NamedPlan } from '../plans';
 import type { TermsState } from '../terms-state';
 import {
   clearPendingShare,
+  consumeSaves,
   dropPendingHash,
+  forgetSaves,
   makeBoot,
+  peekPendingSave,
   peekPendingShare,
+  pendingSaves,
   PENDING_HASH_KEY,
+  PENDING_SAVE_KEY,
   PENDING_SHARE_KEY,
   restorePendingHash,
   stashPendingHash,
+  stashPendingSave,
   stashPendingShare,
 } from './boot';
 import { splitTerms, type WebSnapshot } from './records';
@@ -174,5 +180,62 @@ describe('pending short link', () => {
     expect(() => stashPendingShare('AbCdEfGh12')).not.toThrow();
     expect(peekPendingShare()).toBeNull();
     expect(() => clearPendingShare()).not.toThrow();
+  });
+});
+
+describe('pending Saves', () => {
+  const HOUR = 3_600_000;
+  const T0 = Date.parse('2026-10-26T12:00:00.000Z');
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("this tab's Save, short link or #p=, is kept in sessionStorage with its time and lasts a day", () => {
+    stashPendingSave({ hash: '#p=abc' }, new Date(T0));
+    expect(JSON.parse(sessionStorage.getItem(PENDING_SAVE_KEY)!)).toEqual({ hash: '#p=abc', at: '2026-10-26T12:00:00.000Z' });
+    expect(peekPendingSave(T0 + 24 * HOUR)).toEqual({ hash: '#p=abc' });
+    expect(peekPendingSave(T0 + 24 * HOUR + 1)).toBeNull();
+    expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
+  });
+
+  it.each(['not json', '{"at":"2026-10-26T12:00:00.000Z"}', '{"code":"AbCdEfGh12","at":"yesterday"}', 'null'])(
+    'a damaged entry %j is dropped',
+    (raw) => {
+      sessionStorage.setItem(PENDING_SAVE_KEY, raw);
+      expect(peekPendingSave(T0)).toBeNull();
+      expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
+    },
+  );
+
+  it("lists this tab's Save and another tab's short link, once each", () => {
+    vi.useFakeTimers({ now: T0 });
+    expect(pendingSaves()).toEqual([]);
+    stashPendingSave({ code: 'AbCdEfGh12' });
+    stashPendingShare('AbCdEfGh12');
+    expect(pendingSaves()).toEqual([{ code: 'AbCdEfGh12' }]);
+    stashPendingShare('ZyXwVuTs98'); // another tab saved a second link since
+    expect(pendingSaves()).toEqual([{ code: 'AbCdEfGh12' }, { code: 'ZyXwVuTs98' }]);
+  });
+
+  it('consuming the honored Saves leaves one stashed meanwhile', () => {
+    vi.useFakeTimers({ now: T0 });
+    stashPendingSave({ hash: '#p=abc' });
+    stashPendingShare('ZyXwVuTs98');
+    consumeSaves([{ hash: '#p=abc' }]);
+    expect(peekPendingSave()).toBeNull();
+    expect(peekPendingShare()).toBe('ZyXwVuTs98');
+  });
+
+  it('a turned-off link takes only its own Saves with it', () => {
+    vi.useFakeTimers({ now: T0 });
+    stashPendingSave({ code: 'AbCdEfGh12' });
+    stashPendingShare('ZyXwVuTs98');
+    forgetSaves('AbCdEfGh12');
+    expect(peekPendingSave()).toBeNull();
+    expect(peekPendingShare()).toBe('ZyXwVuTs98');
+    forgetSaves('ZyXwVuTs98');
+    expect(peekPendingShare()).toBeNull();
   });
 });

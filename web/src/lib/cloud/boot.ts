@@ -5,7 +5,7 @@
  */
 import type { ApptTimes, CourseOffering, PlanState, SyncOp } from '@triton/shared';
 import type { TermsState } from '../terms-state';
-import { mirrorTokenFromHash, planFromHash, tokenFromHash } from '../share';
+import { mirrorTokenFromHash, tokenFromHash } from '../share';
 import { postSync, type Me } from './api';
 import { createSyncEngine, type SendResult, type SyncEngine } from './engine';
 import { termsFromSnapshot, type WebSnapshot } from './records';
@@ -24,7 +24,7 @@ export interface CloudBoot {
   pool: CourseOffering[];
   appt: ApptTimes[] | null;
   /** Saved into the plans as the planner starts, so the click they made before signing in is not asked for again. */
-  adopt?: AdoptPlan;
+  adopt?: AdoptPlan[];
 }
 
 /** `send` is a test seam; the app always saves through POST /api/sync. */
@@ -77,10 +77,57 @@ export function restorePendingHash(): void {
   window.history.replaceState(null, '', window.location.pathname + window.location.search + stashed);
 }
 
-/** Forget a stashed link, and any save asked for on one, without restoring it: a short link opened since is the newer one. */
+/** Forget a stashed link without restoring it: a short link opened since is the newer one. */
 export function dropPendingHash(): void {
   try {
     sessionStorage.removeItem(PENDING_HASH_KEY);
+  } catch {
+    /* storage blocked: nothing was stashed either */
+  }
+}
+
+/**
+ * The "Save to my account" this tab clicked while signed out: a short link's
+ * code, or the shown plan of an old #p= link (which cannot be fetched again).
+ * It outlives the confirm mail's tab saving the same link, so this tab can tell
+ * "I asked for this" from "this was only opened" when it sees the sign-in.
+ */
+export type SaveIntent = { code: string } | { hash: string };
+export const PENDING_SAVE_KEY = 'triton-planner:pending-save:v1';
+
+export function stashPendingSave(intent: SaveIntent, now: Date = new Date()): void {
+  try {
+    sessionStorage.setItem(PENDING_SAVE_KEY, JSON.stringify({ ...intent, at: now.toISOString() }));
+  } catch {
+    /* storage blocked: a short link still has its localStorage stash; a #p= link waits for its own Save click */
+  }
+}
+
+/** This tab's Save if under a day old, as short links' stash; an older or damaged one is dropped. */
+export function peekPendingSave(now: number = Date.now()): SaveIntent | null {
+  let raw: string | null;
+  try {
+    raw = sessionStorage.getItem(PENDING_SAVE_KEY);
+  } catch {
+    return null;
+  }
+  if (raw === null) return null;
+  let intent: SaveIntent | null = null;
+  try {
+    const v = JSON.parse(raw) as { code?: unknown; hash?: unknown; at?: unknown } | null;
+    if (typeof v?.at === 'string' && now - Date.parse(v.at) <= PENDING_SHARE_MAX_AGE_MS) {
+      if (typeof v.code === 'string') intent = { code: v.code };
+      else if (typeof v.hash === 'string') intent = { hash: v.hash };
+    }
+  } catch {
+    /* not JSON: dropped below */
+  }
+  if (intent === null) clearPendingSave();
+  return intent;
+}
+
+export function clearPendingSave(): void {
+  try {
     sessionStorage.removeItem(PENDING_SAVE_KEY);
   } catch {
     /* storage blocked: nothing was stashed either */
@@ -88,33 +135,31 @@ export function dropPendingHash(): void {
 }
 
 /**
- * "Save to my account" on a #p= link: the link itself, kept in this tab so the
- * plan is saved, not just shown, once signed in. Unlike a short link it cannot
- * be fetched again, so it does not outlive the tab (the confirm mail's tab
- * gets the plain sign-in).
+ * Every Save still waiting: this tab's own, and the short link another tab left
+ * for the confirm mail (when it is a different link). Viewing other links never
+ * cancels one; only saving it, its link being turned off, or a day passing does.
  */
-export const PENDING_SAVE_KEY = 'triton-planner:pending-save:v1';
-
-export function stashPendingSave(hash: string): void {
-  try {
-    sessionStorage.setItem(PENDING_SAVE_KEY, hash);
-  } catch {
-    /* storage blocked: the link still opens after sign-in, it just waits for its own Save click */
-  }
+export function pendingSaves(): SaveIntent[] {
+  const own = peekPendingSave();
+  const code = peekPendingShare();
+  const out: SaveIntent[] = own ? [own] : [];
+  if (code !== null && !(own && 'code' in own && own.code === code)) out.push({ code });
+  return out;
 }
 
-/** The #p= link Save was asked for and its plan, consumed with the link's own stash; null if none (or it does not decode). */
-export function takePendingSave(): { hash: string; plan: PlanState } | null {
-  let hash: string | null;
-  try {
-    hash = sessionStorage.getItem(PENDING_SAVE_KEY);
-  } catch {
-    return null;
-  }
-  if (hash === null) return null;
-  dropPendingHash();
-  const plan = planFromHash(hash);
-  return plan ? { hash, plan } : null;
+/** A short link turned off: any Save waiting on it goes with it. */
+export function forgetSaves(code: string): void {
+  if (peekPendingShare() === code) clearPendingShare();
+  const own = peekPendingSave();
+  if (own && 'code' in own && own.code === code) clearPendingSave();
+}
+
+/** The Saves just honored are done; a newer one stashed meanwhile (another tab) stays. */
+export function consumeSaves(done: SaveIntent[]): void {
+  const own = peekPendingSave();
+  if (own && done.some((d) => JSON.stringify(d) === JSON.stringify(own))) clearPendingSave();
+  const code = peekPendingShare();
+  if (code !== null && done.some((d) => 'code' in d && d.code === code)) clearPendingShare();
 }
 
 /**

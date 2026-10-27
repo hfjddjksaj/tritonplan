@@ -20,24 +20,26 @@ import { ShareGone } from './components/share/ShareGone';
 import { SharedPlanView } from './components/share/SharedPlanView';
 import { fetchMe, fetchShare, fetchState, UnauthorizedError, type Me } from './lib/cloud/api';
 import {
-  carriesPlan,
-  clearPendingShare,
+  consumeSaves,
   dropPendingHash,
+  forgetSaves,
   makeBoot,
-  peekPendingShare,
+  pendingSaves,
   restorePendingHash,
   stashPendingHash,
   stashPendingSave,
   stashPendingShare,
-  takePendingSave,
   type AdoptPlan,
   type CloudBoot,
+  type SaveIntent,
 } from './lib/cloud/boot';
 import { pluralize } from './lib/format';
 import type { WebSnapshot } from './lib/cloud/records';
 import { loadPendingMigration, type MigrationPayload } from './lib/migration';
-import { planFromHash } from './lib/share';
+import { samePlanContent } from './lib/plans';
+import { planFromHash, planToHash } from './lib/share';
 import { saveReceived, saveViewing } from './lib/storage';
+import { displayTermLabel, isArchived } from './lib/terms';
 
 type Entry =
   | { kind: 'reset'; token: string }
@@ -109,7 +111,7 @@ type Screen =
   /** Someone's plan, read-only, signed out. `code` is null for a #p= link: that plan is in the hash, not on the server. */
   | { kind: 'shared'; name: string; plan: PlanState; code: string | null }
   | { kind: 'gone' }
-  | { kind: 'import'; me: Me; snapshot: WebSnapshot; payload: MigrationPayload; adopt?: AdoptPlan }
+  | { kind: 'import'; me: Me; snapshot: WebSnapshot; payload: MigrationPayload; saving?: Saving }
   | { kind: 'planner'; boot: CloudBoot; nonce: number; flash?: string };
 type PlannerScreen = Extract<Screen, { kind: 'planner' }>;
 type SharedScreen = Extract<Screen, { kind: 'shared' }>;
@@ -120,7 +122,19 @@ type Loaded = { kind: 'offline' } | { kind: 'signed-out' } | { kind: 'ready'; me
 /** A refocus refresh downloads the whole account; the TSS ↔ planner back-and-forth must not do that every few seconds. */
 const REFRESH_MIN_GAP_MS = 30_000;
 
-const SAVED_SHARED = 'Saved the shared plan to your account — you can edit it now';
+/** Saves clicked before signing in and their plans. The Saves stay stashed until a planner holding the plans mounts. */
+type Saving = { plans: AdoptPlan[]; intents: SaveIntent[] };
+
+/** What the planner says about the Saves it just honored; `fresh` are the plans not already in the account. */
+function savedFlash(asked: number, fresh: AdoptPlan[]): string | undefined {
+  if (asked === 0) return undefined;
+  if (fresh.length === 0) return `${asked === 1 ? 'That shared plan is' : 'Those shared plans are'} already in your account`;
+  if (fresh.length > 1) return `Saved ${fresh.length} shared plans to your account`;
+  const term = fresh[0]!.plan.term;
+  return isArchived(term, new Date())
+    ? `Saved the shared plan to your account — ${displayTermLabel(term)} is over, so it is read-only`
+    : 'Saved the shared plan to your account — you can edit it now';
+}
 
 /**
  * Drop the address bar's hash before another App mounts. A mounted planner
@@ -168,7 +182,7 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
   }, []);
 
   const mountPlanner = useCallback(
-    (me: Me, snapshot: WebSnapshot, flash?: string, adopt?: AdoptPlan) => {
+    (me: Me, snapshot: WebSnapshot, flash?: string, saving?: Saving) => {
       // On the page's first entry the hash is the link the student opened. After a planner has
       // been mounted here (signed out mid-session, back in), it can only be that planner's mirror.
       if (nonce.current > 0) dropAddressHash();
@@ -176,21 +190,33 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
       setPageNotice(undefined);
       lastFresh.current = Date.now();
       const boot = makeBoot(me, snapshot);
-      if (adopt) {
-        boot.adopt = adopt;
-        saveViewing('mine'); // the plan they just saved, not one received earlier in this tab
+      if (saving) {
+        // Only now are the Saves done with: until this planner exists (the import screen, a reload) they stay stashed.
+        consumeSaves(saving.intents);
+        // A #p= link that was saved must not also open as received, from the address bar or this tab's stash.
+        const bar = planFromHash(window.location.hash);
+        if (bar && saving.plans.some((a) => samePlanContent(a.plan, bar))) dropAddressHash();
+        // Already in the account (the confirm mail's tab saved it, or they had it): not saved twice.
+        const owned = Object.values(boot.terms?.terms ?? {}).flatMap((ws) => ws.plans.plans.map((p) => p.plan));
+        const fresh = saving.plans.filter(
+          (a, i) =>
+            !owned.some((p) => samePlanContent(p, a.plan)) &&
+            !saving.plans.slice(0, i).some((b) => samePlanContent(b.plan, a.plan)),
+        );
+        if (fresh.length > 0) boot.adopt = fresh;
+        flash ??= savedFlash(saving.plans.length, fresh);
       }
-      show({ kind: 'planner', boot, nonce: nonce.current++, flash: flash ?? (adopt ? SAVED_SHARED : undefined) });
+      show({ kind: 'planner', boot, nonce: nonce.current++, flash });
     },
     [show],
   );
 
   /** Signed in: plans waiting from the old site are confirmed before the planner (and its engine) exists. */
   const enter = useCallback(
-    (me: Me, snapshot: WebSnapshot, adopt?: AdoptPlan) => {
+    (me: Me, snapshot: WebSnapshot, saving?: Saving) => {
       const payload = loadPendingMigration();
-      if (payload) show({ kind: 'import', me, snapshot, payload, adopt });
-      else mountPlanner(me, snapshot, undefined, adopt);
+      if (payload) show({ kind: 'import', me, snapshot, payload, saving });
+      else mountPlanner(me, snapshot, undefined, saving);
     },
     [mountPlanner, show],
   );
@@ -209,7 +235,7 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
         : `Moved ${outcome.plans} ${pluralize(outcome.plans, 'plan')} to your account.`;
       try {
         const fresh = await fetchState();
-        if (alive.current) mountPlanner(s.me, fresh, flash, s.adopt);
+        if (alive.current) mountPlanner(s.me, fresh, flash, s.saving);
       } catch (err) {
         if (alive.current) show({ kind: err instanceof UnauthorizedError ? 'signed-out' : 'offline' });
       }
@@ -217,11 +243,9 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
     [mountPlanner, show],
   );
 
-  /** A short link opened signed in is done with. */
+  /** A short link opened signed in is done with: the planner lives at "/", and a reload must not fetch it again. */
   const settleLink = useCallback(() => {
-    clearPendingShare(); // whichever link this was, a stash still around is this one: it is done
     share.current = null;
-    // The planner lives at "/", and a reload must not fetch the link again.
     if (SHARE_PATH.test(window.location.pathname)) window.history.replaceState(null, '', '/');
   }, []);
 
@@ -241,8 +265,12 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
    */
   const saveShared = useCallback(
     (s: SharedScreen) => {
-      if (s.code) stashPendingShare(s.code);
-      else stashPendingSave(window.location.hash); // the #p= link on show: that is where s.plan came from
+      if (s.code) {
+        stashPendingShare(s.code);
+        stashPendingSave({ code: s.code });
+      } else {
+        stashPendingSave({ hash: `#${planToHash(s.plan)}` }); // the plan on show, whatever the address bar says now
+      }
       show({ kind: 'signed-out', saveTo: s.code ? `/s/${s.code}` : '/' });
     },
     [show],
@@ -256,60 +284,53 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
       const unreachable = () => {
         if (why !== 'recheck' || current.current.kind === 'offline') show({ kind: 'offline' });
       };
-      /** A short link's snapshot, or null once the screen says why there is none. A dead link's stash goes with it. */
+      /** A short link's snapshot, or null once the screen says why there is none. A dead link's Saves go with it. */
       const openShare = async (code: string): Promise<Shared | null> => {
         const s = await fetchShare(code);
         if (!alive.current) return null;
         if (s === 'not-found') {
-          clearPendingShare();
+          forgetSaves(code);
           show({ kind: 'gone' });
           return null;
         }
-        if (s === null) unreachable(); // a stash stays for Try again or the next load
+        if (s === null) unreachable(); // a Save stays stashed for Try again or the next load
         return s;
       };
       try {
         // A short link in the address bar shows without a session, so it is fetched before asking who this is.
-        // It is newer than any link stashed earlier, whatever this fetch brings, so those give way now. The one
-        // exception is its own "Save to my account": that stash waits to be opened once signed in.
+        // It is newer than a #p= link stashed earlier only to be shown. A Save clicked earlier is another matter:
+        // viewing a link never cancels one.
         let shared: Shared | null = null;
         const link = share.current;
         if (link) {
           dropPendingHash();
-          if (peekPendingShare() !== link) clearPendingShare();
           shared = await openShare(link);
           if (!shared) return;
         }
         const r = await loadAccount();
         if (!alive.current) return;
         if (r.kind === 'ready') {
-          // Saving was what they asked for before signing in, so a link whose own "Save to my account"
-          // was clicked is saved now; one merely opened goes to the received slot.
-          let save = shared !== null && peekPendingShare() === link;
-          // A link saved before signing in, maybe in another tab, unless the hash is a (newer) link of its own;
-          // after a planner has been mounted here, the hash is only that planner's mirror (see mountPlanner).
-          const pending = shared ? null : peekPendingShare();
-          if (pending && nonce.current === 0 && carriesPlan(window.location.hash)) {
-            clearPendingShare();
-          } else if (pending) {
-            shared = await openShare(pending);
-            if (!shared) return;
-            save = true;
+          // Every "Save to my account" clicked before signing in is saved now, without a second click.
+          const intents = pendingSaves();
+          const plans: AdoptPlan[] = [];
+          for (const it of intents) {
+            if ('hash' in it) {
+              const plan = planFromHash(it.hash); // null once it no longer decodes
+              if (plan) plans.push({ name: 'Shared plan', plan });
+              continue;
+            }
+            const s = it.code === link ? shared : await openShare(it.code);
+            if (!s) return;
+            plans.push({ name: s.name, plan: s.plan });
           }
-          let adopt: AdoptPlan | undefined;
-          if (shared && save) {
-            adopt = { name: shared.name, plan: shared.plan };
-            settleLink();
-          } else if (shared) {
-            receive(shared.plan);
+          // What they saved shows, not a plan received earlier in this tab; a link being opened right now
+          // (below, or a #p= in the address bar) shows instead. Opened, not saved: the received slot.
+          if (intents.length > 0) saveViewing('mine');
+          if (link && shared) {
+            if (intents.some((it) => 'code' in it && it.code === link)) settleLink();
+            else receive(shared.plan);
           }
-          // The same for a #p= link (this tab only). It goes from the address bar too, or it would also open as received.
-          const hashSave = takePendingSave();
-          if (hashSave && !adopt) {
-            adopt = { name: 'Shared plan', plan: hashSave.plan };
-            if (window.location.hash === hashSave.hash) dropAddressHash();
-          }
-          enter(r.me, r.snapshot, adopt);
+          enter(r.me, r.snapshot, intents.length > 0 ? { plans, intents } : undefined);
         } else if (r.kind === 'signed-out') {
           stashPendingHash(window.location.hash);
           if (current.current.kind === 'signed-out') return;

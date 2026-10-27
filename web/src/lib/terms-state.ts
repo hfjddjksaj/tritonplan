@@ -84,13 +84,22 @@ export function switchTermIn(state: TermsState, key: TermKey): TermsState {
 }
 
 /**
- * Keep someone's plan as a NEW named plan in ITS OWN term (made if missing), its
- * courses on that plan's browsed list, and switch to it. Merging its courses into
- * the pool is the caller's.
+ * Keep someone's plan as a NEW named plan in ITS OWN term, its courses on that
+ * plan's browsed list, and switch to it. A term the account lacks gets a workspace
+ * holding just this plan, not an empty "My plan" beside it; that also makes this
+ * the way to start a TermsState with no terms yet. Merging its courses into the
+ * pool is the caller's.
  */
 export function adoptPlanIn(state: TermsState, plan: PlanState, name: string, now: string): TermsState {
   const key = termKey(plan.term);
-  const next = updateWorkspace(ensureWorkspace(state, plan.term, now), key, (ps) => {
+  if (!state.terms[key]) {
+    const id = newPlanId();
+    const named: NamedPlan = {
+      id, name, plan, createdAt: now, updatedAt: now, browsed: [...new Set(plan.entries.map((e) => e.course.id))],
+    };
+    return { ...state, activeTermKey: key, terms: { ...state.terms, [key]: { term: plan.term, plans: { activeId: id, plans: [named] } } } };
+  }
+  const next = updateWorkspace(state, key, (ps) => {
     const withPlan = addPlan(ps, plan, name, now);
     return addBrowsed(withPlan, withPlan.activeId, plan.entries.map((e) => e.course.id), now);
   });
