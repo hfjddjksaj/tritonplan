@@ -651,6 +651,76 @@ describe('usePlan on a cloud boot', () => {
     boot.engine.dispose();
   });
 
+  describe('extension course pushes', () => {
+    const C = { ...makeCourse('CSE-100|2026|2', 'CSE-100'), capturedAt: '2026-10-01T00:00:00.000Z' };
+    const D = { ...makeCourse('MATH-18|2026|2', 'MATH-18'), capturedAt: '2026-10-01T00:00:00.000Z' };
+    const entry = (c: typeof C) => ({ course: c, selectedOptionId: c.options[0]!.id, color: '120' });
+    const terms = (): TermsState => ({
+      version: 1,
+      activeTermKey: '2026|2',
+      terms: {
+        '2026|2': {
+          term: FA,
+          plans: {
+            activeId: 'plan-1',
+            plans: [
+              { id: 'plan-1', name: 'One', plan: { ...makePlan(), entries: [entry(C)] }, createdAt: 'c', updatedAt: 'u', browsed: [C.id, D.id] },
+              { id: 'plan-2', name: 'Two', plan: { ...makePlan(), entries: [entry(D)] }, createdAt: 'c', updatedAt: 'u', browsed: [D.id] },
+            ],
+          },
+        },
+      },
+    });
+    const push = (payload: unknown[]) =>
+      act(async () => {
+        window.dispatchEvent(new MessageEvent('message', {
+          data: { source: BRIDGE_SOURCE, type: 'courses', version: 1, payload },
+          source: window,
+          origin: window.location.origin,
+        }));
+      });
+
+    async function start() {
+      const boot = makeTestBoot({ terms: terms(), pool: [C, D] });
+      let api!: ReturnType<typeof usePlan>;
+      function Probe() {
+        api = usePlan(boot);
+        return null;
+      }
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      await act(async () => root!.render(<Probe />));
+      await act(() => boot.engine.flush()); // whatever the first render had to save (the dev sample pool)
+      const setTerms = vi.spyOn(boot.engine, 'setTerms');
+      return { boot, setTerms, api: () => api, sentBefore: boot.sent.length };
+    }
+
+    it('an identical push (every planner load re-sends the capture) changes no state and sends nothing', async () => {
+      const t = await start();
+      const plansBefore = t.api().plans;
+      await push([structuredClone(C), structuredClone(D)]);
+      await act(() => t.boot.engine.flush());
+      expect(t.setTerms).not.toHaveBeenCalled(); // the terms state kept its reference
+      expect(t.api().plans).toBe(plansBefore);
+      expect(t.boot.sent.length).toBe(t.sentBefore);
+      t.boot.engine.dispose();
+    });
+
+    it('a real seat change updates exactly the plan holding that course', async () => {
+      const t = await start();
+      const fresh = { ...structuredClone(C), options: C.options.map((o) => ({ ...o, seatsAvailable: 5, limit: 100 })) };
+      await push([fresh, structuredClone(D)]);
+      await act(() => t.boot.engine.flush());
+      const ops = t.boot.sent.slice(t.sentBefore).flat();
+      const puts = ops.filter((o): o is Extract<SyncOp, { op: 'putPlan' }> => o.op === 'putPlan');
+      expect(puts.map((o) => o.planId)).toEqual(['plan-1']);
+      expect((puts[0]!.data as NamedPlan).plan.entries[0]!.course.options[0]!.seatsAvailable).toBe(5);
+      expect(ops.some((o) => o.op === 'putCourses' && o.courses.length === 1 && o.courses[0]!.id === C.id)).toBe(true);
+      t.boot.engine.dispose();
+    });
+  });
+
   it('appointment times pushed by the extension save through the engine', async () => {
     const boot = makeTestBoot({ terms: mine() });
     let appt: ApptTimes[] = [];

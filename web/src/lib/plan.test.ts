@@ -153,6 +153,32 @@ describe('refreshPlanEntries', () => {
     expect(next.entries[0]!.course.options[0]!.seatsAvailable).toBe(7);
     expect(next.entries[1]!).toBe(plan.entries[1]!);
   });
+
+  it('an identical re-push changes nothing: same plan object, same entry objects', () => {
+    // The extension re-pushes its whole capture on every planner load and every TSS browse;
+    // treating a match as a change re-uploaded and re-versioned every plan each time.
+    const plan = makePlan();
+    const other = makeCourse('MATH-20A|2026|2', 'MATH-20A');
+    plan.entries.push({ course: other, selectedOptionId: other.options[0]!.id, color: '12' });
+    const copies = plan.entries.map((e) => structuredClone(e.course));
+    expect(refreshPlanEntries(plan, copies)).toBe(plan);
+  });
+
+  it('a fold that adds nothing new (fresh lacks units the entry already has) is not a change', () => {
+    const plan = makePlan();
+    const { units: _units, ...partial } = structuredClone(plan.entries[0]!.course);
+    expect(refreshPlanEntries(plan, [partial as CourseOffering])).toBe(plan);
+  });
+
+  it('only the entry whose data really changed is replaced', () => {
+    const plan = makePlan();
+    const other = makeCourse('MATH-20A|2026|2', 'MATH-20A');
+    plan.entries.push({ course: other, selectedOptionId: other.options[0]!.id, color: '12' });
+    const next = refreshPlanEntries(plan, [recaptured(plan.entries[0]!.course, 2), structuredClone(other)]);
+    expect(next).not.toBe(plan);
+    expect(next.entries[0]!.course.options[0]!.seatsAvailable).toBe(2);
+    expect(next.entries[1]!).toBe(plan.entries[1]!);
+  });
 });
 
 describe('midtermsSorted / midtermOverlapKeys', () => {

@@ -32,12 +32,26 @@ export function findOption(
   return course.options.find((o) => o.id === optionId);
 }
 
+/** JSON with object keys sorted: foldCourse appends the fields it carries over, so equal data can differ in key order. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v,
+  );
+}
+
 /**
  * Refresh each plan entry's course copy from freshly-pushed capture data — entries
  * otherwise keep the snapshot frozen at add time, so seat counts never update.
  * The selection is kept when that option still exists in the fresh data; if TSS no
- * longer offers it, fall back to the first option. Returns `prev` unchanged when no
- * incoming course matches an entry.
+ * longer offers it, fall back to the first option.
+ *
+ * The extension re-pushes its whole capture on every planner load and TSS browse,
+ * so most pushes carry exactly what an entry already holds. Such an entry is kept
+ * as the same object, and a plan with nothing really changed is returned as `prev`:
+ * otherwise every load would re-save (and re-version) every plan, which another
+ * device then reads as a conflicting edit.
  */
 export function refreshPlanEntries(prev: PlanState, incoming: CourseOffering[]): PlanState {
   if (prev.entries.length === 0 || incoming.length === 0) return prev;
@@ -46,12 +60,14 @@ export function refreshPlanEntries(prev: PlanState, incoming: CourseOffering[]):
   const entries = prev.entries.map((e) => {
     const fresh = byId.get(e.course.id);
     if (!fresh) return e;
-    changed = true;
     const keep = e.selectedOptionId !== null && findOption(fresh, e.selectedOptionId) !== undefined;
     const selectedOptionId = keep ? e.selectedOptionId : (fresh.options[0]?.id ?? null);
     // Fold, don't replace: a browse that captured sections but no module row
     // carries no units/title, and must not erase what we already know.
-    return { ...e, course: foldCourse(e.course, fresh), selectedOptionId };
+    const course = foldCourse(e.course, fresh);
+    if (selectedOptionId === e.selectedOptionId && canonicalJson(course) === canonicalJson(e.course)) return e;
+    changed = true;
+    return { ...e, course, selectedOptionId };
   });
   return changed ? { ...prev, entries } : prev;
 }
