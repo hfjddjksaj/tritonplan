@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlanState } from '@triton/shared';
 import {
-  apiDelete, apiPost, createShare, fetchMe, fetchShare, fetchState, listShares, postSync, revokeShare,
+  apiDelete, apiPost, clampShareName, createShare, fetchMe, fetchShare, fetchState, listShares, postSync, revokeShare,
   syncTimeoutMs, UnauthorizedError,
 } from './api';
 
@@ -172,6 +172,15 @@ describe('shares', () => {
     expect(await createShare('Mine', plan)).toBeNull();
     stub(async () => { throw new TypeError('offline'); });
     expect(await createShare('Mine', plan)).toBeNull();
+  });
+
+  it('clampShareName: trims, caps at 100 code units without splitting an emoji, falls back when empty', () => {
+    expect(clampShareName('  Fall  ')).toBe('Fall');
+    expect(clampShareName('x'.repeat(150))).toHaveLength(100);
+    const cut = clampShareName('x'.repeat(99) + '😀');
+    expect(cut).toBe('x'.repeat(99));
+    expect(clampShareName('x'.repeat(98) + '😀')).toHaveLength(100);
+    expect(clampShareName('   ')).toBe('Shared plan');
   });
 
   it('listShares returns the rows, null on failure', async () => {
