@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Term } from '@triton/shared';
 import type { NamedPlan } from '../plans';
 import type { TermsState } from '../terms-state';
-import { makeBoot, PENDING_HASH_KEY, restorePendingHash, stashPendingHash } from './boot';
+import {
+  makeBoot,
+  PENDING_HASH_KEY,
+  PENDING_SHARE_KEY,
+  restorePendingHash,
+  stashPendingHash,
+  stashPendingShare,
+  takePendingShare,
+} from './boot';
 import { splitTerms, type WebSnapshot } from './records';
 
 const FA: Term = { year: '2026', period: '2', label: 'Fall 2026' };
@@ -104,5 +112,51 @@ describe('pending hash', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
     expect(() => stashPendingHash('#p=abc')).not.toThrow();
     expect(() => restorePendingHash()).not.toThrow();
+  });
+});
+
+describe('pending short link', () => {
+  const HOUR = 3_600_000;
+  const T0 = Date.parse('2026-10-26T12:00:00.000Z');
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('is kept in localStorage as {code, at}, so a verify mail opened in another tab still finds it', () => {
+    stashPendingShare('AbCdEfGh12', new Date(T0));
+    expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!)).toEqual({ code: 'AbCdEfGh12', at: '2026-10-26T12:00:00.000Z' });
+  });
+
+  it('is read once, then forgotten', () => {
+    stashPendingShare('AbCdEfGh12', new Date(T0));
+    expect(takePendingShare(T0 + HOUR)).toBe('AbCdEfGh12');
+    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
+    expect(takePendingShare(T0 + HOUR)).toBeNull();
+  });
+
+  it('older than 24 h is ignored, and forgotten all the same', () => {
+    stashPendingShare('AbCdEfGh12', new Date(T0));
+    expect(takePendingShare(T0 + 24 * HOUR)).toBe('AbCdEfGh12');
+    stashPendingShare('AbCdEfGh12', new Date(T0));
+    expect(takePendingShare(T0 + 24 * HOUR + 1)).toBeNull();
+    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
+  });
+
+  it.each(['not json', '{"code":7,"at":"2026-10-26T12:00:00.000Z"}', '{"code":"AbCdEfGh12","at":"yesterday"}', 'null'])(
+    'a damaged entry %j is dropped',
+    (raw) => {
+      localStorage.setItem(PENDING_SHARE_KEY, raw);
+      expect(takePendingShare(T0)).toBeNull();
+      expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
+    },
+  );
+
+  it('blocked storage is not an error', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
+    expect(() => stashPendingShare('AbCdEfGh12')).not.toThrow();
+    expect(takePendingShare()).toBeNull();
   });
 });

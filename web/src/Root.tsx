@@ -2,9 +2,11 @@
  * The sign-in gate. Nothing of the planner mounts until the account and its
  * state have loaded, so a signed-out visitor never sees it and an extension
  * push waits in the bridge hub until usePlan subscribes. Emailed links
- * (/reset, /verify) are handled first: they work signed out.
+ * (/reset, /verify) are handled first: they work signed out. So does someone's
+ * shared plan (/s/<code>, or an old #p= link), read-only until they sign in.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { PlanState } from '@triton/shared';
 import App from './App';
 import { AuthCard } from './components/auth/AuthCard';
 import { AUTH_NOTICES } from './components/auth/copy';
@@ -14,17 +16,32 @@ import { ImportConfirm, type ImportOutcome } from './components/migrate/ImportCo
 import { MigrateReceiver } from './components/migrate/MigrateReceiver';
 import { ResetPasswordScreen } from './components/auth/ResetPasswordScreen';
 import { VerifyScreen } from './components/auth/VerifyScreen';
-import { fetchMe, fetchState, UnauthorizedError, type Me } from './lib/cloud/api';
-import { makeBoot, restorePendingHash, stashPendingHash, type CloudBoot } from './lib/cloud/boot';
+import { ShareGone } from './components/share/ShareGone';
+import { SharedPlanView } from './components/share/SharedPlanView';
+import { fetchMe, fetchShare, fetchState, UnauthorizedError, type Me } from './lib/cloud/api';
+import {
+  carriesPlan,
+  makeBoot,
+  restorePendingHash,
+  stashPendingHash,
+  stashPendingShare,
+  takePendingShare,
+  type CloudBoot,
+} from './lib/cloud/boot';
 import { pluralize } from './lib/format';
 import type { WebSnapshot } from './lib/cloud/records';
 import { loadPendingMigration, type MigrationPayload } from './lib/migration';
+import { planFromHash } from './lib/share';
+import { saveReceived, saveViewing } from './lib/storage';
 
 type Entry =
   | { kind: 'reset'; token: string }
   | { kind: 'verify'; token: string }
   | { kind: 'migrate' }
-  | { kind: 'planner'; notice?: string; hasAuthParam: boolean };
+  | { kind: 'planner'; notice?: string; hasAuthParam: boolean; shareCode?: string };
+
+/** A short link's path. Its code is not checked here: a mistyped one gets the server's 404, and with it the "no longer works" page. */
+const SHARE_PATH = /^\/s\/([^/]+)\/?$/;
 
 /** What this page load is for. Pure — StrictMode calls it twice — so the address bar is cleaned in an effect. */
 function readEntry(): Entry {
@@ -39,7 +56,12 @@ function readEntry(): Entry {
     if (handoff || !loadPendingMigration()) return { kind: 'migrate' };
   }
   const auth = new URLSearchParams(search).get('auth');
-  return { kind: 'planner', notice: auth === null ? undefined : AUTH_NOTICES.get(auth), hasAuthParam: auth !== null };
+  return {
+    kind: 'planner',
+    notice: auth === null ? undefined : AUTH_NOTICES.get(auth),
+    hasAuthParam: auth !== null,
+    shareCode: SHARE_PATH.exec(pathname)?.[1],
+  };
 }
 
 export default function Root() {
@@ -70,16 +92,23 @@ export default function Root() {
   if (entry.kind === 'reset') return <ResetPasswordScreen token={entry.token} />;
   if (entry.kind === 'verify') return <VerifyScreen token={entry.token} />;
   if (entry.kind === 'migrate' && !received) return <MigrateReceiver onReceived={onReceived} />;
-  return <SignInGate notice={entry.kind === 'planner' ? entry.notice : undefined} />;
+  const planner = entry.kind === 'planner' ? entry : undefined;
+  return <SignInGate notice={planner?.notice} shareCode={planner?.shareCode} />;
 }
 
 type Screen =
   | { kind: 'loading' }
   | { kind: 'offline' }
-  | { kind: 'signed-out' }
+  /** `saveTo`: they asked to save a shared plan, and signing in comes back there. */
+  | { kind: 'signed-out'; saveTo?: string }
+  /** Someone's plan, read-only, signed out. `code` is null for a #p= link: that plan is in the hash, not on the server. */
+  | { kind: 'shared'; name: string; plan: PlanState; code: string | null }
+  | { kind: 'gone' }
   | { kind: 'import'; me: Me; snapshot: WebSnapshot; payload: MigrationPayload }
   | { kind: 'planner'; boot: CloudBoot; nonce: number; flash?: string };
 type PlannerScreen = Extract<Screen, { kind: 'planner' }>;
+type SharedScreen = Extract<Screen, { kind: 'shared' }>;
+type Shared = { name: string; plan: PlanState };
 
 type Loaded = { kind: 'offline' } | { kind: 'signed-out' } | { kind: 'ready'; me: Me; snapshot: WebSnapshot };
 
@@ -111,8 +140,10 @@ async function loadAccount(): Promise<Loaded> {
   }
 }
 
-function SignInGate({ notice }: { notice?: string }) {
+function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string }) {
   const [screen, setScreen] = useState<Screen>({ kind: 'loading' });
+  // The short link this tab is opening: the address bar's, or a saved one Try again has to fetch again.
+  const share = useRef<string | null>(shareCode ?? null);
   // The ?auth= notice explains this page load only; a later sign-out must not repeat it.
   const [pageNotice, setPageNotice] = useState(notice);
   // Listeners and async continuations read the live screen, not the one they closed over.
@@ -174,27 +205,86 @@ function SignInGate({ notice }: { notice?: string }) {
     [mountPlanner, show],
   );
 
+  /** A shared plan opened signed in: into the received slot, on show, as a #p= link would be. */
+  const receive = useCallback((plan: PlanState) => {
+    saveReceived({ plan, source: 'link', receivedAt: new Date().toISOString() });
+    saveViewing('received');
+    share.current = null;
+    // The planner lives at "/", and a reload must not fetch the link again.
+    if (SHARE_PATH.test(window.location.pathname)) window.history.replaceState(null, '', '/');
+  }, []);
+
+  /** "Save to my account" on a shared plan. returnTo serves Google and same-tab sign-ins; the stash serves the confirm mail. */
+  const saveShared = useCallback(
+    (s: SharedScreen) => {
+      if (s.code) stashPendingShare(s.code);
+      show({ kind: 'signed-out', saveTo: s.code ? `/s/${s.code}` : '/' });
+    },
+    [show],
+  );
+
   /** Ask the server who this is. `recheck` = the tab came back while signed out: an unreachable server keeps the form. */
   const load = useCallback(
     async (why: 'start' | 'retry' | 'recheck') => {
       if (busy.current) return;
       busy.current = true;
+      const unreachable = () => {
+        if (why !== 'recheck' || current.current.kind === 'offline') show({ kind: 'offline' });
+      };
       try {
+        // A short link shows without a session, so it is fetched before asking who this is.
+        let shared: Shared | null = null;
+        if (share.current) {
+          const s = await fetchShare(share.current);
+          if (!alive.current) return;
+          if (s === 'not-found') {
+            show({ kind: 'gone' });
+            return;
+          }
+          if (s === null) {
+            unreachable();
+            return;
+          }
+          shared = s;
+        }
         const r = await loadAccount();
         if (!alive.current) return;
         if (r.kind === 'ready') {
+          // A link saved before signing in, maybe in another tab. One this page load carries is newer and wins;
+          // after a planner has been mounted here, the hash is only that planner's mirror (see mountPlanner).
+          const pending = takePendingShare();
+          if (pending && !shared && !(nonce.current === 0 && carriesPlan(window.location.hash))) {
+            const s = await fetchShare(pending);
+            if (!alive.current) return;
+            if (s === 'not-found') {
+              show({ kind: 'gone' });
+              return;
+            }
+            if (s === null) {
+              share.current = pending; // Try again fetches it like a link in the address bar
+              unreachable();
+              return;
+            }
+            shared = s;
+          }
+          if (shared) receive(shared.plan);
           enter(r.me, r.snapshot);
         } else if (r.kind === 'signed-out') {
           stashPendingHash(window.location.hash);
-          if (current.current.kind !== 'signed-out') show({ kind: 'signed-out' });
-        } else if (why !== 'recheck' || current.current.kind === 'offline') {
-          show({ kind: 'offline' });
+          if (current.current.kind === 'signed-out') return;
+          // Someone's plan comes before any sign-in wall. A #p= that does not decode is no plan: straight to the form.
+          const hashPlan = shared ? null : planFromHash(window.location.hash);
+          if (shared) show({ kind: 'shared', name: shared.name, plan: shared.plan, code: share.current });
+          else if (hashPlan) show({ kind: 'shared', name: 'Shared plan', plan: hashPlan, code: null });
+          else show({ kind: 'signed-out' });
+        } else {
+          unreachable();
         }
       } finally {
         busy.current = false;
       }
     },
-    [enter, show],
+    [enter, receive, show],
   );
 
   /** The tab came back: if another device changed the account, remount on the server's state. */
@@ -276,7 +366,19 @@ function SignInGate({ notice }: { notice?: string }) {
           </button>
         </AuthCard>
       );
+    case 'gone':
+      return <ShareGone />;
+    case 'shared':
+      // The snapshot is only loosely checked by the server: a malformed one must not leave a blank page.
+      return (
+        <ErrorBoundary>
+          <SharedPlanView name={screen.name} plan={screen.plan} onSave={() => saveShared(screen)} />
+        </ErrorBoundary>
+      );
     case 'signed-out':
+      if (screen.saveTo) {
+        return <LoginScreen notice={pageNotice} heading="Sign in to save this plan" returnTo={screen.saveTo} />;
+      }
       // Back to "/", not "/migrate": enter() picks a pending payload up on any path, while /migrate without one
       // (imported meanwhile in another tab) would wait for the old site forever.
       return loadPendingMigration() ? (

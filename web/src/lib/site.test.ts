@@ -23,6 +23,7 @@ describe('safeReturnTo', () => {
     ['/verify', '/'],
     ['/verify/?x=1', '/'],
     ['/migrate', '/migrate'],
+    ['/s/AbCdEfGh12', '/s/AbCdEfGh12'], // a short link: "Save to my account" signs in and comes back to it
     ['/x?y=1', '/x?y=1'],
     ['/', '/'],
   ])('%j → %j', (input, out) => {

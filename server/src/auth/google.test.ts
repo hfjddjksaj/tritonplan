@@ -51,6 +51,7 @@ test('exchange rejects wrong aud, wrong iss, expired tokens, missing sub/email a
 test('safeReturnTo keeps /migrate and rejects //evil.com, /\\evil.com, https://evil.com', () => {
   expect(safeReturnTo('/migrate')).toBe('/migrate');
   expect(safeReturnTo('/plan?x=1#y')).toBe('/plan?x=1#y');
+  expect(safeReturnTo('/s/AbCdEfGh12')).toBe('/s/AbCdEfGh12'); // the web app's "Save to my account" on a short link
   for (const bad of [undefined, '', 'migrate', '//evil.com', '/\\evil.com', 'https://evil.com', '/\t/evil.com', '/\n/evil.com', '/a\\b', '\\\\evil.com']) {
     expect(safeReturnTo(bad)).toBe('/');
   }
