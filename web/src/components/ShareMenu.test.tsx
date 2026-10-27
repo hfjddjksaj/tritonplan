@@ -123,3 +123,105 @@ describe('ShareMenu', () => {
     expect(posts()).toHaveLength(1);
   });
 });
+
+// WebKit (every iPhone browser) lets a page write the clipboard only inside the click itself.
+describe('ShareMenu where ClipboardItem exists', () => {
+  class FakeClipboardItem {
+    constructor(readonly data: Record<string, Promise<Blob>>) {}
+  }
+  const order: string[] = [];
+  let blobs: Blob[];
+  let write: ReturnType<typeof vi.fn>;
+  const blobText = (b: Blob) =>
+    new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result as string);
+      r.onerror = () => rej(r.error);
+      r.readAsText(b);
+    });
+
+  beforeEach(() => {
+    order.length = 0;
+    blobs = [];
+    vi.stubGlobal('ClipboardItem', FakeClipboardItem);
+    // Like the real one: the write settles once the item's data does, and fails if that data fails.
+    write = vi.fn(async (items: FakeClipboardItem[]) => {
+      order.push('write');
+      blobs.push(await items[0]!.data['text/plain']!);
+    });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write, writeText } });
+  });
+
+  it('starts the clipboard write inside the click, before the link exists, and copies the short link', async () => {
+    let finish!: (r: Response) => void;
+    fetchMock.mockImplementation(() => {
+      order.push('fetch');
+      return new Promise<Response>((res) => { finish = res; });
+    });
+    await render();
+    await click('Share');
+    // Outside act's microtask drain: only the handler's synchronous part has run and the share is still pending.
+    label('Copy link')!.click();
+    expect(order).toEqual(['fetch', 'write']);
+    expect(flash).not.toHaveBeenCalled();
+    await act(async () => {
+      finish(json(200, { code: 'abc123', url: LINK }));
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(blobs).toHaveLength(1);
+    expect(blobs[0]!.type).toBe('text/plain');
+    expect(await blobText(blobs[0]!)).toBe(LINK);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(flash).toHaveBeenCalledWith('Link copied — anyone with it can view this plan.');
+    expect(label('Copy link')).toBeUndefined(); // the menu closed
+  });
+
+  it('a failed create writes nothing and flashes the create failure', async () => {
+    answer = () => json(500, { error: 'server' });
+    await render();
+    await click('Share');
+    await click('Copy link');
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(blobs).toEqual([]);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(flash).toHaveBeenCalledTimes(1);
+    expect(flash).toHaveBeenCalledWith("Couldn't create a link. Check your connection and try again.");
+  });
+
+  it('a refused clipboard write shows the link instead', async () => {
+    write.mockImplementation(async () => {
+      throw new DOMException('denied', 'NotAllowedError');
+    });
+    await render();
+    await click('Share');
+    await click('Copy link');
+    expect(flash).toHaveBeenCalledWith(`Couldn't copy automatically — your link is ${LINK}`);
+  });
+
+  it('a ClipboardItem that refuses a promise falls back to copying the text', async () => {
+    vi.stubGlobal('ClipboardItem', class {
+      constructor() { throw new TypeError('promises not supported'); }
+    });
+    answer = () => json(500, { error: 'server' });
+    await render();
+    await click('Share');
+    await click('Copy link');
+    expect(flash).toHaveBeenLastCalledWith("Couldn't create a link. Check your connection and try again.");
+    answer = () => json(200, { code: 'abc123', url: LINK });
+    await click('Copy link');
+    expect(write).not.toHaveBeenCalled();
+    expect(writeText).toHaveBeenCalledWith(LINK);
+    expect(flash).toHaveBeenLastCalledWith('Link copied — anyone with it can view this plan.');
+  });
+
+  it('without ClipboardItem it copies the text after the link exists', async () => {
+    vi.stubGlobal('ClipboardItem', undefined);
+    await render();
+    await click('Share');
+    await click('Copy link');
+    expect(write).not.toHaveBeenCalled();
+    expect(writeText).toHaveBeenCalledWith(LINK);
+    expect(flash).toHaveBeenCalledWith('Link copied — anyone with it can view this plan.');
+  });
+});

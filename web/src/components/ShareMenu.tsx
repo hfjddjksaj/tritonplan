@@ -45,17 +45,40 @@ export function ShareMenu({ plan, planName, onFlash }: Props) {
   };
 
   const copyLink = async () => {
-    const url = await ensureLink();
+    const pending = ensureLink();
+    // WebKit (every iPhone browser) lets a page write the clipboard only inside the click, and the link
+    // arrives after it. A ClipboardItem takes a promise, so the write starts now and fills in once the link exists;
+    // a failed create rejects that promise and nothing is written.
+    let copied: Promise<boolean> | null = null;
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      const text = pending.then((url) => {
+        if (!url) throw new Error('no link');
+        return new Blob([url], { type: 'text/plain' });
+      });
+      void text.catch(() => {}); // a failed create is reported below, from `pending`
+      try {
+        copied = navigator.clipboard.write([new ClipboardItem({ 'text/plain': text })]).then(() => true, () => false);
+      } catch {
+        // A ClipboardItem that refuses a promise: copy the text once the link exists instead.
+      }
+    }
+    const url = await pending;
     if (!url) {
       onFlash(CREATE_FAILED);
       return;
     }
+    let ok = false;
     try {
-      await navigator.clipboard.writeText(url);
-      onFlash('Link copied — anyone with it can view this plan.');
+      if (copied) {
+        ok = await copied;
+      } else {
+        await navigator.clipboard.writeText(url);
+        ok = true;
+      }
     } catch {
-      onFlash(`Couldn't copy automatically — your link is ${url}`);
+      // No clipboard API here, or it refused: the flash shows the link instead.
     }
+    onFlash(ok ? 'Link copied — anyone with it can view this plan.' : `Couldn't copy automatically — your link is ${url}`);
     setOpen(false);
   };
 
