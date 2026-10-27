@@ -7,7 +7,7 @@ Host: one Debian 13 box (Tencent Cloud Lighthouse). Caddy terminates TLS for
 
 ```
 /srv/tritonplan/
-  releases/<UTC timestamp>[-placeholder]/{web,app}   root-owned, read-only
+  releases/<UTC timestamp>[-placeholder]/{web,app,web-assets.list}   root-owned, read-only
   web -> releases/<name>/web      served by Caddy
   app -> releases/<name>/app      main.mjs run by the service
   data/      tritonplan.db (+ -wal/-shm)   tritonplan:tritonplan 750
@@ -51,6 +51,11 @@ systemctl restart tritonplan
 `provision.sh` never overwrites an existing `env`. Values with spaces or `<>`
 are double-quoted (systemd strips the quotes).
 
+With `TP_MAIL_TRANSPORT=resend` (production) the service refuses to start
+until `RESEND_API_KEY`, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are all
+non-empty; the journal names every missing one. Fill all three before the
+first deploy, or its health check fails.
+
 ## Deploy
 
 ```sh
@@ -61,6 +66,13 @@ Builds web and server locally, uploads a release, swaps both symlinks
 atomically, restarts the service, waits up to 10 s for `/api/health`, and keeps
 only the newest 5 releases (never one a live link points at). It prints the
 release name.
+
+Before the swap, the new release also gets the live release's own
+`web/assets/*` files that it lacks (never overwriting one), so a tab opened
+before the deploy can still load its code-split chunks. Each release records
+the assets it shipped itself in `releases/<name>/web-assets.list`; only those
+are carried, so a release serves its own assets plus the previous release's,
+and nothing older piles up.
 
 ## Rollback
 
@@ -88,8 +100,9 @@ the migration, so users keep their local plans.
 `tritonplan-backup.timer` runs `/usr/local/bin/tritonplan-backup` daily at
 10:30 UTC (Pacific small hours; `Persistent=true` catches up after downtime).
 It uses `sqlite3 .backup` (safe on a live WAL db), checks `integrity_check`,
-writes `/srv/tritonplan/backups/tritonplan-<date>.db`, deletes files older than
-14 days, and exits 0 with a note if the database does not exist yet.
+writes `/srv/tritonplan/backups/tritonplan-<date>.db`, deletes any backup 14
+days old or more (`-mtime +13`, so none outlives the privacy policy's 14 days),
+and exits 0 with a note if the database does not exist yet.
 
 Check: `systemctl list-timers | grep tritonplan-backup`,
 `journalctl -u tritonplan-backup -n 20`, or run now:

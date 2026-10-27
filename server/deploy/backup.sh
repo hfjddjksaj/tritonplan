@@ -32,7 +32,9 @@ fi
 mv -f "$TMP" "$OUT"
 echo "backup: wrote $OUT"
 
-find "$DIR" -name 'tritonplan-*.db' -mtime +14 -delete
+# +13: find counts whole days, so this deletes anything 14 days old or more.
+# The privacy policy promises no backup is kept longer than 14 days.
+find "$DIR" -name 'tritonplan-*.db' -mtime +13 -delete
 
 # Off-site copy is deferred until the user has a Tencent COS bucket and
 # rclone.conf; without the file this step is skipped and nothing fails.

@@ -13,6 +13,11 @@ tritonplan.cn {
 		X-Frame-Options DENY
 	}
 	handle /api/* {
+		# Just above the app's own 8 MB /api/sync cap: an oversized body is
+		# refused here before it reaches Node at all.
+		request_body {
+			max_size 9MB
+		}
 		reverse_proxy 127.0.0.1:8787 {
 			header_up X-Real-IP {remote_host}
 		}

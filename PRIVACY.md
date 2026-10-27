@@ -20,7 +20,7 @@ When you create an account and use the planner, we store:
 - **Enrollment marks:** which courses you marked as booked, waitlisted, or enrolled.
 - **Appointment times:** your TSS enrollment appointment windows (First Pass, Second Pass, …).
 
-A few things stay only in your browser (`localStorage`) and are never sent to us: interface preferences (such as the calendar view) and plans other people have shared with you.
+A few things stay only in your browser (`localStorage`) and are never sent to us: interface preferences (such as the calendar view) and plans other people have shared with you — unless you move them from the old site, which saves them to your account.
 
 ## Where it is stored
 
