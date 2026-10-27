@@ -37,7 +37,7 @@ import {
   updateActivePlan,
   mapAllPlans,
   createPlan,
-  addPlan,
+  freeSharedName,
   renamePlan as renamePlanIn,
   duplicatePlan as duplicatePlanIn,
   deletePlan as deletePlanIn,
@@ -48,6 +48,7 @@ import {
 } from '../lib/plans';
 import {
   activeWorkspace,
+  adoptPlanIn,
   archiveSweep,
   ensureWorkspace,
   mapWorkspaces,
@@ -87,7 +88,16 @@ function initialState(boot: CloudBoot): { pool: CourseOffering[]; terms: TermsSt
   // Default view is always the NEWEST term: the stored activeTermKey is
   // ignored on load.
   const state = switchTermIn(swept.state, newestTermKey(swept.state));
-  return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds };
+  const adopt = boot.adopt;
+  if (!adopt) return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds };
+  // A plan they chose to save before signing in: kept now, and shown, as "Save as a new plan" would.
+  const withWs = ensureWorkspace(state, adopt.plan.term, iso);
+  const name = freeSharedName(withWs.terms[termKey(adopt.plan.term)]!.plans, adopt.name);
+  return {
+    pool: mergeCourses(swept.pool, adopt.plan.entries.map((e) => e.course)),
+    terms: adoptPlanIn(withWs, adopt.plan, name, iso),
+    forgetModuleIds: swept.forgetModuleIds,
+  };
 }
 
 /** Append a fresh plan entry, coloring it with the next hue in the palette. */
@@ -367,15 +377,7 @@ export function usePlan(boot: CloudBoot) {
       const incoming = received.plan;
       setPool((prev) => mergeCourses(prev, incoming.entries.map((e) => e.course)));
       const nowIso = new Date().toISOString();
-      setTermsState((s) => {
-        const key = termKey(incoming.term);
-        let next = ensureWorkspace(s, incoming.term, nowIso);
-        next = updateWorkspace(next, key, (ps) => {
-          const withPlan = addPlan(ps, incoming, name, nowIso);
-          return addBrowsed(withPlan, withPlan.activeId, incoming.entries.map((e) => e.course.id), nowIso);
-        });
-        return switchTermIn(next, key);
-      });
+      setTermsState((s) => adoptPlanIn(s, incoming, name, nowIso));
       clearReceived();
       setReceived(null);
       switchViewing('mine');

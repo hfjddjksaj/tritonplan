@@ -3,12 +3,18 @@
  * snapshot assembled into planner state, and the sync engine that owns saving
  * it. One boot per mounted App; replacing the boot means disposing its engine.
  */
-import type { ApptTimes, CourseOffering, SyncOp } from '@triton/shared';
+import type { ApptTimes, CourseOffering, PlanState, SyncOp } from '@triton/shared';
 import type { TermsState } from '../terms-state';
-import { mirrorTokenFromHash, tokenFromHash } from '../share';
+import { mirrorTokenFromHash, planFromHash, tokenFromHash } from '../share';
 import { postSync, type Me } from './api';
 import { createSyncEngine, type SendResult, type SyncEngine } from './engine';
 import { termsFromSnapshot, type WebSnapshot } from './records';
+
+/** Someone's plan to keep as a new plan of this account: they chose "Save to my account" before signing in. */
+export interface AdoptPlan {
+  name: string;
+  plan: PlanState;
+}
 
 export interface CloudBoot {
   me: Me;
@@ -17,6 +23,8 @@ export interface CloudBoot {
   terms: TermsState | null;
   pool: CourseOffering[];
   appt: ApptTimes[] | null;
+  /** Saved into the plans as the planner starts, so the click they made before signing in is not asked for again. */
+  adopt?: AdoptPlan;
 }
 
 /** `send` is a test seam; the app always saves through POST /api/sync. */
@@ -69,13 +77,44 @@ export function restorePendingHash(): void {
   window.history.replaceState(null, '', window.location.pathname + window.location.search + stashed);
 }
 
-/** Forget a stashed link without restoring it: a short link opened since is the newer one. */
+/** Forget a stashed link, and any save asked for on one, without restoring it: a short link opened since is the newer one. */
 export function dropPendingHash(): void {
   try {
     sessionStorage.removeItem(PENDING_HASH_KEY);
+    sessionStorage.removeItem(PENDING_SAVE_KEY);
   } catch {
     /* storage blocked: nothing was stashed either */
   }
+}
+
+/**
+ * "Save to my account" on a #p= link: the link itself, kept in this tab so the
+ * plan is saved, not just shown, once signed in. Unlike a short link it cannot
+ * be fetched again, so it does not outlive the tab (the confirm mail's tab
+ * gets the plain sign-in).
+ */
+export const PENDING_SAVE_KEY = 'triton-planner:pending-save:v1';
+
+export function stashPendingSave(hash: string): void {
+  try {
+    sessionStorage.setItem(PENDING_SAVE_KEY, hash);
+  } catch {
+    /* storage blocked: the link still opens after sign-in, it just waits for its own Save click */
+  }
+}
+
+/** The #p= link Save was asked for and its plan, consumed with the link's own stash; null if none (or it does not decode). */
+export function takePendingSave(): { hash: string; plan: PlanState } | null {
+  let hash: string | null;
+  try {
+    hash = sessionStorage.getItem(PENDING_SAVE_KEY);
+  } catch {
+    return null;
+  }
+  if (hash === null) return null;
+  dropPendingHash();
+  const plan = planFromHash(hash);
+  return plan ? { hash, plan } : null;
 }
 
 /**

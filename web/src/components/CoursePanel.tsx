@@ -3,7 +3,7 @@ import type { BookedModule, Term } from '@triton/shared';
 import { findOption } from '../lib/plan';
 import { bookedElsewhere } from '../lib/booked-section';
 import { relativeTime } from '../lib/format';
-import { tssBookingLink } from '../lib/tss';
+import { TSS_HOME_URL, tssBookingLink } from '../lib/tss';
 import type { PlanController } from '../hooks/usePlan';
 import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -160,6 +160,22 @@ export function CoursePanel({ ctl, focus, hidden = false, onFlash }: Props) {
                 desktop browser only. Build your plan on a computer, open it here via Share →
                 link or QR code, then save it as yours to edit its sections.
               </p>
+            ) : ctl.extensionSeen ? (
+              // The extension is here and simply has nothing yet: send them to TSS, not to the store.
+              <>
+                <p>
+                  Courses you open in TSS show up here — then bring the ones you want into your
+                  plan.
+                </p>
+                <a
+                  className="btn btn--primary browse-empty__cta"
+                  href={TSS_HOME_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Go to TSS
+                </a>
+              </>
             ) : (
               <>
                 <p>

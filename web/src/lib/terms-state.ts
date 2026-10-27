@@ -8,7 +8,7 @@
 import type { CourseOffering, PlanState, Term } from '@triton/shared';
 import { emptyPlan } from './plan';
 import {
-  addBrowsed, migratePlans, newPlanId, updateActivePlan,
+  addBrowsed, addPlan, migratePlans, newPlanId, updateActivePlan,
   type NamedPlan, type PlansState,
 } from './plans';
 import { chronoIndex, isArchived, termKey, type TermKey } from './terms';
@@ -81,6 +81,20 @@ export function mapWorkspaces(state: TermsState, fn: (ws: TermWorkspace) => Plan
 export function switchTermIn(state: TermsState, key: TermKey): TermsState {
   if (state.activeTermKey === key || !state.terms[key]) return state;
   return { ...state, activeTermKey: key };
+}
+
+/**
+ * Keep someone's plan as a NEW named plan in ITS OWN term (made if missing), its
+ * courses on that plan's browsed list, and switch to it. Merging its courses into
+ * the pool is the caller's.
+ */
+export function adoptPlanIn(state: TermsState, plan: PlanState, name: string, now: string): TermsState {
+  const key = termKey(plan.term);
+  const next = updateWorkspace(ensureWorkspace(state, plan.term, now), key, (ps) => {
+    const withPlan = addPlan(ps, plan, name, now);
+    return addBrowsed(withPlan, withPlan.activeId, plan.entries.map((e) => e.course.id), now);
+  });
+  return switchTermIn(next, key);
 }
 
 /** Latest plan-updatedAt inside a workspace — tie-breaker for unknown-season terms. */

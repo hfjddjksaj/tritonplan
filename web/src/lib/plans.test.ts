@@ -6,6 +6,7 @@ import {
   updateActivePlan,
   createPlan,
   addPlan,
+  freeSharedName,
   renamePlan,
   duplicatePlan,
   deletePlan,
@@ -125,6 +126,17 @@ describe('plan list operations', () => {
     expect(mapAllPlans(s, (p) => p, NOW)).toBe(s);
     const emptied = mapAllPlans(s, (p) => (p.entries.length ? { ...p, entries: [] } : p), NOW);
     expect(emptied.plans.every((n) => n.plan.entries.length === 0)).toBe(true);
+  });
+});
+
+describe('freeSharedName', () => {
+  it('keeps a free name, and otherwise marks the copy as shared', () => {
+    const s = seeded(); // "My plan" + "Backup"
+    expect(freeSharedName(s, 'Fall draft')).toBe('Fall draft');
+    expect(freeSharedName(s, 'My plan')).toBe('My plan (shared)');
+    const again = addPlan(s, makePlan(), 'My plan (shared)', NOW);
+    expect(freeSharedName(again, 'My plan')).toBe('My plan (shared 2)');
+    expect(freeSharedName(s, '   ')).toBe('Shared plan');
   });
 });
 

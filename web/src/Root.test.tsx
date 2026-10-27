@@ -6,7 +6,7 @@ import Root from './Root';
 import { usePlan } from './hooks/usePlan';
 import { useApptTimes } from './hooks/useApptTimes';
 import { nav } from './lib/nav';
-import { PENDING_HASH_KEY, PENDING_SHARE_KEY, stashPendingShare, type CloudBoot } from './lib/cloud/boot';
+import { PENDING_HASH_KEY, PENDING_SAVE_KEY, PENDING_SHARE_KEY, stashPendingShare, type CloudBoot } from './lib/cloud/boot';
 import type { TermMeta, WebSnapshot } from './lib/cloud/records';
 import { BRIDGE_SOURCE, installBridgeHub, resetBridgeHubForTests } from './lib/bridge';
 import { makeCourse, makePlan } from './lib/fixtures';
@@ -14,6 +14,7 @@ import type { NamedPlan } from './lib/plans';
 import { planToHash, planToMirrorHash } from './lib/share';
 import { loadReceived, saveReceived } from './lib/storage';
 import { OLD_SITE_ORIGIN } from './lib/site';
+import { TSS_HOME_URL } from './lib/tss';
 import { loadPendingMigration, savePendingMigration, type MigrationPayload } from './lib/migration';
 import type { TermsState } from './lib/terms-state';
 import { makeTestBoot, snapshotOf, TEST_ME } from './test/boot';
@@ -179,6 +180,27 @@ const callsTo = (method: string, url: string) => srv.calls.filter((c) => c.metho
 const googleHref = () =>
   [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'))?.getAttribute('href');
 const receivedIds = () => loadReceived()?.plan.entries.map((e) => e.course.id);
+
+/**
+ * The shared MATH-18 plan was kept as a new plan called `name`, without a second click: shown, announced,
+ * and saved to the account beside "Mine", which is untouched. Nothing sits in the received slot.
+ */
+async function expectSavedAsNewPlan(name: string) {
+  expect(container.querySelector('.app')).not.toBeNull();
+  expect(container.querySelector('.received')).toBeNull();
+  expect(loadReceived()).toBeNull();
+  expect(container.querySelector('.planswitch__name')?.textContent).toBe(name);
+  expect(courseCodes()).toEqual(['MATH-18']);
+  expect(text()).toContain('Saved the shared plan to your account — you can edit it now');
+  expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
+  expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
+  await letSyncRun();
+  const saved = Object.values(srv.state.plans).map((p) => p.data as NamedPlan);
+  const idsOf = (n: string) => saved.find((p) => p.name === n)?.plan.entries.map((e) => e.course.id);
+  expect(saved.map((p) => p.name).sort()).toEqual(['Mine', name].sort());
+  expect(idsOf(name)).toEqual(['MATH-18|2026|2']);
+  expect(idsOf('Mine')).toEqual(['CSE-8A|2026|2']);
+}
 
 const CODE = 'AbCdEfGh12';
 /** What GET /api/s/<code> answers for a live link: MATH-18, named "Fall draft". */
@@ -349,6 +371,28 @@ describe('Root: signed in', () => {
     expect(container.querySelector('.received')).not.toBeNull();
   });
 
+  it('with nothing browsed, the extension that has spoken gets "Go to TSS", not the store link', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    const cta = () => container.querySelector<HTMLAnchorElement>('.browse-empty__cta');
+    expect(cta()?.textContent).toBe('Get the extension');
+
+    // A freshly installed extension: an empty pool and no bookings captured yet.
+    await act(async () => {
+      for (const data of [
+        { source: BRIDGE_SOURCE, type: 'courses', version: 1, payload: [] },
+        { source: BRIDGE_SOURCE, type: 'booked', version: 1, payload: [], captured: false },
+      ]) {
+        window.dispatchEvent(new MessageEvent('message', { data, source: window, origin: window.location.origin }));
+      }
+    });
+    expect(cta()?.textContent).toBe('Go to TSS');
+    expect(cta()?.getAttribute('href')).toBe(TSS_HOME_URL);
+    expect(cta()?.getAttribute('target')).toBe('_blank');
+    expect(text()).not.toContain('Get the extension');
+  });
+
   it('a "+ TritonPlan" click queued before sign-in lands in the plan after it', async () => {
     installBridgeHub();
     await mount('/');
@@ -404,7 +448,7 @@ describe('Root: opening a shared plan', () => {
     expect(container.querySelector('h1')?.textContent).toBe('Fall draft');
   });
 
-  it('Save to my account → sign in → the plan opens in the received slot', async () => {
+  it('Save to my account → sign in → the plan is saved as a new plan, no second click', async () => {
     serveShare();
     await mount(`/s/${CODE}`);
     await click('Save to my account');
@@ -413,18 +457,30 @@ describe('Root: opening a shared plan', () => {
     await signInWithEmail();
     expect(navSpy).toHaveBeenCalledWith(`/s/${CODE}`);
 
-    // The navigation to returnTo: the short link again, now signed in.
+    // The navigation to returnTo (Google's comes back the same way): the short link again, now signed in.
     reload();
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount(`/s/${CODE}`);
-    expect(container.querySelector('.received--active')).not.toBeNull();
-    expect(text()).toContain('Save as a new plan');
-    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
-    expect(loadReceived()?.source).toBe('link');
     expect(window.location.pathname).toBe('/');
-    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
-    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine'); // own plan untouched
+    await expectSavedAsNewPlan('Fall draft');
+
+    // A reload neither fetches the link again nor saves it twice.
+    reload();
+    await mount('/');
+    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(2); // the signed-out visit and the save
+    expect(Object.keys(srv.state.plans)).toHaveLength(2);
+  });
+
+  it('a shared plan named like one of theirs is saved under a name of its own', async () => {
+    serveShare(CODE, otherPlan(), 'Mine');
+    await mount(`/s/${CODE}`);
+    await click('Save to my account');
+    reload();
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount(`/s/${CODE}`);
+    await expectSavedAsNewPlan('Mine (shared)');
   });
 
   it('a signed-in visitor goes straight to the planner with the plan received', async () => {
@@ -482,9 +538,30 @@ describe('Root: opening a shared plan', () => {
     srv.state = snapshotOf(mine());
     await mount('/');
     expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
+    await expectSavedAsNewPlan('Shared plan');
+  });
+
+  it('a #p= link Save was clicked on is saved when this tab sees the sign-in from another tab', async () => {
+    const hash = `#${planToHash(otherPlan())}`;
+    await mount(`/${hash}`);
+    await click('Save to my account');
+    // Signed in from the confirm mail's tab; back in this one, the link is still in the address bar.
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await becomeVisible();
+    expect(window.location.hash).toBe(''); // or it would open again, as a received plan
+    await expectSavedAsNewPlan('Shared plan');
+  });
+
+  it('a #p= link merely opened signed out still waits for its own Save after signing in', async () => {
+    await mount(`/#${planToHash(otherPlan())}`);
+    reload(); // no Save click: the visitor went to sign in some other way
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
     expect(receivedIds()).toEqual(['MATH-18|2026|2']);
     expect(container.querySelector('.received')).not.toBeNull();
-    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine'); // own plan untouched
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine');
   });
 
   it('a #p= that does not decode goes straight to the sign-in form', async () => {
@@ -519,10 +596,7 @@ describe('Root: a short link saved before signing in', () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    expect(container.querySelector('.received--active')).not.toBeNull();
-    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
-    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
-    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine');
+    await expectSavedAsNewPlan('Fall draft');
   });
 
   it('is ignored after 24 h', async () => {
@@ -589,13 +663,11 @@ describe('Root: a short link saved before signing in', () => {
     expect(text()).toContain("Can't reach TritonPlan right now.");
     expect(localStorage.getItem(PENDING_SHARE_KEY)).toBe(stashed);
 
-    // A reload rather than Try again: the link is still there to open.
+    // A reload rather than Try again: the link is still there to save.
     reload();
     serveShare();
     await mount('/');
-    expect(container.querySelector('.received--active')).not.toBeNull();
-    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
-    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
+    await expectSavedAsNewPlan('Fall draft');
   });
 
   it('one the server cannot answer yet shows the offline screen, and Try again opens it', async () => {
@@ -607,8 +679,7 @@ describe('Root: a short link saved before signing in', () => {
     expect(text()).toContain("Can't reach TritonPlan right now.");
     serveShare();
     await click('Try again');
-    expect(container.querySelector('.received--active')).not.toBeNull();
-    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
+    await expectSavedAsNewPlan('Fall draft');
   });
 
   it('one turned off meanwhile shows the "no longer works" page', async () => {

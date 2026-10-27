@@ -107,6 +107,17 @@ function nextDefaultName(state: PlansState): string {
   }
 }
 
+/** A shared plan's own name, or "<name> (shared)", "<name> (shared 2)", … — the first no plan here has (most shares are called "My plan"). */
+export function freeSharedName(state: PlansState, name: string): string {
+  const base = name.trim() || 'Shared plan';
+  const taken = new Set(state.plans.map((p) => p.name));
+  if (!taken.has(base)) return base;
+  for (let n = 1; ; n++) {
+    const candidate = n === 1 ? `${base} (shared)` : `${base} (shared ${n})`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
 /** Append a fresh empty plan (term carried over from the active one) and activate it. */
 export function createPlan(state: PlansState, now: string, name?: string): PlansState {
   const id = newPlanId();
