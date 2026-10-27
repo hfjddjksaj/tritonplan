@@ -45,6 +45,10 @@ const cal = (over: Record<string, unknown> = {}) => () =>
   json(200, { ...linked, terms: { '2026|2': 'a', '2027|3': 'w' }, missing: [], ...over });
 
 beforeEach(() => {
+  // Which terms count as open or archived depends on today's date; pin it to mid-October 2026 (Fall 2026 under way).
+  // Only Date is faked, so promises and timers behave normally.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 9, 15));
   flash.mockClear();
   onClose.mockClear();
   onChanged.mockClear();
@@ -63,6 +67,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
