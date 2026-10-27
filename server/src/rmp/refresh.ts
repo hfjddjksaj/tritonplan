@@ -22,6 +22,8 @@ export function startRmpRefresh(deps: Pick<Deps, 'db' | 'now' | 'fetch'>): () =>
       // A roster that lost over half its people is more likely a broken answer than a real change.
       if (rows.length < stored / 2) throw new Error(`RMP roster shrunk from ${stored} to ${rows.length}`);
       replaceTeachers(deps.db, rows, deps.now().toISOString());
+      // One count, no names and nothing from the response: lets the operator see in the journal that a refresh ran.
+      console.log(`RMP refreshed: ${rows.length} teachers`);
     } catch (e) {
       // One line, message only: no body, no stack. The old snapshot stays and the next daily check retries.
       console.error(`RMP refresh failed: ${e instanceof Error ? e.message : 'unknown error'}`);

@@ -223,7 +223,7 @@ describe('delete account', () => {
     await openMenu();
     await click('Delete account…');
     expect(q('[role="dialog"]')!.textContent).toContain(
-      "This deletes your account and every plan in it. It can't be undone.",
+      "This deletes your account, every plan in it, your shared links and your calendar link. It can't be undone.",
     );
     expect(del().disabled).toBe(true);
     type('input[type="email"]', 'someone@else.edu');

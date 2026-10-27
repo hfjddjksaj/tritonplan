@@ -74,6 +74,22 @@ the assets it shipped itself in `releases/<name>/web-assets.list`; only those
 are carried, so a release serves its own assets plus the previous release's,
 and nothing older piles up.
 
+### RateMyProfessors ratings
+
+The server downloads RMP's public UCSD teacher list by itself: right after it
+starts (when the stored list is missing or over 30 days old), then re-checked
+daily, so in practice about once a month. Nothing to run by hand. Check it:
+
+```sh
+journalctl -u tritonplan | grep RMP
+```
+
+Shortly after the first start you should see `RMP refreshed: N teachers`, and
+again roughly monthly. A failed attempt logs `RMP refresh failed: <reason>`; the
+old list stays in use and the next daily check retries. Neither line contains
+names or response data. Set `TP_RMP_REFRESH=off` in `/etc/tritonplan/env` to
+turn the download off.
+
 ## Rollback
 
 ```sh

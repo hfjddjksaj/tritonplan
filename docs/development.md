@@ -224,6 +224,22 @@ Configure the server through `server/.env.local`. It is gitignored; secrets neve
 | `TP_MAIL_TRANSPORT` | `resend` | `resend`, `console`, or `memory`. Use `console` locally to print verification links to the server log. |
 | `RESEND_API_KEY` | — | Required when the transport is `resend`. |
 | `TP_MAIL_FROM` | `TritonPlan <noreply@tritonplan.cn>` | From address for outgoing mail. |
+| `TP_RMP_REFRESH` | `on` | Monthly RateMyProfessors roster download. Only the literal `off` disables it. Set `off` in `server/.env.local` so a dev server never calls RMP. |
+
+### Routes for shares, calendar and ratings
+
+All under `/api`. Everything needs a signed-in session except the two routes marked public.
+
+| Route | Access | Purpose |
+|---|---|---|
+| `POST /shares`, `GET /shares` | signed in | Create a share snapshot; list your own. |
+| `DELETE /shares/:code` | signed in | Revoke one (deletes the snapshot). |
+| `GET /s/:code` | **public** | Read a snapshot: `{name, plan, createdAt}`. Rate-limited per IP. |
+| `GET /calendar`, `PUT /calendar` | signed in | Read / save which plan is picked per term. |
+| `POST /calendar/link` | signed in | Create the feed link, or return the existing one. |
+| `POST /calendar/reset` | signed in | Issue a new secret; the old URL stops working. |
+| `GET /cal/:file` | **public** | The `.ics` feed at `/api/cal/<secret>.ics`; the secret is the credential. Rate-limited per IP. |
+| `GET /rmp?name=…` | signed in | Look up RMP ratings for up to 20 instructor names. |
 
 ## Reference material
 

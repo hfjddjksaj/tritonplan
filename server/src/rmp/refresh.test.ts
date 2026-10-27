@@ -15,11 +15,17 @@ const okPage = (id: number) =>
   }));
 
 let clock = T0.getTime();
+// Every successful refresh logs one line; keep it out of the test output and let a test read it.
+let log: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   vi.useFakeTimers();
   clock = T0.getTime();
+  log = vi.spyOn(console, 'log').mockImplementation(() => {});
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  log.mockRestore();
+  vi.useRealTimers();
+});
 
 function setup(fetchImpl: () => Promise<Response>) {
   const db = openDb(':memory:');
@@ -54,6 +60,14 @@ test('refresh runs at boot only when the data is missing or over 30 days old', a
   await vi.advanceTimersByTimeAsync(0);
   expect(c.fetch).toHaveBeenCalledTimes(1);
   stopC();
+});
+
+test('a successful refresh logs one line with only the teacher count', async () => {
+  const { deps } = setup(async () => pageOf(3));
+  const stop = startRmpRefresh(deps);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(log.mock.calls).toEqual([['RMP refreshed: 3 teachers']]);
+  stop();
 });
 
 test('a failed page throws and leaves the stored teachers untouched', async () => {

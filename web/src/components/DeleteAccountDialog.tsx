@@ -43,7 +43,7 @@ export function DeleteAccountDialog({ me, onClose }: { me: Me; onClose: () => vo
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="planpick__title">Delete account</h2>
-        <p className="planpick__sub">This deletes your account and every plan in it. It can't be undone.</p>
+        <p className="planpick__sub">This deletes your account, every plan in it, your shared links and your calendar link. It can't be undone.</p>
         <form className="auth__form" onSubmit={submit}>
           <AuthField
             label={`Type ${me.email} to confirm`}
