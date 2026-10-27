@@ -31,11 +31,16 @@ export function accountRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     const hit = limiter.hit(`pwchange:user:${userId}`, 10, QUARTER);
     if (!hit.ok) return c.json({ error: 'rate_limited', retryAfter: hit.retryAfterSec }, 429);
     const b = await body(c);
-    const next = str(b.next);
-    if (passwordProblem(next)) return c.json({ error: 'weak_password' }, 400);
     const user = findUserById(db, userId);
     if (!user) return c.json({ error: 'unauthorized' }, 401);
-    if (user.password_hash && !(await verifyPassword(str(b.current), user.password_hash))) {
+    // A first password goes through the emailed link (/password-link), which proves the mailbox: a stolen
+    // session alone must not be able to plant a lasting credential on a Google-only account.
+    if (!user.password_hash) return c.json({ error: 'use_link' }, 400);
+    const next = str(b.next);
+    if (passwordProblem(next)) return c.json({ error: 'weak_password' }, 400);
+    const current = str(b.current);
+    // Longer than any stored password can be: refused without spending argon2 on it.
+    if (passwordProblem(current) === 'too-long' || !(await verifyPassword(current, user.password_hash))) {
       return c.json({ error: 'invalid_credentials' }, 401);
     }
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashPassword(next), userId);
@@ -46,7 +51,11 @@ export function accountRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   });
 
   r.post('/password-link', async (c) => {
-    const user = findUserById(db, c.get('userId'));
+    const userId = c.get('userId');
+    // Every call is a Resend mail out of a small daily quota; a signed-in loop must not be able to spend it.
+    const hit = limiter.hit(`pwlink:user:${userId}`, 3, QUARTER);
+    if (!hit.ok) return c.json({ error: 'rate_limited', retryAfter: hit.retryAfterSec }, 429);
+    const user = findUserById(db, userId);
     if (!user) return c.json({ error: 'unauthorized' }, 401);
     const link = `${config.origin}/reset#token=${issueEmailToken(db, user.id, 'reset', deps.now())}`;
     const mail = user.google_sub && !user.password_hash ? addPasswordMail(link) : resetPasswordMail(link);

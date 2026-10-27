@@ -4,7 +4,11 @@ import { addPasswordMail, finishSignupMail, resetPasswordMail, verifyEmailMail }
 test('mail templates carry subject, link and the ignore line', () => {
   const v = verifyEmailMail('https://tritonplan.cn/#/verify?token=abc');
   expect(v.subject).toBe('Confirm your TritonPlan email');
-  expect(v.text).toContain('https://tritonplan.cn/#/verify?token=abc');
+  // The confirm page asks for the sign-up password (R18), so the mail says so up front.
+  expect(v.text).toBe(
+    'Confirm your TritonPlan email: open this link and enter the password you chose when you signed up.\n\n' +
+      "https://tritonplan.cn/#/verify?token=abc\n\nIf you didn't ask for this, you can ignore this email.\n",
+  );
   expect(v.text).toContain("If you didn't ask for this, you can ignore this email.");
   const r = resetPasswordMail('https://x/y');
   expect(r.subject).toBe('Reset your TritonPlan password');

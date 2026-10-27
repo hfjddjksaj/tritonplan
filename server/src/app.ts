@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type { Config } from './config';
 import type { Db } from './db/db';
 import { accountRoutes } from './account/routes';
@@ -22,6 +23,12 @@ export function createApp(deps: Deps): Hono<AppEnv> {
 
   // Registered before any route so it also covers writes to routes that don't exist.
   app.use('/api/*', sameOriginJson(deps.config));
+
+  // Auth and account bodies are a few short fields. Capped before any route reads one or touches the rate
+  // limiter, so an anonymous oversized POST is turned away without buffering it. /api/sync has its own 8 MB cap.
+  const smallBody = bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ error: 'too_large' }, 413) });
+  app.use('/api/auth/*', smallBody);
+  app.use('/api/account/*', smallBody);
 
   app.get('/api/health', (c) => c.json({ ok: true }));
 

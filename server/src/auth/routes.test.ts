@@ -1,7 +1,14 @@
 import { expect, test, vi } from 'vitest';
 import { createApp } from '../app';
 import { testDeps } from '../test-helpers';
+import { verifyPassword } from './passwords';
 import { newId } from './tokens';
+
+// Pass-through spy: lets a test prove a request never reached argon2.
+vi.mock('./passwords', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('./passwords')>();
+  return { ...mod, verifyPassword: vi.fn(mod.verifyPassword) };
+});
 
 function setup() {
   const deps = testDeps();
@@ -290,17 +297,40 @@ test('GET /api/me without a session is 401', async () => {
   expect((await app.request('/api/me')).status).toBe(401);
 });
 
-test('mail failures surface as 500 server', async () => {
+test('a signup whose confirmation mail fails answers 503 mail_failed, in both branches, without logging the address', async () => {
   const { post, deps } = setup();
   deps.mailer.send = () => Promise.reject(new Error('resend down'));
   const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
   try {
-    const res = await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
-    expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: 'server' });
+    const fresh = await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
+    expect(fresh.status).toBe(503);
+    expect(await fresh.json()).toEqual({ error: 'mail_failed' });
+    // The row stays; a retry takes the existing-unverified branch, whose mail can fail the same way.
+    const again = await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
+    expect(again.status).toBe(503);
+    expect(await again.json()).toEqual({ error: 'mail_failed' });
+    expect(spy).toHaveBeenCalled();
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('a@ucsd.edu');
   } finally {
     spy.mockRestore();
   }
+});
+
+test('a password over 200 characters is 401 at login and verify without running argon2', async () => {
+  const { post, tokenFrom, verifyWith } = setup();
+  await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
+  const spy = vi.mocked(verifyPassword);
+  spy.mockClear();
+  const long = 'x'.repeat(1000);
+  const v = await verifyWith(tokenFrom(0), long);
+  expect(v.status).toBe(401);
+  expect(await v.json()).toEqual({ error: 'invalid_credentials' });
+  const l = await post('/api/auth/login', { email: 'a@ucsd.edu', password: long });
+  expect(l.status).toBe(401);
+  expect(await l.json()).toEqual({ error: 'invalid_credentials' });
+  expect(spy).not.toHaveBeenCalled();
+  // The rejected verify did not burn the link.
+  expect((await verifyWith(tokenFrom(0), 'hunter2hunter2')).status).toBe(200);
 });
 
 test('forgot and resend answer 200 even when the mail send rejects, and never log the address', async () => {

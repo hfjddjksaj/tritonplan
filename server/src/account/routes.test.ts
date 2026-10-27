@@ -63,13 +63,42 @@ test('change password needs the current one, keeps only this session and kills p
   expect((deps.db.prepare('SELECT COUNT(*) AS n FROM email_tokens WHERE user_id = ?').get(u.id) as { n: number }).n).toBe(0);
 });
 
-test('a Google-only account sets a password without current', async () => {
+test('a Google-only account cannot set its first password here: 400 use_link, nothing stored', async () => {
   const { deps, mk, send } = await setup();
   const u = await mk('g@ucsd.edu', { google: 'sub-1' });
   const s = createSession(deps.db, u.id, now);
-  const res = await send('POST', '/api/account/password', { next: 'newpassword1' }, s);
-  expect(res.status).toBe(200);
-  expect(await verifyPassword('newpassword1', findUserById(deps.db, u.id)!.password_hash!)).toBe(true);
+  for (const body of [{ next: 'newpassword1' }, { current: 'anything-123', next: 'newpassword1' }, { next: 'short' }]) {
+    const res = await send('POST', '/api/account/password', body, s);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'use_link' });
+  }
+  expect(findUserById(deps.db, u.id)!.password_hash).toBeNull();
+});
+
+test('a current password over 200 characters is 401 and changes nothing', async () => {
+  const { deps, mk, send } = await setup();
+  const u = await mk('a@ucsd.edu', { password: 'oldpassword1' });
+  const s = createSession(deps.db, u.id, now);
+  const res = await send('POST', '/api/account/password', { current: 'x'.repeat(1000), next: 'newpassword1' }, s);
+  expect(res.status).toBe(401);
+  expect(await res.json()).toEqual({ error: 'invalid_credentials' });
+  expect(await verifyPassword('oldpassword1', findUserById(deps.db, u.id)!.password_hash!)).toBe(true);
+});
+
+test('password-link is limited to 3 mails per user per 15 minutes', async () => {
+  const { deps, mk, send } = await setup();
+  const a = await mk('a@ucsd.edu', { password: 'oldpassword1' });
+  const b = await mk('b@ucsd.edu', { google: 'sub-1' });
+  const as = createSession(deps.db, a.id, now);
+  const bs = createSession(deps.db, b.id, now);
+  for (let i = 0; i < 3; i++) expect((await send('POST', '/api/account/password-link', {}, as)).status).toBe(200);
+  const res = await send('POST', '/api/account/password-link', {}, as);
+  expect(res.status).toBe(429);
+  const body = (await res.json()) as { error: string; retryAfter: number };
+  expect(body.error).toBe('rate_limited');
+  expect(body.retryAfter).toBeGreaterThan(0);
+  expect(deps.mailer.sent).toHaveLength(3);
+  expect((await send('POST', '/api/account/password-link', {}, bs)).status).toBe(200); // per user, not global
 });
 
 test('password changes are rate limited per user', async () => {

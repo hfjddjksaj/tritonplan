@@ -16,7 +16,13 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   const missing: string[] = [];
   if (!env.TP_ORIGIN) missing.push('TP_ORIGIN');
   if (!env.TP_DB_PATH) missing.push('TP_DB_PATH');
-  if (transport === 'resend' && !env.RESEND_API_KEY) missing.push('RESEND_API_KEY');
+  if (transport === 'resend') {
+    // resend = production. Without the Google pair the server would boot and only fail when someone clicks
+    // "Continue with Google", so refuse to start instead.
+    if (!env.RESEND_API_KEY) missing.push('RESEND_API_KEY');
+    if (!env.GOOGLE_CLIENT_ID) missing.push('GOOGLE_CLIENT_ID');
+    if (!env.GOOGLE_CLIENT_SECRET) missing.push('GOOGLE_CLIENT_SECRET');
+  }
   // Report every gap at once so a fresh deploy needs one fix pass, not one per variable.
   if (missing.length) throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   if (!(TRANSPORTS as readonly string[]).includes(transport)) {

@@ -3,7 +3,8 @@ const IGNORE = "If you didn't ask for this, you can ignore this email.";
 export function verifyEmailMail(link: string): { subject: string; text: string } {
   return {
     subject: 'Confirm your TritonPlan email',
-    text: `Confirm your email address to finish setting up your TritonPlan account:\n\n${link}\n\n${IGNORE}\n`,
+    // The confirm page asks for the sign-up password (it proves the mailbox owner also chose it), so say so here.
+    text: `Confirm your TritonPlan email: open this link and enter the password you chose when you signed up.\n\n${link}\n\n${IGNORE}\n`,
   };
 }
 

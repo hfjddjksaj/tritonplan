@@ -30,6 +30,9 @@ async function body(c: Context): Promise<Record<string, unknown>> {
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
+/** Longer than any password we ever store (passwordProblem caps them at 200): refused without spending argon2 on it. */
+const tooLong = (pw: string): boolean => passwordProblem(pw) === 'too-long';
+
 export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
   const { db, config } = deps;
@@ -53,14 +56,31 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     return deps.mailer.send({ to: email, ...verifyEmailMail(`${config.origin}/verify#token=${t}`) });
   };
 
+  const mailFailed = (what: string, err: unknown): void =>
+    console.error(`[mail] ${what} send failed:`, err instanceof Error ? err.message : 'unknown');
+
   /** Fire-and-forget: response time and status must not reveal whether a mail was sent. Never log the address. */
   const sendDetached = (what: string, send: () => Promise<void>): void => {
-    const fail = (err: unknown): void => console.error(`[mail] ${what} send failed:`, err instanceof Error ? err.message : 'unknown');
     try {
-      void send().catch(fail);
+      void send().catch((err: unknown) => mailFailed(what, err));
     } catch (err) {
-      fail(err);
+      mailFailed(what, err);
     }
+  };
+
+  /**
+   * Awaited, for signup: the student is waiting on this mail, so a failed send (Resend down, daily quota used up)
+   * answers 503 mail_failed and the form can say so. The row it created stays; a retry takes the existing-account
+   * branch, which mails a fresh link.
+   */
+  const sendOrFail = async (c: Context, send: () => Promise<void>): Promise<Response> => {
+    try {
+      await send();
+    } catch (err) {
+      mailFailed('signup', err);
+      return c.json({ error: 'mail_failed' }, 503);
+    }
+    return c.json({ ok: true });
   };
 
   r.post('/signup', async (c) => {
@@ -85,12 +105,12 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
       // outstanding verify link is left alone so a repeat signup cannot invalidate the owner's first mail.
       const t = issueEmailToken(db, existing.id, 'reset', deps.now());
       const link = `${config.origin}/reset#token=${t}`;
-      await deps.mailer.send({ to: email, ...(existing.email_verified ? addPasswordMail(link) : finishSignupMail(link)) });
-      return c.json({ ok: true });
+      return sendOrFail(c, () =>
+        deps.mailer.send({ to: email, ...(existing.email_verified ? addPasswordMail(link) : finishSignupMail(link)) }),
+      );
     }
     const user = createUser(db, { email, verified: false, passwordHash: hash }, deps.now());
-    await sendVerify(email, user.id);
-    return c.json({ ok: true });
+    return sendOrFail(c, () => sendVerify(email, user.id));
   });
 
   // Verifying needs the mailbox (token) AND the account's password: a signup typed by someone else must not become
@@ -102,9 +122,11 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     const token = str(b.token);
     const t = token ? findEmailToken(db, token, 'verify', deps.now()) : null;
     if (!t) return c.json({ error: 'link_expired' }, 400);
+    const password = str(b.password);
+    if (tooLong(password)) return c.json({ error: 'invalid_credentials' }, 401);
     const user = findUserById(db, t.userId);
     // A wrong guess leaves the token usable; the dummy hash keeps the no-password case the same cost.
-    const ok = await verifyPassword(str(b.password), user?.password_hash ?? (await DUMMY_HASH));
+    const ok = await verifyPassword(password, user?.password_hash ?? (await DUMMY_HASH));
     if (!user || !user.password_hash || !ok) return c.json({ error: 'invalid_credentials' }, 401);
     tx(db, () => {
       db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(user.id);
@@ -121,8 +143,10 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     if (email) buckets.push([`login:email:${email}`, 10, QUARTER]);
     const blocked = limited(c, buckets);
     if (blocked) return blocked;
+    const password = str(b.password);
+    if (tooLong(password)) return c.json({ error: 'invalid_credentials' }, 401);
     const user = email ? findUserByEmail(db, email) : undefined;
-    const ok = await verifyPassword(str(b.password), user?.password_hash ?? (await DUMMY_HASH));
+    const ok = await verifyPassword(password, user?.password_hash ?? (await DUMMY_HASH));
     if (!user || !user.password_hash || !ok) return c.json({ error: 'invalid_credentials' }, 401);
     if (!user.email_verified) return c.json({ error: 'unverified' }, 403);
     startSession(c, user.id);

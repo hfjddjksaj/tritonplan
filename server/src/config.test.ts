@@ -15,9 +15,20 @@ describe('loadConfig', () => {
   });
 
   test('resend transport requires RESEND_API_KEY', () => {
-    const env = { TP_ORIGIN: 'https://tritonplan.cn', TP_DB_PATH: 'x.db' };
+    const env = { TP_ORIGIN: 'https://tritonplan.cn', TP_DB_PATH: 'x.db', GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 's' };
     expect(() => loadConfig(env)).toThrow(/RESEND_API_KEY/);
     expect(loadConfig({ ...env, RESEND_API_KEY: 'k' }).mail.resendApiKey).toBe('k');
+  });
+
+  test('resend transport (production) also requires both Google secrets, non-empty', () => {
+    const env = { TP_ORIGIN: 'https://tritonplan.cn', TP_DB_PATH: 'x.db', RESEND_API_KEY: 'k' };
+    expect(() => loadConfig(env)).toThrow(/GOOGLE_CLIENT_ID.*GOOGLE_CLIENT_SECRET/s);
+    expect(() => loadConfig({ ...env, GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: '' })).toThrow(/GOOGLE_CLIENT_SECRET/);
+    expect(() => loadConfig({ ...env, GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 's' })).not.toThrow();
+    const c = loadConfig({ ...env, GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 's' });
+    expect([c.googleClientId, c.googleClientSecret]).toEqual(['id', 's']);
+    // Local transports keep working without Google set up.
+    expect(() => loadConfig(base)).not.toThrow();
   });
 
   test('defaults', () => {
