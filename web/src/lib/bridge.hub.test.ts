@@ -5,6 +5,7 @@ import {
   installBridgeHub,
   installBridgeListener,
   installApptTimesListener,
+  postForgetCourses,
   resetBridgeHubForTests,
   subscribeBridge,
 } from './bridge';
@@ -26,6 +27,8 @@ const planAdd = (id: string) => ({
   payload: { course: makeCourse(id), selectedOptionId: `${id}-opt` },
 });
 const apptMsg = { source: BRIDGE_SOURCE, type: 'appt-times', version: 1, payload: [APPT] };
+const bookedMsg = { source: BRIDGE_SOURCE, type: 'booked', version: 1, payload: [], captured: false };
+const coursesMsg = (...ids: string[]) => ({ source: BRIDGE_SOURCE, type: 'courses', version: 1, payload: ids.map((id) => makeCourse(id)) });
 const idOf = (d: unknown) => (d as { payload: { course: { id: string } } }).payload.course.id;
 
 /** Synchronous stand-in for postMessage: source === window, origin === location.origin. */
@@ -211,6 +214,34 @@ describe('bridge hub', () => {
     const off = installBridgeListener({ onCourses: (c) => seen.push(c.map((x) => x.id)), onPlanAdd: vi.fn() });
     expect(seen).toEqual([['a', 'b']]);
     off();
+  });
+
+  it('a planner that mounts again still hears the latest courses, booked and appt-times', () => {
+    // The tab came back and the planner remounted on newer server state: the extension does not
+    // push again until the next page load, so the new planner must hear what the old one heard.
+    installBridgeHub();
+    const kinds = ['courses', 'booked', 'appt-times'] as const;
+    const first = vi.fn();
+    const off = subscribeBridge([...kinds], first);
+    post(coursesMsg('a'));
+    post(bookedMsg);
+    post(apptMsg);
+    expect(first).toHaveBeenCalledTimes(3);
+    off();
+    const second = vi.fn();
+    subscribeBridge([...kinds], second);
+    expect(second.mock.calls.map((c) => (c[0] as { type: string }).type)).toEqual([...kinds]);
+  });
+
+  it('courses the planner forgot are not handed to a planner that mounts later', () => {
+    installBridgeHub();
+    const off = subscribeBridge(['courses'], vi.fn());
+    post(coursesMsg('a', 'b'));
+    off();
+    postForgetCourses(['a']);
+    const seen: string[][] = [];
+    installBridgeListener({ onCourses: (c) => seen.push(c.map((x) => x.id)), onPlanAdd: vi.fn() });
+    expect(seen).toEqual([['b']]);
   });
 
   it('evicting one kind never drops another, and warns once without data', () => {

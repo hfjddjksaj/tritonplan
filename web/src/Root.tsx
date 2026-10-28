@@ -19,6 +19,7 @@ import { VerifyScreen } from './components/auth/VerifyScreen';
 import { ShareGone } from './components/share/ShareGone';
 import { SharedPlanView } from './components/share/SharedPlanView';
 import { fetchMe, fetchShare, fetchState, UnauthorizedError, type Me } from './lib/cloud/api';
+import { nav } from './lib/nav';
 import {
   consumeSaves,
   dropPendingHash,
@@ -378,8 +379,10 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
       });
       try {
         let fresh: WebSnapshot;
+        let me: Me | null;
         try {
-          fresh = await fetchState();
+          [fresh, me] = await Promise.all([fetchState(), fetchMe()]);
+          if (me === null) throw new UnauthorizedError();
         } catch (err) {
           if (err instanceof UnauthorizedError && alive.current && current.current === s) {
             engine.dispose();
@@ -389,10 +392,17 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
           return; // unreachable, timed out or a server hiccup: keep the planner as it is
         }
         lastFresh.current = Date.now();
-        if (!alive.current || current.current !== s || saved || engine.hasPending() || engine.matchesServer(fresh)) return;
+        if (!alive.current || current.current !== s) return;
+        if (me.email !== s.boot.me.email) {
+          // Another tab signed in as someone else: this page's state, unsaved edits included, is not theirs to keep.
+          engine.dispose();
+          nav.reload();
+          return;
+        }
+        if (saved || engine.hasPending() || engine.matchesServer(fresh)) return;
         engine.dispose();
         dropAddressHash();
-        show({ kind: 'planner', boot: makeBoot(s.boot.me, fresh), nonce: nonce.current++ });
+        show({ kind: 'planner', boot: makeBoot(me, fresh), nonce: nonce.current++ });
       } finally {
         off();
         busy.current = false;

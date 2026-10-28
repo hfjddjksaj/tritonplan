@@ -14,8 +14,8 @@ import { failureText } from './auth/copy';
 
 type Dialog = 'password' | 'shared' | 'calendar' | 'delete' | null;
 
-/** How long sign-out waits for unsaved edits to reach the account before leaving anyway. */
-const SIGN_OUT_SAVE_MS = 3000;
+/** How long leaving the planner (sign-out, import) waits for unsaved edits to reach the account before going anyway. */
+const LEAVE_SAVE_MS = 3000;
 
 export function AccountMenu({
   me: initial,
@@ -73,10 +73,19 @@ export function AccountMenu({
     }
   }
 
+  /** An edit still inside the save debounce would otherwise be lost as the page leaves. Bounded: an unreachable server must not keep the student here. */
+  const saveBeforeLeaving = () =>
+    Promise.race([flush().catch(() => {}), new Promise((r) => setTimeout(r, LEAVE_SAVE_MS))]);
+
+  /** The old site's "Download a backup file" sends students here; /migrate takes the file. */
+  async function importBackup() {
+    await saveBeforeLeaving();
+    nav.assign('/migrate');
+  }
+
   async function signOut() {
-    // An edit still inside the save debounce would otherwise go out after logout and be refused.
-    // Bounded: an unreachable server must not keep the student from signing out.
-    await Promise.race([flush().catch(() => {}), new Promise((r) => setTimeout(r, SIGN_OUT_SAVE_MS))]);
+    // After logout an unsaved edit would go out and be refused.
+    await saveBeforeLeaving();
     await apiPost('/api/auth/logout', {}); // a failed logout still leaves: the next load re-checks the session
     clearPendingMigration(); // the old site's plans are this student's, not the next person's on a shared browser
     clearReceived(); // someone else's plan must not greet the next person on this browser
@@ -115,6 +124,7 @@ export function AccountMenu({
               Calendar subscription
               {calendarDot && <span className="acctmenu__dot" aria-label="needs attention" />}
             </MenuButton>
+            <MenuButton onClick={choose(importBackup)}>Import a backup file</MenuButton>
             <MenuButton onClick={choose(() => setDialog('delete'))}>Delete account…</MenuButton>
             <MenuButton onClick={choose(signOut)}>Sign out</MenuButton>
           </div>

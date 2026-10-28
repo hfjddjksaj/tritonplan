@@ -8,7 +8,9 @@ import { apiPost } from '../../lib/cloud/api';
 import { nav } from '../../lib/nav';
 import { safeReturnTo } from '../../lib/site';
 import { AuthCard, AuthField, AuthMessage } from './AuthCard';
-import { failureText, PASSWORDS_DIFFER, WRONG_CREDENTIALS } from './copy';
+import {
+  CHECK_SPAM_NOTE, failureText, isUcsdAddress, PASSWORDS_DIFFER, UCSD_CHECK_NOTE, UCSD_MAIL_NOTE, WRONG_CREDENTIALS,
+} from './copy';
 
 type Mode = 'signin' | 'signup' | 'forgot' | 'check-email';
 
@@ -24,6 +26,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
   // The address a correct sign-in found unconfirmed: offers to resend its link.
   const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
   const [sentText, setSentText] = useState('');
+  const [sentTo, setSentTo] = useState('');
   // A redirect's notice explains how the student got here; it goes once they act.
   const [showNotice, setShowNotice] = useState(true);
 
@@ -36,8 +39,9 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
     setUnconfirmed(null);
     setShowNotice(false);
   };
-  const checkEmail = (text: string) => {
+  const checkEmail = (text: string, to: string) => {
     setSentText(text);
+    setSentTo(to);
     go('check-email');
   };
 
@@ -61,12 +65,12 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
         setError(PASSWORDS_DIFFER);
       } else {
         const r = await apiPost('/api/auth/signup', { email: addr, password });
-        if (r.ok) checkEmail(`Check your inbox at ${addr} to confirm your account.`);
+        if (r.ok) checkEmail(`Check your inbox at ${addr} to confirm your account.`, addr);
         else setError(failureText(r));
       }
     } else if (mode === 'forgot') {
       const r = await apiPost('/api/auth/forgot', { email: addr });
-      if (r.ok) checkEmail(`If an account exists for ${addr}, a reset link is on its way.`);
+      if (r.ok) checkEmail(`If an account exists for ${addr}, a reset link is on its way.`, addr);
       else setError(failureText(r));
     }
     setBusy(false);
@@ -76,7 +80,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
     if (busy || !unconfirmed) return;
     setBusy(true);
     const r = await apiPost('/api/auth/resend', { email: unconfirmed });
-    if (r.ok) checkEmail(`Check your inbox at ${unconfirmed} to confirm your account.`);
+    if (r.ok) checkEmail(`Check your inbox at ${unconfirmed} to confirm your account.`, unconfirmed);
     else setError(failureText(r));
     setBusy(false);
   }
@@ -85,6 +89,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
     return (
       <AuthCard heading="Check your email">
         <AuthMessage tone="notice">{sentText}</AuthMessage>
+        <p className="auth__lede">{isUcsdAddress(sentTo) ? UCSD_CHECK_NOTE : CHECK_SPAM_NOTE}</p>
         <button type="button" className="btn auth__wide" onClick={() => go('signin')}>
           Back to sign in
         </button>
@@ -121,6 +126,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+        {mode === 'signup' && isUcsdAddress(addr) && <AuthMessage tone="notice">{UCSD_MAIL_NOTE}</AuthMessage>}
         {mode !== 'forgot' && (
           <AuthField
             label="Password"

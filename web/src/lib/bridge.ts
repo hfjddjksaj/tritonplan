@@ -127,6 +127,11 @@ export function isBookedMessage(data: unknown): data is BookedMessage {
  * the first statement of main.tsx, holds what nobody has subscribed to yet, and replays it
  * on subscribe. We fix this page-side rather than in the extension because the new
  * extension build has to go to review as early as possible (Task 1).
+ *
+ * Snapshots (`courses`, `booked`, `appt-times`) are kept after delivery too: the planner
+ * remounts when the tab comes back to newer server state, and the extension only speaks
+ * again on the next page load or the next TSS capture, so the new planner must hear the
+ * latest of each as the old one did. A `plan-add` is a click, delivered exactly once.
  */
 
 export type BridgeKind = 'courses' | 'plan-add' | 'booked' | 'appt-times';
@@ -134,12 +139,13 @@ export type BridgeKind = 'courses' | 'plan-add' | 'booked' | 'appt-times';
 /** Queued plan-adds mirror here so they survive the sign-in page navigation (same tab). */
 export const PENDING_ADDS_KEY = 'triton-planner:pending-adds:v1';
 
-/** Per-kind queue cap: keeps the latest N, so a student who never signs in does not grow memory
- *  without bound (only `plan-add` queues more than one; the other kinds keep their latest). */
+/** Queue cap for `plan-add`: keeps the latest N, so a student who never signs in does not grow memory without bound. */
 const MAX_QUEUED_PER_KIND = 200;
 const MAX_MIRRORED_ADDS = 50;
 /** Each push of these is a full snapshot (`courses` = the extension's whole captured pool), so only the latest is worth keeping. */
-const LATEST_ONLY: ReadonlySet<BridgeKind> = new Set<BridgeKind>(['courses', 'booked', 'appt-times']);
+type SnapshotKind = 'courses' | 'booked' | 'appt-times';
+const SNAPSHOT_KINDS: readonly SnapshotKind[] = ['courses', 'booked', 'appt-times'];
+const isSnapshot = (kind: BridgeKind): kind is SnapshotKind => kind !== 'plan-add';
 let warnedEviction = false;
 
 function classify(data: unknown): BridgeKind | null {
@@ -155,7 +161,10 @@ interface Subscriber { kinds: ReadonlySet<BridgeKind>; handler: (data: unknown) 
 
 let hubInstalled = false;
 let hubListener: ((event: MessageEvent) => void) | null = null;
+/** Undelivered plan-adds, in arrival order. */
 let queue: Queued[] = [];
+/** The latest snapshot of each kind this page load, delivered or not. */
+const latest = new Map<SnapshotKind, unknown>();
 const subscribers = new Set<Subscriber>();
 
 function persistPendingAdds(): void {
@@ -198,18 +207,15 @@ function deliver(handler: (data: unknown) => void, data: unknown): boolean {
 }
 
 function enqueue(item: Queued): void {
-  if (LATEST_ONLY.has(item.kind)) queue = queue.filter((q) => q.kind !== item.kind);
   queue.push(item);
-  let count = 0;
-  for (const q of queue) if (q.kind === item.kind) count++;
-  if (count > MAX_QUEUED_PER_KIND) {
-    queue.splice(queue.findIndex((q) => q.kind === item.kind), 1);
+  if (queue.length > MAX_QUEUED_PER_KIND) {
+    queue.shift();
     if (!warnedEviction) {
       warnedEviction = true;
       console.warn(`bridge queue full for "${item.kind}"; dropping the oldest`);
     }
   }
-  if (item.kind === 'plan-add') persistPendingAdds();
+  persistPendingAdds();
 }
 
 /** Install the page's single bridge `message` listener. Idempotent; call it before render. */
@@ -225,9 +231,10 @@ export function installBridgeHub(): void {
     if (!data || typeof data !== 'object' || (data as { source?: unknown }).source !== BRIDGE_SOURCE) return;
     const kind = classify(data);
     if (!kind) return;
+    if (isSnapshot(kind)) latest.set(kind, data);
     const targets = [...subscribers].filter((s) => s.kinds.has(kind));
     if (targets.length === 0) {
-      enqueue({ kind, data });
+      if (!isSnapshot(kind)) enqueue({ kind, data });
       return;
     }
     for (const s of targets) deliver(s.handler, data);
@@ -236,30 +243,32 @@ export function installBridgeHub(): void {
 }
 
 /**
- * Subscribe to these kinds: queued messages of them are replayed first, in arrival order
- * (and removed, so each is delivered once), then live ones follow. Kinds nobody subscribes
- * to keep queueing. Returns the unsubscribe function.
+ * Subscribe to these kinds: the latest snapshot of each comes first, then queued plan-adds
+ * in arrival order (removed, so each click is delivered once), then live messages. Plan-adds
+ * nobody subscribes to keep queueing. Returns the unsubscribe function.
  */
 export function subscribeBridge(kinds: BridgeKind[], handler: (data: unknown) => void): () => void {
   const sub: Subscriber = { kinds: new Set(kinds), handler };
-  const replay = queue.filter((q) => sub.kinds.has(q.kind));
-  if (replay.length > 0) queue = queue.filter((q) => !sub.kinds.has(q.kind));
   subscribers.add(sub);
+  for (const kind of SNAPSHOT_KINDS) {
+    if (!sub.kinds.has(kind) || !latest.has(kind) || !subscribers.has(sub)) continue;
+    deliver(handler, latest.get(kind));
+  }
+  const unsubscribe = () => {
+    subscribers.delete(sub);
+  };
+  if (!sub.kinds.has('plan-add')) return unsubscribe;
+  const replay = queue;
+  queue = [];
   // Entries stay mirrored in sessionStorage until the loop ends: a handler that throws or
   // unsubscribes mid-replay must not cost the student a queued "+ TritonPlan" click.
   const undelivered: Queued[] = [];
   for (const q of replay) {
     if (!subscribers.has(sub) || !deliver(handler, q.data)) undelivered.push(q);
   }
-  if (undelivered.length > 0) {
-    // Back to the front in original order; a newer snapshot that arrived meanwhile wins.
-    const newer = new Set(queue.filter((q) => LATEST_ONLY.has(q.kind)).map((q) => q.kind));
-    queue = [...undelivered.filter((q) => !newer.has(q.kind)), ...queue];
-  }
-  if (replay.some((q) => q.kind === 'plan-add')) persistPendingAdds();
-  return () => {
-    subscribers.delete(sub);
-  };
+  queue = [...undelivered, ...queue]; // back to the front, in original order
+  if (replay.length > 0) persistPendingAdds();
+  return unsubscribe;
 }
 
 /** Test seam: forget everything, as a full page reload would (sessionStorage is left alone). */
@@ -268,6 +277,7 @@ export function resetBridgeHubForTests(): void {
   hubListener = null;
   hubInstalled = false;
   queue = [];
+  latest.clear();
   warnedEviction = false;
   subscribers.clear();
 }
@@ -398,6 +408,12 @@ export interface ForgetCoursesMessage {
  *  archive sweep to release captured data for terms that are over. */
 export function postForgetCourses(moduleIds: string[]): void {
   if (moduleIds.length === 0) return;
+  // The remembered snapshot must forget them too, or a remounted planner would get them back.
+  const kept = latest.get('courses');
+  if (isCoursesMessage(kept)) {
+    const gone = new Set(moduleIds);
+    latest.set('courses', { ...kept, payload: kept.payload.filter((c) => !gone.has(c.moduleId)) });
+  }
   const msg: ForgetCoursesMessage = {
     source: PAGE_BRIDGE_SOURCE,
     type: 'forget-courses',

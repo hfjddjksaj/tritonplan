@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { LoginScreen } from './LoginScreen';
+import { CHECK_SPAM_NOTE, UCSD_CHECK_NOTE, UCSD_MAIL_NOTE } from './copy';
 import { nav } from '../../lib/nav';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -176,6 +177,36 @@ describe('LoginScreen', () => {
     type('input[name="confirm"]', 'pw');
     await click('Create account');
     expect(text()).toContain(copy);
+  });
+
+  it('a UCSD address at sign-up is warned that the school may hold the mail back', async () => {
+    answers['/api/auth/signup'] = () => json(200, { ok: true });
+    await render();
+    await click('Create an account');
+    expect(text()).not.toContain(UCSD_MAIL_NOTE);
+    type('input[type="email"]', 'new@gmail.com');
+    expect(text()).not.toContain(UCSD_MAIL_NOTE);
+    type('input[type="email"]', 'New@UCSD.edu ');
+    expect(text()).toContain(UCSD_MAIL_NOTE);
+    await click('Sign in'); // signing in sends no mail: no warning
+    expect(text()).not.toContain(UCSD_MAIL_NOTE);
+    await click('Create an account');
+    type('input[name="password"]', 'long enough');
+    type('input[name="confirm"]', 'long enough');
+    await click('Create account');
+    expect(text()).toContain(UCSD_CHECK_NOTE);
+  });
+
+  it('the check-email screen says what to do when nothing arrives', async () => {
+    answers['/api/auth/signup'] = () => json(200, { ok: true });
+    await render();
+    await click('Create an account');
+    type('input[type="email"]', 'new@gmail.com');
+    type('input[name="password"]', 'long enough');
+    type('input[name="confirm"]', 'long enough');
+    await click('Create account');
+    expect(text()).toContain(CHECK_SPAM_NOTE);
+    expect(text()).not.toContain(UCSD_CHECK_NOTE);
   });
 
   it('forgot password always answers the same way', async () => {

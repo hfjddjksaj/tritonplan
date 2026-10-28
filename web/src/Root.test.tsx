@@ -68,6 +68,8 @@ const json = (status: number, body: unknown) =>
 function startServer() {
   const srv = {
     me: 'out' as 'in' | 'out' | 'down',
+    /** Whose session the cookie carries while `me` is 'in'. */
+    who: TEST_ME as typeof TEST_ME,
     state: snapshotOf() as WebSnapshot,
     auth: {} as Record<string, (body: unknown) => Response>,
     calls: [] as { method: string; url: string; body: unknown }[],
@@ -110,7 +112,7 @@ function startServer() {
       }
       if (srv.me === 'down') throw new TypeError('Failed to fetch');
       if (srv.me === 'out') return json(401, { error: 'unauthorized' });
-      if (route === 'GET /api/me') return json(200, TEST_ME);
+      if (route === 'GET /api/me') return json(200, srv.who);
       const answer = json(200, srv.state);
       if (srv.holdState) await srv.holdState;
       return answer;
@@ -1005,6 +1007,62 @@ describe('Root: coming back to the tab', () => {
     expect(disposed(boots[0]!)).toBe(true);
     await letSyncRun();
     expect(srv.state.plans['plan-1']!.data).toMatchObject({ name: 'Renamed on phone' });
+  });
+
+  it('a remount keeps what the extension already said: "Go to TSS" stays', async () => {
+    installBridgeHub();
+    srv.me = 'in';
+    srv.state = snapshotOf(mine('Mine'));
+    await mount('/');
+    await letSyncRun();
+    // The extension speaks once per page load (and again only when TSS captures something new).
+    await act(async () => {
+      for (const data of [
+        { source: BRIDGE_SOURCE, type: 'courses', version: 1, payload: [] },
+        { source: BRIDGE_SOURCE, type: 'booked', version: 1, payload: [], captured: false },
+      ]) {
+        window.dispatchEvent(new MessageEvent('message', { data, source: window, origin: window.location.origin }));
+      }
+    });
+    const cta = () => container.querySelector<HTMLAnchorElement>('.browse-empty__cta');
+    expect(cta()?.textContent).toBe('Go to TSS');
+    const doc = srv.state.plans['plan-1']!;
+    srv.state.plans['plan-1'] = { ...doc, version: doc.version + 100, data: { ...(doc.data as NamedPlan), name: 'Renamed on phone' } };
+    await waitOutThrottle();
+    await becomeVisible();
+    expect(boots).toHaveLength(2);
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Renamed on phone');
+    expect(cta()?.textContent).toBe('Go to TSS');
+  });
+
+  it('signed in as someone else in another tab → the page reloads, never showing their plans under this name', async () => {
+    const reloadSpy = vi.spyOn(nav, 'reload').mockImplementation(() => {});
+    srv.me = 'in';
+    srv.state = snapshotOf(mine('Mine'));
+    await mount('/');
+    await letSyncRun();
+    srv.who = { ...TEST_ME, email: 'someone.else@ucsd.edu' };
+    srv.state = snapshotOf(mine('Theirs'));
+    await waitOutThrottle();
+    await becomeVisible();
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    expect(boots).toHaveLength(1);
+    expect(disposed(boots[0]!)).toBe(true); // this tab's leftovers must not save into their account
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine');
+  });
+
+  it('the same account with a password set elsewhere remounts with the fresh account details', async () => {
+    srv.me = 'in';
+    srv.who = { ...TEST_ME, hasPassword: false, hasGoogle: true };
+    srv.state = snapshotOf(mine('Mine'));
+    await mount('/');
+    await letSyncRun();
+    srv.who = { ...TEST_ME, hasPassword: true, hasGoogle: true };
+    addCourseElsewhere();
+    await waitOutThrottle();
+    await becomeVisible();
+    expect(boots).toHaveLength(2);
+    expect(boots[1]!.me).toEqual({ ...TEST_ME, hasPassword: true, hasGoogle: true });
   });
 
   it('a save that lands while the refresh is out does not remount on the older answer', async () => {

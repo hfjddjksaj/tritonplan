@@ -10,6 +10,17 @@ export const SOMETHING_WRONG = 'Something went wrong. Please try again.';
 /** A new password is typed twice, so a slip of the finger cannot lock the student out. */
 export const PASSWORDS_DIFFER = "The passwords don't match.";
 
+/*
+ * UCSD's mail servers accept our mail (Resend reports it delivered) yet it can reach neither
+ * the inbox nor spam: a new sending domain gets held. Google sign-in needs no mail at all.
+ */
+export const UCSD_MAIL_NOTE = "UCSD's mail filters may hold back our confirmation email. Continue with Google skips it.";
+export const UCSD_CHECK_NOTE = "Not there? UCSD's mail filters may be holding it. Go back and continue with Google instead.";
+export const CHECK_SPAM_NOTE = 'Not there after a few minutes? Check your spam folder, or go back and continue with Google.';
+
+/** A UCSD address, campus subdomains included. */
+export const isUcsdAddress = (email: string): boolean => /@([a-z0-9-]+\.)*ucsd\.edu$/i.test(email.trim());
+
 /** `?auth=` codes the server redirects back with. */
 export const AUTH_NOTICES: ReadonlyMap<string, string> = new Map([
   ['link-expired', LINK_EXPIRED],
