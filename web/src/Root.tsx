@@ -12,6 +12,7 @@ import { AuthCard } from './components/auth/AuthCard';
 import { AUTH_NOTICES } from './components/auth/copy';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { SignedOutPreview } from './components/auth/SignedOutPreview';
 import { ImportConfirm, type ImportOutcome } from './components/migrate/ImportConfirm';
 import { MigrateReceiver } from './components/migrate/MigrateReceiver';
 import { ResetPasswordScreen } from './components/auth/ResetPasswordScreen';
@@ -468,10 +469,12 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
       }
       // Back to "/", not "/migrate": enter() picks a pending payload up on any path, while /migrate without one
       // (imported meanwhile in another tab) would wait for the old site forever.
+      // Anyone else gets the planner's page with the sign-in card over it, not a bare sign-in page: a new
+      // student sent here by "+ TritonPlan" sees their course first and knows they are in the right place.
       return loadPendingMigration() ? (
         <LoginScreen notice={pageNotice} heading="Sign in to finish moving your plans" returnTo="/" />
       ) : (
-        <LoginScreen notice={pageNotice} returnTo={window.location.pathname} />
+        <SignedOutPreview notice={pageNotice} returnTo={window.location.pathname} />
       );
     case 'import':
       return <ImportConfirm snapshot={screen.snapshot} payload={screen.payload} onDone={(o) => void importDone(screen, o)} />;

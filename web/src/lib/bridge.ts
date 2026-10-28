@@ -166,6 +166,8 @@ let queue: Queued[] = [];
 /** The latest snapshot of each kind this page load, delivered or not. */
 const latest = new Map<SnapshotKind, unknown>();
 const subscribers = new Set<Subscriber>();
+/** Told after every arrival; they only look (peekBridge), never take. */
+const watchers = new Set<() => void>();
 
 function persistPendingAdds(): void {
   try {
@@ -235,11 +237,36 @@ export function installBridgeHub(): void {
     const targets = [...subscribers].filter((s) => s.kinds.has(kind));
     if (targets.length === 0) {
       if (!isSnapshot(kind)) enqueue({ kind, data });
-      return;
+    } else {
+      for (const s of targets) deliver(s.handler, data);
     }
-    for (const s of targets) deliver(s.handler, data);
+    for (const w of [...watchers]) deliver(w, data);
   };
   window.addEventListener('message', hubListener);
+}
+
+export interface BridgeSeen {
+  /** The extension's latest captured pool. */
+  courses: CourseOffering[];
+  /** "+ TritonPlan" clicks still waiting for the planner, oldest first. */
+  adds: { course: CourseOffering; selectedOptionId: string }[];
+}
+
+/** What the extension has said this page load, without using any of it up: the planner still gets it all after sign-in. */
+export function peekBridge(): BridgeSeen {
+  const kept = latest.get('courses');
+  return {
+    courses: isCoursesMessage(kept) ? kept.payload : [],
+    adds: queue.flatMap((q) => (isPlanAddMessage(q.data) ? [q.data.payload] : [])),
+  };
+}
+
+/** Calls back after each bridge message the hub takes in. Returns the stop function. */
+export function watchBridge(onChange: () => void): () => void {
+  watchers.add(onChange);
+  return () => {
+    watchers.delete(onChange);
+  };
 }
 
 /**
@@ -280,6 +307,7 @@ export function resetBridgeHubForTests(): void {
   latest.clear();
   warnedEviction = false;
   subscribers.clear();
+  watchers.clear();
 }
 
 /** Same-window/same-origin listener for `appt-times` pushes. Separate from

@@ -168,3 +168,38 @@
     height: 38px;
   }
 }
+
+/* The column beside the week: the plan's courses, then (signed-out preview) what else was browsed. */
+.shared__side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+/* Nothing to list beside the week: it takes the whole width. */
+@media (min-width: 900px) {
+  .shared__layout--solo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Signed-out preview: an empty week still reads as the planner's calendar. */
+.preview .empty {
+  min-height: 360px;
+}
+.preview__label {
+  margin: 0 0 6px 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+/* Not in the plan yet, so no course colour. */
+.preview__browsed .shared__code::before {
+  display: none;
+}
+@media (max-width: 760px) {
+  .preview .empty {
+    min-height: 240px;
+  }
+}

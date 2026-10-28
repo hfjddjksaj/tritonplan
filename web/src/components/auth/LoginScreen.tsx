@@ -7,16 +7,29 @@ import { useState, type FormEvent } from 'react';
 import { apiPost } from '../../lib/cloud/api';
 import { nav } from '../../lib/nav';
 import { safeReturnTo } from '../../lib/site';
-import { AuthCard, AuthField, AuthMessage } from './AuthCard';
+import { AuthCard, AuthField, AuthMessage, type AuthDialog } from './AuthCard';
 import {
   CHECK_SPAM_NOTE, failureText, isUcsdAddress, PASSWORDS_DIFFER, UCSD_CHECK_NOTE, UCSD_MAIL_NOTE, WRONG_CREDENTIALS,
 } from './copy';
 
 type Mode = 'signin' | 'signup' | 'forgot' | 'check-email';
 
-const LEDE = 'TritonPlan now saves your plans to your account, so they follow you to any device.';
+export const LEDE = 'TritonPlan saves your plans to your account, so they follow you to any device.';
 
-export function LoginScreen({ notice, heading, returnTo }: { notice?: string; heading?: string; returnTo: string }) {
+export function LoginScreen({
+  notice,
+  heading,
+  lede = LEDE,
+  returnTo,
+  dialog,
+}: {
+  notice?: string;
+  heading?: string;
+  lede?: string;
+  returnTo: string;
+  /** Shown over the signed-out preview rather than as a page. */
+  dialog?: AuthDialog;
+}) {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -87,7 +100,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
 
   if (mode === 'check-email') {
     return (
-      <AuthCard heading="Check your email">
+      <AuthCard heading="Check your email" dialog={dialog}>
         <AuthMessage tone="notice">{sentText}</AuthMessage>
         <p className="auth__lede">{isUcsdAddress(sentTo) ? UCSD_CHECK_NOTE : CHECK_SPAM_NOTE}</p>
         <button type="button" className="btn auth__wide" onClick={() => go('signin')}>
@@ -102,13 +115,13 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
     : (heading ?? (mode === 'signup' ? 'Create your TritonPlan account' : 'Sign in to TritonPlan'));
 
   return (
-    <AuthCard heading={title}>
+    <AuthCard heading={title} dialog={dialog}>
       {notice && showNotice && <AuthMessage tone="notice">{notice}</AuthMessage>}
       {mode === 'forgot' ? (
         <p className="auth__lede">Enter your email and we'll send you a link to choose a new password.</p>
       ) : (
         <>
-          <p className="auth__lede">{LEDE}</p>
+          <p className="auth__lede">{lede}</p>
           <a className="btn auth__wide auth__google" href={'/api/auth/google?returnTo=' + encodeURIComponent(target)}>
             <GoogleMark />
             Continue with Google

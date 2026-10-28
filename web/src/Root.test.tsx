@@ -299,15 +299,63 @@ afterEach(() => {
 });
 
 describe('Root: signed out', () => {
-  it('signed out shows the email form and a Google link carrying returnTo', async () => {
+  it('signed out shows the planner page with the sign-in card over it: email form and a Google link carrying returnTo', async () => {
     await mount('/');
+    expect(container.querySelector('h1')?.textContent).toBe('Plan your quarter');
+    expect(text()).toContain('Your week is open');
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Sign in to TritonPlan');
     expect(input('email')).not.toBeNull();
     expect(input('password')).not.toBeNull();
-    expect(text()).toContain('TritonPlan now saves your plans to your account, so they follow you to any device.');
+    expect(text()).toContain('Your plans are saved to your account, so they follow you to any device.');
     const google = [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'));
     expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2F');
     expect(container.querySelector('.app')).toBeNull();
     expect(callsTo('GET', '/api/state')).toHaveLength(0);
+  });
+
+  it('what the extension brought shows under the card; signing in keeps every click for the planner', async () => {
+    installBridgeHub();
+    await mount('/');
+    const cse = makeCourse('CSE-100|2026|2', 'CSE-100');
+    const math = makeCourse('MATH-18|2026|2', 'MATH-18');
+    await act(async () => {
+      for (const data of [
+        { source: BRIDGE_SOURCE, type: 'courses', version: 1, payload: [cse, math] },
+        { source: BRIDGE_SOURCE, type: 'plan-add', version: 1, payload: { course: cse, selectedOptionId: cse.options[0]!.id } },
+      ]) {
+        window.dispatchEvent(new MessageEvent('message', { data, source: window, origin: window.location.origin }));
+      }
+    });
+    expect(container.querySelector('h1')?.textContent).toBe('Your plan');
+    expect(text()).toContain('Fall 2026 · not saved yet');
+    expect([...container.querySelectorAll('.shared__layout > .shared__side > .shared__courses .shared__code')].map((e) => e.textContent)).toEqual(['CSE-100']);
+    expect([...container.querySelectorAll('.preview__browsed .shared__code')].map((e) => e.textContent)).toEqual(['MATH-18']);
+    expect(container.querySelector('[role="dialog"] h2')?.textContent).toBe('Sign in to save your plan');
+    expect(text()).toContain('Your courses from TSS are here.');
+
+    // Signed in from another tab (the verify link); coming back to this one enters the planner with the click.
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await becomeVisible();
+    expect(container.querySelector('.app')).not.toBeNull();
+    await letSyncRun();
+    const saved = Object.values(srv.state.plans).map((p) => p.data as NamedPlan);
+    expect(saved.flatMap((p) => p.plan.entries.map((e) => e.course.id))).toContain('CSE-100|2026|2');
+  });
+
+  it('the card closes (×, Escape) to the preview, and the page button opens it again', async () => {
+    await mount('/');
+    const dialog = () => container.querySelector('[role="dialog"]');
+    expect(dialog()!.parentElement!.className).toContain('authdlg--delayed'); // first, the page
+    await act(async () => container.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Close"]')!.click());
+    expect(dialog()).toBeNull();
+    expect(container.querySelector('h1')?.textContent).toBe('Plan your quarter');
+    await click('Sign in');
+    expect(dialog()).not.toBeNull();
+    expect(dialog()!.parentElement!.className).not.toContain('authdlg--delayed'); // asked for: no waiting
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(dialog()).toBeNull();
   });
 
   it.each([

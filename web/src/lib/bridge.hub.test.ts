@@ -5,9 +5,11 @@ import {
   installBridgeHub,
   installBridgeListener,
   installApptTimesListener,
+  peekBridge,
   postForgetCourses,
   resetBridgeHubForTests,
   subscribeBridge,
+  watchBridge,
 } from './bridge';
 import { makeCourse } from './fixtures';
 
@@ -242,6 +244,27 @@ describe('bridge hub', () => {
     const seen: string[][] = [];
     installBridgeListener({ onCourses: (c) => seen.push(c.map((x) => x.id)), onPlanAdd: vi.fn() });
     expect(seen).toEqual([['b']]);
+  });
+
+  it('peeking shows what the extension sent without using it up, and watchers hear each arrival', () => {
+    installBridgeHub();
+    const heard = vi.fn();
+    const stop = watchBridge(heard);
+    post(coursesMsg('a', 'b'));
+    post(planAdd('A'));
+    expect(heard).toHaveBeenCalledTimes(2);
+    expect(peekBridge()).toEqual({
+      courses: [makeCourse('a'), makeCourse('b')],
+      adds: [{ course: makeCourse('A'), selectedOptionId: 'A-opt' }],
+    });
+    stop();
+    post(planAdd('B'));
+    expect(heard).toHaveBeenCalledTimes(2);
+    // The planner that mounts after sign-in still gets every click.
+    const h = vi.fn();
+    subscribeBridge(['plan-add'], h);
+    expect(h.mock.calls.map((c) => idOf(c[0]))).toEqual(['A', 'B']);
+    expect(peekBridge().adds).toEqual([]);
   });
 
   it('evicting one kind never drops another, and warns once without data', () => {
