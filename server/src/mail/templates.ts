@@ -16,11 +16,24 @@ export function addPasswordMail(link: string): { subject: string; text: string }
   };
 }
 
-/** Sent on repeat sign-up for an unverified address: the mailbox owner, not the form submitter, chooses the password. */
+/**
+ * Sent on repeat sign-up for an unverified address. The link confirms the password submitted with it, so only
+ * someone holding both the mailbox and that password can finish: a stranger's sign-up dead-ends with the owner.
+ */
 export function finishSignupMail(link: string): { subject: string; text: string } {
   return {
-    subject: 'Choose your TritonPlan password',
-    text: `To finish signing up for TritonPlan, choose your password here:\n\n${link}\n\n${IGNORE}\n`,
+    subject: 'Finish signing up for TritonPlan',
+    text: `To finish signing up for TritonPlan, open this link and enter the password you just chose:\n\n${link}\n\n${IGNORE}\n`,
+  };
+}
+
+/** Sent when someone signs up with an address that already signs in with Google; the link confirms the password, as above. */
+export function googleSignupMail(link: string): { subject: string; text: string } {
+  return {
+    subject: 'Confirm your TritonPlan password',
+    text:
+      'This email already signs in to TritonPlan with Google. ' +
+      `To sign in with the password you just chose as well, open this link and enter it:\n\n${link}\n\n${IGNORE}\n`,
   };
 }
 

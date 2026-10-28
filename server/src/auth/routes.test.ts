@@ -104,21 +104,31 @@ test('signup on a verified password account is 409 email_taken', async () => {
   expect(await res.json()).toEqual({ error: 'email_taken' });
 });
 
-test('signup on an unverified account keeps the first password and link, and mails a choose-password link', async () => {
-  const { post, tokenFrom, deps, verifyWith } = setup();
+test('signup again on an unverified account: its link confirms with the new password, which then replaces the first', async () => {
+  const { post, tokenFrom, deps, verifyWith, cookieOf } = setup();
   await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'first-password' });
   const second = await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'second-password' });
   expect(second.status).toBe(200);
   expect(await second.json()).toEqual({ ok: true });
-  expect(deps.mailer.sent[1]!.subject).toBe('Choose your TritonPlan password');
-  expect(deps.mailer.sent[1]!.text).toContain('https://tritonplan.cn/reset#token=');
-  // The first verify link still works, with the first password.
+  expect(deps.mailer.sent[1]!.subject).toBe('Finish signing up for TritonPlan');
+  expect(deps.mailer.sent[1]!.text).toContain('https://tritonplan.cn/verify#token=');
+  // Until confirmed, the second password is nothing: the first one is still the account's.
+  expect((await verifyWith(tokenFrom(1), 'first-password')).status).toBe(401);
+  const v = await verifyWith(tokenFrom(1), 'second-password');
+  expect(v.status).toBe(200);
+  expect(cookieOf(v)).toBeTruthy();
+  expect((await post('/api/auth/login', { email: 'a@ucsd.edu', password: 'second-password' })).status).toBe(200);
+  expect((await post('/api/auth/login', { email: 'a@ucsd.edu', password: 'first-password' })).status).toBe(401);
+  expect((await verifyWith(tokenFrom(0), 'first-password')).status).toBe(400); // confirmed: every confirm link is spent
+});
+
+test('signup again on an unverified account leaves the first link working with the first password', async () => {
+  const { post, tokenFrom, verifyWith } = setup();
+  await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'first-password' });
+  await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'second-password' });
   expect((await verifyWith(tokenFrom(0), 'first-password')).status).toBe(200);
   expect((await post('/api/auth/login', { email: 'a@ucsd.edu', password: 'first-password' })).status).toBe(200);
   expect((await post('/api/auth/login', { email: 'a@ucsd.edu', password: 'second-password' })).status).toBe(401);
-  const r = await post('/api/auth/reset', { token: tokenFrom(1), password: 'owners-new-password' });
-  expect(r.status).toBe(200);
-  expect((await post('/api/auth/login', { email: 'a@ucsd.edu', password: 'owners-new-password' })).status).toBe(200);
 });
 
 test('unsolicited signup cannot hand the attacker the victim account', async () => {
@@ -130,14 +140,17 @@ test('unsolicited signup cannot hand the attacker the victim account', async () 
   const atk = await post('/api/auth/login', { email: 'victim@ucsd.edu', password: 'attacker-password' });
   expect(atk.status).toBe(403);
   expect(await atk.json()).toEqual({ error: 'unverified' });
-  // The victim signs up again, gets a choose-password link and takes the account over.
+  // The attacker signing up again gets nothing either: the victim cannot confirm a password they never chose.
+  await post('/api/auth/signup', { email: 'victim@ucsd.edu', password: 'attacker-again' });
+  expect((await verifyWith(tokenFrom(1), 'victim-own-password')).status).toBe(401);
+  // The victim signs up with their own password and confirms it from the mail.
   await post('/api/auth/signup', { email: 'victim@ucsd.edu', password: 'victim-own-password' });
-  expect(deps.mailer.sent[1]!.subject).toBe('Choose your TritonPlan password');
-  const r = await post('/api/auth/reset', { token: tokenFrom(1), password: 'victim-own-password' });
-  expect(r.status).toBe(200);
+  expect(deps.mailer.sent[2]!.subject).toBe('Finish signing up for TritonPlan');
+  expect((await verifyWith(tokenFrom(2), 'victim-own-password')).status).toBe(200);
   expect((await post('/api/auth/login', { email: 'victim@ucsd.edu', password: 'victim-own-password' })).status).toBe(200);
   expect((await post('/api/auth/login', { email: 'victim@ucsd.edu', password: 'attacker-password' })).status).toBe(401);
-  expect((await verifyWith(verifyTok, 'attacker-password')).status).toBe(401);
+  expect((await post('/api/auth/login', { email: 'victim@ucsd.edu', password: 'attacker-again' })).status).toBe(401);
+  expect((await verifyWith(verifyTok, 'attacker-password')).status).toBe(400);
 });
 
 test('wrong password at verify is 401 and leaves the token usable', async () => {
@@ -175,19 +188,31 @@ test('wrong-kind tokens are rejected without burning the other kind', async () =
   expect((await post('/api/auth/reset', { token: resetTok, password: 'brand-new-password' })).status).toBe(200);
 });
 
-test('signup on a google-only account never applies the submitted password and mails a set-password link', async () => {
-  const { post, deps, tokenFrom, googleOnly } = setup();
+test('signup on a google-only account: the mail says so, and its link adds the password just chosen', async () => {
+  const { post, deps, tokenFrom, googleOnly, verifyWith, cookieOf, me } = setup();
   googleOnly('g@ucsd.edu');
-  const res = await post('/api/auth/signup', { email: 'g@ucsd.edu', password: 'attacker-chosen' });
+  const res = await post('/api/auth/signup', { email: 'g@ucsd.edu', password: 'owners-password' });
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ ok: true });
+  expect(deps.mailer.sent[0]!.subject).toBe('Confirm your TritonPlan password');
+  expect(deps.mailer.sent[0]!.text).toContain('already signs in to TritonPlan with Google');
+  expect(deps.mailer.sent[0]!.text).toContain('https://tritonplan.cn/verify#token=');
+  // Not usable until the mailbox owner confirms it.
+  expect((await post('/api/auth/login', { email: 'g@ucsd.edu', password: 'owners-password' })).status).toBe(401);
+  const v = await verifyWith(tokenFrom(0), 'owners-password');
+  expect(v.status).toBe(200);
+  expect(await (await me(cookieOf(v)!)).json()).toEqual({ email: 'g@ucsd.edu', hasPassword: true, hasGoogle: true });
+  expect((await post('/api/auth/login', { email: 'g@ucsd.edu', password: 'owners-password' })).status).toBe(200);
+});
+
+test('signup on a google-only account by someone else never applies their password', async () => {
+  const { post, tokenFrom, googleOnly, verifyWith } = setup();
+  googleOnly('g@ucsd.edu');
+  await post('/api/auth/signup', { email: 'g@ucsd.edu', password: 'attacker-chosen' });
+  // The owner clicks the mail and types a password of their own: it is not the one submitted, so nothing changes.
+  expect((await verifyWith(tokenFrom(0), 'owners-own-password')).status).toBe(401);
   expect((await post('/api/auth/login', { email: 'g@ucsd.edu', password: 'attacker-chosen' })).status).toBe(401);
-  expect(deps.mailer.sent[0]!.subject).toBe('Set a password for TritonPlan');
-  expect(deps.mailer.sent[0]!.text).toContain('https://tritonplan.cn/reset#token=');
-  const r = await post('/api/auth/reset', { token: tokenFrom(0), password: 'owners-new-password' });
-  expect(r.status).toBe(200);
-  expect((await post('/api/auth/login', { email: 'g@ucsd.edu', password: 'owners-new-password' })).status).toBe(200);
-  expect((await post('/api/auth/login', { email: 'g@ucsd.edu', password: 'attacker-chosen' })).status).toBe(401);
+  expect((await post('/api/auth/login', { email: 'g@ucsd.edu', password: 'owners-own-password' })).status).toBe(401);
 });
 
 test('expired, reused or missing verify token is 400 link_expired', async () => {

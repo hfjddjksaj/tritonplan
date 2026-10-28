@@ -4,7 +4,7 @@ import type { Deps } from '../app';
 import { tx } from '../db/db';
 import { clientIp, requireUser, type AppEnv } from '../http/guard';
 import type { RateLimiter } from '../http/rate-limit';
-import { addPasswordMail, finishSignupMail, resetPasswordMail, verifyEmailMail } from '../mail/templates';
+import { finishSignupMail, googleSignupMail, resetPasswordMail, verifyEmailMail } from '../mail/templates';
 import { hashPassword, passwordProblem, verifyPassword } from './passwords';
 import { clearSessionCookie, createSession, deleteSession, deleteUserSessions, SESSION_COOKIE, sessionCookie } from './sessions';
 import { consumeEmailToken, createUser, findEmailToken, findUserByEmail, findUserById, issueEmailToken, normalizeEmail } from './users';
@@ -100,13 +100,13 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     if (existing?.email_verified && existing.password_hash) return c.json({ error: 'email_taken' }, 409);
 
     if (existing) {
-      // Google-only or still unverified: the submitted password is discarded. Whoever fills this form does not
-      // necessarily own the mailbox, so the owner picks the password through a reset-style link instead. The
-      // outstanding verify link is left alone so a repeat signup cannot invalidate the owner's first mail.
-      const t = issueEmailToken(db, existing.id, 'reset', deps.now());
-      const link = `${config.origin}/reset#token=${t}`;
+      // Google-only or still unverified: the submitted password waits on a confirm link, applied only when the
+      // person at the mailbox enters that same password. Whoever fills this form does not necessarily own the
+      // mailbox, and the owner cannot confirm a password a stranger chose. The owner's first confirm link stays.
+      const t = issueEmailToken(db, existing.id, 'verify', deps.now(), hash);
+      const link = `${config.origin}/verify#token=${t}`;
       return sendOrFail(c, () =>
-        deps.mailer.send({ to: email, ...(existing.email_verified ? addPasswordMail(link) : finishSignupMail(link)) }),
+        deps.mailer.send({ to: email, ...(existing.email_verified ? googleSignupMail(link) : finishSignupMail(link)) }),
       );
     }
     const user = createUser(db, { email, verified: false, passwordHash: hash }, deps.now());
@@ -125,11 +125,13 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     const password = str(b.password);
     if (tooLong(password)) return c.json({ error: 'invalid_credentials' }, 401);
     const user = findUserById(db, t.userId);
+    // A repeat sign-up's link confirms the password sent with it; a first sign-up's, the account's own.
+    const expected = t.pendingPasswordHash ?? user?.password_hash;
     // A wrong guess leaves the token usable; the dummy hash keeps the no-password case the same cost.
-    const ok = await verifyPassword(password, user?.password_hash ?? (await DUMMY_HASH));
-    if (!user || !user.password_hash || !ok) return c.json({ error: 'invalid_credentials' }, 401);
+    const ok = await verifyPassword(password, expected ?? (await DUMMY_HASH));
+    if (!user || !expected || !ok) return c.json({ error: 'invalid_credentials' }, 401);
     tx(db, () => {
-      db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(user.id);
+      db.prepare('UPDATE users SET email_verified = 1, password_hash = ? WHERE id = ?').run(expected, user.id);
       db.prepare("DELETE FROM email_tokens WHERE user_id = ? AND kind = 'verify'").run(user.id);
     });
     startSession(c, user.id);

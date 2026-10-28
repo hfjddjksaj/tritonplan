@@ -46,25 +46,40 @@ export function normalizeEmail(raw: string): string | null {
 
 const HOUR_MS = 3_600_000;
 
-/** Single live token per user and kind: issuing a new one invalidates the previous link. Only the SHA-256 is stored. */
-export function issueEmailToken(db: Db, userId: string, kind: 'verify' | 'reset', now: Date): string {
+/**
+ * Single live token per user and kind: issuing a new one invalidates the previous link. Only the SHA-256 is stored.
+ * A verify token may carry the hash of a password submitted with a repeat sign-up, to be confirmed with it; those
+ * replace only each other, so a stranger's repeat sign-up never kills the owner's first confirm link.
+ */
+export function issueEmailToken(
+  db: Db, userId: string, kind: 'verify' | 'reset', now: Date, pendingPasswordHash: string | null = null,
+): string {
   const token = randomToken();
-  db.prepare('DELETE FROM email_tokens WHERE user_id = ? AND kind = ?').run(userId, kind);
-  db.prepare('INSERT INTO email_tokens (token_hash, user_id, kind, expires_at) VALUES (?, ?, ?, ?)').run(
+  db.prepare('DELETE FROM email_tokens WHERE user_id = ? AND kind = ? AND (pending_password_hash IS NULL) = ?').run(
+    userId,
+    kind,
+    pendingPasswordHash === null ? 1 : 0,
+  );
+  db.prepare('INSERT INTO email_tokens (token_hash, user_id, kind, pending_password_hash, expires_at) VALUES (?, ?, ?, ?, ?)').run(
     sha256Hex(token),
     userId,
     kind,
+    pendingPasswordHash,
     new Date(now.getTime() + (kind === 'verify' ? 24 : 1) * HOUR_MS).toISOString(),
   );
   return token;
 }
 
 /** Owner of a known, right-kind, unexpired token, without using the token up. */
-export function findEmailToken(db: Db, token: string, kind: 'verify' | 'reset', now: Date): { userId: string } | null {
-  const row = db.prepare('SELECT user_id, expires_at FROM email_tokens WHERE token_hash = ? AND kind = ?').get(sha256Hex(token), kind) as
-    | { user_id: string; expires_at: string }
-    | undefined;
-  return row && Date.parse(row.expires_at) > now.getTime() ? { userId: row.user_id } : null;
+export function findEmailToken(
+  db: Db, token: string, kind: 'verify' | 'reset', now: Date,
+): { userId: string; pendingPasswordHash: string | null } | null {
+  const row = db
+    .prepare('SELECT user_id, pending_password_hash, expires_at FROM email_tokens WHERE token_hash = ? AND kind = ?')
+    .get(sha256Hex(token), kind) as { user_id: string; pending_password_hash: string | null; expires_at: string } | undefined;
+  return row && Date.parse(row.expires_at) > now.getTime()
+    ? { userId: row.user_id, pendingPasswordHash: row.pending_password_hash }
+    : null;
 }
 
 /** Looks up and deletes in one step so a link works once; returns null for unknown, wrong-kind or expired tokens. */

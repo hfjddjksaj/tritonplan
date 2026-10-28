@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { addPasswordMail, finishSignupMail, resetPasswordMail, verifyEmailMail } from './templates';
+import { addPasswordMail, finishSignupMail, googleSignupMail, resetPasswordMail, verifyEmailMail } from './templates';
 
 test('mail templates carry subject, link and the ignore line', () => {
   const v = verifyEmailMail('https://tritonplan.cn/#/verify?token=abc');
@@ -24,10 +24,20 @@ test("addPasswordMail carries subject, link and the ignore line", () => {
   expect(m.text).toContain("If you didn't ask for this, you can ignore this email.");
 });
 
-test("finishSignupMail carries subject, body, link and the ignore line", () => {
-  const m = finishSignupMail("https://x/reset#token=t");
-  expect(m.subject).toBe("Choose your TritonPlan password");
-  expect(m.text).toContain("To finish signing up for TritonPlan, choose your password here:");
-  expect(m.text).toContain("https://x/reset#token=t");
+test("finishSignupMail asks for the password just chosen", () => {
+  const m = finishSignupMail("https://x/verify#token=t");
+  expect(m.subject).toBe("Finish signing up for TritonPlan");
+  expect(m.text).toContain("To finish signing up for TritonPlan, open this link and enter the password you just chose:");
+  expect(m.text).toContain("https://x/verify#token=t");
+  expect(m.text).toContain("If you didn't ask for this, you can ignore this email.");
+});
+
+test("googleSignupMail says the address already signs in with Google", () => {
+  const m = googleSignupMail("https://x/verify#token=t");
+  expect(m.subject).toBe("Confirm your TritonPlan password");
+  expect(m.text).toContain(
+    "This email already signs in to TritonPlan with Google. To sign in with the password you just chose as well, open this link and enter it:",
+  );
+  expect(m.text).toContain("https://x/verify#token=t");
   expect(m.text).toContain("If you didn't ask for this, you can ignore this email.");
 });
