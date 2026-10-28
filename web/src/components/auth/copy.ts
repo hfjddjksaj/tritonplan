@@ -7,6 +7,8 @@ export const WRONG_CREDENTIALS = 'Wrong email or password.';
 export const VERIFY_MISMATCH =
   "That password doesn't match this sign-up. If you didn't sign up for TritonPlan, you can ignore the email.";
 export const SOMETHING_WRONG = 'Something went wrong. Please try again.';
+/** A new password is typed twice, so a slip of the finger cannot lock the student out. */
+export const PASSWORDS_DIFFER = "The passwords don't match.";
 
 /** `?auth=` codes the server redirects back with. */
 export const AUTH_NOTICES: ReadonlyMap<string, string> = new Map([

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { apiPost } from '../lib/cloud/api';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { AuthField } from './auth/AuthCard';
-import { failureText } from './auth/copy';
+import { failureText, PASSWORDS_DIFFER } from './auth/copy';
 
 interface Props {
   onClose: () => void;
@@ -20,12 +20,17 @@ export function ChangePasswordDialog({ onClose, onFlash }: Props) {
   useEscapeKey(onClose);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
+    if (next !== confirm) {
+      setError(PASSWORDS_DIFFER);
+      return;
+    }
     setBusy(true);
     setError(null);
     const r = await apiPost('/api/account/password', { current, next });
@@ -66,6 +71,14 @@ export function ChangePasswordDialog({ onClose, onFlash }: Props) {
             minLength={8}
             value={next}
             onChange={(e) => setNext(e.target.value)}
+          />
+          <AuthField
+            label="Confirm new password"
+            type="password"
+            name="confirm"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
           />
           {error && (
             <p className="auth__msg auth__msg--error" role="alert">

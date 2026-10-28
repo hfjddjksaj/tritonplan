@@ -124,12 +124,38 @@ describe('LoginScreen', () => {
     expect(text()).toContain('Something went wrong. Please try again.');
   });
 
+  it('only sign-up asks for the password twice', async () => {
+    await render();
+    expect(container.querySelectorAll('input[type="password"]')).toHaveLength(1);
+    await click('Create an account');
+    expect(container.querySelector('input[name="confirm"]')?.getAttribute('autocomplete')).toBe('new-password');
+    expect(container.querySelectorAll('input[type="password"]')).toHaveLength(2);
+    await click('Sign in');
+    expect(container.querySelectorAll('input[type="password"]')).toHaveLength(1);
+  });
+
+  it('two different passwords are caught before anything is sent', async () => {
+    answers['/api/auth/signup'] = () => json(200, { ok: true });
+    await render();
+    await click('Create an account');
+    type('input[type="email"]', 'new@ucsd.edu');
+    type('input[name="password"]', 'long enough');
+    type('input[name="confirm"]', 'long enougj');
+    await click('Create account');
+    expect(text()).toContain("The passwords don't match.");
+    expect(sent('/api/auth/signup')).toEqual([]);
+    type('input[name="confirm"]', 'long enough');
+    await click('Create account');
+    expect(sent('/api/auth/signup')).toEqual([{ email: 'new@ucsd.edu', password: 'long enough' }]);
+  });
+
   it('sign-up success shows the check-email screen', async () => {
     answers['/api/auth/signup'] = () => json(200, { ok: true });
     await render();
     await click('Create an account');
     type('input[type="email"]', 'new@ucsd.edu');
-    type('input[type="password"]', 'long enough');
+    type('input[name="password"]', 'long enough');
+    type('input[name="confirm"]', 'long enough');
     await click('Create account');
     expect(sent('/api/auth/signup')).toEqual([{ email: 'new@ucsd.edu', password: 'long enough' }]);
     expect(text()).toContain('Check your inbox at new@ucsd.edu to confirm your account.');
@@ -146,7 +172,8 @@ describe('LoginScreen', () => {
     await render();
     await click('Create an account');
     type('input[type="email"]', 'new@ucsd.edu');
-    type('input[type="password"]', 'pw');
+    type('input[name="password"]', 'pw');
+    type('input[name="confirm"]', 'pw');
     await click('Create account');
     expect(text()).toContain(copy);
   });

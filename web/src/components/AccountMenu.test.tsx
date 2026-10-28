@@ -277,9 +277,10 @@ describe('change password', () => {
     await openMenu();
     await click('Change password');
   }
-  function fill() {
+  function fill(confirm = 'new password 1') {
     type('input[autocomplete="current-password"]', 'old password');
-    type('input[autocomplete="new-password"]', 'new password 1');
+    type('input[name="next"]', 'new password 1');
+    type('input[name="confirm"]', confirm);
   }
   async function save() {
     const form = q('[role="dialog"] form') as HTMLFormElement;
@@ -298,6 +299,16 @@ describe('change password', () => {
     expect(bodies('/api/account/password')).toEqual([{ current: 'old password', next: 'new password 1' }]);
     expect(q('[role="dialog"]')).toBeNull();
     expect(flash).toHaveBeenCalledWith('Password changed.');
+  });
+
+  it('a new password typed differently twice is caught before anything is sent', async () => {
+    answers['POST /api/account/password'] = () => json(200, { ok: true });
+    await open();
+    fill('new password 2');
+    await save();
+    expect(q('[role="alert"]')!.textContent).toBe("The passwords don't match.");
+    expect(bodies('/api/account/password')).toEqual([]);
+    expect(q('[role="dialog"]')).not.toBeNull();
   });
 
   it.each([

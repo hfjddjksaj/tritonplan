@@ -163,6 +163,7 @@ function reload() {
 
 const text = () => container.textContent ?? '';
 const input = (type: 'email' | 'password') => container.querySelector<HTMLInputElement>(`input[type="${type}"]`);
+const confirmInput = () => container.querySelector<HTMLInputElement>('input[name="confirm"]');
 function type(el: HTMLInputElement | null, value: string) {
   if (!el) throw new Error('no such input');
   act(() => {
@@ -1107,10 +1108,22 @@ describe('Root: email links', () => {
     expect(text()).toContain('Choose a new password');
     expect(input('password')?.getAttribute('minlength')).toBe('8');
     type(input('password'), 'new password 1');
+    type(confirmInput(), 'new password 1');
     await click('Save password');
     expect(callsTo('POST', '/api/auth/reset')[0]?.body).toEqual({ token: 'abc', password: 'new password 1' });
     expect(navSpy).toHaveBeenCalledWith('/');
     expect(callsTo('GET', '/api/me')).toHaveLength(0);
+  });
+
+  it('a new password typed differently twice is caught before the reset is sent', async () => {
+    srv.auth['POST /api/auth/reset'] = () => json(200, { ok: true });
+    await mount('/reset#token=abc');
+    type(input('password'), 'new password 1');
+    type(confirmInput(), 'new password 2');
+    await click('Save password');
+    expect(text()).toContain("The passwords don't match.");
+    expect(callsTo('POST', '/api/auth/reset')).toHaveLength(0);
+    expect(navSpy).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1120,6 +1133,7 @@ describe('Root: email links', () => {
     srv.auth['POST /api/auth/reset'] = () => json(400, answer);
     await mount('/reset#token=abc');
     type(input('password'), 'short');
+    type(confirmInput(), 'short');
     await click('Save password');
     expect(text()).toContain(copy);
     expect(navSpy).not.toHaveBeenCalled();
@@ -1132,6 +1146,7 @@ describe('Root: email links', () => {
     expect(text()).toContain('Confirm your email');
     expect(text()).toContain('Enter the password you chose when you signed up.');
     expect(input('password')?.getAttribute('minlength')).toBeNull(); // an existing password: no new rule
+    expect(confirmInput()).toBeNull(); // nor a second box
     type(input('password'), 'correct horse');
     await click('Confirm and sign in');
     expect(callsTo('POST', '/api/auth/verify')[0]?.body).toEqual({ token: 'tok', password: 'correct horse' });

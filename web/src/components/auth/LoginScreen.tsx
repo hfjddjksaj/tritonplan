@@ -8,7 +8,7 @@ import { apiPost } from '../../lib/cloud/api';
 import { nav } from '../../lib/nav';
 import { safeReturnTo } from '../../lib/site';
 import { AuthCard, AuthField, AuthMessage } from './AuthCard';
-import { failureText, WRONG_CREDENTIALS } from './copy';
+import { failureText, PASSWORDS_DIFFER, WRONG_CREDENTIALS } from './copy';
 
 type Mode = 'signin' | 'signup' | 'forgot' | 'check-email';
 
@@ -18,6 +18,7 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The address a correct sign-in found unconfirmed: offers to resend its link.
@@ -56,9 +57,13 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
       if (r.status === 403) setUnconfirmed(addr);
       else setError(failureText(r, { 401: WRONG_CREDENTIALS }));
     } else if (mode === 'signup') {
-      const r = await apiPost('/api/auth/signup', { email: addr, password });
-      if (r.ok) checkEmail(`Check your inbox at ${addr} to confirm your account.`);
-      else setError(failureText(r));
+      if (password !== confirm) {
+        setError(PASSWORDS_DIFFER);
+      } else {
+        const r = await apiPost('/api/auth/signup', { email: addr, password });
+        if (r.ok) checkEmail(`Check your inbox at ${addr} to confirm your account.`);
+        else setError(failureText(r));
+      }
     } else if (mode === 'forgot') {
       const r = await apiPost('/api/auth/forgot', { email: addr });
       if (r.ok) checkEmail(`If an account exists for ${addr}, a reset link is on its way.`);
@@ -125,6 +130,16 @@ export function LoginScreen({ notice, heading, returnTo }: { notice?: string; he
             minLength={mode === 'signup' ? 8 : undefined}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+          />
+        )}
+        {mode === 'signup' && (
+          <AuthField
+            label="Confirm password"
+            type="password"
+            name="confirm"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
           />
         )}
         {error && <AuthMessage tone="error">{error}</AuthMessage>}
