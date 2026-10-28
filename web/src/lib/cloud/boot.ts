@@ -7,7 +7,7 @@ import type { ApptTimes, CourseOffering, PlanState, SyncOp } from '@triton/share
 import type { TermsState } from '../terms-state';
 import { mirrorTokenFromHash, tokenFromHash } from '../share';
 import { postSync, type Me } from './api';
-import { createSyncEngine, type SendResult, type SyncEngine } from './engine';
+import { createSyncEngine, idleEngine, type SendResult, type SyncEngine } from './engine';
 import { termsFromSnapshot, type WebSnapshot } from './records';
 
 /** Someone's plan to keep as a new plan of this account: they chose "Save to my account" before signing in. */
@@ -17,7 +17,8 @@ export interface AdoptPlan {
 }
 
 export interface CloudBoot {
-  me: Me;
+  /** Null: signed out. The planner shows what the extension brings and asks for sign-in before any edit. */
+  me: Me | null;
   snapshot: WebSnapshot;
   engine: SyncEngine;
   terms: TermsState | null;
@@ -40,6 +41,18 @@ export function makeBoot(
     terms: termsFromSnapshot(snapshot),
     pool: snapshot.pool,
     appt: snapshot.appt,
+  };
+}
+
+/** The planner for a visitor who is not signed in: a new account's empty start, saved nowhere. */
+export function makeGuestBoot(): CloudBoot {
+  return {
+    me: null,
+    snapshot: { terms: {}, plans: {}, pool: [], appt: null },
+    engine: idleEngine(),
+    terms: null,
+    pool: [],
+    appt: null,
   };
 }
 

@@ -14,20 +14,18 @@ import {
 
 type Mode = 'signin' | 'signup' | 'forgot' | 'check-email';
 
-export const LEDE = 'TritonPlan saves your plans to your account, so they follow you to any device.';
+const LEDE = 'TritonPlan saves your plans to your account, so they follow you to any device.';
 
 export function LoginScreen({
   notice,
   heading,
-  lede = LEDE,
   returnTo,
   dialog,
 }: {
   notice?: string;
   heading?: string;
-  lede?: string;
   returnTo: string;
-  /** Shown over the signed-out preview rather than as a page. */
+  /** Shown over the signed-out planner rather than as a page. */
   dialog?: AuthDialog;
 }) {
   const [mode, setMode] = useState<Mode>('signin');
@@ -121,7 +119,7 @@ export function LoginScreen({
         <p className="auth__lede">Enter your email and we'll send you a link to choose a new password.</p>
       ) : (
         <>
-          <p className="auth__lede">{lede}</p>
+          <p className="auth__lede">{LEDE}</p>
           <a className="btn auth__wide auth__google" href={'/api/auth/google?returnTo=' + encodeURIComponent(target)}>
             <GoogleMark />
             Continue with Google

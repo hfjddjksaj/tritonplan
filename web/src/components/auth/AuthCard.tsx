@@ -4,7 +4,7 @@ import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { PRODUCT_NAME } from '../../lib/brand';
 import { Trident, X } from '../icons';
 
-/** The card as a dialog over a page (the signed-out preview) instead of a page of its own. */
+/** The card as a dialog over a page (the signed-out planner) instead of a page of its own. */
 export interface AuthDialog {
   onClose: () => void;
   /** Fade in a moment after the page, so the visitor first sees where they are. */

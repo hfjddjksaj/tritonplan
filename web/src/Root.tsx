@@ -12,7 +12,6 @@ import { AuthCard } from './components/auth/AuthCard';
 import { AUTH_NOTICES } from './components/auth/copy';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginScreen } from './components/auth/LoginScreen';
-import { SignedOutPreview } from './components/auth/SignedOutPreview';
 import { ImportConfirm, type ImportOutcome } from './components/migrate/ImportConfirm';
 import { MigrateReceiver } from './components/migrate/MigrateReceiver';
 import { ResetPasswordScreen } from './components/auth/ResetPasswordScreen';
@@ -26,6 +25,7 @@ import {
   dropPendingHash,
   forgetSaves,
   makeBoot,
+  makeGuestBoot,
   pendingSaves,
   restorePendingHash,
   stashPendingHash,
@@ -394,7 +394,7 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
         }
         lastFresh.current = Date.now();
         if (!alive.current || current.current !== s) return;
-        if (me.email !== s.boot.me.email) {
+        if (me.email !== s.boot.me?.email) {
           // Another tab signed in as someone else: this page's state, unsaved edits included, is not theirs to keep.
           engine.dispose();
           nav.reload();
@@ -469,12 +469,11 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
       }
       // Back to "/", not "/migrate": enter() picks a pending payload up on any path, while /migrate without one
       // (imported meanwhile in another tab) would wait for the old site forever.
-      // Anyone else gets the planner's page with the sign-in card over it, not a bare sign-in page: a new
-      // student sent here by "+ TritonPlan" sees their course first and knows they are in the right place.
+      // Anyone else gets the planner with the sign-in card over it, not a bare sign-in page.
       return loadPendingMigration() ? (
         <LoginScreen notice={pageNotice} heading="Sign in to finish moving your plans" returnTo="/" />
       ) : (
-        <SignedOutPreview notice={pageNotice} returnTo={window.location.pathname} />
+        <GuestPlanner notice={pageNotice} returnTo={window.location.pathname} />
       );
     case 'import':
       return <ImportConfirm snapshot={screen.snapshot} payload={screen.payload} onDone={(o) => void importDone(screen, o)} />;
@@ -486,4 +485,31 @@ function SignInGate({ notice, shareCode }: { notice?: string; shareCode?: string
         </ErrorBoundary>
       );
   }
+}
+
+/**
+ * The planner for a visitor who is not signed in, with what the extension just brought from TSS on it
+ * and the sign-in card over it a moment later. A new student sent here by "+ TritonPlan" sees their
+ * course on the week first, so they know they are in the right place. Nothing is saved and every edit
+ * opens the card; the clicks stay queued and land in the plan once they sign in.
+ */
+function GuestPlanner({ notice, returnTo }: { notice?: string; returnTo: string }) {
+  const [boot] = useState(makeGuestBoot);
+  // A notice (a failed Google sign-in, an expired link) is news about signing in: no waiting for it.
+  const [dialog, setDialog] = useState<'first' | 'open' | 'closed'>(notice ? 'open' : 'first');
+  const open = useCallback(() => setDialog('open'), []);
+  return (
+    <>
+      <ErrorBoundary>
+        <App boot={boot} onSignIn={open} />
+      </ErrorBoundary>
+      {dialog !== 'closed' && (
+        <LoginScreen
+          notice={notice}
+          returnTo={returnTo}
+          dialog={{ onClose: () => setDialog('closed'), delayed: dialog === 'first' }}
+        />
+      )}
+    </>
+  );
 }

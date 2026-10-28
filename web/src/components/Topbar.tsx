@@ -17,8 +17,8 @@ interface Props {
   apptSlot?: ReactNode;
   /** The signed-in account's menu, rendered at the far right. */
   accountSlot?: ReactNode;
-  /** The plan on screen, for the Share menu (link + QR). */
-  sharePlan: PlanState;
+  /** The plan on screen, for the Share menu (link + QR). Null: no menu (signed out, a link needs an account). */
+  sharePlan: PlanState | null;
   /** Name the shared link is listed under. */
   planName: string;
   onFlash: (msg: string) => void;
@@ -81,7 +81,7 @@ export function Topbar({
           <MapPinIcon size={15} /> Map
         </button>
 
-        <ShareMenu plan={sharePlan} planName={planName} onFlash={onFlash} />
+        {sharePlan && <ShareMenu plan={sharePlan} planName={planName} onFlash={onFlash} />}
       </div>
 
       {accountSlot}

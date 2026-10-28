@@ -131,7 +131,9 @@ export function isBookedMessage(data: unknown): data is BookedMessage {
  * Snapshots (`courses`, `booked`, `appt-times`) are kept after delivery too: the planner
  * remounts when the tab comes back to newer server state, and the extension only speaks
  * again on the next page load or the next TSS capture, so the new planner must hear the
- * latest of each as the old one did. A `plan-add` is a click, delivered exactly once.
+ * latest of each as the old one did. A `plan-add` is a click, delivered exactly once to the
+ * signed-in planner. The signed-out planner shows the clicks too, but only keeps a copy: they
+ * stay queued for the planner that can save them.
  */
 
 export type BridgeKind = 'courses' | 'plan-add' | 'booked' | 'appt-times';
@@ -157,7 +159,8 @@ function classify(data: unknown): BridgeKind | null {
 }
 
 interface Queued { kind: BridgeKind; data: unknown }
-interface Subscriber { kinds: ReadonlySet<BridgeKind>; handler: (data: unknown) => void }
+/** `keep`: hears plan-adds without taking them (the signed-out planner). */
+interface Subscriber { kinds: ReadonlySet<BridgeKind>; handler: (data: unknown) => void; keep: boolean }
 
 let hubInstalled = false;
 let hubListener: ((event: MessageEvent) => void) | null = null;
@@ -166,8 +169,6 @@ let queue: Queued[] = [];
 /** The latest snapshot of each kind this page load, delivered or not. */
 const latest = new Map<SnapshotKind, unknown>();
 const subscribers = new Set<Subscriber>();
-/** Told after every arrival; they only look (peekBridge), never take. */
-const watchers = new Set<() => void>();
 
 function persistPendingAdds(): void {
   try {
@@ -235,47 +236,24 @@ export function installBridgeHub(): void {
     if (!kind) return;
     if (isSnapshot(kind)) latest.set(kind, data);
     const targets = [...subscribers].filter((s) => s.kinds.has(kind));
-    if (targets.length === 0) {
-      if (!isSnapshot(kind)) enqueue({ kind, data });
-    } else {
-      for (const s of targets) deliver(s.handler, data);
-    }
-    for (const w of [...watchers]) deliver(w, data);
+    if (!isSnapshot(kind) && !targets.some((s) => !s.keep)) enqueue({ kind, data });
+    for (const s of targets) deliver(s.handler, data);
   };
   window.addEventListener('message', hubListener);
-}
-
-export interface BridgeSeen {
-  /** The extension's latest captured pool. */
-  courses: CourseOffering[];
-  /** "+ TritonPlan" clicks still waiting for the planner, oldest first. */
-  adds: { course: CourseOffering; selectedOptionId: string }[];
-}
-
-/** What the extension has said this page load, without using any of it up: the planner still gets it all after sign-in. */
-export function peekBridge(): BridgeSeen {
-  const kept = latest.get('courses');
-  return {
-    courses: isCoursesMessage(kept) ? kept.payload : [],
-    adds: queue.flatMap((q) => (isPlanAddMessage(q.data) ? [q.data.payload] : [])),
-  };
-}
-
-/** Calls back after each bridge message the hub takes in. Returns the stop function. */
-export function watchBridge(onChange: () => void): () => void {
-  watchers.add(onChange);
-  return () => {
-    watchers.delete(onChange);
-  };
 }
 
 /**
  * Subscribe to these kinds: the latest snapshot of each comes first, then queued plan-adds
  * in arrival order (removed, so each click is delivered once), then live messages. Plan-adds
- * nobody subscribes to keep queueing. Returns the unsubscribe function.
+ * nobody takes keep queueing. With `keep`, plan-adds are heard but stay queued, queued ones
+ * included. Returns the unsubscribe function.
  */
-export function subscribeBridge(kinds: BridgeKind[], handler: (data: unknown) => void): () => void {
-  const sub: Subscriber = { kinds: new Set(kinds), handler };
+export function subscribeBridge(
+  kinds: BridgeKind[],
+  handler: (data: unknown) => void,
+  { keep = false }: { keep?: boolean } = {},
+): () => void {
+  const sub: Subscriber = { kinds: new Set(kinds), handler, keep };
   subscribers.add(sub);
   for (const kind of SNAPSHOT_KINDS) {
     if (!sub.kinds.has(kind) || !latest.has(kind) || !subscribers.has(sub)) continue;
@@ -285,6 +263,13 @@ export function subscribeBridge(kinds: BridgeKind[], handler: (data: unknown) =>
     subscribers.delete(sub);
   };
   if (!sub.kinds.has('plan-add')) return unsubscribe;
+  if (keep) {
+    for (const q of [...queue]) {
+      if (!subscribers.has(sub)) break;
+      deliver(handler, q.data);
+    }
+    return unsubscribe;
+  }
   const replay = queue;
   queue = [];
   // Entries stay mirrored in sessionStorage until the loop ends: a handler that throws or
@@ -307,7 +292,6 @@ export function resetBridgeHubForTests(): void {
   latest.clear();
   warnedEviction = false;
   subscribers.clear();
-  watchers.clear();
 }
 
 /** Same-window/same-origin listener for `appt-times` pushes. Separate from
@@ -467,8 +451,9 @@ export interface BridgeHandlers {
  * Only same-window, same-origin messages matching a known contract invoke the
  * corresponding callback — the extension's content script posts from this page's
  * own window/origin, so anything else (iframes, other windows) is untrusted.
+ * `keep`: the signed-out planner, which leaves every plan-add queued for after sign-in.
  */
-export function installBridgeListener(handlers: BridgeHandlers): () => void {
+export function installBridgeListener(handlers: BridgeHandlers, { keep = false }: { keep?: boolean } = {}): () => void {
   const dispatch = (data: unknown) => {
     if (isPlanAddMessage(data)) {
       handlers.onPlanAdd(data.payload.course, data.payload.selectedOptionId);
@@ -478,7 +463,7 @@ export function installBridgeListener(handlers: BridgeHandlers): () => void {
       handlers.onBooked?.(data.payload, data.capturedAt, data.captured);
     }
   };
-  if (hubInstalled) return subscribeBridge(['plan-add', 'courses', 'booked'], dispatch);
+  if (hubInstalled) return subscribeBridge(['plan-add', 'courses', 'booked'], dispatch, { keep });
   const handler = (event: MessageEvent) => {
     if (event.source !== window || event.origin !== window.location.origin) return;
     dispatch(event.data);

@@ -123,6 +123,8 @@ function appendEntry(
 }
 
 export function usePlan(boot: CloudBoot) {
+  // Signed out: the extension's pushes show, nothing is saved, and App asks for sign-in before any edit.
+  const guest = boot.me === null;
   const bootRef = useRef<ReturnType<typeof initialState> | null>(null);
   if (bootRef.current === null) bootRef.current = initialState(boot);
   const [pool, setPool] = useState<CourseOffering[]>(bootRef.current.pool);
@@ -130,9 +132,10 @@ export function usePlan(boot: CloudBoot) {
   const [pendingQueue, setPendingQueue] = useState<{ course: CourseOffering; optionId: string }[]>([]);
   // A plan someone else sent (share link or imported JSON). Lives in its own slot,
   // shown read-only — it can never overwrite any of the user's plans.
-  const [received, setReceived] = useState<ReceivedPlan | null>(loadReceived);
+  // Signed out, a plan someone sent opens on its own page instead, and one this device kept waits for the account.
+  const [received, setReceived] = useState<ReceivedPlan | null>(() => (guest ? null : loadReceived()));
   const [viewing, setViewing] = useState<Viewing>(() =>
-    loadReceived() ? loadViewing() : 'mine',
+    !guest && loadReceived() ? loadViewing() : 'mine',
   );
   // Latest pool/terms for effects that must not re-subscribe on every edit.
   const poolRef = useRef(pool);
@@ -143,9 +146,10 @@ export function usePlan(boot: CloudBoot) {
   }, [pool, termsState]);
 
   // One-time: tell the extension to release captured data the archive sweep dropped.
+  // Signed out nothing was swept: there is no account yet.
   useEffect(() => {
-    postForgetCourses(bootRef.current?.forgetModuleIds ?? []);
-  }, []);
+    if (!guest) postForgetCourses(bootRef.current?.forgetModuleIds ?? []);
+  }, [guest]);
 
   // The plan every existing action/selector works on = the ACTIVE named plan of
   // the ACTIVE TERM's workspace.
@@ -188,8 +192,9 @@ export function usePlan(boot: CloudBoot) {
   // then stripped from the address bar (leaving it would pin every reload to that
   // snapshot). The user's own plans are untouched — it opens read-only alongside
   // them. Also runs on hashchange: pasting a link into an already-open planner tab
-  // doesn't reload.
+  // doesn't reload. Signed out, the sign-in gate has stashed the link for after sign-in.
   useEffect(() => {
+    if (guest) return;
     const consume = () => {
       const owned = Object.entries(termsRef.current.terms).flatMap(([key, ws]) =>
         ws.plans.plans.map((p) => ({ key, id: p.id, plan: p.plan })),
@@ -228,7 +233,7 @@ export function usePlan(boot: CloudBoot) {
     consume();
     window.addEventListener('hashchange', consume);
     return () => window.removeEventListener('hashchange', consume);
-  }, [switchViewing]);
+  }, [guest, switchViewing]);
 
   // Everything the account holds is saved by the sync engine, which diffs it
   // against what the server acknowledged. No first-render skip: a new
@@ -457,7 +462,8 @@ export function usePlan(boot: CloudBoot) {
   }, []);
 
   // Data bridge: `courses` routes into each course's own term; `plan-add` adds to
-  // the course's term (via the picker when that term has several plans).
+  // the course's term (via the picker when that term has several plans). Signed out, the
+  // plan-adds stay queued too, for the planner that mounts after sign-in.
   useEffect(() => {
     return installBridgeListener({
       onCourses: (incoming) => {
@@ -548,8 +554,8 @@ export function usePlan(boot: CloudBoot) {
           return changed ? { ...next, terms } : s;
         });
       },
-    });
-  }, [addIntoTerm, markBridgeSeen, switchViewing]);
+    }, { keep: guest });
+  }, [addIntoTerm, guest, markBridgeSeen, switchViewing]);
 
   /** Jump back to TSS — through the extension when present, else a plain new tab. */
   const openCourseInTss = useCallback((course: CourseOffering) => {
@@ -727,6 +733,7 @@ export function usePlan(boot: CloudBoot) {
     viewing,
     viewPlan,
     readOnly,
+    guest,
     switchViewing,
     saveReceivedAsMine,
     saveReceivedAsNewPlan,
@@ -747,3 +754,31 @@ export function usePlan(boot: CloudBoot) {
 }
 
 export type PlanController = ReturnType<typeof usePlan>;
+
+/**
+ * The signed-out planner's controller: every edit asks for sign-in instead. An edit made
+ * here would be lost at sign-in, when the account's own planner takes over. Looking around
+ * (terms, TSS links, the map) still works.
+ */
+export function lockedForGuest(ctl: PlanController, ask: () => void): PlanController {
+  return {
+    ...ctl,
+    addCourse: ask,
+    addCourseWithOption: ask,
+    removeCourse: ask,
+    selectOption: ask,
+    replacePlan: ask,
+    resetPlan: ask,
+    removeFromPool: ask,
+    clearBrowsed: ask,
+    toggleBooked: ask,
+    switchPlan: ask,
+    createNewPlan: ask,
+    renamePlan: ask,
+    duplicatePlan: ask,
+    deletePlan: ask,
+    saveReceivedAsMine: ask,
+    saveReceivedAsNewPlan: ask,
+    discardReceived: ask,
+  };
+}

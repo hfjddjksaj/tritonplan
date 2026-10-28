@@ -5,11 +5,9 @@ import {
   installBridgeHub,
   installBridgeListener,
   installApptTimesListener,
-  peekBridge,
   postForgetCourses,
   resetBridgeHubForTests,
   subscribeBridge,
-  watchBridge,
 } from './bridge';
 import { makeCourse } from './fixtures';
 
@@ -246,25 +244,31 @@ describe('bridge hub', () => {
     expect(seen).toEqual([['b']]);
   });
 
-  it('peeking shows what the extension sent without using it up, and watchers hear each arrival', () => {
+  it('a keeping subscriber hears every plan-add but leaves them all for the planner after sign-in', () => {
     installBridgeHub();
-    const heard = vi.fn();
-    const stop = watchBridge(heard);
-    post(coursesMsg('a', 'b'));
     post(planAdd('A'));
-    expect(heard).toHaveBeenCalledTimes(2);
-    expect(peekBridge()).toEqual({
-      courses: [makeCourse('a'), makeCourse('b')],
-      adds: [{ course: makeCourse('A'), selectedOptionId: 'A-opt' }],
-    });
-    stop();
+    const kept: string[] = [];
+    const off = installBridgeListener({ onCourses: vi.fn(), onPlanAdd: (c) => kept.push(c.id) }, { keep: true });
     post(planAdd('B'));
-    expect(heard).toHaveBeenCalledTimes(2);
-    // The planner that mounts after sign-in still gets every click.
-    const h = vi.fn();
-    subscribeBridge(['plan-add'], h);
-    expect(h.mock.calls.map((c) => idOf(c[0]))).toEqual(['A', 'B']);
-    expect(peekBridge().adds).toEqual([]);
+    expect(kept).toEqual(['A', 'B']);
+    expect(JSON.parse(sessionStorage.getItem(PENDING_ADDS_KEY) as string).map(idOf)).toEqual(['A', 'B']);
+    off();
+    // The signed-in planner still gets every click, once.
+    const taken: string[] = [];
+    installBridgeListener({ onCourses: vi.fn(), onPlanAdd: (c) => taken.push(c.id) });
+    post(planAdd('C'));
+    expect(taken).toEqual(['A', 'B', 'C']);
+    const late = vi.fn();
+    subscribeBridge(['plan-add'], late);
+    expect(late).not.toHaveBeenCalled();
+  });
+
+  it('a keeping subscriber gets the latest snapshots like any other', () => {
+    installBridgeHub();
+    post(coursesMsg('a', 'b'));
+    const onCourses = vi.fn();
+    installBridgeListener({ onCourses, onPlanAdd: vi.fn() }, { keep: true });
+    expect(onCourses).toHaveBeenCalledWith([makeCourse('a'), makeCourse('b')]);
   });
 
   it('evicting one kind never drops another, and warns once without data', () => {

@@ -164,6 +164,9 @@ function reload() {
 }
 
 const text = () => container.textContent ?? '';
+/** The account's planner. Signed out the planner shows too, with a Sign in button where the account menu goes. */
+const accountPlanner = () => container.querySelector('.app .acctbtn');
+const dialog = () => container.querySelector('[role="dialog"]');
 const input = (type: 'email' | 'password') => container.querySelector<HTMLInputElement>(`input[type="${type}"]`);
 const confirmInput = () => container.querySelector<HTMLInputElement>('input[name="confirm"]');
 function type(el: HTMLInputElement | null, value: string) {
@@ -199,7 +202,7 @@ function savedPlans(): Record<string, string[]> {
  * and saved to the account beside "Mine", which is untouched. Nothing sits in the received slot.
  */
 async function expectSavedAsNewPlan(name: string) {
-  expect(container.querySelector('.app')).not.toBeNull();
+  expect(accountPlanner()).not.toBeNull();
   expect(container.querySelector('.received')).toBeNull();
   expect(loadReceived()).toBeNull();
   expect(container.querySelector('.planswitch__name')?.textContent).toBe(name);
@@ -233,7 +236,15 @@ async function signInWithEmail() {
   srv.auth['POST /api/auth/login'] = () => json(200, { ok: true });
   type(input('email'), 'student@ucsd.edu');
   type(input('password'), 'correct horse');
-  await click('Sign in');
+  await submit();
+}
+
+/** The sign-in card's own button: signed out, the planner's top bar has a Sign in button of its own. */
+async function submit() {
+  const form = input('email')?.form;
+  if (!form) throw new Error(`no sign-in form in: ${text()}`);
+  await act(async () => form.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+  await settle();
 }
 
 async function becomeVisible() {
@@ -299,22 +310,22 @@ afterEach(() => {
 });
 
 describe('Root: signed out', () => {
-  it('signed out shows the planner page with the sign-in card over it: email form and a Google link carrying returnTo', async () => {
+  it('signed out shows the planner with the sign-in card over it: email form and a Google link carrying returnTo', async () => {
     await mount('/');
-    expect(container.querySelector('h1')?.textContent).toBe('Plan your quarter');
-    expect(text()).toContain('Your week is open');
-    const dialog = container.querySelector('[role="dialog"]');
-    expect(dialog?.querySelector('h2')?.textContent).toBe('Sign in to TritonPlan');
+    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).toBeNull();
+    expect(container.querySelector('.topbar')?.textContent).toContain('Sign in');
+    expect(dialog()?.querySelector('h2')?.textContent).toBe('Sign in to TritonPlan');
     expect(input('email')).not.toBeNull();
     expect(input('password')).not.toBeNull();
-    expect(text()).toContain('Your plans are saved to your account, so they follow you to any device.');
-    const google = [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'));
-    expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2F');
-    expect(container.querySelector('.app')).toBeNull();
+    expect(text()).toContain('TritonPlan saves your plans to your account, so they follow you to any device.');
+    expect(googleHref()).toBe('/api/auth/google?returnTo=%2F');
+    await advance(5000);
     expect(callsTo('GET', '/api/state')).toHaveLength(0);
+    expect(callsTo('POST', '/api/sync')).toHaveLength(0);
   });
 
-  it('what the extension brought shows under the card; signing in keeps every click for the planner', async () => {
+  it('what the extension brought shows on the planner; an edit asks for sign-in, and signing in keeps every click', async () => {
     installBridgeHub();
     await mount('/');
     const cse = makeCourse('CSE-100|2026|2', 'CSE-100');
@@ -327,30 +338,39 @@ describe('Root: signed out', () => {
         window.dispatchEvent(new MessageEvent('message', { data, source: window, origin: window.location.origin }));
       }
     });
-    expect(container.querySelector('h1')?.textContent).toBe('Your plan');
-    expect(text()).toContain('Fall 2026 · not saved yet');
-    expect([...container.querySelectorAll('.shared__layout > .shared__side > .shared__courses .shared__code')].map((e) => e.textContent)).toEqual(['CSE-100']);
-    expect([...container.querySelectorAll('.preview__browsed .shared__code')].map((e) => e.textContent)).toEqual(['MATH-18']);
-    expect(container.querySelector('[role="dialog"] h2')?.textContent).toBe('Sign in to save your plan');
-    expect(text()).toContain('Your courses from TSS are here.');
+    expect(courseCodes()).toEqual(['CSE-100']);
+    // (The dev build's sample courses are browsed too.)
+    const browsed = () => [...container.querySelectorAll('.browse-row')];
+    const codeOf = (row: Element) => row.querySelector('.browse-row__code')?.textContent;
+    expect(browsed().map(codeOf)).toContain('MATH-18');
+    expect(browsed().map(codeOf)).not.toContain('CSE-100');
+    // The extension has spoken: the rail offers what only it can do.
+    expect(text()).toContain('Check bookings');
+
+    // Closed, the card comes back for an edit, and the edit is not made.
+    await act(async () => dialog()!.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
+    expect(dialog()).toBeNull();
+    await act(async () => (browsed().find((r) => codeOf(r) === 'MATH-18') as HTMLButtonElement).click());
+    expect(dialog()).not.toBeNull();
+    expect(courseCodes()).toEqual(['CSE-100']);
+    await letSyncRun();
+    expect(callsTo('POST', '/api/sync')).toHaveLength(0);
 
     // Signed in from another tab (the verify link); coming back to this one enters the planner with the click.
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await becomeVisible();
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     await letSyncRun();
-    const saved = Object.values(srv.state.plans).map((p) => p.data as NamedPlan);
-    expect(saved.flatMap((p) => p.plan.entries.map((e) => e.course.id))).toContain('CSE-100|2026|2');
+    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2', 'CSE-100|2026|2'] });
   });
 
-  it('the card closes (×, Escape) to the preview, and the page button opens it again', async () => {
+  it('the card closes (×, Escape) to the planner, and its Sign in button opens it again', async () => {
     await mount('/');
-    const dialog = () => container.querySelector('[role="dialog"]');
     expect(dialog()!.parentElement!.className).toContain('authdlg--delayed'); // first, the page
-    await act(async () => container.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Close"]')!.click());
+    await act(async () => dialog()!.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
     expect(dialog()).toBeNull();
-    expect(container.querySelector('h1')?.textContent).toBe('Plan your quarter');
+    expect(container.querySelector('.app')).not.toBeNull();
     await click('Sign in');
     expect(dialog()).not.toBeNull();
     expect(dialog()!.parentElement!.className).not.toContain('authdlg--delayed'); // asked for: no waiting
@@ -376,7 +396,7 @@ describe('Root: signed out', () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await click('Try again');
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
   });
 
   it('a server that never answers is given up on after 15 s, with Try again', async () => {
@@ -389,7 +409,7 @@ describe('Root: signed out', () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await click('Try again');
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
   });
 
   it('a hostile path never becomes the sign-in returnTo', async () => {
@@ -416,7 +436,7 @@ describe('Root: signed in', () => {
       ),
     );
     await settle();
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     expect(callsTo('GET', '/api/me')).toHaveLength(1);
     expect(boots).toHaveLength(1);
     await letSyncRun();
@@ -477,7 +497,7 @@ describe('Root: signed in', () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await becomeVisible();
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     await letSyncRun();
     const saved = Object.values(srv.state.plans).map((p) => p.data as NamedPlan);
     expect(saved.flatMap((p) => p.plan.entries.map((e) => e.course.id))).toContain('CSE-100|2026|2');
@@ -492,7 +512,7 @@ describe('Root: opening a shared plan', () => {
     expect(text()).toContain('Fall 2026 · shared with you · read-only');
     expect(text()).toContain('MATH-18');
     expect(input('email')).toBeNull();
-    expect(container.querySelector('.app')).toBeNull();
+    expect(accountPlanner()).toBeNull();
     expect(srv.calls[0]?.url).toBe(`/api/s/${CODE}`); // asked for before who this is
     expect(callsTo('GET', '/api/state')).toHaveLength(0);
     expect(window.location.pathname).toBe(`/s/${CODE}`); // a reload shows it again
@@ -597,7 +617,7 @@ describe('Root: opening a shared plan', () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount(`/s/${CODE}`);
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     expect(container.querySelector('.received--active')).not.toBeNull();
     expect(receivedIds()).toEqual(['MATH-18|2026|2']);
     expect(text()).not.toContain('Save to my account');
@@ -729,7 +749,7 @@ describe('Root: a short link saved before signing in', () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     expect(container.querySelector('.received')).toBeNull();
     expect(loadReceived()).toBeNull();
     expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(1); // only the visit itself
@@ -825,7 +845,7 @@ describe('Root: a short link saved before signing in', () => {
     sessionStorage.clear();
     sessionStorage.setItem(PENDING_SAVE_KEY, tabA!);
     await mount(`/s/${CODE}`);
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     expect(container.querySelector('.received')).toBeNull();
     expect(loadReceived()).toBeNull();
     expect(text()).toContain('That shared plan is already in your account');
@@ -901,7 +921,7 @@ describe('Root: a short link saved before signing in', () => {
     srv.state = snapshotOf(mine());
     await mount(`/s/${CODE}`);
     expect(text()).toContain('Move your plans');
-    expect(container.querySelector('.app')).toBeNull();
+    expect(accountPlanner()).toBeNull();
 
     reload(); // on the import screen
     await mount('/');
@@ -943,7 +963,7 @@ describe('Root: a short link saved before signing in', () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     expect(text()).toContain('A plan you chose to save is no longer shared');
     expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
     await letSyncRun();
@@ -961,7 +981,7 @@ describe('Root: coming back to the tab', () => {
     await waitOutThrottle();
     srv.me = 'out';
     await becomeVisible();
-    expect(container.querySelector('.app')).toBeNull();
+    expect(accountPlanner()).toBeNull();
     expect(input('email')).not.toBeNull();
     const google = [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'));
     expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2F');
@@ -973,7 +993,7 @@ describe('Root: coming back to the tab', () => {
     addCourseElsewhere();
     srv.me = 'in';
     await becomeVisible();
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     expect(loadReceived()).toBeNull();
     expect(container.querySelector('.received')).toBeNull();
     expect(courseCodes()).toContain('MATH-18');
@@ -1406,7 +1426,7 @@ describe('Root: moving plans from the old site', () => {
     // old site forever. Any path picks up a payload that is still pending.
     const google = [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'));
     expect(google?.getAttribute('href')).toBe('/api/auth/google?returnTo=%2F');
-    expect(container.querySelector('.app')).toBeNull();
+    expect(accountPlanner()).toBeNull();
     expect(loadPendingMigration()).not.toBeNull();
   });
 
@@ -1422,9 +1442,9 @@ describe('Root: moving plans from the old site', () => {
     savePendingMigration(pending());
     await mount('/migrate');
     expect(text()).toContain('We found 1 plan in 1 term from the old TritonPlan.');
-    expect(container.querySelector('.app')).toBeNull();
+    expect(accountPlanner()).toBeNull();
     await click('Add to my account');
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     expect(text()).toContain('Moved 1 plan to your account.');
     expect(loadPendingMigration()).toBeNull();
     expect(window.location.pathname).toBe('/');
@@ -1437,7 +1457,7 @@ describe('Root: moving plans from the old site', () => {
     savePendingMigration(pending());
     await mount('/');
     await click('Not now');
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     expect(loadPendingMigration()).not.toBeNull();
   });
 
@@ -1460,7 +1480,7 @@ describe('Root: moving plans from the old site', () => {
     expect(container.querySelectorAll('button')).toHaveLength(0);
     await act(async () => release());
     await settle();
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
   });
 
   it('Not now after a half-applied import boots from the server state, first batch included', async () => {
@@ -1479,7 +1499,7 @@ describe('Root: moving plans from the old site', () => {
     await click('Add to my account');
     expect(text()).toContain("Couldn't add your plans. Please try again.");
     await click('Not now');
-    expect(container.querySelector('.app')).not.toBeNull();
+    expect(accountPlanner()).not.toBeNull();
     expect(text()).toContain('Old plan');
     expect(loadPendingMigration()).not.toBeNull();
   });

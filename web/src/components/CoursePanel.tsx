@@ -134,7 +134,7 @@ export function CoursePanel({ ctl, focus, hidden = false, onFlash }: Props) {
         <>
         <div className="rail__section">
           <span className="eyebrow">Browsed — not yet added</span>
-          {ctl.browsedNotAdded.length > 0 && (
+          {ctl.browsedNotAdded.length > 0 && !ctl.guest && (
             <button
               type="button"
               className="rail__section-action"

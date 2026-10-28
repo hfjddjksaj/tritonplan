@@ -163,13 +163,14 @@
   }
 }
 
-/* The sign-in card as a dialog over the signed-out preview. On first load it fades in
+/* The sign-in card as a dialog over the signed-out planner. On first load it fades in
    a moment after the page, so the visitor first sees the planner and their courses;
-   until then it is hidden and takes no clicks. Reopened, it shows at once. */
+   until then it is hidden and takes no clicks. Reopened, it shows at once. Above the
+   planner's popovers and campus map (95), which may be open when it appears. */
 .authdlg {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: 96;
   display: grid;
   place-items: center;
   padding: 24px 16px;

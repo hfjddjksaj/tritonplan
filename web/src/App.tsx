@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePlan } from './hooks/usePlan';
+import { lockedForGuest, usePlan } from './hooks/usePlan';
 import { useIsMobile } from './hooks/useIsMobile';
 import { useApptTimes } from './hooks/useApptTimes';
 import { Topbar } from './components/Topbar';
@@ -32,8 +32,20 @@ import type { PositionedBlock } from './lib/layout';
 import type { CloudBoot } from './lib/cloud/boot';
 import { installUnloadGuard } from './lib/cloud/engine';
 
-export default function App({ boot, initialFlash }: { boot: CloudBoot; initialFlash?: string }) {
-  const ctl = usePlan(boot);
+const noop = () => {};
+
+export default function App({
+  boot,
+  initialFlash,
+  onSignIn = noop,
+}: {
+  boot: CloudBoot;
+  initialFlash?: string;
+  /** Signed out (no `boot.me`): what the Sign in button and every edit do. */
+  onSignIn?: () => void;
+}) {
+  const own = usePlan(boot);
+  const ctl = own.guest ? lockedForGuest(own, onSignIn) : own;
   const isMobile = useIsMobile();
   const appt = useApptTimes(boot);
   const [tab, setTab] = useState<MobileTab>('calendar');
@@ -169,8 +181,9 @@ export default function App({ boot, initialFlash }: { boot: CloudBoot; initialFl
           )
         }
         units={ctl.units}
-        readOnly={ctl.readOnly}
+        readOnly={ctl.readOnly || ctl.guest}
         planSwitcher={
+          !ctl.guest && (
           <PlanSwitcher
             plans={ctl.plans.map((p) => ({ id: p.id, name: p.name, count: p.plan.entries.length }))}
             activeId={ctl.activePlanId}
@@ -180,10 +193,19 @@ export default function App({ boot, initialFlash }: { boot: CloudBoot; initialFl
             onDuplicate={ctl.duplicatePlan}
             onDelete={ctl.deletePlan}
           />
+          )
         }
         apptSlot={<ApptCapsule appt={appt} />}
-        accountSlot={<AccountMenu me={boot.me} terms={ctl.termsState} onFlash={flash} flush={boot.engine.flush} />}
-        sharePlan={ctl.viewPlan}
+        accountSlot={
+          boot.me ? (
+            <AccountMenu me={boot.me} terms={ctl.termsState} onFlash={flash} flush={boot.engine.flush} />
+          ) : (
+            <button type="button" className="btn btn--primary btn--sm" onClick={onSignIn}>
+              Sign in
+            </button>
+          )
+        }
+        sharePlan={ctl.guest ? null : ctl.viewPlan}
         planName={ctl.viewing === 'received' && ctl.received ? 'Shared plan' : ctl.activePlanName}
         onFlash={flash}
         onReset={handleReset}

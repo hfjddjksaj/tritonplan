@@ -31,6 +31,22 @@ export interface SyncEngine {
   dispose(): void;
 }
 
+/** Signed out there is nowhere to save, so nothing is ever pending. */
+export function idleEngine(): SyncEngine {
+  return {
+    setTerms() {},
+    setPool() {},
+    setAppt() {},
+    flush: () => Promise.resolve(),
+    status: () => 'idle',
+    hasPending: () => false,
+    pendingOps: () => [],
+    matchesServer: () => false,
+    subscribe: () => () => {},
+    dispose() {},
+  };
+}
+
 // Well under the server's SYNC_LIMITS (500 ops / 8 MB body); the byte budget leaves headroom for the envelope.
 const MAX_OPS = 500;
 // ~1 MB keeps a request finishable within postSync's size-scaled timeout on a slow uplink; a timeout that
