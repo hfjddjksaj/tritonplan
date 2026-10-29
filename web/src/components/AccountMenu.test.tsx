@@ -78,21 +78,13 @@ describe('AccountMenu items', () => {
     expect(buttons()).not.toContain('Set a password');
   });
 
-  it('Import a backup file saves pending edits, then opens the import page', async () => {
+  it('Import from old TritonPlan saves pending edits, then opens the import page; share links are gone', async () => {
     await render();
     await openMenu();
-    await click('Import a backup file');
+    expect(buttons()).not.toContain('Shared links');
+    await click('Import from old TritonPlan');
     expect(flush).toHaveBeenCalledTimes(1);
     expect(assign).toHaveBeenCalledWith('/migrate');
-  });
-
-  it('Shared links opens the list of links to turn off', async () => {
-    answers['undefined /api/shares'] = // this file's fetch mock keys a plain GET by its missing method
-() => json(200, { shares: [] });
-    await render();
-    await openMenu();
-    await click('Shared links');
-    expect(q('[role="dialog"]')!.textContent).toContain("You haven't shared any plans yet.");
   });
 
   it('Google-only: Set a password, no Change password, no Disconnect Google', async () => {

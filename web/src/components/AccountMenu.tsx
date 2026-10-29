@@ -7,12 +7,11 @@ import { useClickAway } from '../hooks/useClickAway';
 import { ChevronDown } from './icons';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
-import { SharedLinksDialog } from './SharedLinksDialog';
 import { CalendarDialog, calendarNeedsPick, calendarRows } from './CalendarDialog';
 import type { TermsState } from '../lib/terms-state';
 import { failureText } from './auth/copy';
 
-type Dialog = 'password' | 'shared' | 'calendar' | 'delete' | null;
+type Dialog = 'password' | 'calendar' | 'delete' | null;
 
 /** How long leaving the planner (sign-out, import) waits for unsaved edits to reach the account before going anyway. */
 const LEAVE_SAVE_MS = 3000;
@@ -39,7 +38,7 @@ export function AccountMenu({
   const ref = useRef<HTMLDivElement>(null);
   useClickAway(open, ref, () => setOpen(false));
 
-  // Once per mount (and after the dialog saves), never per render: the dot is a hint, not live data.
+  // On mount, on opening the menu (Share may have changed a pick) and after the dialog saves; never per render.
   const liveRef = useRef(true);
   const refreshCalendar = useCallback(async () => {
     const c = await fetchCalendar();
@@ -77,7 +76,7 @@ export function AccountMenu({
   const saveBeforeLeaving = () =>
     Promise.race([flush().catch(() => {}), new Promise((r) => setTimeout(r, LEAVE_SAVE_MS))]);
 
-  /** The old site's "Download a backup file" sends students here; /migrate takes the file. */
+  /** The file the old site's move page offers when its hand-off fails; /migrate takes it. */
   async function importBackup() {
     await saveBeforeLeaving();
     nav.assign('/migrate');
@@ -101,7 +100,10 @@ export function AccountMenu({
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label="Account"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => {
+            if (!open) void refreshCalendar();
+            setOpen((v) => !v);
+          }}
         >
           <span className="acctbtn__initial" aria-hidden="true">
             {me.email.charAt(0).toUpperCase()}
@@ -119,12 +121,11 @@ export function AccountMenu({
             {me.hasGoogle && me.hasPassword && (
               <MenuButton onClick={choose(disconnectGoogle)}>Disconnect Google</MenuButton>
             )}
-            <MenuButton onClick={choose(() => setDialog('shared'))}>Shared links</MenuButton>
             <MenuButton onClick={choose(() => setDialog('calendar'))}>
               Calendar subscription
               {calendarDot && <span className="acctmenu__dot" aria-label="needs attention" />}
             </MenuButton>
-            <MenuButton onClick={choose(importBackup)}>Import a backup file</MenuButton>
+            <MenuButton onClick={choose(importBackup)}>Import from old TritonPlan</MenuButton>
             <MenuButton onClick={choose(() => setDialog('delete'))}>Delete account…</MenuButton>
             <MenuButton onClick={choose(signOut)}>Sign out</MenuButton>
           </div>
@@ -133,7 +134,6 @@ export function AccountMenu({
       {dialog === 'password' && (
         <ChangePasswordDialog onClose={() => setDialog(null)} onFlash={onFlash} />
       )}
-      {dialog === 'shared' && <SharedLinksDialog onClose={() => setDialog(null)} onFlash={onFlash} />}
       {dialog === 'calendar' && (
         <CalendarDialog
           terms={terms}

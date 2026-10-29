@@ -14,6 +14,7 @@ import { SyncBanner } from './components/SyncBanner';
 import { ExtensionUpdateNote } from './components/ExtensionUpdateNote';
 import { AccountMenu } from './components/AccountMenu';
 import { ConflictBanner } from './components/ConflictBanner';
+import { ShareMenu } from './components/ShareMenu';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { GuestBanner } from './components/GuestBanner';
 import { BuildingPopover } from './components/BuildingPopover';
@@ -201,9 +202,19 @@ export default function App({
           // Signed out, the banner under the top bar carries the Sign in button.
           boot.me && <AccountMenu me={boot.me} terms={ctl.termsState} onFlash={flash} flush={boot.engine.flush} />
         }
-        sharePlan={ctl.guest ? null : ctl.viewPlan}
-        planName={ctl.viewing === 'received' && ctl.received ? 'Shared plan' : ctl.activePlanName}
-        onFlash={flash}
+        shareSlot={
+          // Into the calendar go the account's own plans: not signed out, not while someone else's plan is up.
+          !ctl.guest && ctl.viewing === 'mine' && (
+            <ShareMenu
+              term={ctl.viewPlan.term}
+              plans={ctl.plans.map((p) => ({ id: p.id, name: p.name, count: p.plan.entries.length }))}
+              activeId={ctl.activePlanId}
+              archived={ctl.archived}
+              flush={boot.engine.flush}
+              onFlash={flash}
+            />
+          )
+        }
         onReset={handleReset}
         onOpenMap={() => setCampusOpen(true)}
       />

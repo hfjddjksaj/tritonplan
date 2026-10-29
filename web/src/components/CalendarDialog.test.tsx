@@ -269,11 +269,12 @@ describe('AccountMenu calendar item', () => {
     expect(dot()).toBeNull();
   });
 
-  it('fetches the calendar once, not on every render', async () => {
+  it('fetches the calendar on mount and on opening the menu (Share may have changed a pick), not on every render', async () => {
     await renderMenu();
     await renderMenu();
-    await open();
     expect(fetchMock.mock.calls.filter((c) => c[0] === '/api/calendar')).toHaveLength(1);
+    await open();
+    expect(fetchMock.mock.calls.filter((c) => c[0] === '/api/calendar')).toHaveLength(2);
   });
 
   it('opens the dialog from the menu', async () => {

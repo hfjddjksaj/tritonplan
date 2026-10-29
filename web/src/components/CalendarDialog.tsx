@@ -187,7 +187,7 @@ export function CalendarDialog({
                 </p>
                 {confirmingReset ? (
                   <>
-                    <p className="sharedlinks__ask">
+                    <p className="acctdlg__ask">
                       Your old link stops working right away, and you'll need to subscribe again.
                     </p>
                     <div className="acctdlg__actions">
