@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import App from './App';
 import { makeTestBoot } from './test/boot';
+import { makeGuestBoot } from './lib/cloud/boot';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -94,6 +95,13 @@ describe('App → extension update note', () => {
     expect(localStorage.getItem(KEY)).not.toBeNull();
     act(() => root.unmount());
     await mount(); // the next sign-in on this browser
+    expect(container.textContent).not.toContain(NOTE);
+  });
+
+  it('is not shown signed out: a new visitor never had the old extension', async () => {
+    root = createRoot(container);
+    await act(async () => root.render(<App boot={makeGuestBoot()} onSignIn={() => {}} />));
+    expect(container.querySelector('.app')).not.toBeNull();
     expect(container.textContent).not.toContain(NOTE);
   });
 

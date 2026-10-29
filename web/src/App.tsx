@@ -212,7 +212,8 @@ export default function App({
         onOpenMap={() => setCampusOpen(true)}
       />
       <SyncBanner engine={boot.engine} />
-      <ExtensionUpdateNote />
+      {/* For students upgrading from the old extension, who all have an account to sign in to. */}
+      {!ctl.guest && <ExtensionUpdateNote />}
       {ctl.received && (
         <ReceivedBanner
           received={ctl.received}
