@@ -3891,33 +3891,72 @@ button.termsw__cell:hover {
   background: var(--conflict);
   border-radius: 50%;
 }
-.calterms {
-  list-style: none;
-  margin: 0 0 12px;
+/* ---- Calendar subscription: the Share dialog's shell; each term a card with its plan picker ---- */
+.caldlg {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.caldlg__terms {
   padding: 0;
+  list-style: none;
 }
-.calterms__row {
-  margin-bottom: 8px;
+.caldlg__term {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
 }
-.calterms__label {
+/* A term still waiting for a plan, in the planner's gold (as on the received-plan banner). */
+.caldlg__term--ask {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+.caldlg__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  font-size: 12.5px;
+  gap: 12px;
+}
+.caldlg__name {
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink);
 }
-.calterms__select {
+.caldlg__select {
   min-width: 0;
-  max-width: 60%;
+  max-width: 62%;
+  height: 30px;
+  padding: 0 8px;
   font: inherit;
-  font-weight: 500;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
 }
-.calterms__hint {
-  margin: 3px 0 0;
+.caldlg__hint {
+  margin: 6px 0 0;
   font-size: 11.5px;
-  color: var(--text-muted);
+  line-height: 1.45;
+  color: var(--gold-ink);
+}
+.caldlg__hint--error {
+  margin: -4px 0 12px;
+  color: var(--conflict);
+}
+.caldlg__create {
+  width: 100%;
+  justify-content: center;
+}
+.caldlg__label {
+  margin: 2px 0 8px;
+}
+.caldlg__reset {
+  margin-top: 10px;
+}
+/* The calendar icon on Share's and this dialog's app rows carries the planner's gold. */
+.sharecal__title svg {
+  color: var(--gold);
 }
 .acctdlg__danger {
   color: #fff;

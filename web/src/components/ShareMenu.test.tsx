@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { Term } from '@triton/shared';
-import { googleCalendarUrl, ShareMenu } from './ShareMenu';
+import { googleCalendarUrl } from '../lib/cloud/api';
+import { ShareMenu } from './ShareMenu';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

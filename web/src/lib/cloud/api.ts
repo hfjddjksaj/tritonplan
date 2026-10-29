@@ -119,6 +119,10 @@ export async function fetchShare(
 }
 
 export interface CalendarLinks { https: string; webcal: string }
+
+/** Google's "add a calendar by URL", with the feed already filled in. */
+export const googleCalendarUrl = (webcal: string): string =>
+  `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
 export interface CalendarState {
   https: string | null;
   webcal: string | null;

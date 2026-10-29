@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  createCalendarLink, fetchCalendar, resetCalendarLink, saveCalendarTerms,
+  createCalendarLink, fetchCalendar, googleCalendarUrl, resetCalendarLink, saveCalendarTerms,
   type CalendarLinks, type CalendarState,
 } from '../lib/cloud/api';
 import type { TermsState } from '../lib/terms-state';
 import { chronoIndex, displayTermLabel, isArchived, termKey } from '../lib/terms';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { Calendar, X } from './icons';
 
 export interface CalendarRow { key: string; label: string; plans: { id: string; name: string }[] }
 
@@ -110,16 +111,21 @@ export function CalendarDialog({
     }
   }
 
+  // The Share dialog's shell and rows: the terms as cards, the two apps as rows that are links.
   return createPortal(
     <div className="mappop__backdrop" onClick={onClose}>
       <div
-        className="mappop acctdlg"
+        className="mappop planpick caldlg"
         role="dialog"
         aria-modal="true"
         aria-label="Calendar subscription"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="planpick__title">Calendar subscription</h2>
+        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
+          <X size={14} />
+        </button>
+        <div className="eyebrow">Calendar subscription</div>
+        <div className="mappop__name">Your calendar</div>
         <p className="planpick__sub">
           Pick one plan per term. Your calendar shows the classes, midterms and finals of the plans you pick, and
           drops a term once its finals are over.
@@ -128,16 +134,16 @@ export function CalendarDialog({
         {cal === null && <p className="planpick__sub">Couldn't load your calendar settings.</p>}
         {cal && (
           <>
-            <ul className="calterms">
+            <ul className="planpick__list caldlg__terms">
               {rows.map((r) => {
                 const gone = missing.includes(r.key);
                 const value = gone ? '' : (picks[r.key] ?? '');
                 return (
-                  <li key={r.key} className="calterms__row">
-                    <label className="calterms__label">
-                      <span className="calterms__term">{r.label}</span>
+                  <li key={r.key} className={`caldlg__term${gone || !value ? ' caldlg__term--ask' : ''}`}>
+                    <label className="caldlg__row">
+                      <span className="caldlg__name">{r.label}</span>
                       <select
-                        className="calterms__select"
+                        className="caldlg__select"
                         value={value}
                         disabled={busy}
                         onChange={(e) => void choose(r.key, e.target.value)}
@@ -149,44 +155,58 @@ export function CalendarDialog({
                       </select>
                     </label>
                     {gone && (
-                      <p className="calterms__hint">The plan you picked for {r.label} was deleted — pick another.</p>
+                      <p className="caldlg__hint">The plan you picked for {r.label} was deleted — pick another.</p>
                     )}
                     {!gone && !value && (
-                      <p className="calterms__hint">Pick a plan to add {r.label} to your calendar.</p>
+                      <p className="caldlg__hint">Pick a plan to add {r.label} to your calendar.</p>
                     )}
                   </li>
                 );
               })}
             </ul>
-            {saveFailed && <p className="calterms__hint" role="alert">Couldn't save. Please try again.</p>}
+            {saveFailed && <p className="caldlg__hint caldlg__hint--error" role="alert">Couldn't save. Please try again.</p>}
             {!links ? (
-              <div className="acctdlg__actions">
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  disabled={busy}
-                  onClick={() => void makeLink(createCalendarLink, "Couldn't create the link. Please try again.")}
-                >
-                  Create my calendar link
-                </button>
-              </div>
+              <button
+                type="button"
+                className="btn btn--primary caldlg__create"
+                disabled={busy}
+                onClick={() => void makeLink(createCalendarLink, "Couldn't create the link. Please try again.")}
+              >
+                Create my calendar link
+              </button>
             ) : (
-              <div className="calterms__links">
-                <div className="acctdlg__actions">
-                  <a className="btn btn--sm" href={links.webcal}>Subscribe in Apple Calendar</a>
-                  <button type="button" className="btn btn--sm" onClick={() => void copy(links.https)}>
-                    Copy link for Google Calendar
-                  </button>
+              <>
+                <div className="eyebrow caldlg__label">Add it to</div>
+                <div className="planpick__list">
+                  <a className="planpick__item sharecal__app" href={links.webcal}>
+                    <span className="sharecal__title">
+                      <Calendar size={15} /> Subscribe in Apple Calendar
+                    </span>
+                    <span className="sharecal__desc">Opens Calendar to subscribe. Changes show up within an hour.</span>
+                  </a>
+                  <a
+                    className="planpick__item sharecal__app"
+                    href={googleCalendarUrl(links.webcal)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span className="sharecal__title">
+                      <Calendar size={15} /> Add to Google Calendar
+                    </span>
+                    <span className="sharecal__desc">
+                      Opens Google Calendar to add it. Changes can take several hours to a day — it can't be sped up.
+                    </span>
+                  </a>
                 </div>
-                <p className="planpick__sub">
-                  In Google Calendar on a computer: Other calendars → + → From URL → paste the link → Add calendar.
-                </p>
-                <p className="planpick__sub">
-                  Apple Calendar picks up changes within an hour. Google Calendar can take several hours to a day — it
-                  can't be sped up.
+                <p className="mappop__hint">
+                  Another app, or Google didn't open?{' '}
+                  <button type="button" className="sharecal__link" onClick={() => void copy(links.https)}>
+                    Copy the link
+                  </button>{' '}
+                  and add it as a calendar from a URL.
                 </p>
                 {confirmingReset ? (
-                  <>
+                  <div className="caldlg__reset">
                     <p className="acctdlg__ask">
                       Your old link stops working right away, and you'll need to subscribe again.
                     </p>
@@ -203,23 +223,19 @@ export function CalendarDialog({
                         Reset
                       </button>
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <div className="acctdlg__actions">
-                    <button type="button" className="btn btn--sm" onClick={() => setConfirmingReset(true)}>
+                  <p className="mappop__hint">
+                    Shared the link by mistake?{' '}
+                    <button type="button" className="sharecal__link" onClick={() => setConfirmingReset(true)}>
                       Reset link
                     </button>
-                  </div>
+                  </p>
                 )}
-              </div>
+              </>
             )}
           </>
         )}
-        <div className="acctdlg__actions">
-          <button type="button" className="btn btn--sm" onClick={onClose}>
-            Close
-          </button>
-        </div>
       </div>
     </div>,
     document.body,

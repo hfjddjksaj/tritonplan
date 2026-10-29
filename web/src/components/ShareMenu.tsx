@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Term } from '@triton/shared';
 import { useEscapeKey } from '../hooks/useEscapeKey';
-import { createCalendarLink, fetchCalendar, saveCalendarTerms, type CalendarLinks } from '../lib/cloud/api';
+import {
+  createCalendarLink, fetchCalendar, googleCalendarUrl, saveCalendarTerms, type CalendarLinks,
+} from '../lib/cloud/api';
 import { pluralize } from '../lib/format';
 import { displayTermLabel, termKey } from '../lib/terms';
 import { Calendar, Share, X } from './icons';
@@ -18,10 +20,6 @@ interface Props {
   flush: () => Promise<void>;
   onFlash: (msg: string) => void;
 }
-
-/** Google's "add a calendar by URL", with the feed already filled in. */
-export const googleCalendarUrl = (webcal: string): string =>
-  `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
 
 const UNREACHABLE = "Couldn't reach your calendar settings. Check your connection and try again.";
 

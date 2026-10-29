@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { Term } from '@triton/shared';
 import type { TermsState } from '../lib/terms-state';
-import type { Me } from '../lib/cloud/api';
+import { googleCalendarUrl, type Me } from '../lib/cloud/api';
 import { AccountMenu } from './AccountMenu';
 import { CalendarDialog } from './CalendarDialog';
 
@@ -127,27 +127,26 @@ describe('CalendarDialog', () => {
     await renderDialog();
     expect(btns('Subscribe in Apple Calendar')).toHaveLength(0);
     await click(btns('Create my calendar link')[0]!);
-    expect(document.body.querySelector<HTMLAnchorElement>('a[href^="webcal://"]')!.textContent).toBe(
+    expect(document.body.querySelector<HTMLAnchorElement>('a[href^="webcal://"]')!.textContent).toContain(
       'Subscribe in Apple Calendar',
     );
     expect(btns('Create my calendar link')).toHaveLength(0);
     expect(onChanged).toHaveBeenCalled();
   });
 
-  it('Apple is the webcal:// link; Google copies the https:// one', async () => {
+  it('Apple is the webcal:// link, Google opens its add page, and the https:// link can still be copied', async () => {
     await renderDialog();
     const a = document.body.querySelector<HTMLAnchorElement>('a[href^="webcal://"]')!;
     expect(a.getAttribute('href')).toBe(WEBCAL);
-    expect(a.textContent).toBe('Subscribe in Apple Calendar');
-    await click(btns('Copy link for Google Calendar')[0]!);
+    expect(a.textContent).toContain('Subscribe in Apple Calendar');
+    expect(a.textContent).toContain('Changes show up within an hour.');
+    const g = [...document.body.querySelectorAll('a')].find((e) => e.textContent?.includes('Add to Google Calendar'))!;
+    expect(g.getAttribute('href')).toBe(googleCalendarUrl(WEBCAL));
+    expect(g.getAttribute('target')).toBe('_blank');
+    expect(g.textContent).toContain("Changes can take several hours to a day — it can't be sped up.");
+    await click(btns('Copy the link')[0]!);
     expect(writeText).toHaveBeenCalledWith(HTTPS);
     expect(flash).toHaveBeenCalledWith('Calendar link copied.');
-    expect(text()).toContain(
-      'In Google Calendar on a computer: Other calendars → + → From URL → paste the link → Add calendar.',
-    );
-    expect(text()).toContain(
-      "Apple Calendar picks up changes within an hour. Google Calendar can take several hours to a day — it can't be sped up.",
-    );
   });
 
   it('changing a term PUTs the whole map, and Not in calendar drops the key', async () => {
@@ -210,7 +209,7 @@ describe('CalendarDialog', () => {
     expect(document.body.querySelector('a[href^="webcal://"]')!.getAttribute('href')).toBe(
       'webcal://tritonplan.cn/cal/new.ics',
     );
-    await click(btns('Copy link for Google Calendar')[0]!);
+    await click(btns('Copy the link')[0]!);
     expect(writeText).toHaveBeenCalledWith('https://tritonplan.cn/cal/new.ics');
   });
 
@@ -250,7 +249,7 @@ describe('AccountMenu calendar item', () => {
     expect(dot()).toBeNull();
     await click(btns('Calendar subscription')[0]!);
     await click(btns('Create my calendar link')[0]!);
-    await click(btns('Close')[0]!);
+    await click(document.body.querySelector<HTMLElement>('[role="dialog"] button[aria-label="Close"]')!);
     await open();
     expect(dot()).not.toBeNull();
   });
