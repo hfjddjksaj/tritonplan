@@ -140,9 +140,16 @@ function eventLines(uid: string, now: Date, props: string[]): string[] {
   return ['BEGIN:VEVENT', `UID:${uid}@tritonplan.cn`, `DTSTAMP:${icsUtc(now)}`, ...props, 'END:VEVENT'];
 }
 
-function meetingEvent(course: CourseOffering, comp: Component, m: Meeting, index: number, holidays: readonly string[], now: Date): string[] | null {
-  const begin = comp.beginDate;
-  const end = comp.endDate;
+/** A term's weeks of instruction (terms.ts). */
+export type TermSpan = { begin: string; end: string };
+
+function meetingEvent(
+  course: CourseOffering, comp: Component, m: Meeting, index: number, holidays: readonly string[], now: Date, span: TermSpan | undefined,
+): string[] | null {
+  // The section's own dates when TSS sent them; the live feed sends none, and then the term's weeks of instruction.
+  // Only a missing date falls back: one that is there but malformed still leaves the meeting out, below.
+  const begin = comp.beginDate ?? span?.begin;
+  const end = comp.endDate ?? span?.end;
   // Never guess at a value that isn't well formed: the meeting is left out.
   if (!isIsoDate(begin) || !isIsoDate(end) || !m || !isHhmm(m.start) || !isHhmm(m.end) || !isWeekdays(m.days)) return null;
   let first = begin;
@@ -177,8 +184,14 @@ function examEvent(course: CourseOffering, kind: 'Final' | 'Midterm', uid: strin
   return eventLines(uid, now, props);
 }
 
-export function buildCalendar(input: { plans: { plan: PlanState }[]; now: Date; holidays: readonly string[] }): string {
-  const { now, holidays } = input;
+export function buildCalendar(input: {
+  plans: { plan: PlanState }[];
+  now: Date;
+  holidays: readonly string[];
+  /** Weeks of instruction by term key, for meetings that carry no dates of their own. */
+  instruction?: Readonly<Record<string, TermSpan>>;
+}): string {
+  const { now, holidays, instruction = {} } = input;
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -203,7 +216,7 @@ export function buildCalendar(input: { plans: { plan: PlanState }[]; now: Date; 
     let events: string[][];
     try {
       if (calendarTermIsOver(plan, now)) continue;
-      events = planEvents(plan, holidays, now);
+      events = planEvents(plan, holidays, now, instruction);
     } catch {
       // A plan whose shape is broken drops out whole; the student's other terms still reach their calendar.
       continue;
@@ -215,16 +228,20 @@ export function buildCalendar(input: { plans: { plan: PlanState }[]; now: Date; 
 }
 
 /** Every event of one plan. Collected before any of them is added, so a plan that throws halfway adds nothing. */
-function planEvents(plan: PlanState, holidays: readonly string[], now: Date): string[][] {
+function planEvents(
+  plan: PlanState, holidays: readonly string[], now: Date, instruction: Readonly<Record<string, TermSpan>>,
+): string[][] {
   const out: string[][] = [];
   const push = (ev: string[] | null) => { if (ev) out.push(ev); };
   for (const entry of plan.entries) {
     const course = entry.course;
     const opt = course.options.find((o) => o.id === entry.selectedOptionId);
     if (!opt) continue;
+    const key = `${course.term?.year}|${course.term?.period}`;
+    const span = Object.hasOwn(instruction, key) ? instruction[key] : undefined;
     for (const comp of opt.components) {
-      if (comp.unscheduled || !comp.beginDate || !comp.endDate || !Array.isArray(comp.meetings)) continue;
-      comp.meetings.forEach((m, i) => push(meetingEvent(course, comp, m, i, holidays, now)));
+      if (comp.unscheduled || !Array.isArray(comp.meetings)) continue;
+      comp.meetings.forEach((m, i) => push(meetingEvent(course, comp, m, i, holidays, now, span)));
     }
     const id = uidPart(course.id);
     if (isExam(opt.final)) push(examEvent(course, 'Final', `final-${id}`, opt.final, now));

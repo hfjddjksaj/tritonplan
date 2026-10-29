@@ -9,6 +9,7 @@ import { clientIp, requireUser, type AppEnv } from '../http/guard';
 import type { RateLimiter } from '../http/rate-limit';
 import { buildCalendar } from './ics';
 import { UCSD_HOLIDAYS } from './holidays';
+import { UCSD_INSTRUCTION } from './terms';
 
 const QUARTER = 900_000;
 const MAX_TERMS = 40;
@@ -120,7 +121,7 @@ export function calendarRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     }
     c.header('Content-Type', 'text/calendar; charset=utf-8');
     c.header('Cache-Control', 'no-cache');
-    return c.body(buildCalendar({ plans, now: deps.now(), holidays: UCSD_HOLIDAYS }));
+    return c.body(buildCalendar({ plans, now: deps.now(), holidays: UCSD_HOLIDAYS, instruction: UCSD_INSTRUCTION }));
   });
 
   return r;

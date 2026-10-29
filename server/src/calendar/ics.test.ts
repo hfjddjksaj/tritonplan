@@ -53,6 +53,40 @@ test('a course spanning the end of daylight time keeps its local clock time', ()
   expect(build([plan(spring)], new Date('2027-03-01T00:00:00Z'))).toContain('UNTIL=20270605T065959Z');
 });
 
+test('a meeting TSS sent without dates recurs over its term\'s weeks of instruction', () => {
+  // The live TSS feed has no BeginDate / EndDate: only the final would reach the calendar.
+  const o = option();
+  delete o.components[0]!.beginDate;
+  delete o.components[0]!.endDate;
+  o.components[0]!.meetings.push({ days: ['Mon'], start: '09:00', end: '09:50', modality: 'In Person' });
+  const fall = { '2026|2': { begin: '2026-09-24', end: '2026-12-04' } };
+  const evs = events(buildCalendar({ plans: [{ plan: plan(o) }], now: NOW, holidays: HOLIDAYS, instruction: fall }));
+  const tuth = evs.find((e) => e.includes('BYDAY=TU,TH'))!;
+  expect(tuth).toContain('DTSTART;TZID=America/Los_Angeles:20260924T110000\r\n'); // instruction begins on a Thursday
+  expect(tuth).toContain('RRULE:FREQ=WEEKLY;BYDAY=TU,TH;UNTIL=20261205T075959Z\r\n');
+  expect(tuth).toContain('EXDATE;TZID=America/Los_Angeles:20261126T110000\r\n');
+  const mon = evs.find((e) => e.includes('BYDAY=MO'))!;
+  expect(mon).toContain('DTSTART;TZID=America/Los_Angeles:20260928T090000\r\n'); // the first Monday of instruction
+  expect(evs.some((e) => e.includes('SUMMARY:CSE 8A Final'))).toBe(true);
+});
+
+test("a section's own dates win over its term's", () => {
+  const fall = { '2026|2': { begin: '2026-09-21', end: '2026-12-11' } };
+  const [e] = events(buildCalendar({ plans: [{ plan: plan() }], now: NOW, holidays: HOLIDAYS, instruction: fall }));
+  expect(e).toContain('DTSTART;TZID=America/Los_Angeles:20260924T110000\r\n');
+  expect(e).toContain('UNTIL=20261205T075959Z');
+});
+
+test('an undated meeting in a term with no known dates is still left out, its final kept', () => {
+  const o = option();
+  delete o.components[0]!.beginDate;
+  delete o.components[0]!.endDate;
+  const p = plan(o, { term: { year: '2027', period: '9', label: 'Period 9 2027' } });
+  const evs = events(buildCalendar({ plans: [{ plan: p }], now: NOW, holidays: HOLIDAYS, instruction: {} }));
+  expect(evs).toHaveLength(1);
+  expect(evs[0]).toContain('SUMMARY:CSE 8A Final');
+});
+
 test('holidays on meeting days are excluded, others are not', () => {
   const [e] = events(build([plan()]));
   expect(e).toContain('EXDATE;TZID=America/Los_Angeles:20261126T110000\r\n'); // Thursday

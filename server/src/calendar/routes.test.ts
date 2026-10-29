@@ -111,6 +111,22 @@ test('only the selected plan per term is in the feed', async () => {
   expect(state).toEqual({ https, webcal: https.replace('https://', 'webcal://'), terms: { FA26: 'p2' }, missing: [] });
 });
 
+test('a Fall 2026 meeting captured from the live TSS feed, which has no section dates, still recurs in the feed', async () => {
+  const { mk, send, get, savePlan, link, path } = setup();
+  const u = mk('a@ucsd.edu');
+  const p = planFor('CSE', 'CSE 100|2026|2');
+  const comp = p.entries[0]!.course.options[0]!.components[0]!;
+  delete comp.beginDate;
+  delete comp.endDate;
+  await savePlan(u.token, 'p1', 'FA26', p);
+  await send('PUT', '/api/calendar', { terms: { FA26: 'p1' } }, u.token);
+  const { https } = await link(u.token);
+  const [e] = events(await (await get(path(https))).text());
+  expect(e).toContain('SUMMARY:CSE 100 Lecture');
+  expect(e).toContain('DTSTART;TZID=America/Los_Angeles:20260929T090000'); // the first Tuesday of instruction
+  expect(e).toContain('RRULE:FREQ=WEEKLY;BYDAY=TU;UNTIL=20261205T075959Z');
+});
+
 test('a selected plan that was deleted or moved to another term is reported missing and left out', async () => {
   const { mk, send, get, savePlan, deletePlan, link, path, missing } = setup();
   const u = mk('a@ucsd.edu');
