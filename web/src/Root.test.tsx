@@ -314,7 +314,7 @@ describe('Root: signed out', () => {
     await mount('/');
     expect(container.querySelector('.app')).not.toBeNull();
     expect(accountPlanner()).toBeNull();
-    expect(container.querySelector('.topbar')?.textContent).toContain('Sign in');
+    expect(container.querySelector('.received--active')?.textContent).toContain('Sign in');
     expect(dialog()?.querySelector('h2')?.textContent).toBe('Sign in to TritonPlan');
     expect(input('email')).not.toBeNull();
     expect(input('password')).not.toBeNull();
@@ -365,7 +365,7 @@ describe('Root: signed out', () => {
     expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2', 'CSE-100|2026|2'] });
   });
 
-  it('the card closes (×, Escape) to the planner, and its Sign in button opens it again', async () => {
+  it('the card closes (×, Escape) to the planner, and the banner’s Sign in button opens it again', async () => {
     await mount('/');
     expect(dialog()!.parentElement!.className).toContain('authdlg--delayed'); // first, the page
     await act(async () => dialog()!.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
@@ -376,6 +376,16 @@ describe('Root: signed out', () => {
     expect(dialog()!.parentElement!.className).not.toContain('authdlg--delayed'); // asked for: no waiting
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
     expect(dialog()).toBeNull();
+  });
+
+  it('a banner says they are not signed in, and its button opens the card', async () => {
+    await mount('/');
+    await act(async () => dialog()!.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
+    const banner = container.querySelector('.received--active');
+    expect(banner?.textContent).toContain('You’re not signed in');
+    expect(banner?.textContent).toContain('Nothing here is saved.');
+    await act(async () => banner!.querySelector<HTMLButtonElement>('button')!.click());
+    expect(dialog()).not.toBeNull();
   });
 
   it.each([

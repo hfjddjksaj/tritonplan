@@ -15,6 +15,7 @@ import { ExtensionUpdateNote } from './components/ExtensionUpdateNote';
 import { AccountMenu } from './components/AccountMenu';
 import { ConflictBanner } from './components/ConflictBanner';
 import { ReceivedBanner } from './components/ReceivedBanner';
+import { GuestBanner } from './components/GuestBanner';
 import { BuildingPopover } from './components/BuildingPopover';
 const CampusMap = lazy(() => import('./components/CampusMap').then((m) => ({ default: m.CampusMap })));
 import { PlanPickerModal } from './components/PlanPickerModal';
@@ -41,7 +42,7 @@ export default function App({
 }: {
   boot: CloudBoot;
   initialFlash?: string;
-  /** Signed out (no `boot.me`): what the Sign in button and every edit do. */
+  /** Signed out (no `boot.me`): what the banner's Sign in button and every edit do. */
   onSignIn?: () => void;
 }) {
   const own = usePlan(boot);
@@ -197,13 +198,8 @@ export default function App({
         }
         apptSlot={<ApptCapsule appt={appt} />}
         accountSlot={
-          boot.me ? (
-            <AccountMenu me={boot.me} terms={ctl.termsState} onFlash={flash} flush={boot.engine.flush} />
-          ) : (
-            <button type="button" className="btn btn--primary btn--sm" onClick={onSignIn}>
-              Sign in
-            </button>
-          )
+          // Signed out, the banner under the top bar carries the Sign in button.
+          boot.me && <AccountMenu me={boot.me} terms={ctl.termsState} onFlash={flash} flush={boot.engine.flush} />
         }
         sharePlan={ctl.guest ? null : ctl.viewPlan}
         planName={ctl.viewing === 'received' && ctl.received ? 'Shared plan' : ctl.activePlanName}
@@ -214,6 +210,7 @@ export default function App({
       <SyncBanner engine={boot.engine} />
       {/* For students upgrading from the old extension, who all have an account to sign in to. */}
       {!ctl.guest && <ExtensionUpdateNote />}
+      {ctl.guest && <GuestBanner onSignIn={onSignIn} />}
       {ctl.received && (
         <ReceivedBanner
           received={ctl.received}
