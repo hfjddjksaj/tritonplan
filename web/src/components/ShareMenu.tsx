@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Term } from '@triton/shared';
-import { useClickAway } from '../hooks/useClickAway';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { createCalendarLink, fetchCalendar, saveCalendarTerms, type CalendarLinks } from '../lib/cloud/api';
 import { pluralize } from '../lib/format';
 import { displayTermLabel, termKey } from '../lib/terms';
-import { Calendar, ChevronDown, Share } from './icons';
+import { Calendar, Share, X } from './icons';
 
 interface Props {
   /** The term on screen; its plans are the ones offered. */
@@ -34,18 +35,28 @@ interface Picked {
 }
 
 /**
- * Share ▾ — puts a plan into the student's calendar: first which plan of this term, then which
- * calendar app. Both apps subscribe to the account's one calendar link, which shows one plan per
- * term, so exporting a plan makes it this term's. Picking the plan fetches (or makes) the link, so
- * the app choices are plain links the browser follows inside the click; a webcal:// opened after
- * an await could be refused for want of a user gesture.
+ * Share — puts a plan into the student's calendar, in a dialog like the building one: first which
+ * plan of this term, then which calendar app. Both apps subscribe to the account's one calendar
+ * link, which shows one plan per term, so exporting a plan makes it this term's. Picking the plan
+ * fetches (or makes) the link, so the app choices are plain links the browser follows inside the
+ * click; a webcal:// opened after an await could be refused for want of a user gesture.
  */
-export function ShareMenu({ term, plans, activeId, archived, flush, onFlash }: Props) {
+export function ShareMenu(props: Props) {
   const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="btn btn--sm btn--primary" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+        <Share size={15} /> Share
+      </button>
+      {open && <ShareDialog {...props} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function ShareDialog({ term, plans, activeId, archived, flush, onFlash, onClose }: Props & { onClose: () => void }) {
+  useEscapeKey(onClose);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [busy, setBusy] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useClickAway(open, ref, () => setOpen(false));
   const key = termKey(term);
   const label = displayTermLabel(term);
 
@@ -72,98 +83,89 @@ export function ShareMenu({ term, plans, activeId, archived, flush, onFlash }: P
       ),
     );
     // After the click has been followed: the link must still be in the page when the browser acts on it.
-    setTimeout(() => setOpen(false));
+    setTimeout(onClose);
   }
 
-  return (
-    <div className="menu-wrap" ref={ref}>
-      <button
-        type="button"
-        className="btn btn--sm btn--primary"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => {
-          if (!open) setPicked(null);
-          setOpen((v) => !v);
-        }}
+  // Portaled: the top bar is a positioned ancestor, and a fixed overlay inside it would be held to it.
+  return createPortal(
+    <div className="mappop__backdrop" onClick={onClose}>
+      <div
+        className="mappop planpick"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add to calendar"
+        aria-busy={busy}
+        onClick={(e) => e.stopPropagation()}
       >
-        <Share size={15} /> Share <ChevronDown size={12} />
-      </button>
-      {open && (
-        <div className="menu menu--right" role="menu" aria-busy={busy}>
-          {archived ? (
-            <p className="menu__foot">{label} is over, so it is no longer in calendars.</p>
-          ) : !picked ? (
-            <>
-              <div className="menu__head eyebrow">Add to calendar · {label} · which plan?</div>
+        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
+          <X size={14} />
+        </button>
+        <div className="eyebrow">Add to calendar</div>
+        {archived ? (
+          <>
+            <div className="mappop__name">{label} is over</div>
+            <p className="planpick__sub">A term that is over is no longer in calendars.</p>
+          </>
+        ) : !picked ? (
+          <>
+            <div className="mappop__name">Which plan?</div>
+            <p className="planpick__sub">Your calendar shows one plan for {label}.</p>
+            <div className="planpick__list">
               {plans.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className="menu__item"
-                  role="menuitem"
-                  disabled={busy}
-                  onClick={() => void pick(p)}
-                >
-                  <span className="menu__item-title">{p.name}</span>
-                  <span className="menu__item-desc">
+                <button key={p.id} type="button" className="planpick__item" disabled={busy} onClick={() => void pick(p)}>
+                  <span className="planpick__name">{p.name}</span>
+                  <span className="planpick__count">
                     {p.count} {pluralize(p.count, 'course')}
                     {p.id === activeId ? ' · on screen' : ''}
                   </span>
                 </button>
               ))}
-            </>
-          ) : (
-            <>
-              <div className="menu__head eyebrow">
-                <button type="button" className="menu__back" onClick={() => setPicked(null)} aria-label="Back to plans">
-                  ‹
-                </button>
-                {picked.plan.name} · which calendar?
-              </div>
-              <a
-                className="menu__item"
-                role="menuitem"
-                href={picked.links.webcal}
-                onClick={() => putInCalendar(picked)}
-              >
-                <span className="menu__item-title">
-                  <Calendar size={14} /> Export to Apple Calendar
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mappop__name">Which calendar?</div>
+            <p className="planpick__sub">
+              “{picked.plan.name}” · {label}
+            </p>
+            <div className="planpick__list">
+              <a className="planpick__item sharecal__app" href={picked.links.webcal} onClick={() => putInCalendar(picked)}>
+                <span className="sharecal__title">
+                  <Calendar size={15} /> Export to Apple Calendar
                 </span>
-                <span className="menu__item-desc">Opens Calendar to subscribe. Changes show up within an hour.</span>
+                <span className="sharecal__desc">Opens Calendar to subscribe. Changes show up within an hour.</span>
               </a>
               <a
-                className="menu__item"
-                role="menuitem"
+                className="planpick__item sharecal__app"
                 href={googleCalendarUrl(picked.links.webcal)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => putInCalendar(picked)}
               >
-                <span className="menu__item-title">
-                  <Calendar size={14} /> Export to Google Calendar
+                <span className="sharecal__title">
+                  <Calendar size={15} /> Export to Google Calendar
                 </span>
-                <span className="menu__item-desc">
+                <span className="sharecal__desc">
                   Opens Google Calendar to add it. Changes can take several hours to a day to show up.
                 </span>
               </a>
-              {picked.subscribed && (
-                <p className="menu__foot">
-                  Already in your calendar?{' '}
-                  <button
-                    type="button"
-                    className="menu__link"
-                    onClick={() => putInCalendar(picked)}
-                  >
-                    Just switch it to this plan
-                  </button>{' '}
-                  — adding it again would show it twice.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
+            </div>
+            {picked.subscribed && (
+              <p className="mappop__hint">
+                Already in your calendar?{' '}
+                <button type="button" className="sharecal__link" onClick={() => putInCalendar(picked)}>
+                  Just switch it to this plan
+                </button>{' '}
+                — adding it again would show it twice.
+              </p>
+            )}
+            <button type="button" className="btn btn--sm planpick__cancel sharecal__back" onClick={() => setPicked(null)}>
+              ‹ Back to plans
+            </button>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }

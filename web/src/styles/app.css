@@ -1220,48 +1220,6 @@ button.menu__item:hover {
   line-height: 1.5;
   color: var(--text-muted);
 }
-/* Share's two steps, which plan and then which calendar: a heading line, links drawn as
-   items, and a footnote under them. */
-a.menu__item {
-  text-decoration: none;
-  color: inherit;
-}
-a.menu__item:hover {
-  background: var(--surface-2);
-}
-.menu__head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px 4px;
-  overflow-wrap: anywhere;
-}
-.menu__back {
-  padding: 0 6px 0 0;
-  font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--ink);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-.menu__foot {
-  margin: 4px 10px 6px;
-  font-size: 10.5px;
-  line-height: 1.5;
-  color: var(--text-muted);
-}
-.menu__link {
-  padding: 0;
-  font: inherit;
-  font-weight: 700;
-  color: var(--ink);
-  text-decoration: underline;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
 
 /* A dialog's confirm-before line (the calendar link's Reset). */
 .acctdlg__ask {
@@ -2692,6 +2650,40 @@ a.menu__item:hover {
 .planpick__cancel {
   width: 100%;
   justify-content: center;
+}
+
+/* ---- Share: which plan (the picker's rows), then which calendar app (rows that are links) ---- */
+.sharecal__app {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  color: inherit;
+  text-decoration: none;
+}
+.sharecal__title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.sharecal__desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.sharecal__link {
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: underline;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.mappop__hint + .sharecal__back {
+  margin-top: 12px;
 }
 
 /* ---- term switcher ---- */
