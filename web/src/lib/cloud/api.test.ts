@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlanState } from '@triton/shared';
 import {
-  apiDelete, apiPost, fetchMe, fetchShare, fetchState, postSync, syncTimeoutMs, UnauthorizedError,
+  apiDelete, apiPost, fetchMe, fetchShare, fetchState, googleCalendarUrl, postSync, syncTimeoutMs, UnauthorizedError,
 } from './api';
 
 const res = (status: number, body: unknown = {}) =>
@@ -175,5 +175,27 @@ describe('shares', () => {
     expect(await fetchShare('abc')).toBeNull();
     stub(async () => res(200, 'not json'));
     expect(await fetchShare('abc')).toBeNull();
+  });
+});
+
+describe('googleCalendarUrl', () => {
+  const WEBCAL = 'webcal://tritonplan.cn/api/cal/secret.ics';
+
+  it('opens Google add-by-URL page with the feed filled in, marked so Google fetches it afresh', () => {
+    expect(googleCalendarUrl(WEBCAL, 'abc')).toBe(
+      'https://calendar.google.com/calendar/r?cid=webcal%3A%2F%2Ftritonplan.cn%2Fapi%2Fcal%2Fsecret.ics%3Fv%3Dabc',
+    );
+  });
+
+  it('each link is a URL Google has not seen: its cache of the feed cannot answer for it', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(1_000);
+      const first = googleCalendarUrl(WEBCAL);
+      vi.setSystemTime(2_000);
+      expect(googleCalendarUrl(WEBCAL)).not.toBe(first);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

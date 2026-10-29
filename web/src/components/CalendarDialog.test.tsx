@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { Term } from '@triton/shared';
 import type { TermsState } from '../lib/terms-state';
-import { googleCalendarUrl, type Me } from '../lib/cloud/api';
+import type { Me } from '../lib/cloud/api';
 import { AccountMenu } from './AccountMenu';
 import { CalendarDialog } from './CalendarDialog';
 
@@ -141,7 +141,9 @@ describe('CalendarDialog', () => {
     expect(a.textContent).toContain('Subscribe in Apple Calendar');
     expect(a.textContent).toContain('Changes show up within an hour.');
     const g = [...document.body.querySelectorAll('a')].find((e) => e.textContent?.includes('Add to Google Calendar'))!;
-    expect(g.getAttribute('href')).toBe(googleCalendarUrl(WEBCAL));
+    expect(g.getAttribute('href')).toMatch(
+      /^https:\/\/calendar\.google\.com\/calendar\/r\?cid=webcal%3A%2F%2Ftritonplan\.cn%2Fcal%2Fsecret\.ics%3Fv%3D[a-z0-9]+$/,
+    );
     expect(g.getAttribute('target')).toBe('_blank');
     expect(g.textContent).toContain("Changes can take several hours to a day — it can't be sped up.");
     await click(btns('Copy the link')[0]!);

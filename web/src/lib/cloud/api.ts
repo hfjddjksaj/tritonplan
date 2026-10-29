@@ -120,9 +120,13 @@ export async function fetchShare(
 
 export interface CalendarLinks { https: string; webcal: string }
 
-/** Google's "add a calendar by URL", with the feed already filled in. */
-export const googleCalendarUrl = (webcal: string): string =>
-  `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
+/**
+ * Google's "add a calendar by URL", with the feed already filled in. Google keeps a copy of a feed per URL and
+ * answers a re-add from it for hours, so each link adds the feed under a URL of its own: the server ignores the
+ * `v` query, and Google fetches what the feed holds now.
+ */
+export const googleCalendarUrl = (webcal: string, v: string = Date.now().toString(36)): string =>
+  `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(`${webcal}?v=${v}`)}`;
 export interface CalendarState {
   https: string | null;
   webcal: string | null;

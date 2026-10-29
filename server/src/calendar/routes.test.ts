@@ -127,6 +127,17 @@ test('a Fall 2026 meeting captured from the live TSS feed, which has no section 
   expect(e).toContain('RRULE:FREQ=WEEKLY;BYDAY=TU;UNTIL=20261205T075959Z');
 });
 
+test('a query on the feed URL is ignored: the web app adds one so Google fetches afresh', async () => {
+  const { mk, send, get, savePlan, link, path } = setup();
+  const u = mk('a@ucsd.edu');
+  await savePlan(u.token, 'p1', 'FA26', planFor('CSE', 'CSE 100|2026|2'));
+  await send('PUT', '/api/calendar', { terms: { FA26: 'p1' } }, u.token);
+  const { https } = await link(u.token);
+  const res = await get(`${path(https)}?v=abc123`);
+  expect(res.status).toBe(200);
+  expect(await res.text()).toContain('SUMMARY:CSE 100 Lecture');
+});
+
 test('a selected plan that was deleted or moved to another term is reported missing and left out', async () => {
   const { mk, send, get, savePlan, deletePlan, link, path, missing } = setup();
   const u = mk('a@ucsd.edu');

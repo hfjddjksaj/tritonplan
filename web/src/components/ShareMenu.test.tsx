@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { Term } from '@triton/shared';
-import { googleCalendarUrl } from '../lib/cloud/api';
 import { ShareMenu } from './ShareMenu';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -97,9 +96,9 @@ describe('ShareMenu', () => {
     const apple = row('Export to Apple Calendar') as HTMLAnchorElement;
     const google = row('Export to Google Calendar') as HTMLAnchorElement;
     expect(apple.getAttribute('href')).toBe(WEBCAL);
-    expect(google.getAttribute('href')).toBe(googleCalendarUrl(WEBCAL));
-    expect(google.getAttribute('href')).toBe(
-      'https://calendar.google.com/calendar/r?cid=webcal%3A%2F%2Ftritonplan.cn%2Fapi%2Fcal%2Fsecret.ics',
+    // Google's add page with the feed filled in, under a URL of its own, so Google cannot answer from its cache.
+    expect(google.getAttribute('href')).toMatch(
+      /^https:\/\/calendar\.google\.com\/calendar\/r\?cid=webcal%3A%2F%2Ftritonplan\.cn%2Fapi%2Fcal%2Fsecret\.ics%3Fv%3D[a-z0-9]+$/,
     );
     expect(google.getAttribute('target')).toBe('_blank');
     expect(text()).not.toContain('Already in your calendar?');
