@@ -1,135 +1,169 @@
-import { useRef, useState } from 'react';
-import type { PlanState } from '@triton/shared';
-import { useClickAway } from '../hooks/useClickAway';
-import { encodePlan, shareUrl, tokenFromHash, type ShareFormat } from '../lib/share';
-import { saveSyncedToken } from '../lib/storage';
-import { ChevronDown, Link, QrCode, Share } from './icons';
-import { QrPopover } from './QrPopover';
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { Term } from '@triton/shared';
+import { useEscapeKey } from '../hooks/useEscapeKey';
+import {
+  createCalendarLink, fetchCalendar, googleCalendarUrl, saveCalendarTerms, type CalendarLinks,
+} from '../lib/cloud/api';
+import { pluralize } from '../lib/format';
+import { displayTermLabel, termKey } from '../lib/terms';
+import { Calendar, Share, X } from './icons';
 
 interface Props {
-  /** The plan on screen — yours, or a received one you're passing along. */
-  plan: PlanState;
+  /** The term on screen; its plans are the ones offered. */
+  term: Term;
+  plans: { id: string; name: string; count: number }[];
+  activeId: string;
+  /** A term that is over is not in any calendar. */
+  archived: boolean;
+  /** Sends unsaved edits now: a plan made a moment ago must be on the server before the calendar names it. */
+  flush: () => Promise<void>;
   onFlash: (msg: string) => void;
 }
 
+const UNREACHABLE = "Couldn't reach your calendar settings. Check your connection and try again.";
+
+/** What step two needs: the plan picked, the account's calendar link, and the term → plan picks it already has. */
+interface Picked {
+  plan: { id: string; name: string };
+  links: CalendarLinks;
+  picks: Record<string, string>;
+  /** The account had a calendar link before: it is probably in a calendar app already. */
+  subscribed: boolean;
+}
+
 /**
- * Share ▾ — Copy link / QR code, with a Full (default) vs Lite format toggle.
- * Full = v3 token, every section option included, editable after saving on the
- * other device. Lite = v2 slim snapshot, view-only. A link IS the whole plan,
- * so there is no JSON export/import path — pasting a link in the address bar
- * is the only way a plan comes in.
+ * Share — puts a plan into the student's calendar, in a dialog like the building one: first which
+ * plan of this term, then which calendar app. Both apps subscribe to the account's one calendar
+ * link, which shows one plan per term, so exporting a plan makes it this term's. Picking the plan
+ * fetches (or makes) the link, so the app choices are plain links the browser follows inside the
+ * click; a webcal:// opened after an await could be refused for want of a user gesture.
  */
-export function ShareMenu({ plan, onFlash }: Props) {
+export function ShareMenu(props: Props) {
   const [open, setOpen] = useState(false);
-  const [format, setFormat] = useState<ShareFormat>('full');
-  const [qrOpen, setQrOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  // Only the dropdown closes on an outside click — the QR modal is portaled
-  // to <body>, outside `ref`, so a click inside it would otherwise register
-  // as "outside" too and take the modal down with the dropdown. The modal
-  // closes on its own terms (backdrop click, its close button, or Escape).
-  useClickAway(open, ref, () => setOpen(false));
-
-  const close = () => {
-    setOpen(false);
-    setQrOpen(false);
-  };
-
-  const copyLink = async () => {
-    const token = encodePlan(plan, format);
-    const url = shareUrl(plan, format);
-    try {
-      await navigator.clipboard.writeText(url);
-      onFlash(
-        format === 'full'
-          ? 'Full link copied — every section option included'
-          : 'Lite link copied — view-only snapshot',
-      );
-    } catch {
-      // Clipboard unavailable — expose the link via the address bar instead.
-      // Mark it as our own write so the next load doesn't re-import it.
-      // Store the marker in the same form the consume effect will read back:
-      // URLSearchParams turns a literal '+' (present in lite/lz-string tokens)
-      // into a space, so normalize through the same parser.
-      saveSyncedToken(tokenFromHash(`#p=${token}`) ?? token);
-      window.history.replaceState(null, '', `#p=${token}`);
-      onFlash('Share link is in the address bar — copy it from there');
-    }
-    close();
-  };
-
   return (
     <>
-      <div className="menu-wrap" ref={ref}>
-        <button
-          type="button"
-          className="btn btn--sm btn--primary"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <Share size={15} /> Share <ChevronDown size={12} />
+      <button type="button" className="btn btn--sm btn--primary" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+        <Share size={15} /> Share
+      </button>
+      {open && <ShareDialog {...props} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function ShareDialog({ term, plans, activeId, archived, flush, onFlash, onClose }: Props & { onClose: () => void }) {
+  useEscapeKey(onClose);
+  const [picked, setPicked] = useState<Picked | null>(null);
+  const [busy, setBusy] = useState(false);
+  const key = termKey(term);
+  const label = displayTermLabel(term);
+
+  async function pick(plan: { id: string; name: string }) {
+    if (busy) return;
+    setBusy(true);
+    await flush().catch(() => {});
+    const cal = await fetchCalendar();
+    const links =
+      cal === null ? null : cal.https && cal.webcal ? { https: cal.https, webcal: cal.webcal } : await createCalendarLink();
+    setBusy(false);
+    if (!cal || !links) {
+      onFlash(UNREACHABLE);
+      return;
+    }
+    setPicked({ plan, links, picks: cal.terms, subscribed: cal.https !== null });
+  }
+
+  /** The server replaces the whole map, so every other term's pick goes along unchanged. */
+  function putInCalendar(p: Picked) {
+    void saveCalendarTerms({ ...p.picks, [key]: p.plan.id }).then((ok) =>
+      onFlash(
+        ok ? `Your calendar shows “${p.plan.name}” for ${label}.` : "Couldn't save which plan your calendar shows. Please try again.",
+      ),
+    );
+    // After the click has been followed: the link must still be in the page when the browser acts on it.
+    setTimeout(onClose);
+  }
+
+  // Portaled: the top bar is a positioned ancestor, and a fixed overlay inside it would be held to it.
+  return createPortal(
+    <div className="mappop__backdrop" onClick={onClose}>
+      <div
+        className="mappop planpick"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add to calendar"
+        aria-busy={busy}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
+          <X size={14} />
         </button>
-        {open && (
-          <div className="menu menu--right" role="menu">
-            <div className="menu__seg" role="group" aria-label="Share format">
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={format === 'full'}
-                className={`menu__seg-btn${format === 'full' ? ' menu__seg-btn--on' : ''}`}
-                onClick={() => setFormat('full')}
-              >
-                Full
-              </button>
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={format === 'lite'}
-                className={`menu__seg-btn${format === 'lite' ? ' menu__seg-btn--on' : ''}`}
-                onClick={() => setFormat('lite')}
-              >
-                Lite
-              </button>
+        <div className="eyebrow">Add to calendar</div>
+        {archived ? (
+          <>
+            <div className="mappop__name">{label} is over</div>
+            <p className="planpick__sub">A term that is over is no longer in calendars.</p>
+          </>
+        ) : !picked ? (
+          <>
+            <div className="mappop__name">Which plan?</div>
+            <p className="planpick__sub">Your calendar shows one plan for {label}.</p>
+            <div className="planpick__list">
+              {plans.map((p) => (
+                <button key={p.id} type="button" className="planpick__item" disabled={busy} onClick={() => void pick(p)}>
+                  <span className="planpick__name">{p.name}</span>
+                  <span className="planpick__count">
+                    {p.count} {pluralize(p.count, 'course')}
+                    {p.id === activeId ? ' · on screen' : ''}
+                  </span>
+                </button>
+              ))}
             </div>
-            <p className="menu__seg-desc">
-              {format === 'full'
-                ? 'All sections included — editable on the other device.'
-                : 'Selected sections only — smaller link, view-only.'}
+          </>
+        ) : (
+          <>
+            <div className="mappop__name">Which calendar?</div>
+            <p className="planpick__sub">
+              “{picked.plan.name}” · {label}
             </p>
-
-            <button type="button" className="menu__item" role="menuitem" onClick={copyLink}>
-              <span className="menu__item-title">
-                <Link size={14} /> Copy link
-              </span>
-              <span className="menu__item-desc">
-                Send it anywhere — the plan travels inside the link itself.
-              </span>
+            <div className="planpick__list">
+              <a className="planpick__item sharecal__app" href={picked.links.webcal} onClick={() => putInCalendar(picked)}>
+                <span className="sharecal__title">
+                  <Calendar size={15} /> Export to Apple Calendar
+                </span>
+                <span className="sharecal__desc">Opens Calendar to subscribe. Changes show up within an hour.</span>
+              </a>
+              <a
+                className="planpick__item sharecal__app"
+                href={googleCalendarUrl(picked.links.webcal)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => putInCalendar(picked)}
+              >
+                <span className="sharecal__title">
+                  <Calendar size={15} /> Export to Google Calendar
+                </span>
+                <span className="sharecal__desc">
+                  Opens Google Calendar to add it. Changes can take several hours to a day to show up.
+                </span>
+              </a>
+            </div>
+            {picked.subscribed && (
+              <p className="mappop__hint">
+                Already in your calendar?{' '}
+                <button type="button" className="sharecal__link" onClick={() => putInCalendar(picked)}>
+                  Just switch it to this plan
+                </button>{' '}
+                — adding it again would show it twice.
+              </p>
+            )}
+            <button type="button" className="btn btn--sm planpick__cancel sharecal__back" onClick={() => setPicked(null)}>
+              ‹ Back to plans
             </button>
-
-            <button
-              type="button"
-              className="menu__item"
-              role="menuitem"
-              aria-expanded={qrOpen}
-              onClick={() => {
-                // Close the dropdown itself (z-index 40) so it doesn't sit dimmed and
-                // unclickable behind the modal's backdrop (z-index 90). The modal
-                // (qrOpen) is a separate, portaled sibling — see the useClickAway
-                // comment above for why closing `open` here must not touch it.
-                setOpen(false);
-                setQrOpen((v) => !v);
-              }}
-            >
-              <span className="menu__item-title">
-                <QrCode size={14} /> QR code
-              </span>
-              <span className="menu__item-desc">Scan with your phone to open this plan there.</span>
-            </button>
-          </div>
+          </>
         )}
       </div>
-      {qrOpen && <QrPopover plan={plan} format={format} onClose={() => setQrOpen(false)} />}
-    </>
+    </div>,
+    document.body,
   );
 }

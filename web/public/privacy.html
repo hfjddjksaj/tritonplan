@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TritonPlan Privacy Policy</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1d2129; --muted:#5b6472; --line:#d8dde5; --accent:#0b5cad; --code:#f1f3f6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --fg:#e4e7ec; --muted:#9aa3b0; --line:#2d333c; --accent:#6cb2ff; --code:#1f242c; }
+  }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:1.8rem; line-height:1.25; margin:.2em 0 .1em; }
+  h2 { font-size:1.2rem; margin:2em 0 .4em; padding-top:.6em; border-top:1px solid var(--line); }
+  h3 { font-size:1rem; margin:1.4em 0 .3em; }
+  a { color:var(--accent); }
+  .muted { color:var(--muted); }
+  code { background:var(--code); padding:.1em .35em; border-radius:4px; font-size:.9em; }
+  table { border-collapse:collapse; width:100%; margin:.6em 0; }
+  th, td { text-align:left; vertical-align:top; padding:8px 10px; border:1px solid var(--line); }
+  th { background:var(--code); }
+  .tablewrap { overflow-x:auto; }
+  .short { border-left:4px solid var(--accent); padding:.2em 1em; background:var(--code); border-radius:0 6px 6px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>TritonPlan Privacy Policy</h1>
+<p class="muted"><strong>Effective date: 2026-10-26</strong></p>
+
+<p>TritonPlan is an unofficial, student-made course-planning tool for UC San Diego. It is <strong>not affiliated with, authorized, or endorsed by UC San Diego</strong>.</p>
+
+<p class="short"><strong>Short version:</strong> you sign in, and your plans are stored on our server so they follow you across devices. We keep only what the planner needs, we never sell it, and there are no ads, no analytics, and no third-party trackers. You can delete your account and everything in it at any time.</p>
+
+<p>This policy covers the planner website at <code>https://tritonplan.cn</code> and the TritonPlan browser extension.</p>
+
+<h2>What we collect</h2>
+<p>When you create an account and use the planner, we store:</p>
+<ul>
+  <li><strong>Account details:</strong> your email address and whether it is verified. If you sign up with a password, we store it only as an irreversible hash (argon2id) &mdash; never the password itself. If you use <strong>Sign in with Google</strong>, we also store Google&rsquo;s account ID (<code>sub</code>). We request only the <code>openid</code>, <code>email</code>, and <code>profile</code> scopes, and we do <strong>not</strong> store your name or profile photo.</li>
+  <li><strong>Your plans:</strong> terms and plans (the courses you added, the sections you chose, plan names).</li>
+  <li><strong>Browsed courses:</strong> the courses you looked at on TSS that the extension captured (the &ldquo;Browsed&rdquo; pool in the planner).</li>
+  <li><strong>Enrollment marks:</strong> which courses you marked as booked, waitlisted, or enrolled.</li>
+  <li><strong>Appointment times:</strong> your TSS enrollment appointment windows (First Pass, Second Pass, &hellip;).</li>
+  <li><strong>Shared links:</strong> when you create a share link, we store a snapshot of that plan and its name on our server (see &ldquo;Sharing and calendar links&rdquo; below).</li>
+  <li><strong>Calendar link:</strong> if you turn on the calendar subscription, we store a secret code for your private calendar link and which plan you picked for the calendar in each term.</li>
+</ul>
+<p>A few things stay only in your browser (<code>localStorage</code>) and are never sent to us: interface preferences (such as the calendar view) and plans other people have shared with you &mdash; unless you move them from the old site, which saves them to your account.</p>
+
+<h2>Where it is stored</h2>
+<p>On a single server hosted by Tencent Cloud in Silicon Valley, United States. Nightly backups of the server&rsquo;s data are kept for at most 14 days and then deleted on a rolling basis.</p>
+
+<h2>Who can see it</h2>
+<p>Only you, in the sense that no other user can see your data. The person who runs TritonPlan has technical access to the server and its database, and uses it only to keep the service running and to fix problems. The other exceptions are the two links you can create yourself: a share link and a calendar link. Whoever holds one of them can see what it points to, as described in the next section.</p>
+
+<h2>Sharing and calendar links</h2>
+<p><strong>Share links.</strong> A share link is a short link like <code>https://tritonplan.cn/s/&lt;code&gt;</code>. Creating one stores a snapshot of that plan on our server, together with the name you gave it. The snapshot contains only the plan itself (term, courses, chosen sections, colors); your booked / waitlisted / enrolled marks, appointment times and the rest of your account are never part of it. Anyone who has the link can open the snapshot; the page that serves it returns only the snapshot&rsquo;s name, the plan and when it was created, nothing else about you. You can have up to 500 share links. To turn a link off, open the Account menu, choose <strong>Shared links</strong> and remove it; that deletes the snapshot and the link stops working. Deleting your account deletes all of your share links too. Older share links that look like <code>#p=&hellip;</code> work differently: they carry the plan inside the link itself and never touch our server, so we cannot turn them off.</p>
+<p><strong>Calendar link.</strong> If you turn on the calendar subscription, you get a private address of the form <code>https://tritonplan.cn/api/cal/&lt;secret&gt;.ics</code> (the secret is 43 random characters). Anyone who has this address can see the plans you picked for the calendar: your classes, sections, rooms, instructors, final exams and midterms. Treat it like a password. You can reset the link at any time, which stops the old address working immediately. The link is deleted when you delete your account. Calendar apps such as Apple Calendar and Google Calendar fetch the address from their own servers, so if you subscribe in Google Calendar, Google&rsquo;s servers receive that calendar content.</p>
+
+<h2>Professor ratings</h2>
+<p>TritonPlan shows RateMyProfessors (RMP) ratings next to instructors. About once a month our server downloads RMP&rsquo;s public list of UC San Diego teachers, with their average ratings, and keeps it in our database. When you look up ratings in the planner, your browser sends only the instructors&rsquo; names to our own server (you must be signed in), and the server answers from that stored list. Nothing about you is sent to RMP. If you click through to RMP, you leave TritonPlan and RMP&rsquo;s own privacy policy applies on its site.</p>
+
+<h2>The extension</h2>
+<p>The extension is a <em>passive observer</em>. On <code>tss.ucsd.edu</code>, it reads the course data that the Triton Student System (TSS) has <strong>already loaded into your browser</strong> and displayed to you, by observing the page&rsquo;s own network responses. It <strong>never makes its own requests to TSS</strong>, never automates the site, and never sends anything to us itself. It keeps the captured courses in the browser&rsquo;s extension storage and passes them to the TritonPlan planner page open in your browser; the planner then saves them to your account. The extension doesn&rsquo;t read your TritonPlan account details.</p>
+
+<h3>Permissions the extension requests, and why</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Permission</th><th>Why it&rsquo;s needed</th></tr></thead>
+  <tbody>
+    <tr><td><code>storage</code></td><td>To keep the captured course data locally in your browser until the planner picks it up.</td></tr>
+    <tr><td><code>tabs</code></td><td>To open or focus the TritonPlan planner tab when you click &ldquo;+ TritonPlan&rdquo; or open the planner from the extension popup.</td></tr>
+    <tr><td>Host access to <code>tss.ucsd.edu</code></td><td>To read the course data TSS has already displayed to you. Read-only and passive &mdash; no extra requests are made to TSS.</td></tr>
+    <tr><td>Host access to <code>tritonplan.cn</code></td><td>To hand the captured courses from the extension to the planner page you open.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The extension requests <strong>no</strong> broad web access and <strong>no</strong> access to any other site.</p>
+
+<h2>Cookies</h2>
+<p>The planner sets one sign-in session cookie, <code>tp_session</code>, which lasts 30 days and is renewed while you use the site. During Google sign-in it also sets short-lived cookies that exist only to complete that sign-in. We use no advertising or analytics cookies.</p>
+
+<h2>Logs and IP addresses</h2>
+<p>We don&rsquo;t log the pages you visit. Like any web server, ours sees your IP address: it is held in memory for up to an hour to limit sign-in attempts and repeated requests to the public share and calendar addresses, and it can appear in the server&rsquo;s error logs, which are deleted automatically within 14 days.</p>
+
+<h2>Third parties</h2>
+<ul>
+  <li><strong>Tencent Cloud</strong> hosts the server.</li>
+  <li><strong>Resend</strong> sends our verification and password-reset emails, so it receives your email address for that purpose.</li>
+  <li><strong>Google</strong> handles Google sign-in, if you choose it.</li>
+</ul>
+<p>We do not sell your data or share it for advertising. There are no ads, no analytics, and no third-party trackers.</p>
+
+<h2>Your control and deleting your data</h2>
+<p>In the planner, open the Account menu and choose <strong>Delete account</strong>. This immediately removes your account, every plan, your browsed courses, your booked / waitlisted / enrolled marks, your appointment windows, all of your share links and your calendar link. Server backups made before the deletion roll off within 14 days. Old <code>#p=&hellip;</code> share links carry their snapshot inside the link itself, so they keep working for whoever has them. You can also remove the extension&rsquo;s locally stored data by uninstalling the extension.</p>
+<p>The old site at <code>https://hfjddjksaj.github.io/tritonplan/</code> is now a migration page. It reads the plans saved in that browser and hands them to the new site only when you click the migrate button; it never deletes them.</p>
+
+<h2>Children&rsquo;s privacy</h2>
+<p>TritonPlan is intended for UC San Diego students and is not directed at children.</p>
+
+<h2>Changes to this policy</h2>
+<p>If this policy changes, the updated version will be posted at <code>https://tritonplan.cn/privacy.html</code> and in <code>PRIVACY.md</code> in the project repository, with a new effective date.</p>
+
+<h2>Contact</h2>
+<p>Questions about this policy: open an issue at <a href="https://github.com/hfjddjksaj/tritonplan/issues">github.com/hfjddjksaj/tritonplan/issues</a>.</p>
+
+<p class="muted"><em>Disclaimer: TritonPlan is provided as-is, with no warranty. Use at your own risk, and in accordance with UC San Diego&rsquo;s Acceptable Use Policy.</em></p>
+</main>
+</body>
+</html>

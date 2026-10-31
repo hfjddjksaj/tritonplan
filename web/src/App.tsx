@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePlan } from './hooks/usePlan';
+import { lockedForGuest, usePlan } from './hooks/usePlan';
 import { useIsMobile } from './hooks/useIsMobile';
 import { useApptTimes } from './hooks/useApptTimes';
 import { Topbar } from './components/Topbar';
@@ -10,8 +10,13 @@ import { CalendarGrid } from './components/CalendarGrid';
 import { CalViewToggle } from './components/CalViewToggle';
 import { FinalsView } from './components/FinalsView';
 import { MidtermsView } from './components/MidtermsView';
+import { SyncBanner } from './components/SyncBanner';
+import { ExtensionUpdateNote } from './components/ExtensionUpdateNote';
+import { AccountMenu } from './components/AccountMenu';
 import { ConflictBanner } from './components/ConflictBanner';
+import { ShareMenu } from './components/ShareMenu';
 import { ReceivedBanner } from './components/ReceivedBanner';
+import { GuestBanner } from './components/GuestBanner';
 import { BuildingPopover } from './components/BuildingPopover';
 const CampusMap = lazy(() => import('./components/CampusMap').then((m) => ({ default: m.CampusMap })));
 import { PlanPickerModal } from './components/PlanPickerModal';
@@ -26,11 +31,25 @@ import { displayTermLabel } from './lib/terms';
 import { pluralize } from './lib/format';
 import { loadCalView, saveCalView, type CalView } from './lib/storage';
 import type { PositionedBlock } from './lib/layout';
+import type { CloudBoot } from './lib/cloud/boot';
+import { installUnloadGuard } from './lib/cloud/engine';
 
-export default function App() {
-  const ctl = usePlan();
+const noop = () => {};
+
+export default function App({
+  boot,
+  initialFlash,
+  onSignIn = noop,
+}: {
+  boot: CloudBoot;
+  initialFlash?: string;
+  /** Signed out (no `boot.me`): what the banner's Sign in button and every edit do. */
+  onSignIn?: () => void;
+}) {
+  const own = usePlan(boot);
+  const ctl = own.guest ? lockedForGuest(own, onSignIn) : own;
   const isMobile = useIsMobile();
-  const appt = useApptTimes();
+  const appt = useApptTimes(boot);
   const [tab, setTab] = useState<MobileTab>('calendar');
   const [calPulse, setCalPulse] = useState(false);
   const [calView, setCalView] = useState<CalView>(loadCalView);
@@ -41,7 +60,7 @@ export default function App() {
   // Desktop has no Courses tab — the rail is always visible there.
   const view: MobileTab = !isMobile && tab === 'courses' ? 'calendar' : tab;
   const plannerView: PlannerView = view === 'courses' ? 'calendar' : view;
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(initialFlash ?? null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   const [campusOpen, setCampusOpen] = useState(false);
   const [sheetBlock, setSheetBlock] = useState<PositionedBlock | null>(null);
@@ -52,6 +71,10 @@ export default function App() {
   const flash = useCallback((msg: string) => {
     setToast(msg);
   }, []);
+
+  // Once per boot: Root remounts App with a new boot on refocus, and the old
+  // engine's listeners must not outlive it.
+  useEffect(() => installUnloadGuard(boot.engine), [boot.engine]);
 
   useEffect(() => {
     if (!toast) return;
@@ -160,8 +183,9 @@ export default function App() {
           )
         }
         units={ctl.units}
-        readOnly={ctl.readOnly}
+        readOnly={ctl.readOnly || ctl.guest}
         planSwitcher={
+          !ctl.guest && (
           <PlanSwitcher
             plans={ctl.plans.map((p) => ({ id: p.id, name: p.name, count: p.plan.entries.length }))}
             activeId={ctl.activePlanId}
@@ -171,13 +195,33 @@ export default function App() {
             onDuplicate={ctl.duplicatePlan}
             onDelete={ctl.deletePlan}
           />
+          )
         }
         apptSlot={<ApptCapsule appt={appt} />}
-        sharePlan={ctl.viewPlan}
-        onFlash={flash}
+        accountSlot={
+          // Signed out, the banner under the top bar carries the Sign in button.
+          boot.me && <AccountMenu me={boot.me} terms={ctl.termsState} onFlash={flash} flush={boot.engine.flush} />
+        }
+        shareSlot={
+          // Into the calendar go the account's own plans: not signed out, not while someone else's plan is up.
+          !ctl.guest && ctl.viewing === 'mine' && (
+            <ShareMenu
+              term={ctl.viewPlan.term}
+              plans={ctl.plans.map((p) => ({ id: p.id, name: p.name, count: p.plan.entries.length }))}
+              activeId={ctl.activePlanId}
+              archived={ctl.archived}
+              flush={boot.engine.flush}
+              onFlash={flash}
+            />
+          )
+        }
         onReset={handleReset}
         onOpenMap={() => setCampusOpen(true)}
       />
+      <SyncBanner engine={boot.engine} />
+      {/* For students upgrading from the old extension, who all have an account to sign in to. */}
+      {!ctl.guest && <ExtensionUpdateNote />}
+      {ctl.guest && <GuestBanner onSignIn={onSignIn} />}
       {ctl.received && (
         <ReceivedBanner
           received={ctl.received}
@@ -190,7 +234,7 @@ export default function App() {
         />
       )}
       <div className="app__body">
-        <CoursePanel ctl={ctl} focus={focusReq} hidden={isMobile && view !== 'courses'} />
+        <CoursePanel ctl={ctl} focus={focusReq} onFlash={flash} hidden={isMobile && view !== 'courses'} />
 
         {(!isMobile || view !== 'courses') && (
           <main className="main">

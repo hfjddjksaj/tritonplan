@@ -79,11 +79,17 @@ if (referenced && workers.length === 1) {
 }
 
 /* ---- 4. Every statically-named runtime URL resolves --------------------- */
-// `new URL("thing", import.meta.url)` is how Vite emits an asset reference
-// under `base: './'`. Each one must land on a file that exists, or it is a
-// same-origin 404 waiting to happen on GitHub Pages.
+// Under `base: '/'` Vite emits an asset reference as a root-absolute string
+// ("/assets/thing.js"); under a relative base it was `new URL("thing",
+// import.meta.url)`. Either way it must land on a file that exists, or it is
+// a same-origin 404 waiting to happen in production.
 for (const f of files) {
   const src = await readFile(f, 'utf8');
+  for (const m of src.matchAll(/["'](\/assets\/[^"'?#\s]+)["']/g)) {
+    if (!existsSync(join(DIST, m[1]))) {
+      fail(`${relative(DIST, f)} points at ${JSON.stringify(m[1])}, which is not in the build`);
+    }
+  }
   for (const m of src.matchAll(/new URL\(\s*"([^"]+)"\s*,\s*import\.meta\.url\s*\)/g)) {
     const spec = m[1];
     if (/^[a-z]+:/i.test(spec) || spec.startsWith('/')) {

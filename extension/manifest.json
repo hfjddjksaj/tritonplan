@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "TritonPlan",
-  "version": "1.2.1",
+  "version": "2.0.0",
   "description": "UCSD course planner for TSS — your whole week on one calendar, with class and final-exam conflict detection.",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
     "https://tss.ucsd.edu/*",
-    "https://hfjddjksaj.github.io/tritonplan/*"
+    "https://tritonplan.cn/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js",
@@ -49,7 +49,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://hfjddjksaj.github.io/tritonplan/*"],
+      "matches": ["https://tritonplan.cn/*"],
       "js": ["content/planner-bridge.js"],
       "run_at": "document_idle"
     }

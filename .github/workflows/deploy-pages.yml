@@ -1,6 +1,8 @@
-name: Deploy planner to GitHub Pages
+name: Deploy the migration page to GitHub Pages
 
-# Builds the TritonPlan planner website (web/) and publishes web/dist to GitHub Pages.
+# The GitHub Pages site is now ONLY the old-site migration page (web/migrate/): it hands the
+# plans saved in a browser over to https://tritonplan.cn. It publishes web/dist-migrate, not the
+# planner — the planner is served by the tritonplan.cn server.
 # The extension is NOT deployed here — it is zipped from extension/dist and uploaded to the
 # Chrome Web Store manually.
 
@@ -29,11 +31,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build -w @triton/web
+      - run: npm run build:migrate -w @triton/web
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: web/dist
+          path: web/dist-migrate
 
   deploy:
     needs: build

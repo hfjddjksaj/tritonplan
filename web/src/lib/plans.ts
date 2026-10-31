@@ -7,15 +7,11 @@
  * Every mutator preserves them (deletePlan refuses the last plan; migratePlans
  * repairs a dangling activeId).
  */
-import type { PlanState } from '@triton/shared';
+import type { PlanState, StoredPlanDoc } from '@triton/shared';
 import { emptyPlan } from './plan';
 
-export interface NamedPlan {
-  id: string;
-  name: string;
-  plan: PlanState;
-  createdAt: string;
-  updatedAt: string;
+/** Synced as-is as one plan doc; the server's calendar feed reads the StoredPlanDoc fields. */
+export interface NamedPlan extends StoredPlanDoc {
   /**
    * LEGACY (pre-terms migration input only): course ids the plan used to hide
    * from the shared browsed pool. Read once by `migrateToTermsState` to seed
@@ -109,6 +105,32 @@ function nextDefaultName(state: PlansState): string {
     const name = `Plan ${n}`;
     if (!taken.has(name)) return name;
   }
+}
+
+/** A shared plan's own name, or "<name> (shared)", "<name> (shared 2)", … — the first not in `names` (most shares are called "My plan"). */
+export function freeSharedName(names: string[], name: string): string {
+  const base = name.trim() || 'Shared plan';
+  const taken = new Set(names);
+  if (!taken.has(base)) return base;
+  for (let n = 1; ; n++) {
+    const candidate = n === 1 ? `${base} (shared)` : `${base} (shared ${n})`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * Same term, same courses on the same sections, in the same order: a shared plan the account
+ * already holds. Seat counts and colors are left out — they move after the copy is saved.
+ */
+export function samePlanContent(a: PlanState, b: PlanState): boolean {
+  return (
+    a.term.year === b.term.year &&
+    a.term.period === b.term.period &&
+    a.entries.length === b.entries.length &&
+    a.entries.every(
+      (e, i) => e.course.id === b.entries[i]!.course.id && e.selectedOptionId === b.entries[i]!.selectedOptionId,
+    )
+  );
 }
 
 /** Append a fresh empty plan (term carried over from the active one) and activate it. */

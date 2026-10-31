@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the TritonPlan backup every night
+
+[Timer]
+# 10:30 UTC is the small hours in Pacific time, when nobody is planning.
+OnCalendar=*-*-* 10:30:00 UTC
+# Catch up after downtime so a reboot never skips a night.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

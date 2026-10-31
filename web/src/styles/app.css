@@ -495,6 +495,14 @@ p {
   border-radius: 4px;
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
+.course-card__tss--off {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.course-card__tss--off:hover {
+  border-color: var(--c-border, var(--line));
+  box-shadow: none;
+}
 .course-card__tss:hover {
   border-color: var(--c-spine, var(--gold));
   box-shadow: 0 0 0 1px var(--c-spine, var(--gold));
@@ -1213,43 +1221,18 @@ button.menu__item:hover {
   color: var(--text-muted);
 }
 
-/* Share menu: format segment + QR panel */
-.menu__seg {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 4px 6px 0;
-}
-.menu__seg-btn {
-  height: 26px;
+/* A dialog's confirm-before line (the calendar link's Reset). */
+.acctdlg__ask {
+  margin: 6px 0 0;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  cursor: pointer;
-}
-.menu__seg-btn--on {
-  color: #fff;
-  background: var(--ink);
-  border-color: var(--ink);
-}
-.menu__seg-btn:hover:not(.menu__seg-btn--on) {
-  color: var(--ink);
-  border-color: var(--line-strong);
-}
-.menu__seg-desc {
-  margin: 4px 8px 2px;
-  font-size: 11px;
-  line-height: 1.45;
   color: var(--text-faint);
 }
 
 /* =============================== received plan (share link / imported JSON) banner */
 /* Constant reminder that what's on screen (or parked nearby) is someone else's
    plan: read-only, stored apart, never clobbering the user's own. */
-.received {
+.received,
+.notebar {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1277,7 +1260,13 @@ button.menu__item:hover {
   color: var(--gold-ink);
   white-space: nowrap;
 }
-.received__text {
+/* A one-time notice (the extension-update note) wears the received bar's neutral look. */
+.notebar__text {
+  flex: 1;
+  min-width: 0;
+}
+.received__text,
+.notebar__text {
   color: var(--text-muted);
 }
 .received--active .received__text {
@@ -1819,46 +1808,6 @@ button.menu__item:hover {
   font-size: 11px;
   line-height: 1.5;
   color: var(--text-faint);
-}
-
-/* The share QR needs far more room than a normal popover: a realistic plan is
-   ~133 modules, and anything under ~3 device pixels per module stops scanning.
-   Width is set inline from the module count so every module lands on whole
-   pixels — the box just centers it. */
-.qrpop {
-  width: auto;
-  max-width: min(92vw, 860px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-.qrpop__code {
-  /* White stays white in every theme — scanners need the quiet zone light. */
-  background: #fff;
-  border-radius: var(--r-sm);
-  overflow: hidden;
-  /* Backstop for tiny screens with a large (high-version) plan: qrScale floors
-     at 2px/module, so the whole-pixel size computed in JS can still come out
-     wider or taller than the viewport. These mirror availablePx()'s own 92vw
-     / 78vh budget, so on any normal screen they never bind (JS already fits);
-     they only clip the rare pathological case, accepting a non-integer scale
-     there rather than letting the modal spill off-screen. */
-  max-width: 92vw;
-  max-height: 78vh;
-}
-.qrpop__code svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.qrpop__note {
-  margin: 0;
-  max-width: 44ch;
-  text-align: center;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--gold-ink);
 }
 
 /* ================================= booked-section popover (in-card) */
@@ -2677,9 +2626,64 @@ button.menu__item:hover {
   font-size: 12px;
   color: var(--text-muted);
 }
+.rmp__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rmp__score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+.rmp__avg {
+  font-weight: 600;
+}
+.rmp__note {
+  margin: 0 0 12px;
+  font-size: 12px;
+}
 .planpick__cancel {
   width: 100%;
   justify-content: center;
+}
+
+/* ---- Share: which plan (the picker's rows), then which calendar app (rows that are links) ---- */
+.sharecal__app {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  color: inherit;
+  text-decoration: none;
+}
+.sharecal__title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.sharecal__desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.sharecal__link {
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: underline;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.mappop__hint + .sharecal__back {
+  margin-top: 12px;
 }
 
 /* ---- term switcher ---- */
@@ -3814,5 +3818,165 @@ button.termsw__cell:hover {
 @media (prefers-reduced-motion: reduce) {
   .tip {
     animation: none;
+  }
+}
+
+/* =============================================================== sync banner + account menu */
+.syncbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 18px 10px;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  color: var(--conflict-ink);
+  background: var(--conflict-soft);
+  border: 1px solid #f4c9cb;
+  border-left: 3px solid var(--conflict);
+  border-radius: var(--r-md);
+}
+.syncbar__text {
+  flex: 1;
+  min-width: 0;
+}
+.acctbtn {
+  gap: 5px;
+  padding: 0 8px;
+}
+.acctbtn__initial {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 50%;
+}
+.acctmenu {
+  width: 220px;
+}
+.acctmenu__email {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.acctmenu__item {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.acctdlg {
+  width: min(380px, calc(100vw - 40px));
+}
+.acctdlg .planpick__sub {
+  margin-bottom: 12px;
+}
+.acctdlg__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.acctmenu__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  vertical-align: middle;
+  background: var(--conflict);
+  border-radius: 50%;
+}
+/* ---- Calendar subscription: the Share dialog's shell; each term a card with its plan picker ---- */
+.caldlg {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.caldlg__terms {
+  padding: 0;
+  list-style: none;
+}
+.caldlg__term {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+/* A term still waiting for a plan, in the planner's gold (as on the received-plan banner). */
+.caldlg__term--ask {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+.caldlg__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.caldlg__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.caldlg__select {
+  min-width: 0;
+  max-width: 62%;
+  height: 30px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+}
+.caldlg__hint {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--gold-ink);
+}
+.caldlg__hint--error {
+  margin: -4px 0 12px;
+  color: var(--conflict);
+}
+.caldlg__create {
+  width: 100%;
+  justify-content: center;
+}
+.caldlg__label {
+  margin: 2px 0 8px;
+}
+.caldlg__reset {
+  margin-top: 10px;
+}
+/* The calendar icon on Share's and this dialog's app rows carries the planner's gold. */
+.sharecal__title svg {
+  color: var(--gold);
+}
+.acctdlg__danger {
+  color: #fff;
+  background: var(--conflict);
+  border-color: var(--conflict);
+}
+.acctdlg__danger:disabled {
+  opacity: 0.45;
+}
+@media (max-width: 760px) {
+  /* The initial alone is the account button on a phone — the chevron would
+     push Share off a 320px topbar. */
+  .acctbtn {
+    padding: 0 6px;
+  }
+  .acctbtn svg {
+    display: none;
+  }
+  .syncbar {
+    margin-left: 8px;
+    margin-right: 8px;
   }
 }

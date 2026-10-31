@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/verify-build.mjs",
+    "build:migrate": "tsc --noEmit && vite build --config vite.migrate.config.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -22,7 +23,6 @@
     "fflate": "^0.8.3",
     "lz-string": "^1.5.0",
     "maplibre-gl": "^6.4.0",
-    "qrcode-generator": "^2.0.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

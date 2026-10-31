@@ -4,13 +4,13 @@
 
 **A calendar-first course planner for UC San Diego — the WebReg "plan" view that the new Triton Student System (TSS) never shipped.**
 
-**➡️ Open the planner: <https://hfjddjksaj.github.io/tritonplan/>**
+**➡️ Open the planner: <https://tritonplan.cn>**
 **➡️ Install the extension: [Chrome Web Store](https://chromewebstore.google.com/detail/tritonplan/lnchlccmjhhpbbemlfnpldooeehcmjel)**
 
 The old WebReg showed your week as a calendar — times, locations, professors, sections, final exams — and flagged time conflicts before you enrolled. TSS doesn't. TritonPlan rebuilds that view:
 
 1. **A Chrome / Edge extension** that passively reads the course data TSS already displays to you and puts a **"+ TritonPlan"** button on each bookable section.
-2. **A static planner website** that draws your week as a calendar and flags conflicts. No backend — nothing you do there leaves your browser.
+2. **A planner website** that draws your week as a calendar and flags conflicts. Sign in and your plans are saved to your account, so they follow you across devices.
 
 > **Unofficial, student-made tool.** Not affiliated with, authorized, or endorsed by UC San Diego. See [Disclaimer](#disclaimer) and [PRIVACY.md](./PRIVACY.md).
 
@@ -25,8 +25,10 @@ The old WebReg showed your week as a calendar — times, locations, professors, 
 - **Jump back to TSS** — click a course code on the calendar to return to that exact course in TSS, or jump straight to the section's booking page.
 - **Building lookup** — click a class's location to see which building it is, with Google Maps and UCSD campus map links.
 - **Your appointment times** — the "My Appointment Times" windows (First Pass, Second Pass, …) captured from TSS show as a live capsule in the planner topbar, so you always know when you can enroll. Private: never part of shared plans.
-- **Share & export** — the whole plan compresses into a shareable URL; JSON export/import for backups.
-- **Local-first** — plans live in your browser's `localStorage`. Nothing is uploaded.
+- **Share** — send a short link and whoever has it sees a snapshot of that plan. The snapshot is stored on our server; turn any link off under **Shared links** in the Account menu.
+- **Calendar subscription** — subscribe in Apple or Google Calendar to a private link that shows your classes, rooms, finals and midterms. Anyone with the link can see them; reset it any time.
+- **Professor ratings** — RateMyProfessors ratings on every course card. Only instructor names go to our server; nothing about you goes to RMP.
+- **Accounts** — sign in with email + password or Google; your plans are stored on our server, not just in one browser.
 
 ## Screenshots
 
@@ -46,7 +48,7 @@ The old WebReg showed your week as a calendar — times, locations, professors, 
 
 TSS is an SAP (SAPUI5 / Fiori) web app. When you browse the Schedule of Classes, the TSS server sends your browser the course data as **OData** (JSON) responses, and the page renders them on screen.
 
-That's all TritonPlan needs. The extension **captures those responses as they arrive in your browser** — a copy of data the server already sent *you* — parses the schedules out of them, and hands the result to the planner page. It never asks the server for anything.
+That's all TritonPlan needs. The extension **captures those responses as they arrive in your browser** — a copy of data the server already sent *you* — parses the schedules out of them, and hands the result to the planner page in your browser, which saves it to your account. It never asks the TSS server for anything.
 
 This passive design is the product's hard rule:
 
@@ -63,7 +65,7 @@ This passive design is the product's hard rule:
 2. Browse the **Schedule of Classes** in TSS as usual.
 3. Click **"+ TritonPlan"** on a section you want — you land on the planner with it placed.
 4. Arrange sections to avoid conflicts, and check the **Finals** view.
-5. **Share or export** your plan.
+5. **Share** your plan.
 
 <details>
 <summary>Manual install (load unpacked)</summary>
@@ -79,7 +81,7 @@ This passive design is the product's hard rule:
 
 ## Privacy
 
-No accounts, no backend, no data collection. Everything stays in your browser — see [PRIVACY.md](./PRIVACY.md).
+You sign in with email + password or Google. We store your email (and Google account ID if you use Google sign-in), your plans, the courses you browsed, your booked / waitlisted / enrolled marks, and your appointment times on one server (Tencent Cloud, Silicon Valley, USA). Never sold, no ads, no analytics, no third-party trackers. Delete your account from the Account menu at any time. Share links and your calendar link are stored on the server too (anyone holding one can see what it points to; both are deleted with your account). Ratings come from a copy, refreshed about once a month, of RateMyProfessors' public UCSD list, so nothing about you is sent to RMP. The extension still only reads what the TSS page already received and sends no requests to TSS. Full details: [PRIVACY.md](./PRIVACY.md) or <https://tritonplan.cn/privacy.html>.
 
 ## Developing
 
@@ -91,7 +93,7 @@ Built with the help of **Claude AI** — Anthropic's **Claude Code**.
 
 ## Disclaimer
 
-TritonPlan is an **unofficial, student-made tool**, not affiliated with, authorized, or endorsed by UC San Diego. It only reads course data already displayed in your own browser and stores it locally on your device. Provided **as-is, with no warranty — use at your own risk**. You are responsible for using it in accordance with UCSD's Acceptable Use Policy and all applicable UCSD policies.
+TritonPlan is an **unofficial, student-made tool**, not affiliated with, authorized, or endorsed by UC San Diego. It only reads course data already displayed in your own browser; the planner stores your plans in your account on our server (see [PRIVACY.md](./PRIVACY.md)). Provided **as-is, with no warranty — use at your own risk**. You are responsible for using it in accordance with UCSD's Acceptable Use Policy and all applicable UCSD policies.
 
 ## License
 

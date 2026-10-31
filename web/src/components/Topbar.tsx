@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
-import type { PlanState } from '@triton/shared';
 import { PRODUCT_NAME } from '../lib/brand';
-import { ShareMenu } from './ShareMenu';
 import { Trident, Trash, MapPinIcon } from './icons';
 import { tip } from './Tooltip';
 
@@ -15,9 +13,10 @@ interface Props {
   planSwitcher?: ReactNode;
   /** The student's own appointment-times capsule, rendered before the unit pill. */
   apptSlot?: ReactNode;
-  /** The plan on screen, for the Share menu (link + QR). */
-  sharePlan: PlanState;
-  onFlash: (msg: string) => void;
+  /** The signed-in account's menu, rendered at the far right. */
+  accountSlot?: ReactNode;
+  /** The Share menu (into a calendar), rendered after Map. */
+  shareSlot?: ReactNode;
   onReset: () => void;
   onOpenMap: () => void;
 }
@@ -28,8 +27,8 @@ export function Topbar({
   readOnly,
   planSwitcher,
   apptSlot,
-  sharePlan,
-  onFlash,
+  accountSlot,
+  shareSlot,
   onReset,
   onOpenMap,
 }: Props) {
@@ -75,8 +74,10 @@ export function Topbar({
           <MapPinIcon size={15} /> Map
         </button>
 
-        <ShareMenu plan={sharePlan} onFlash={onFlash} />
+        {shareSlot}
       </div>
+
+      {accountSlot}
     </header>
   );
 }

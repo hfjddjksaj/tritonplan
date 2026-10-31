@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Term } from '@triton/shared';
 import {
-  newWorkspace, ensureWorkspace, activeWorkspace, updateWorkspace,
+  newWorkspace, ensureWorkspace, activeWorkspace, adoptPlanIn, updateWorkspace,
   switchTermIn, newestTermKey, allPlansEmpty, adoptSeedPlan, migrateToTermsState,
   archiveSweep, routeCapture, type TermsState,
 } from './terms-state';
@@ -34,6 +34,39 @@ describe('newWorkspace / ensureWorkspace', () => {
     expect(Object.keys(s1.terms).sort()).toEqual(['2026|2', '2027|3']);
     expect(ensureWorkspace(s1, WINTER27, NOW)).toBe(s1);
     expect(s1.activeTermKey).toBe('2026|2'); // ensure does NOT switch the view
+  });
+});
+
+describe('adoptPlanIn', () => {
+  const plan = () => {
+    const course = { ...makeCourse('MATH-20|2027|3', 'MATH-20'), term: WINTER27 };
+    return { version: 1 as const, term: WINTER27, entries: [{ course, selectedOptionId: course.options[0]!.id, color: '1' }] };
+  };
+
+  it('a term the account lacks gets a workspace holding just this plan, and the view switches to it', () => {
+    const start = base();
+    const s = adoptPlanIn(start, plan(), 'Winter', NOW);
+    expect(s.activeTermKey).toBe('2027|3');
+    const ws = s.terms['2027|3']!;
+    expect(ws.plans.plans.map((p) => p.name)).toEqual(['Winter']);
+    expect(ws.plans.activeId).toBe(ws.plans.plans[0]!.id);
+    expect(ws.plans.plans[0]!.browsed).toEqual(['MATH-20|2027|3']);
+    expect(s.terms['2026|2']).toBe(start.terms['2026|2']); // untouched
+  });
+
+  it('a term the account has gets it beside its plans, active', () => {
+    const start = ensureWorkspace(base(), WINTER27, NOW);
+    const s = adoptPlanIn(start, plan(), 'Winter', NOW);
+    const ws = s.terms['2027|3']!;
+    expect(ws.plans.plans.map((p) => p.name)).toEqual(['My plan', 'Winter']);
+    expect(activeWorkspace(s).plans.activeId).toBe(ws.plans.plans[1]!.id);
+    expect(ws.plans.plans[1]!.browsed).toEqual(['MATH-20|2027|3']);
+  });
+
+  it('starts a TermsState from nothing', () => {
+    const s = adoptPlanIn({ version: 1, activeTermKey: '2027|3', terms: {} }, plan(), 'Winter', NOW);
+    expect(Object.keys(s.terms)).toEqual(['2027|3']);
+    expect(activeWorkspace(s).plans.plans.map((p) => p.name)).toEqual(['Winter']);
   });
 });
 

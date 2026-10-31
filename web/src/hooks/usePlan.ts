@@ -21,14 +21,8 @@ import {
   toggleBooked as toggleBookedIn,
   waitlistedSet,
 } from '../lib/booked';
+import type { AdoptPlan, CloudBoot } from '../lib/cloud/boot';
 import {
-  loadPlan,
-  loadPlans,
-  loadTerms,
-  saveTerms,
-  loadPool,
-  savePool,
-  purgeSeededSamples,
   loadReceived,
   saveReceived,
   clearReceived,
@@ -43,7 +37,7 @@ import {
   updateActivePlan,
   mapAllPlans,
   createPlan,
-  addPlan,
+  freeSharedName,
   renamePlan as renamePlanIn,
   duplicatePlan as duplicatePlanIn,
   deletePlan as deletePlanIn,
@@ -54,8 +48,7 @@ import {
 } from '../lib/plans';
 import {
   activeWorkspace,
-  adoptSeedPlan,
-  allPlansEmpty,
+  adoptPlanIn,
   archiveSweep,
   ensureWorkspace,
   mapWorkspaces,
@@ -67,7 +60,7 @@ import {
   type TermsState,
 } from '../lib/terms-state';
 import { isArchived, termKey, type TermKey } from '../lib/terms';
-import { mirrorSeedPlan, planToMirrorHash, readHash } from '../lib/share';
+import { mirrorTokenFromHash, readHash } from '../lib/share';
 import { openBooking, openInTss, openTssHome } from '../lib/tss';
 import {
   buildSelectedCourses,
@@ -84,23 +77,36 @@ import {
 // the extension re-pushes the real pool on each load via a `courses` bridge message.
 const SAMPLE = import.meta.env.DEV ? (sampleCourses as unknown as CourseOffering[]) : [];
 
-/** One-shot boot: pool repository + terms container + the archive sweep's forget list. */
-function initialState(): { pool: CourseOffering[]; terms: TermsState; forgetModuleIds: string[] } {
+/** One-shot boot from the account: pool repository + terms container + the archive sweep's forget list. */
+function initialState(boot: CloudBoot): { pool: CourseOffering[]; terms: TermsState; forgetModuleIds: string[] } {
   const now = new Date();
   const iso = now.toISOString();
-  const pool = mergeCourses(SAMPLE, purgeSeededSamples(loadPool() ?? []));
-  let terms = migrateToTermsState(loadTerms(), loadPlans(), loadPlan(), pool, iso);
-  if (allPlansEmpty(terms)) {
-    // Nothing saved on this device yet, but the address bar carries our own mirror:
-    // this is a synced/bookmarked tab opened somewhere new, so adopt it as the plan.
-    const seed = mirrorSeedPlan(window.location.hash);
-    if (seed) terms = adoptSeedPlan(terms, seed, iso);
+  const pool = mergeCourses(SAMPLE, boot.pool);
+  const adopt = boot.adopt ?? [];
+  const adopted = adopt.flatMap((a) => a.plan.entries.map((e) => e.course));
+  // A new account that starts with plans they chose to save holds just those, not an empty "My plan" beside them —
+  // unless they are all from terms that are over, which leave nothing to edit.
+  if (!boot.terms && adopt.some((a) => !isArchived(a.plan.term, now))) {
+    return { pool: mergeCourses(pool, adopted), terms: adoptInto(null, adopt, iso), forgetModuleIds: [] };
   }
+  // An account with no terms yet starts from the same single empty plan a new device always did.
+  const terms = boot.terms ?? migrateToTermsState(null, null, null, pool, iso);
   const swept = archiveSweep(terms, pool, now);
   // Default view is always the NEWEST term: the stored activeTermKey is
-  // ignored on load.
+  // ignored on load. Plans they chose to save before signing in are kept now, and shown.
   const state = switchTermIn(swept.state, newestTermKey(swept.state));
-  return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds };
+  if (adopt.length === 0) return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds };
+  return { pool: mergeCourses(swept.pool, adopted), terms: adoptInto(state, adopt, iso), forgetModuleIds: swept.forgetModuleIds };
+}
+
+/** Each plan they chose to save, as a new plan with a name of its own in its term; the planner opens on the last. */
+function adoptInto(state: TermsState | null, adopt: AdoptPlan[], iso: string): TermsState {
+  let s: TermsState = state ?? { version: 1, activeTermKey: termKey(adopt[0]!.plan.term), terms: {} };
+  for (const a of adopt) {
+    const names = s.terms[termKey(a.plan.term)]?.plans.plans.map((p) => p.name) ?? [];
+    s = adoptPlanIn(s, a.plan, freeSharedName(names, a.name), iso);
+  }
+  return s;
 }
 
 /** Append a fresh plan entry, coloring it with the next hue in the palette. */
@@ -116,17 +122,20 @@ function appendEntry(
   };
 }
 
-export function usePlan() {
+export function usePlan(boot: CloudBoot) {
+  // Signed out: the extension's pushes show, nothing is saved, and App asks for sign-in before any edit.
+  const guest = boot.me === null;
   const bootRef = useRef<ReturnType<typeof initialState> | null>(null);
-  if (bootRef.current === null) bootRef.current = initialState();
+  if (bootRef.current === null) bootRef.current = initialState(boot);
   const [pool, setPool] = useState<CourseOffering[]>(bootRef.current.pool);
   const [termsState, setTermsState] = useState<TermsState>(bootRef.current.terms);
   const [pendingQueue, setPendingQueue] = useState<{ course: CourseOffering; optionId: string }[]>([]);
   // A plan someone else sent (share link or imported JSON). Lives in its own slot,
   // shown read-only — it can never overwrite any of the user's plans.
-  const [received, setReceived] = useState<ReceivedPlan | null>(loadReceived);
+  // Signed out, a plan someone sent opens on its own page instead, and one this device kept waits for the account.
+  const [received, setReceived] = useState<ReceivedPlan | null>(() => (guest ? null : loadReceived()));
   const [viewing, setViewing] = useState<Viewing>(() =>
-    loadReceived() ? loadViewing() : 'mine',
+    !guest && loadReceived() ? loadViewing() : 'mine',
   );
   // Latest pool/terms for effects that must not re-subscribe on every edit.
   const poolRef = useRef(pool);
@@ -137,9 +146,10 @@ export function usePlan() {
   }, [pool, termsState]);
 
   // One-time: tell the extension to release captured data the archive sweep dropped.
+  // Signed out nothing was swept: there is no account yet.
   useEffect(() => {
-    postForgetCourses(bootRef.current?.forgetModuleIds ?? []);
-  }, []);
+    if (!guest) postForgetCourses(bootRef.current?.forgetModuleIds ?? []);
+  }, [guest]);
 
   // The plan every existing action/selector works on = the ACTIVE named plan of
   // the ACTIVE TERM's workspace.
@@ -177,18 +187,22 @@ export function usePlan() {
     saveViewing(v);
   }, []);
 
-  // A hash that isn't one of this device's plans (a share link, or a #m= mirror
-  // bookmarked/copied on another device) is consumed ONCE into the received slot,
+  // A hash that isn't one of this device's plans (a share link, or an old #m=
+  // mirror bookmarked/copied before plans lived in the account) is consumed ONCE into the received slot,
   // then stripped from the address bar (leaving it would pin every reload to that
   // snapshot). The user's own plans are untouched — it opens read-only alongside
   // them. Also runs on hashchange: pasting a link into an already-open planner tab
-  // doesn't reload.
+  // doesn't reload. Signed out, the sign-in gate has stashed the link for after sign-in.
   useEffect(() => {
+    if (guest) return;
     const consume = () => {
       const owned = Object.entries(termsRef.current.terms).flatMap(([key, ws]) =>
         ws.plans.plans.map((p) => ({ key, id: p.id, plan: p.plan })),
       );
-      const intent = readHash(window.location.hash, {
+      const hash = window.location.hash;
+      const stripHash = () =>
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      const intent = readHash(hash, {
         plans: owned.map((o) => o.plan),
         syncedToken: loadSyncedToken(),
       });
@@ -200,6 +214,9 @@ export function usePlan() {
             switchTermIn(updateWorkspace(s, match.key, (ps) => switchActive(ps, match.id)), match.key),
           );
         }
+        // Nothing writes #m= any more; a stale one left in the bar would make an F5
+        // re-read an old snapshot (overwriting received, or flipping the active plan).
+        if (mirrorTokenFromHash(hash) !== null) stripHash();
         return;
       }
       if (intent.kind !== 'shared') return;
@@ -211,39 +228,24 @@ export function usePlan() {
       saveReceived(rec);
       setReceived(rec);
       switchViewing('received');
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      stripHash();
     };
     consume();
     window.addEventListener('hashchange', consume);
     return () => window.removeEventListener('hashchange', consume);
-  }, [switchViewing]);
+  }, [guest, switchViewing]);
 
-  // Mirror the ACTIVE plan into the address bar as a #m=<full token> so the
-  // browser's own "send this tab to your device" / bookmark sync always carry
-  // the latest plan. The `#m=` key is what marks it as ours — a bookmark opens
-  // in a fresh tab, so nothing per-tab could ever do that job. Depends on
-  // `received` too: after consuming a foreign hash we restore our own hash
-  // right away.
+  // Everything the account holds is saved by the sync engine, which diffs it
+  // against what the server acknowledged. No first-render skip: a new
+  // account's first plan, or an archive sweep, saves without waiting for an edit.
   useEffect(() => {
-    if (plan.entries.length === 0) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      return;
-    }
-    window.history.replaceState(null, '', `#${planToMirrorHash(plan)}`);
-  }, [plan, received]);
+    boot.engine.setTerms(termsState);
+  }, [boot.engine, termsState]);
 
-  // Persist the terms container on change. No first-render skip: loading and
-  // migration happen synchronously in the same initializer, so the first write
-  // is exactly what was loaded — and it makes a fresh migration (or an archive
-  // sweep that changed nothing else) durable without waiting for an edit.
+  // The browsed pool too, so "Browsed — not yet added" follows the student to other devices.
   useEffect(() => {
-    saveTerms(termsState);
-  }, [termsState]);
-
-  // Persist the browsed pool so the "Browsed — not yet added" list survives reloads.
-  useEffect(() => {
-    savePool(pool);
-  }, [pool]);
+    boot.engine.setPool(pool);
+  }, [boot.engine, pool]);
 
   // ---- term switching ----------------------------------------------------
   const switchTerm = useCallback((key: TermKey) => {
@@ -389,15 +391,7 @@ export function usePlan() {
       const incoming = received.plan;
       setPool((prev) => mergeCourses(prev, incoming.entries.map((e) => e.course)));
       const nowIso = new Date().toISOString();
-      setTermsState((s) => {
-        const key = termKey(incoming.term);
-        let next = ensureWorkspace(s, incoming.term, nowIso);
-        next = updateWorkspace(next, key, (ps) => {
-          const withPlan = addPlan(ps, incoming, name, nowIso);
-          return addBrowsed(withPlan, withPlan.activeId, incoming.entries.map((e) => e.course.id), nowIso);
-        });
-        return switchTermIn(next, key);
-      });
+      setTermsState((s) => adoptPlanIn(s, incoming, name, nowIso));
       clearReceived();
       setReceived(null);
       switchViewing('mine');
@@ -468,7 +462,8 @@ export function usePlan() {
   }, []);
 
   // Data bridge: `courses` routes into each course's own term; `plan-add` adds to
-  // the course's term (via the picker when that term has several plans).
+  // the course's term (via the picker when that term has several plans). Signed out, the
+  // plan-adds stay queued too, for the planner that mounts after sign-in.
   useEffect(() => {
     return installBridgeListener({
       onCourses: (incoming) => {
@@ -559,8 +554,8 @@ export function usePlan() {
           return changed ? { ...next, terms } : s;
         });
       },
-    });
-  }, [addIntoTerm, markBridgeSeen, switchViewing]);
+    }, { keep: guest });
+  }, [addIntoTerm, guest, markBridgeSeen, switchViewing]);
 
   /** Jump back to TSS — through the extension when present, else a plain new tab. */
   const openCourseInTss = useCallback((course: CourseOffering) => {
@@ -710,6 +705,7 @@ export function usePlan() {
     openBookingInTss,
     // terms
     activeTermKey: termsState.activeTermKey,
+    termsState,
     termList,
     archived,
     switchTerm,
@@ -737,6 +733,7 @@ export function usePlan() {
     viewing,
     viewPlan,
     readOnly,
+    guest,
     switchViewing,
     saveReceivedAsMine,
     saveReceivedAsNewPlan,
@@ -757,3 +754,31 @@ export function usePlan() {
 }
 
 export type PlanController = ReturnType<typeof usePlan>;
+
+/**
+ * The signed-out planner's controller: every edit asks for sign-in instead. An edit made
+ * here would be lost at sign-in, when the account's own planner takes over. Looking around
+ * (terms, TSS links, the map) still works.
+ */
+export function lockedForGuest(ctl: PlanController, ask: () => void): PlanController {
+  return {
+    ...ctl,
+    addCourse: ask,
+    addCourseWithOption: ask,
+    removeCourse: ask,
+    selectOption: ask,
+    replacePlan: ask,
+    resetPlan: ask,
+    removeFromPool: ask,
+    clearBrowsed: ask,
+    toggleBooked: ask,
+    switchPlan: ask,
+    createNewPlan: ask,
+    renamePlan: ask,
+    duplicatePlan: ask,
+    deletePlan: ask,
+    saveReceivedAsMine: ask,
+    saveReceivedAsNewPlan: ask,
+    discardReceived: ask,
+  };
+}

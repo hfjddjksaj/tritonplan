@@ -30,8 +30,8 @@ const dist = resolve(root, 'dist');
 const watch = process.argv.includes('--watch');
 const dev = process.argv.includes('--dev');
 
-/** Planner the build targets: production GitHub Pages, or the local Vite server (--dev). */
-const PLANNER_URL = dev ? 'http://localhost:5173/' : 'https://hfjddjksaj.github.io/tritonplan/';
+/** Planner the build targets: production tritonplan.cn, or the local Vite server (--dev). */
+const PLANNER_URL = dev ? 'http://localhost:5173/' : 'https://tritonplan.cn/';
 const PLANNER_MATCH = `${PLANNER_URL}*`;
 
 /** Planner match the --dev build adds so the bridge also runs on the local Vite server. */

@@ -116,11 +116,194 @@ export function isBookedMessage(data: unknown): data is BookedMessage {
   );
 }
 
+/* ---- message hub ------------------------------------------------------------ */
+
+/*
+ * Why a hub: planner-bridge.ts (extension) drains the "+ TritonPlan" queue exactly once at
+ * document_idle and posts it into the page; after that the extension's queue is empty. The
+ * planner only renders after sign-in and the account snapshot load, so listeners installed
+ * by usePlan / useApptTimes come too late and the pushes would be dropped (and a Google
+ * sign-in is a full-page round trip that throws away the whole page). The hub listens from
+ * the first statement of main.tsx, holds what nobody has subscribed to yet, and replays it
+ * on subscribe. We fix this page-side rather than in the extension because the new
+ * extension build has to go to review as early as possible (Task 1).
+ *
+ * Snapshots (`courses`, `booked`, `appt-times`) are kept after delivery too: the planner
+ * remounts when the tab comes back to newer server state, and the extension only speaks
+ * again on the next page load or the next TSS capture, so the new planner must hear the
+ * latest of each as the old one did. A `plan-add` is a click, delivered exactly once to the
+ * signed-in planner. The signed-out planner shows the clicks too, but only keeps a copy: they
+ * stay queued for the planner that can save them.
+ */
+
+export type BridgeKind = 'courses' | 'plan-add' | 'booked' | 'appt-times';
+
+/** Queued plan-adds mirror here so they survive the sign-in page navigation (same tab). */
+export const PENDING_ADDS_KEY = 'triton-planner:pending-adds:v1';
+
+/** Queue cap for `plan-add`: keeps the latest N, so a student who never signs in does not grow memory without bound. */
+const MAX_QUEUED_PER_KIND = 200;
+const MAX_MIRRORED_ADDS = 50;
+/** Each push of these is a full snapshot (`courses` = the extension's whole captured pool), so only the latest is worth keeping. */
+type SnapshotKind = 'courses' | 'booked' | 'appt-times';
+const SNAPSHOT_KINDS: readonly SnapshotKind[] = ['courses', 'booked', 'appt-times'];
+const isSnapshot = (kind: BridgeKind): kind is SnapshotKind => kind !== 'plan-add';
+let warnedEviction = false;
+
+function classify(data: unknown): BridgeKind | null {
+  if (isPlanAddMessage(data)) return 'plan-add';
+  if (isCoursesMessage(data)) return 'courses';
+  if (isBookedMessage(data)) return 'booked';
+  if (isApptTimesMessage(data)) return 'appt-times';
+  return null;
+}
+
+interface Queued { kind: BridgeKind; data: unknown }
+/** `keep`: hears plan-adds without taking them (the signed-out planner). */
+interface Subscriber { kinds: ReadonlySet<BridgeKind>; handler: (data: unknown) => void; keep: boolean }
+
+let hubInstalled = false;
+let hubListener: ((event: MessageEvent) => void) | null = null;
+/** Undelivered plan-adds, in arrival order. */
+let queue: Queued[] = [];
+/** The latest snapshot of each kind this page load, delivered or not. */
+const latest = new Map<SnapshotKind, unknown>();
+const subscribers = new Set<Subscriber>();
+
+function persistPendingAdds(): void {
+  try {
+    // Newest only: stays well under the sessionStorage quota.
+    const adds = queue.filter((q) => q.kind === 'plan-add').map((q) => q.data).slice(-MAX_MIRRORED_ADDS);
+    if (adds.length === 0) sessionStorage.removeItem(PENDING_ADDS_KEY);
+    else sessionStorage.setItem(PENDING_ADDS_KEY, JSON.stringify(adds));
+  } catch {
+    // Private mode / blocked storage / quota: the hub keeps working in memory. Don't leave
+    // a stale mirror behind (it would resurrect already-delivered adds after a reload).
+    try { sessionStorage.removeItem(PENDING_ADDS_KEY); } catch { /* blocked */ }
+  }
+}
+
+function restorePendingAdds(): void {
+  try {
+    const raw = sessionStorage.getItem(PENDING_ADDS_KEY);
+    if (!raw) return;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    // Restored entries go first: they arrived before anything posted on this page load.
+    const restored = parsed.filter(isPlanAddMessage).map((data) => ({ kind: 'plan-add' as const, data }));
+    queue = [...restored, ...queue].slice(-MAX_QUEUED_PER_KIND);
+  } catch {
+    // Corrupt or unreadable: start empty.
+  }
+}
+
+/** Returns false when the handler threw, so replay can keep the message for the next subscriber. */
+function deliver(handler: (data: unknown) => void, data: unknown): boolean {
+  try {
+    handler(data);
+    return true;
+  } catch (err) {
+    // One failing subscriber must not lose the rest of a replay.
+    console.error('bridge subscriber threw', err);
+    return false;
+  }
+}
+
+function enqueue(item: Queued): void {
+  queue.push(item);
+  if (queue.length > MAX_QUEUED_PER_KIND) {
+    queue.shift();
+    if (!warnedEviction) {
+      warnedEviction = true;
+      console.warn(`bridge queue full for "${item.kind}"; dropping the oldest`);
+    }
+  }
+  persistPendingAdds();
+}
+
+/** Install the page's single bridge `message` listener. Idempotent; call it before render. */
+export function installBridgeHub(): void {
+  if (hubInstalled) return;
+  hubInstalled = true;
+  restorePendingAdds();
+  hubListener = (event: MessageEvent) => {
+    // The extension's content script posts from this page's own window/origin; anything
+    // else (iframes, other windows) is untrusted.
+    if (event.source !== window || event.origin !== window.location.origin) return;
+    const data = event.data;
+    if (!data || typeof data !== 'object' || (data as { source?: unknown }).source !== BRIDGE_SOURCE) return;
+    const kind = classify(data);
+    if (!kind) return;
+    if (isSnapshot(kind)) latest.set(kind, data);
+    const targets = [...subscribers].filter((s) => s.kinds.has(kind));
+    if (!isSnapshot(kind) && !targets.some((s) => !s.keep)) enqueue({ kind, data });
+    for (const s of targets) deliver(s.handler, data);
+  };
+  window.addEventListener('message', hubListener);
+}
+
+/**
+ * Subscribe to these kinds: the latest snapshot of each comes first, then queued plan-adds
+ * in arrival order (removed, so each click is delivered once), then live messages. Plan-adds
+ * nobody takes keep queueing. With `keep`, plan-adds are heard but stay queued, queued ones
+ * included. Returns the unsubscribe function.
+ */
+export function subscribeBridge(
+  kinds: BridgeKind[],
+  handler: (data: unknown) => void,
+  { keep = false }: { keep?: boolean } = {},
+): () => void {
+  const sub: Subscriber = { kinds: new Set(kinds), handler, keep };
+  subscribers.add(sub);
+  for (const kind of SNAPSHOT_KINDS) {
+    if (!sub.kinds.has(kind) || !latest.has(kind) || !subscribers.has(sub)) continue;
+    deliver(handler, latest.get(kind));
+  }
+  const unsubscribe = () => {
+    subscribers.delete(sub);
+  };
+  if (!sub.kinds.has('plan-add')) return unsubscribe;
+  if (keep) {
+    for (const q of [...queue]) {
+      if (!subscribers.has(sub)) break;
+      deliver(handler, q.data);
+    }
+    return unsubscribe;
+  }
+  const replay = queue;
+  queue = [];
+  // Entries stay mirrored in sessionStorage until the loop ends: a handler that throws or
+  // unsubscribes mid-replay must not cost the student a queued "+ TritonPlan" click.
+  const undelivered: Queued[] = [];
+  for (const q of replay) {
+    if (!subscribers.has(sub) || !deliver(handler, q.data)) undelivered.push(q);
+  }
+  queue = [...undelivered, ...queue]; // back to the front, in original order
+  if (replay.length > 0) persistPendingAdds();
+  return unsubscribe;
+}
+
+/** Test seam: forget everything, as a full page reload would (sessionStorage is left alone). */
+export function resetBridgeHubForTests(): void {
+  if (hubListener) window.removeEventListener('message', hubListener);
+  hubListener = null;
+  hubInstalled = false;
+  queue = [];
+  latest.clear();
+  warnedEviction = false;
+  subscribers.clear();
+}
+
 /** Same-window/same-origin listener for `appt-times` pushes. Separate from
  *  installBridgeListener so the appt hook subscribes independently of usePlan. */
 export function installApptTimesListener(
   onApptTimes: (appt: ApptTimes[]) => void,
 ): () => void {
+  if (hubInstalled) {
+    return subscribeBridge(['appt-times'], (data) => {
+      if (isApptTimesMessage(data)) onApptTimes(data.payload);
+    });
+  }
   const handler = (event: MessageEvent) => {
     if (event.source !== window || event.origin !== window.location.origin) return;
     if (isApptTimesMessage(event.data)) onApptTimes(event.data.payload);
@@ -237,6 +420,12 @@ export interface ForgetCoursesMessage {
  *  archive sweep to release captured data for terms that are over. */
 export function postForgetCourses(moduleIds: string[]): void {
   if (moduleIds.length === 0) return;
+  // The remembered snapshot must forget them too, or a remounted planner would get them back.
+  const kept = latest.get('courses');
+  if (isCoursesMessage(kept)) {
+    const gone = new Set(moduleIds);
+    latest.set('courses', { ...kept, payload: kept.payload.filter((c) => !gone.has(c.moduleId)) });
+  }
   const msg: ForgetCoursesMessage = {
     source: PAGE_BRIDGE_SOURCE,
     type: 'forget-courses',
@@ -262,17 +451,22 @@ export interface BridgeHandlers {
  * Only same-window, same-origin messages matching a known contract invoke the
  * corresponding callback — the extension's content script posts from this page's
  * own window/origin, so anything else (iframes, other windows) is untrusted.
+ * `keep`: the signed-out planner, which leaves every plan-add queued for after sign-in.
  */
-export function installBridgeListener(handlers: BridgeHandlers): () => void {
+export function installBridgeListener(handlers: BridgeHandlers, { keep = false }: { keep?: boolean } = {}): () => void {
+  const dispatch = (data: unknown) => {
+    if (isPlanAddMessage(data)) {
+      handlers.onPlanAdd(data.payload.course, data.payload.selectedOptionId);
+    } else if (isCoursesMessage(data)) {
+      handlers.onCourses(data.payload);
+    } else if (isBookedMessage(data)) {
+      handlers.onBooked?.(data.payload, data.capturedAt, data.captured);
+    }
+  };
+  if (hubInstalled) return subscribeBridge(['plan-add', 'courses', 'booked'], dispatch, { keep });
   const handler = (event: MessageEvent) => {
     if (event.source !== window || event.origin !== window.location.origin) return;
-    if (isPlanAddMessage(event.data)) {
-      handlers.onPlanAdd(event.data.payload.course, event.data.payload.selectedOptionId);
-    } else if (isCoursesMessage(event.data)) {
-      handlers.onCourses(event.data.payload);
-    } else if (isBookedMessage(event.data)) {
-      handlers.onBooked?.(event.data.payload, event.data.capturedAt, event.data.captured);
-    }
+    dispatch(event.data);
   };
   window.addEventListener('message', handler);
   return () => window.removeEventListener('message', handler);

@@ -7,7 +7,6 @@ import {
   planToHash,
   planToMirrorHash,
   planFromHash,
-  shareUrl,
   tokenFromHash,
   mirrorTokenFromHash,
   mirrorSeedPlan,
@@ -163,13 +162,6 @@ describe('hash helpers', () => {
   it('returns null when the hash has no plan token', () => {
     expect(planFromHash('')).toBeNull();
     expect(planFromHash('#foo=bar')).toBeNull();
-  });
-
-  it('builds an absolute share URL carrying the plan', () => {
-    const plan = richPlan();
-    const url = shareUrl(plan, 'lite', 'https://plan.example/app/');
-    expect(url.startsWith('https://plan.example/app/#p=')).toBe(true);
-    expect(planFromHash(new URL(url).hash)!.entries[0]!.course.courseCode).toBe('CSE-008A');
   });
 });
 
