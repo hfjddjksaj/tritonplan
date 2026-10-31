@@ -2664,6 +2664,21 @@ button.menu__item:hover {
 .rmp__row--mine .rmp__name {
   font-weight: 800;
 }
+/* The row is the link; the underline on the name is what says so. */
+.rmp__link {
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.14s ease;
+}
+.rmp__row:hover .rmp__link,
+.rmp__row:focus-visible .rmp__link {
+  text-decoration-color: currentColor;
+}
+.rmp__row--mine .rmp__link {
+  text-decoration-color: var(--gold);
+}
 .rmp__tag {
   padding: 2px 6px;
   font-size: 9.5px;

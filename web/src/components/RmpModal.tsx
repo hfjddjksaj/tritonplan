@@ -1,7 +1,7 @@
-/** Several teachers on one course: ratings side by side, each row a link to RMP.
- *  Portaled like PlanPickerModal — the course rail is overflow:hidden. Laid out like
- *  the Share dialog; whoever teaches the section on the plan stands out, so a
- *  student sees their own professor at a glance. */
+/** A course's teachers with their ratings side by side, each row a link to RMP
+ *  (a name underlined like a link says so). Portaled like PlanPickerModal — the
+ *  course rail is overflow:hidden. Laid out like the Share dialog; whoever teaches
+ *  the section on the plan stands out, so a student sees their own professor at a glance. */
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { RmpLookup } from '@triton/shared';
@@ -60,7 +60,7 @@ export function RmpModal({ courseCode, instructors, selectedCode = null, onClose
         <p className="planpick__sub">
           {mine.length > 0
             ? `Your section, ${selectedCode}, is taught by ${names(mine.map((who) => who.name))}.`
-            : 'Pick a professor to open their page.'}
+            : 'Click a name to open their page on Rate My Professors.'}
         </p>
         <div className="planpick__list">
           {instructors.map((who, i) => {
@@ -79,7 +79,7 @@ export function RmpModal({ courseCode, instructors, selectedCode = null, onClose
               >
                 <span className="rmp__who">
                   <span className="rmp__name">
-                    {who.name}
+                    <span className="rmp__link">{who.name}</span>
                     {isMine && <span className="rmp__tag">Your section</span>}
                   </span>
                   <span className="rmp__sections">

@@ -17,10 +17,9 @@ interface Props {
   focus?: { courseId: string; nonce: number } | null;
   /** Mobile: pane hidden but kept mounted so filter/scroll state survives tab switches. */
   hidden?: boolean;
-  onFlash?: (msg: string) => void;
 }
 
-export function CoursePanel({ ctl, focus, hidden = false, onFlash }: Props) {
+export function CoursePanel({ ctl, focus, hidden = false }: Props) {
   const [filter, setFilter] = useState('');
   const isMobile = useIsMobile();
   const readOnly = ctl.readOnly;
@@ -115,7 +114,6 @@ export function CoursePanel({ ctl, focus, hidden = false, onFlash }: Props) {
                 bookedByTss={ctl.tssBookedIds.has(entry.course.id)}
                 {...(elsewhere ? { bookedOptionCode: elsewhere.code } : {})}
                 onToggleBooked={readOnly ? undefined : () => ctl.toggleBooked(entry.course)}
-                {...(onFlash ? { onFlash } : {})}
               />
             );
           })

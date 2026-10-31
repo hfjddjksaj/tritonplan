@@ -1,22 +1,23 @@
 import { useMemo, useState } from 'react';
 import type { CourseOffering } from '@triton/shared';
-import { lookupRmp } from '../lib/cloud/api';
-import { courseInstructors, rmpSearchUrl } from '../lib/rmp';
+import { courseInstructors } from '../lib/rmp';
 import { External } from './icons';
 import { tip } from './Tooltip';
 import { RmpModal } from './RmpModal';
 
 const NO_INSTRUCTOR = "TSS doesn't list an instructor for this course yet.";
-const BLOCKED = 'Your browser blocked the new tab. Allow pop-ups for TritonPlan to open Rate My Professors.';
 
 interface Props {
   course: CourseOffering;
-  /** The section on the plan: its teachers are marked in the several-teachers dialog. */
+  /** The section on the plan: its teachers are marked in the dialog. */
   selectedOptionId?: string | null;
-  onFlash?: ((msg: string) => void) | undefined;
 }
 
-export function RmpButton({ course, selectedOptionId = null, onFlash }: Props) {
+/**
+ * Opens the ratings dialog, even for a course with one teacher: the stars are
+ * there to compare inside the planner, and RMP is a click on a row away.
+ */
+export function RmpButton({ course, selectedOptionId = null }: Props) {
   const instructors = useMemo(() => courseInstructors(course), [course]);
   const selectedCode = course.options.find((o) => o.id === selectedOptionId)?.code ?? null;
   const [modal, setModal] = useState(false);
@@ -37,32 +38,12 @@ export function RmpButton({ course, selectedOptionId = null, onFlash }: Props) {
     );
   }
 
-  const onClick = () => {
-    if (instructors.length > 1) {
-      setModal(true);
-      return;
-    }
-    const name = instructors[0]!.name;
-    // The tab has to open inside the click: after an await the browser no longer counts
-    // this as a user gesture and blocks it. It waits on about:blank while the lookup runs.
-    const w = window.open('about:blank', '_blank');
-    if (!w) {
-      onFlash?.(BLOCKED);
-      return;
-    }
-    w.opener = null; // the page we send it to must not be able to reach back into the planner
-    void lookupRmp([name]).then((r) => {
-      const hit = r?.[0];
-      w.location.href = hit?.match?.url ?? hit?.searchUrl ?? rmpSearchUrl(name);
-    });
-  };
-
   return (
     <>
       <button
         type="button"
         className="course-card__tss"
-        onClick={onClick}
+        onClick={() => setModal(true)}
         {...tip(`Ratings for ${course.courseCode} instructors on RateMyProfessors`)}
       >
         rate my professor <External size={11} strokeWidth={2.2} />

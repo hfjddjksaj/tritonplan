@@ -33,19 +33,10 @@ let container: HTMLDivElement;
 let root: Root;
 let fetchMock: ReturnType<typeof vi.fn>;
 let openSpy: MockInstance<typeof window.open>;
-let fakeTab: { opener: unknown; location: { href: string } };
-const flash = vi.fn();
-const order: string[] = [];
 
 beforeEach(() => {
   clearRmpCache();
-  flash.mockClear();
-  order.length = 0;
-  fakeTab = { opener: 'the-planner', location: { href: 'about:blank' } };
-  openSpy = vi.spyOn(window, 'open').mockImplementation(() => {
-    order.push('open');
-    return fakeTab as unknown as Window;
-  });
+  openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
   container = document.createElement('div');
@@ -65,7 +56,7 @@ const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(
 
 async function mount(course: CourseOffering, selectedOptionId: string | null = null) {
   await act(async () => {
-    root.render(<><RmpButton course={course} selectedOptionId={selectedOptionId} onFlash={flash} /><TooltipLayer /></>);
+    root.render(<><RmpButton course={course} selectedOptionId={selectedOptionId} /><TooltipLayer /></>);
     await settle();
   });
 }
@@ -102,73 +93,49 @@ describe('RmpButton with no instructor', () => {
 });
 
 describe('RmpButton with one instructor', () => {
-  it('opens the new tab in the click, before the lookup is even sent', async () => {
-    let finish!: (r: Response) => void;
-    fetchMock.mockImplementation(() => {
-      order.push('fetch');
-      return new Promise<Response>((res) => { finish = res; });
-    });
-    await mount(courseWith(['Joshua Figueroa', 'P-001']));
-    // Click outside act's microtask drain: only the handler's synchronous part has run, and the
-    // fetch mock has not resolved. The tab must already be open, and open must precede the request.
-    button().click();
-    expect(order).toEqual(['open', 'fetch']);
-    expect(openSpy).toHaveBeenCalledWith('about:blank', '_blank');
-    expect(fakeTab.opener).toBeNull();
-    expect(fakeTab.location.href).toBe('about:blank');
-    expect(fakeTab.location.href).toBe('about:blank'); // lookup still pending
-    await act(async () => { finish(reply([matched('Joshua Figueroa', 4.2, 10)])); await settle(); });
-    expect(fakeTab.location.href).toBe(matched('Joshua Figueroa', 4.2, 10).match!.url);
+  const one = () => courseWith(['Joshua Figueroa', 'P-001']);
+
+  it('opens the dialog, not RMP: the stars show first, RMP is a click on the row', async () => {
+    fetchMock.mockResolvedValue(reply([matched('Joshua Figueroa', 4.2, 10)]));
+    await mount(one(), 'o0');
+    await click(button());
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(row('Joshua Figueroa').querySelector('.rmp__avg')!.textContent).toBe('4.2');
+    expect(dialog()!.textContent).toContain('Your section, P-001, is taught by Joshua Figueroa.');
+    await click(row('Joshua Figueroa'));
+    expect(openSpy).toHaveBeenCalledWith(matched('Joshua Figueroa', 4.2, 10).match!.url, '_blank', 'noopener');
   });
 
   it('sends the name as TSS gave it, as a name parameter', async () => {
     fetchMock.mockResolvedValue(reply([unmatched('Joshua Figueroa')]));
-    await mount(courseWith(['Joshua Figueroa', 'P-001']));
+    await mount(one());
     await click(button());
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe('/api/rmp?name=Joshua+Figueroa');
     expect((init as RequestInit).credentials).toBe('same-origin');
   });
 
-  it('goes to the search page when there is no safe match', async () => {
+  it("underlines the name, the row's sign that it is a link", async () => {
     fetchMock.mockResolvedValue(reply([unmatched('Joshua Figueroa')]));
-    await mount(courseWith(['Joshua Figueroa', 'P-001']));
+    await mount(one());
     await click(button());
-    expect(fakeTab.location.href).toBe(search('Joshua Figueroa'));
-  });
-
-  it('goes to the search page when the lookup fails', async () => {
-    fetchMock.mockResolvedValue(new Response('{}', { status: 500 }));
-    await mount(courseWith(['Joshua Figueroa', 'P-001']));
-    await click(button());
-    expect(fakeTab.location.href).toBe(search('Joshua Figueroa'));
-  });
-
-  it('goes to the search page when the network is down', async () => {
-    fetchMock.mockRejectedValue(new TypeError('offline'));
-    await mount(courseWith(['Joshua Figueroa', 'P-001']));
-    await click(button());
-    expect(fakeTab.location.href).toBe(search('Joshua Figueroa'));
-  });
-
-  it('flashes when the browser blocked the tab, and does not look anything up', async () => {
-    openSpy.mockImplementation(() => null);
-    await mount(courseWith(['Joshua Figueroa', 'P-001']));
-    await click(button());
-    expect(flash).toHaveBeenCalledWith('Your browser blocked the new tab. Allow pop-ups for TritonPlan to open Rate My Professors.');
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(row('Joshua Figueroa').querySelector('.rmp__link')!.textContent).toBe('Joshua Figueroa');
+    expect(dialog()!.textContent).toContain('Click a name to open their page on Rate My Professors.');
   });
 
   it('remembers a name for the page session but never a failure', async () => {
+    const reopen = async () => {
+      await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); });
+      await click(button());
+    };
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 500 }));
-    await mount(courseWith(['Joshua Figueroa', 'P-001']));
+    await mount(one());
     await click(button());
     fetchMock.mockResolvedValueOnce(reply([matched('Joshua Figueroa', 4, 3)]));
-    await click(button());
+    await reopen();
     expect(fetchMock).toHaveBeenCalledTimes(2); // the failure was retried
-    await click(button());
+    await reopen();
     expect(fetchMock).toHaveBeenCalledTimes(2); // the success was not
-    expect(fakeTab.location.href).toBe(matched('Joshua Figueroa', 4, 3).match!.url);
   });
 });
 
@@ -271,7 +238,7 @@ describe('RmpButton with several instructors', () => {
     await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); });
     await mount(two(), null);
     await click(button());
-    expect(dialog()!.textContent).toContain('Pick a professor to open their page.');
+    expect(dialog()!.textContent).toContain('Click a name to open their page on Rate My Professors.');
     expect(dialog()!.querySelector('.rmp__row--mine')).toBeNull();
   });
 
