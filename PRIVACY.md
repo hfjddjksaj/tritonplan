@@ -1,6 +1,6 @@
 # Privacy Policy — TritonPlan
 
-**Effective date: 2026-10-26**
+**Effective date: 2026-10-30**
 
 TritonPlan is an unofficial, student-made course-planning tool for UC San Diego. It is **not affiliated with, authorized, or endorsed by UC San Diego**.
 
@@ -19,8 +19,8 @@ When you create an account and use the planner, we store:
 - **Browsed courses:** the courses you looked at on TSS that the extension captured (the "Browsed" pool in the planner).
 - **Enrollment marks:** which courses you marked as booked, waitlisted, or enrolled.
 - **Appointment times:** your TSS enrollment appointment windows (First Pass, Second Pass, …).
-- **Shared links:** when you create a share link, we store a snapshot of that plan and its name on our server (see "Sharing and calendar links" below).
-- **Calendar link:** if you turn on the calendar subscription, we store a secret code for your private calendar link and which plan you picked for the calendar in each term.
+- **Share links made before 2026-10-30:** TritonPlan no longer creates share links. A link made earlier is a snapshot of one plan and its name stored on our server (see "Calendar link and older share links" below).
+- **Calendar link:** if you add a plan to Apple or Google Calendar (Share in the planner, or Calendar subscription in the Account menu), we store a secret code for your private calendar link and which plan you picked for the calendar in each term.
 
 A few things stay only in your browser (`localStorage`) and are never sent to us: interface preferences (such as the calendar view) and plans other people have shared with you — unless you move them from the old site, which saves them to your account.
 
@@ -30,13 +30,13 @@ On a single server hosted by Tencent Cloud in Silicon Valley, United States. Nig
 
 ## Who can see it
 
-Only you, in the sense that no other user can see your data. The person who runs TritonPlan has technical access to the server and its database, and uses it only to keep the service running and to fix problems. The other exceptions are the two links you can create yourself: a share link and a calendar link. Whoever holds one of them can see what it points to, as described in the next section.
+Only you, in the sense that no other user can see your data. The person who runs TritonPlan has technical access to the server and its database, and uses it only to keep the service running and to fix problems. The other exceptions are your calendar link, and any share link made before TritonPlan stopped offering them. Whoever holds one of them can see what it points to, as described in the next section.
 
-## Sharing and calendar links
+## Calendar link and older share links
 
-**Share links.** A share link is a short link like `https://tritonplan.cn/s/<code>`. Creating one stores a snapshot of that plan on our server, together with the name you gave it. The snapshot contains only the plan itself (term, courses, chosen sections, colors); your booked / waitlisted / enrolled marks, appointment times and the rest of your account are never part of it. Anyone who has the link can open the snapshot; the page that serves it returns only the snapshot's name, the plan and when it was created, nothing else about you. You can have up to 500 share links. To turn a link off, open the Account menu, choose **Shared links** and remove it; that deletes the snapshot and the link stops working. Deleting your account deletes all of your share links too. Older share links that look like `#p=…` work differently: they carry the plan inside the link itself and never touch our server, so we cannot turn them off.
+**Calendar link.** When you add a plan to Apple or Google Calendar, you get a private address of the form `https://tritonplan.cn/api/cal/<secret>.ics` (the secret is 43 random characters). Anyone who has this address can see the plans you picked for the calendar: your classes, sections, rooms, instructors, final exams and midterms. Treat it like a password. You can reset the link at any time, which stops the old address working immediately. The link is deleted when you delete your account. Calendar apps such as Apple Calendar and Google Calendar fetch the address from their own servers, so if you subscribe in Google Calendar, Google's servers receive that calendar content.
 
-**Calendar link.** If you turn on the calendar subscription, you get a private address of the form `https://tritonplan.cn/api/cal/<secret>.ics` (the secret is 43 random characters). Anyone who has this address can see the plans you picked for the calendar: your classes, sections, rooms, instructors, final exams and midterms. Treat it like a password. You can reset the link at any time, which stops the old address working immediately. The link is deleted when you delete your account. Calendar apps such as Apple Calendar and Google Calendar fetch the address from their own servers, so if you subscribe in Google Calendar, Google's servers receive that calendar content.
+**Older share links.** Until 2026-10-30 the planner could make short share links like `https://tritonplan.cn/s/<code>`; it no longer does. Each one stored a snapshot of one plan on our server, together with its name. The snapshot contains only the plan itself (term, courses, chosen sections, colors); your booked / waitlisted / enrolled marks, appointment times and the rest of your account were never part of it. Anyone who has such a link can still open the snapshot; the page that serves it returns only the snapshot's name, the plan and when it was created, nothing else about you. The snapshot is deleted when the account that made it is deleted; to have one removed sooner, contact us (below). Links that look like `#p=…` work differently: they carry the plan inside the link itself and never touch our server, so we cannot turn them off.
 
 ## Professor ratings
 

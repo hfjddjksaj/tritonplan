@@ -27,7 +27,7 @@
 <body>
 <main>
 <h1>TritonPlan Privacy Policy</h1>
-<p class="muted"><strong>Effective date: 2026-10-26</strong></p>
+<p class="muted"><strong>Effective date: 2026-10-30</strong></p>
 
 <p>TritonPlan is an unofficial, student-made course-planning tool for UC San Diego. It is <strong>not affiliated with, authorized, or endorsed by UC San Diego</strong>.</p>
 
@@ -43,8 +43,8 @@
   <li><strong>Browsed courses:</strong> the courses you looked at on TSS that the extension captured (the &ldquo;Browsed&rdquo; pool in the planner).</li>
   <li><strong>Enrollment marks:</strong> which courses you marked as booked, waitlisted, or enrolled.</li>
   <li><strong>Appointment times:</strong> your TSS enrollment appointment windows (First Pass, Second Pass, &hellip;).</li>
-  <li><strong>Shared links:</strong> when you create a share link, we store a snapshot of that plan and its name on our server (see &ldquo;Sharing and calendar links&rdquo; below).</li>
-  <li><strong>Calendar link:</strong> if you turn on the calendar subscription, we store a secret code for your private calendar link and which plan you picked for the calendar in each term.</li>
+  <li><strong>Share links made before 2026-10-30:</strong> TritonPlan no longer creates share links. A link made earlier is a snapshot of one plan and its name stored on our server (see &ldquo;Calendar link and older share links&rdquo; below).</li>
+  <li><strong>Calendar link:</strong> if you add a plan to Apple or Google Calendar (Share in the planner, or Calendar subscription in the Account menu), we store a secret code for your private calendar link and which plan you picked for the calendar in each term.</li>
 </ul>
 <p>A few things stay only in your browser (<code>localStorage</code>) and are never sent to us: interface preferences (such as the calendar view) and plans other people have shared with you &mdash; unless you move them from the old site, which saves them to your account.</p>
 
@@ -52,11 +52,11 @@
 <p>On a single server hosted by Tencent Cloud in Silicon Valley, United States. Nightly backups of the server&rsquo;s data are kept for at most 14 days and then deleted on a rolling basis.</p>
 
 <h2>Who can see it</h2>
-<p>Only you, in the sense that no other user can see your data. The person who runs TritonPlan has technical access to the server and its database, and uses it only to keep the service running and to fix problems. The other exceptions are the two links you can create yourself: a share link and a calendar link. Whoever holds one of them can see what it points to, as described in the next section.</p>
+<p>Only you, in the sense that no other user can see your data. The person who runs TritonPlan has technical access to the server and its database, and uses it only to keep the service running and to fix problems. The other exceptions are your calendar link, and any share link made before TritonPlan stopped offering them. Whoever holds one of them can see what it points to, as described in the next section.</p>
 
-<h2>Sharing and calendar links</h2>
-<p><strong>Share links.</strong> A share link is a short link like <code>https://tritonplan.cn/s/&lt;code&gt;</code>. Creating one stores a snapshot of that plan on our server, together with the name you gave it. The snapshot contains only the plan itself (term, courses, chosen sections, colors); your booked / waitlisted / enrolled marks, appointment times and the rest of your account are never part of it. Anyone who has the link can open the snapshot; the page that serves it returns only the snapshot&rsquo;s name, the plan and when it was created, nothing else about you. You can have up to 500 share links. To turn a link off, open the Account menu, choose <strong>Shared links</strong> and remove it; that deletes the snapshot and the link stops working. Deleting your account deletes all of your share links too. Older share links that look like <code>#p=&hellip;</code> work differently: they carry the plan inside the link itself and never touch our server, so we cannot turn them off.</p>
-<p><strong>Calendar link.</strong> If you turn on the calendar subscription, you get a private address of the form <code>https://tritonplan.cn/api/cal/&lt;secret&gt;.ics</code> (the secret is 43 random characters). Anyone who has this address can see the plans you picked for the calendar: your classes, sections, rooms, instructors, final exams and midterms. Treat it like a password. You can reset the link at any time, which stops the old address working immediately. The link is deleted when you delete your account. Calendar apps such as Apple Calendar and Google Calendar fetch the address from their own servers, so if you subscribe in Google Calendar, Google&rsquo;s servers receive that calendar content.</p>
+<h2>Calendar link and older share links</h2>
+<p><strong>Calendar link.</strong> When you add a plan to Apple or Google Calendar, you get a private address of the form <code>https://tritonplan.cn/api/cal/&lt;secret&gt;.ics</code> (the secret is 43 random characters). Anyone who has this address can see the plans you picked for the calendar: your classes, sections, rooms, instructors, final exams and midterms. Treat it like a password. You can reset the link at any time, which stops the old address working immediately. The link is deleted when you delete your account. Calendar apps such as Apple Calendar and Google Calendar fetch the address from their own servers, so if you subscribe in Google Calendar, Google&rsquo;s servers receive that calendar content.</p>
+<p><strong>Older share links.</strong> Until 2026-10-30 the planner could make short share links like <code>https://tritonplan.cn/s/&lt;code&gt;</code>; it no longer does. Each one stored a snapshot of one plan on our server, together with its name. The snapshot contains only the plan itself (term, courses, chosen sections, colors); your booked / waitlisted / enrolled marks, appointment times and the rest of your account were never part of it. Anyone who has such a link can still open the snapshot; the page that serves it returns only the snapshot&rsquo;s name, the plan and when it was created, nothing else about you. The snapshot is deleted when the account that made it is deleted; to have one removed sooner, contact us (below). Links that look like <code>#p=&hellip;</code> work differently: they carry the plan inside the link itself and never touch our server, so we cannot turn them off.</p>
 
 <h2>Professor ratings</h2>
 <p>TritonPlan shows RateMyProfessors (RMP) ratings next to instructors. About once a month our server downloads RMP&rsquo;s public list of UC San Diego teachers, with their average ratings, and keeps it in our database. When you look up ratings in the planner, your browser sends only the instructors&rsquo; names to our own server (you must be signed in), and the server answers from that stored list. Nothing about you is sent to RMP. If you click through to RMP, you leave TritonPlan and RMP&rsquo;s own privacy policy applies on its site.</p>

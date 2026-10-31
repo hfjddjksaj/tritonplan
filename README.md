@@ -24,9 +24,8 @@ The old WebReg showed your week as a calendar — times, locations, professors, 
 - **Section switching** — compare a course's lecture/discussion/lab combinations (tagged LEC / DIS / LAB, with seat counts) and switch right in the planner to clear a conflict.
 - **Jump back to TSS** — click a course code on the calendar to return to that exact course in TSS, or jump straight to the section's booking page.
 - **Building lookup** — click a class's location to see which building it is, with Google Maps and UCSD campus map links.
-- **Your appointment times** — the "My Appointment Times" windows (First Pass, Second Pass, …) captured from TSS show as a live capsule in the planner topbar, so you always know when you can enroll. Private: never part of shared plans.
-- **Share** — send a short link and whoever has it sees a snapshot of that plan. The snapshot is stored on our server; turn any link off under **Shared links** in the Account menu.
-- **Calendar subscription** — subscribe in Apple or Google Calendar to a private link that shows your classes, rooms, finals and midterms. Anyone with the link can see them; reset it any time.
+- **Your appointment times** — the "My Appointment Times" windows (First Pass, Second Pass, …) captured from TSS show as a live capsule in the planner topbar, so you always know when you can enroll. Private to your account.
+- **Share to your calendar** — **Share** → pick a plan → Apple or Google Calendar. Your classes, rooms, finals and midterms show up there and stay in sync as you edit. The calendar link is private (anyone with it can see those plans); reset it any time under **Calendar subscription** in the Account menu.
 - **Professor ratings** — RateMyProfessors ratings on every course card. Only instructor names go to our server; nothing about you goes to RMP.
 - **Accounts** — sign in with email + password or Google; your plans are stored on our server, not just in one browser.
 
@@ -65,7 +64,7 @@ This passive design is the product's hard rule:
 2. Browse the **Schedule of Classes** in TSS as usual.
 3. Click **"+ TritonPlan"** on a section you want — you land on the planner with it placed.
 4. Arrange sections to avoid conflicts, and check the **Finals** view.
-5. **Share** your plan.
+5. **Share** it to Apple or Google Calendar.
 
 <details>
 <summary>Manual install (load unpacked)</summary>
@@ -81,11 +80,11 @@ This passive design is the product's hard rule:
 
 ## Privacy
 
-You sign in with email + password or Google. We store your email (and Google account ID if you use Google sign-in), your plans, the courses you browsed, your booked / waitlisted / enrolled marks, and your appointment times on one server (Tencent Cloud, Silicon Valley, USA). Never sold, no ads, no analytics, no third-party trackers. Delete your account from the Account menu at any time. Share links and your calendar link are stored on the server too (anyone holding one can see what it points to; both are deleted with your account). Ratings come from a copy, refreshed about once a month, of RateMyProfessors' public UCSD list, so nothing about you is sent to RMP. The extension still only reads what the TSS page already received and sends no requests to TSS. Full details: [PRIVACY.md](./PRIVACY.md) or <https://tritonplan.cn/privacy.html>.
+You sign in with email + password or Google. We store your email (and Google account ID if you use Google sign-in), your plans, the courses you browsed, your booked / waitlisted / enrolled marks, and your appointment times on one server (Tencent Cloud, Silicon Valley, USA). Never sold, no ads, no analytics, no third-party trackers. Delete your account from the Account menu at any time. Your calendar link is stored on the server too (anyone holding it can see the plans you put in your calendar; it is deleted with your account). Ratings come from a copy, refreshed about once a month, of RateMyProfessors' public UCSD list, so nothing about you is sent to RMP. The extension still only reads what the TSS page already received and sends no requests to TSS. Full details: [PRIVACY.md](./PRIVACY.md) or <https://tritonplan.cn/privacy.html>.
 
 ## Developing
 
-Monorepo: `shared/` (data model + conflict logic), `web/` (React planner), `extension/` (MV3). Setup, commands, and architecture: [docs/development.md](./docs/development.md).
+Monorepo: `shared/` (data model + conflict logic), `server/` (API on tritonplan.cn), `web/` (React planner), `extension/` (MV3). Setup, commands, and architecture: [docs/development.md](./docs/development.md).
 
 ## Credits
 

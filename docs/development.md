@@ -11,7 +11,7 @@ plan/
 │   └── src/types.ts     The contract between extension and website
 ├── server/         The API server (Hono on Node 24, node:sqlite): accounts, plans
 ├── web/            The planner website (React + Vite)
-│   └── src/             Calendar UI, planner state, share/export, TSS deep links
+│   └── src/             Calendar UI, planner state, calendar export, TSS deep links
 ├── extension/      The Chrome/Edge MV3 extension
 │   └── src/             Passive interceptor, TSS parser, background worker, popup
 └── docs/           TSS reverse-engineering notes + README screenshots
@@ -229,6 +229,8 @@ Configure the server through `server/.env.local`. It is gitignored; secrets neve
 ### Routes for shares, calendar and ratings
 
 All under `/api`. Everything needs a signed-in session except the two routes marked public.
+Since 2026-10-30 the web app no longer makes or lists share links (Share exports to a calendar
+instead); the share routes stay so links made before then keep opening.
 
 | Route | Access | Purpose |
 |---|---|---|
@@ -250,4 +252,6 @@ All under `/api`. Everything needs a signed-in session except the two routes mar
 - Privacy policy: [`PRIVACY.md`](../PRIVACY.md), mirrored as the standalone page
   `web/public/privacy.html` (served at `/privacy.html`); keep the two in sync.
 - The Pages workflow ([`deploy-pages.yml`](../.github/workflows/deploy-pages.yml)) runs on
-  every push to `main`.
+  every push to `main` and publishes only the old site's move page (`web/dist-migrate`) at
+  `https://hfjddjksaj.github.io/tritonplan/`. The planner itself is deployed to tritonplan.cn
+  with `server/deploy/deploy.sh` (see `server/deploy/README.md`).
