@@ -3,6 +3,7 @@ import { formatDisplay } from '@triton/shared';
 import type { PositionedBlock } from '../lib/layout';
 import { colorsForHue } from '../lib/colors';
 import { weekdayLong } from '../lib/format';
+import { isNamedInstructor } from '../lib/rmp';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { External, Warning, X } from './icons';
 
@@ -10,16 +11,18 @@ interface Props {
   block: PositionedBlock;
   onOpenCourse: (courseId: string) => void;
   onOpenLocation: (block: PositionedBlock) => void;
+  /** Show the course's Rate My Professors ratings. */
+  onOpenInstructor: (block: PositionedBlock) => void;
   onFocusCourse: (courseId: string) => void;
   onClose: () => void;
 }
 
 /**
- * Mobile tap-a-block detail card. Collapses the desktop block's three click
- * targets (code → TSS, location → building map, elsewhere → course card) into
- * one sheet with explicit buttons. Portaled to <body> like PrereqPopover.
+ * Mobile tap-a-block detail card. Collapses the desktop block's click targets
+ * (code → TSS, location → building map, teacher → RMP ratings, elsewhere →
+ * course card) into one sheet with explicit buttons. Portaled to <body> like PrereqPopover.
  */
-export function BlockSheet({ block, onOpenCourse, onOpenLocation, onFocusCourse, onClose }: Props) {
+export function BlockSheet({ block, onOpenCourse, onOpenLocation, onOpenInstructor, onFocusCourse, onClose }: Props) {
   useEscapeKey(onClose);
   const c = colorsForHue(block.hue);
   return createPortal(
@@ -54,7 +57,14 @@ export function BlockSheet({ block, onOpenCourse, onOpenLocation, onFocusCourse,
           ) : (
             <div className="blocksheet__loctext">{block.location}</div>
           ))}
-        {block.instructor && <div className="blocksheet__instr">{block.instructor}</div>}
+        {block.instructor &&
+          (isNamedInstructor(block.instructor) ? (
+            <button type="button" className="blocksheet__instr blocksheet__instr--link" onClick={() => onOpenInstructor(block)}>
+              {block.instructor}
+            </button>
+          ) : (
+            <div className="blocksheet__instr">{block.instructor}</div>
+          ))}
         <div className="mappop__actions">
           <button type="button" className="btn btn--sm btn--primary" onClick={() => onOpenCourse(block.courseId)}>
             <External size={13} /> Open in TSS

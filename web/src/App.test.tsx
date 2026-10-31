@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { PlanState } from '@triton/shared';
 import App from './App';
 import { makeTestBoot } from './test/boot';
 import { makeGuestBoot } from './lib/cloud/boot';
+import { clearRmpCache } from './lib/cloud/api';
+import { makeCourse } from './lib/fixtures';
+import type { TermsState } from './lib/terms-state';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -115,5 +119,59 @@ describe('App → extension update note', () => {
     } finally {
       vi.restoreAllMocks();
     }
+  });
+});
+
+describe('App → a teacher on the calendar', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let boot: ReturnType<typeof makeTestBoot>;
+
+  /** One course, section P-002 chosen, its lecture on Mondays taught by Leo Porter. */
+  function account(): TermsState {
+    const course = makeCourse('CSE-8A|2026|2', 'CSE-8A');
+    const lecture = (id: string, who: string) => ({
+      id, type: 'LE', typeText: 'Lecture', sectionCode: 'A00', instructors: [who], unscheduled: false, rawSched: '',
+      meetings: [{ days: ['Mon' as const], start: '11:00', end: '11:50', modality: 'In Person', building: 'Center Hall', room: '109' }],
+    });
+    course.options = [
+      { id: 'o1', code: 'P-001', enrollCode: 'o1', components: [lecture('E1', 'Ada Lovelace')] },
+      { id: 'o2', code: 'P-002', enrollCode: 'o2', components: [lecture('E2', 'Leo Porter')] },
+    ];
+    const plan: PlanState = { version: 1, term: course.term, entries: [{ course, selectedOptionId: 'o2' }] };
+    return {
+      version: 1,
+      activeTermKey: '2026|2',
+      terms: { '2026|2': { term: course.term, plans: { activeId: 'p', plans: [{ id: 'p', name: 'Plan', plan, createdAt: 'c', updatedAt: 'u', browsed: [] }] } } },
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    clearRmpCache();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [] }), { status: 200 })));
+    boot = makeTestBoot({ terms: account() });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    boot.engine.dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("opens the course's ratings dialog, the plan's section marked", async () => {
+    await act(async () => root.render(<App boot={boot} />));
+    const link = container.querySelector<HTMLButtonElement>('.cal-canvas button.block__instr--link')!;
+    expect(link.textContent).toBe('Leo Porter');
+    await act(async () => link.click());
+    const dialog = document.body.querySelector('[role="dialog"][aria-label="Rate My Professors — CSE-8A"]')!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain('Your section, P-002, is taught by Leo Porter.');
+    expect([...dialog.querySelectorAll('.rmp__link')].map((n) => n.textContent)).toEqual(['Ada Lovelace', 'Leo Porter']);
+    await act(async () => dialog.querySelector<HTMLButtonElement>('.mappop__close')!.click());
+    expect(document.body.querySelector('.rmp')).toBeNull();
   });
 });

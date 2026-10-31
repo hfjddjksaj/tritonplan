@@ -1,6 +1,7 @@
 import { formatDisplay } from '@triton/shared';
 import { colorsForHue } from '../lib/colors';
 import type { PositionedBlock } from '../lib/layout';
+import { isNamedInstructor } from '../lib/rmp';
 import { Warning } from './icons';
 import { tip } from './Tooltip';
 
@@ -12,6 +13,8 @@ interface Props {
   onOpen: (courseId: string) => void;
   /** Show where this block's building is; when absent the location stays plain text. */
   onOpenLocation?: (block: PositionedBlock) => void;
+  /** Show the course's Rate My Professors ratings; when absent the teacher stays plain text. */
+  onOpenInstructor?: (block: PositionedBlock) => void;
   /** Reveal this course's card (sections expanded) in the rail; fires on any click
       that isn't the code or the location text. */
   onFocusCourse?: (courseId: string) => void;
@@ -20,7 +23,7 @@ interface Props {
   onDetail?: (block: PositionedBlock) => void;
 }
 
-export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse, onDetail }: Props) {
+export function CourseBlock({ block, onOpen, onOpenLocation, onOpenInstructor, onFocusCourse, onDetail }: Props) {
   const c = colorsForHue(block.hue);
   const widthPct = 100 / block.laneCount;
   const compact = block.height < 42;
@@ -97,9 +100,24 @@ export function CourseBlock({ block, onOpen, onOpenLocation, onFocusCourse, onDe
         ) : (
           <div className="block__loc">{block.location}</div>
         ))}
-      {!compact && block.height > 60 && block.instructor && (
-        <div className="block__instr">{block.instructor}</div>
-      )}
+      {!compact &&
+        block.height > 60 &&
+        block.instructor &&
+        (!onDetail && onOpenInstructor && isNamedInstructor(block.instructor) ? (
+          <button
+            type="button"
+            className="block__instr block__instr--link"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenInstructor(block);
+            }}
+            {...tip(`${block.instructor} on Rate My Professors`)}
+          >
+            {block.instructor}
+          </button>
+        ) : (
+          <div className="block__instr">{block.instructor}</div>
+        ))}
     </article>
   );
 }

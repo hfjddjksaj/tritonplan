@@ -2,12 +2,12 @@
  *  (a name underlined like a link says so). Portaled like PlanPickerModal — the
  *  course rail is overflow:hidden. Laid out like the Share dialog; whoever teaches
  *  the section on the plan stands out, so a student sees their own professor at a glance. */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { RmpLookup } from '@triton/shared';
+import type { CourseOffering, RmpLookup } from '@triton/shared';
 import { lookupRmp } from '../lib/cloud/api';
 import { pluralize } from '../lib/format';
-import { rmpSearchUrl, type CourseInstructor } from '../lib/rmp';
+import { courseInstructors, rmpSearchUrl, type CourseInstructor } from '../lib/rmp';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { Star, X } from './icons';
 
@@ -17,6 +17,22 @@ interface Props {
   /** Code of the section chosen on the plan ("P-002-001"), if any. */
   selectedCode?: string | null;
   onClose: () => void;
+}
+
+/** The dialog for one course of the plan: its teachers, the plan's section marked. */
+export function CourseRmpModal({
+  course,
+  selectedOptionId,
+  onClose,
+}: {
+  course: CourseOffering;
+  selectedOptionId: string | null;
+  onClose: () => void;
+}) {
+  // Memoized: the dialog looks its teachers up again whenever this list changes identity.
+  const instructors = useMemo(() => courseInstructors(course), [course]);
+  const selectedCode = course.options.find((o) => o.id === selectedOptionId)?.code ?? null;
+  return <RmpModal courseCode={course.courseCode} instructors={instructors} selectedCode={selectedCode} onClose={onClose} />;
 }
 
 /** "A", "A and B", "A, B and C". */

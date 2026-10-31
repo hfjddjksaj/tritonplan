@@ -20,6 +20,7 @@ import { GuestBanner } from './components/GuestBanner';
 import { BuildingPopover } from './components/BuildingPopover';
 const CampusMap = lazy(() => import('./components/CampusMap').then((m) => ({ default: m.CampusMap })));
 import { PlanPickerModal } from './components/PlanPickerModal';
+import { CourseRmpModal } from './components/RmpModal';
 import { TermSwitcher } from './components/TermSwitcher';
 import { BlockSheet } from './components/BlockSheet';
 import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
@@ -64,6 +65,9 @@ export default function App({
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   const [campusOpen, setCampusOpen] = useState(false);
   const [sheetBlock, setSheetBlock] = useState<PositionedBlock | null>(null);
+  // A teacher's name on the calendar opens the same ratings dialog as the course card's button.
+  const [rmpCourseId, setRmpCourseId] = useState<string | null>(null);
+  const rmpEntry = rmpCourseId ? ctl.viewPlan.entries.find((e) => e.course.id === rmpCourseId) : undefined;
   // Clicking a calendar block reveals that course's card in the rail. The nonce
   // makes a second click on the same course re-trigger the scroll/expand.
   const [focusReq, setFocusReq] = useState<{ courseId: string; nonce: number } | null>(null);
@@ -266,6 +270,7 @@ export default function App({
                 onOpenLocation={(block) => {
                   if (block.building) setMapLoc({ building: block.building, room: block.room });
                 }}
+                onOpenInstructor={(block) => setRmpCourseId(block.courseId)}
                 onFocusCourse={handleFocusCourse}
                 onBlockDetail={isMobile ? setSheetBlock : undefined}
                 variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
@@ -323,10 +328,22 @@ export default function App({
             setSheetBlock(null);
             if (b.building) setMapLoc({ building: b.building, room: b.room });
           }}
+          onOpenInstructor={(b) => {
+            setSheetBlock(null);
+            setRmpCourseId(b.courseId);
+          }}
           onFocusCourse={(id) => {
             setSheetBlock(null);
             handleFocusCourse(id);
           }}
+        />
+      )}
+
+      {rmpEntry && (
+        <CourseRmpModal
+          course={rmpEntry.course}
+          selectedOptionId={rmpEntry.selectedOptionId}
+          onClose={() => setRmpCourseId(null)}
         />
       )}
 

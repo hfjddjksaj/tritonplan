@@ -31,6 +31,8 @@ interface Props {
   instances: MeetingInstance[];
   onOpenCourse: (courseId: string) => void;
   onOpenLocation: (block: PositionedBlock) => void;
+  /** A teacher's name was clicked: show the course's Rate My Professors ratings. */
+  onOpenInstructor?: (block: PositionedBlock) => void;
   onFocusCourse: (courseId: string) => void;
   /** 'desktop' (default) | mobile 'fit' (whole week in viewport) | mobile 'scroll' (wide snap-scrolling day columns). */
   variant?: 'desktop' | 'fit' | 'scroll';
@@ -41,6 +43,7 @@ export function CalendarGrid({
   instances,
   onOpenCourse,
   onOpenLocation,
+  onOpenInstructor,
   onFocusCourse,
   variant = 'desktop',
   onBlockDetail,
@@ -170,6 +173,7 @@ export function CalendarGrid({
                       block={block}
                       onOpen={onOpenCourse}
                       onOpenLocation={onOpenLocation}
+                      onOpenInstructor={onOpenInstructor}
                       onFocusCourse={onFocusCourse}
                       onDetail={onBlockDetail}
                     />

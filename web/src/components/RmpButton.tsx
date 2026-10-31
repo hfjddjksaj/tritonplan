@@ -3,7 +3,7 @@ import type { CourseOffering } from '@triton/shared';
 import { courseInstructors } from '../lib/rmp';
 import { External } from './icons';
 import { tip } from './Tooltip';
-import { RmpModal } from './RmpModal';
+import { CourseRmpModal } from './RmpModal';
 
 const NO_INSTRUCTOR = "TSS doesn't list an instructor for this course yet.";
 
@@ -19,7 +19,6 @@ interface Props {
  */
 export function RmpButton({ course, selectedOptionId = null }: Props) {
   const instructors = useMemo(() => courseInstructors(course), [course]);
-  const selectedCode = course.options.find((o) => o.id === selectedOptionId)?.code ?? null;
   const [modal, setModal] = useState(false);
 
   // aria-disabled rather than disabled: a disabled button swallows pointer and focus
@@ -48,14 +47,7 @@ export function RmpButton({ course, selectedOptionId = null }: Props) {
       >
         rate my professor <External size={11} strokeWidth={2.2} />
       </button>
-      {modal && (
-        <RmpModal
-          courseCode={course.courseCode}
-          instructors={instructors}
-          selectedCode={selectedCode}
-          onClose={() => setModal(false)}
-        />
-      )}
+      {modal && <CourseRmpModal course={course} selectedOptionId={selectedOptionId} onClose={() => setModal(false)} />}
     </>
   );
 }

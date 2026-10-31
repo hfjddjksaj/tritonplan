@@ -9,6 +9,12 @@ export interface CourseInstructor {
 /** TSS fills the slot with a placeholder when nobody is assigned; there is no one to look up. */
 const PLACEHOLDERS = new Set(['staff', 'tba']);
 
+/** A teacher's name rather than TSS's "Staff" / "TBA" placeholder: someone RMP could have rated. */
+export function isNamedInstructor(name: string | undefined): name is string {
+  const key = name?.trim().toLowerCase();
+  return !!key && !PLACEHOLDERS.has(key);
+}
+
 /**
  * Everyone TSS names on any component of any option, once each. Case-insensitive on the
  * trimmed name, first spelling kept. The name is passed on exactly as TSS wrote it:
@@ -19,9 +25,9 @@ export function courseInstructors(course: CourseOffering): CourseInstructor[] {
   for (const option of course.options) {
     for (const component of option.components) {
       for (const raw of component.instructors) {
+        if (!isNamedInstructor(raw)) continue;
         const name = raw.trim();
         const key = name.toLowerCase();
-        if (!name || PLACEHOLDERS.has(key)) continue;
         let who = byKey.get(key);
         if (!who) byKey.set(key, (who = { name, sections: [] }));
         if (!who.sections.includes(option.code)) who.sections.push(option.code);
