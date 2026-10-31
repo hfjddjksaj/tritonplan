@@ -9,8 +9,16 @@ import { RmpModal } from './RmpModal';
 const NO_INSTRUCTOR = "TSS doesn't list an instructor for this course yet.";
 const BLOCKED = 'Your browser blocked the new tab. Allow pop-ups for TritonPlan to open Rate My Professors.';
 
-export function RmpButton({ course, onFlash }: { course: CourseOffering; onFlash?: ((msg: string) => void) | undefined }) {
+interface Props {
+  course: CourseOffering;
+  /** The section on the plan: its teachers are marked in the several-teachers dialog. */
+  selectedOptionId?: string | null;
+  onFlash?: ((msg: string) => void) | undefined;
+}
+
+export function RmpButton({ course, selectedOptionId = null, onFlash }: Props) {
   const instructors = useMemo(() => courseInstructors(course), [course]);
+  const selectedCode = course.options.find((o) => o.id === selectedOptionId)?.code ?? null;
   const [modal, setModal] = useState(false);
 
   // aria-disabled rather than disabled: a disabled button swallows pointer and focus
@@ -59,7 +67,14 @@ export function RmpButton({ course, onFlash }: { course: CourseOffering; onFlash
       >
         rate my professor <External size={11} strokeWidth={2.2} />
       </button>
-      {modal && <RmpModal courseCode={course.courseCode} instructors={instructors} onClose={() => setModal(false)} />}
+      {modal && (
+        <RmpModal
+          courseCode={course.courseCode}
+          instructors={instructors}
+          selectedCode={selectedCode}
+          onClose={() => setModal(false)}
+        />
+      )}
     </>
   );
 }

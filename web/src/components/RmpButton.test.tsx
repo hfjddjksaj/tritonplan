@@ -63,9 +63,9 @@ afterEach(() => {
 const reply = (results: RmpLookup[]) => new Response(JSON.stringify({ results }), { status: 200 });
 const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 
-async function mount(course: CourseOffering) {
+async function mount(course: CourseOffering, selectedOptionId: string | null = null) {
   await act(async () => {
-    root.render(<><RmpButton course={course} onFlash={flash} /><TooltipLayer /></>);
+    root.render(<><RmpButton course={course} selectedOptionId={selectedOptionId} onFlash={flash} /><TooltipLayer /></>);
     await settle();
   });
 }
@@ -74,6 +74,10 @@ async function click(el: HTMLElement) {
   await act(async () => { el.click(); await settle(); });
 }
 const dialog = () => document.body.querySelector('[role="dialog"]');
+/** The dialog's row for one teacher. */
+const row = (name: string) =>
+  [...dialog()!.querySelectorAll<HTMLElement>('.rmp__row')].find((b) => b.querySelector('.rmp__name')!.textContent!.startsWith(name))!;
+const chips = (name: string) => [...row(name).querySelectorAll('.rmp__sec')].map((c) => c.textContent);
 
 describe('RmpButton with no instructor', () => {
   it('is greyed out and its tooltip is still reachable by hover', async () => {
@@ -177,7 +181,8 @@ describe('RmpButton with several instructors', () => {
     await mount(two());
     await click(button());
     expect(openSpy).not.toHaveBeenCalled();
-    expect(dialog()!.textContent).toContain('Rate My Professors — CSE-8A');
+    expect(dialog()!.getAttribute('aria-label')).toBe('Rate My Professors — CSE-8A');
+    expect(dialog()!.textContent).toContain('CSE-8A');
     expect(dialog()!.textContent).toContain('Loading ratings…');
     await act(async () => {
       finish(reply([matched('Ada Lovelace', 4.25, 12), unmatched('Leo Porter')]));
@@ -185,13 +190,12 @@ describe('RmpButton with several instructors', () => {
     });
     const text = dialog()!.textContent!;
     expect(text).not.toContain('Loading ratings…');
-    expect(text).toContain('Ada Lovelace');
-    expect(text).toContain('★ 4.3');
-    expect(text).toContain('12 ratings');
-    expect(text).toContain('Sections P-001, P-002');
-    expect(text).toContain('Leo Porter');
-    expect(text).toContain('no ratings');
-    expect(text).toContain('Sections P-002');
+    expect(row('Ada Lovelace').querySelector('.rmp__avg')!.textContent).toBe('4.3');
+    expect(row('Ada Lovelace').querySelector('.rmp__count')!.textContent).toBe('12 ratings');
+    expect(chips('Ada Lovelace')).toEqual(['P-001', 'P-002']);
+    expect(row('Leo Porter').querySelector('.rmp__avg')).toBeNull();
+    expect(row('Leo Porter').querySelector('.rmp__count')!.textContent).toBe('no ratings');
+    expect(chips('Leo Porter')).toEqual(['P-002']);
     expect(text).toContain('Ratings from RateMyProfessors.com, updated monthly.');
     expect(fetchMock.mock.calls[0]![0]).toBe('/api/rmp?name=Ada+Lovelace&name=Leo+Porter');
   });
@@ -200,7 +204,7 @@ describe('RmpButton with several instructors', () => {
     fetchMock.mockResolvedValue(reply([matched('Ada Lovelace', null, 0), unmatched('Leo Porter')]));
     await mount(two());
     await click(button());
-    expect(dialog()!.textContent).not.toContain('★');
+    expect(dialog()!.querySelector('.rmp__avg')).toBeNull();
     expect(dialog()!.textContent!.match(/no ratings/g)).toHaveLength(2);
   });
 
@@ -241,8 +245,34 @@ describe('RmpButton with several instructors', () => {
     expect(text).toContain('Ada Lovelace');
     expect(text).toContain('Leo Porter');
     expect(text).not.toContain('no ratings');
-    expect(text).not.toContain('★');
     expect(dialog()!.querySelector('.rmp__score')).toBeNull();
+  });
+
+  it("marks who teaches the plan's section, and that section's chip", async () => {
+    fetchMock.mockResolvedValue(reply([matched('Ada Lovelace', 4, 3), matched('Leo Porter', 3, 9)]));
+    const course = courseWith(['Ada Lovelace', 'P-001'], ['Leo Porter', 'P-002']);
+    await mount(course, course.options[1]!.id);
+    await click(button());
+    expect(dialog()!.textContent).toContain('Your section, P-002, is taught by Leo Porter.');
+    expect(row('Leo Porter').classList).toContain('rmp__row--mine');
+    expect(row('Leo Porter').textContent).toContain('Your section');
+    expect(row('Leo Porter').querySelector('.rmp__sec--mine')!.textContent).toBe('P-002');
+    expect(row('Ada Lovelace').classList).not.toContain('rmp__row--mine');
+    expect(row('Ada Lovelace').querySelector('.rmp__sec--mine')).toBeNull();
+  });
+
+  it('names every teacher of a shared section, and marks nobody with no section chosen', async () => {
+    fetchMock.mockResolvedValue(reply([unmatched('Ada Lovelace'), unmatched('Leo Porter')]));
+    await mount(two(), 'o1'); // P-002: both teach in it
+    await click(button());
+    expect(dialog()!.textContent).toContain('Your section, P-002, is taught by Ada Lovelace and Leo Porter.');
+    expect(dialog()!.querySelectorAll('.rmp__row--mine')).toHaveLength(2);
+
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); });
+    await mount(two(), null);
+    await click(button());
+    expect(dialog()!.textContent).toContain('Pick a professor to open their page.');
+    expect(dialog()!.querySelector('.rmp__row--mine')).toBeNull();
   });
 
   it('closes on Escape and on the backdrop', async () => {

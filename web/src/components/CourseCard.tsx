@@ -242,7 +242,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
           >
             prerequisites
           </button>
-          <RmpButton course={course} onFlash={onFlash} />
+          <RmpButton course={course} selectedOptionId={entry.selectedOptionId} onFlash={onFlash} />
           {/* Manual marking exists for courses TSS has not spoken about. Once it
               reports one, there is nothing here to decide — enrolment is its fact, not
               a preference — and the toggle would only offer a way to contradict it

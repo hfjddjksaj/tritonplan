@@ -2626,26 +2626,102 @@ button.menu__item:hover {
   font-size: 12px;
   color: var(--text-muted);
 }
+/* ---- Rate My Professors: one row per teacher, the plan's own section marked in gold ---- */
+.rmp {
+  width: min(460px, calc(100vw - 40px));
+  max-width: none;
+}
+.rmp__row {
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+}
+.rmp__row--mine {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.rmp__row--mine:hover {
+  background: var(--gold-soft);
+  border-color: var(--gold-ink);
+}
 .rmp__who {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 7px;
   min-width: 0;
+}
+.rmp__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.rmp__row--mine .rmp__name {
+  font-weight: 800;
+}
+.rmp__tag {
+  padding: 2px 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+  background: var(--surface);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+}
+.rmp__sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rmp__sec {
+  padding: 2px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.rmp__sec--mine {
+  font-weight: 700;
+  color: var(--gold-ink);
+  background: var(--surface);
+  border-color: var(--gold);
 }
 .rmp__score {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
-  margin-left: 12px;
+  margin-left: auto;
+  padding-top: 1px;
 }
 .rmp__avg {
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.rmp__star {
+  color: var(--gold);
+}
+.rmp__count {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 .rmp__note {
-  margin: 0 0 12px;
-  font-size: 12px;
+  margin-top: 4px;
 }
 .planpick__cancel {
   width: 100%;
