@@ -593,19 +593,22 @@ export function usePlan(boot: CloudBoot) {
 
 
   /**
-   * What TSS ITSELF reported for the viewed term this session, before any of the
-   * student's own marks and unmarks. Only `bookedIds` decides how a course reads; this
-   * exists so a card can show that an unmark is standing against a live report, rather
-   * than leaving the student to wonder why TSS "forgot" a course they are enrolled in.
+   * What TSS ITSELF reported for the viewed term, before any of the student's own
+   * marks and unmarks: the report saved with the term (`bookedAuto`), plus this
+   * session's push. Only `bookedIds` decides how a course reads; this decides that a
+   * card stops offering to contradict TSS. The saved report has to count on its own:
+   * a session's push never comes on a phone, nor while Chrome holds the extension
+   * switched off after an update — and the toggle came back exactly then.
    */
   const tssBookedIds = useMemo<ReadonlySet<string>>(() => {
     const t = viewPlan.term;
-    return new Set(
-      bookedRows
+    return new Set([
+      ...(termsState.terms[termKey(t)]?.bookedAuto ?? []),
+      ...bookedRows
         .filter((r) => r.term.year === t.year && r.term.period === t.period)
         .map((r) => `${r.courseCode}|${r.term.year}|${r.term.period}`),
-    );
-  }, [bookedRows, viewPlan.term]);
+    ]);
+  }, [bookedRows, termsState, viewPlan.term]);
 
   /**
    * Per course id, the events TSS says the student is enrolled in — the raw material

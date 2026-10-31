@@ -3,16 +3,18 @@
  *
  * Three id lists on TermWorkspace: `bookedAuto` (the extension's capture of the
  * TSS homepage "Booked Courses" feed, replaced wholesale per push), plus manual
- * overrides `bookedOn` / `bookedOff`. Verdict: (auto ∪ on) − off.
+ * overrides `bookedOn` / `bookedOff`. Verdict: auto ∪ (on − off). TSS wins: an
+ * unmark never outvotes the feed. `bookedOff` is no longer written; one left in old
+ * data (or recorded while the planner wrongly offered the toggle) is simply outranked.
  *
  * PERSONAL data — never part of PlanState, share payloads, QR or JSON export.
  */
 import type { TermWorkspace } from './terms-state';
 
 export function bookedSet(ws: TermWorkspace): ReadonlySet<string> {
+  const off = new Set(ws.bookedOff ?? []);
   const out = new Set(ws.bookedAuto ?? []);
-  for (const id of ws.bookedOn ?? []) out.add(id);
-  for (const id of ws.bookedOff ?? []) out.delete(id);
+  for (const id of ws.bookedOn ?? []) if (!off.has(id)) out.add(id);
   return out;
 }
 
@@ -94,17 +96,15 @@ export function applyAutoBooked(ws: TermWorkspace, ids: readonly string[]): Term
   return { ...ws, bookedAuto: auto, bookedOn: on, bookedOff: off };
 }
 
-/** Manual "mark booked" / "unmark" — the auto list itself is never edited by hand. */
+/**
+ * Manual "mark booked" / "unmark", for courses TSS has said nothing about. A course
+ * the feed reports is not the student's to toggle (the card offers no button), so
+ * the workspace comes back unchanged for one.
+ */
 export function toggleBooked(ws: TermWorkspace, courseId: string): TermWorkspace {
-  const auto = ws.bookedAuto ?? [];
+  if ((ws.bookedAuto ?? []).includes(courseId)) return ws;
   const on = new Set(ws.bookedOn ?? []);
-  const off = new Set(ws.bookedOff ?? []);
-  if (bookedSet(ws).has(courseId)) {
-    on.delete(courseId);
-    if (auto.includes(courseId)) off.add(courseId);
-  } else {
-    off.delete(courseId);
-    if (!auto.includes(courseId)) on.add(courseId);
-  }
-  return { ...ws, bookedOn: [...on], bookedOff: [...off] };
+  if (on.has(courseId)) on.delete(courseId);
+  else on.add(courseId);
+  return { ...ws, bookedOn: [...on] };
 }

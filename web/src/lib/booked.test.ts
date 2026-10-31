@@ -22,9 +22,14 @@ const A = 'CHEM-114A|2026|2';
 const B = 'CHEM-152|2026|2';
 
 describe('bookedSet', () => {
-  it('is (auto ∪ on) − off; absent fields are empty', () => {
+  it('is auto ∪ (on − off); absent fields are empty', () => {
     expect([...bookedSet(ws())]).toEqual([]);
-    expect([...bookedSet(ws({ bookedAuto: [A], bookedOn: [B], bookedOff: [A] }))]).toEqual([B]);
+    expect([...bookedSet(ws({ bookedAuto: [A], bookedOn: [B] }))]).toEqual([A, B]);
+    expect([...bookedSet(ws({ bookedOn: [B], bookedOff: [B] }))]).toEqual([]);
+  });
+  it('a standing unmark never outvotes what TSS reported', () => {
+    // Old data, or a click while the card wrongly offered the toggle for a reported course.
+    expect([...bookedSet(ws({ bookedAuto: [A], bookedOff: [A] }))]).toEqual([A]);
   });
 });
 
@@ -34,11 +39,10 @@ describe('toggleBooked', () => {
     expect(next.bookedOn).toEqual([A]);
     expect(bookedSet(next).has(A)).toBe(true);
   });
-  it('unmarks an auto-booked course via bookedOff (auto list untouched)', () => {
-    const next = toggleBooked(ws({ bookedAuto: [A] }), A);
-    expect(next.bookedAuto).toEqual([A]);
-    expect(next.bookedOff).toEqual([A]);
-    expect(bookedSet(next).has(A)).toBe(false);
+  it('leaves a course TSS reported alone: it is not the student’s to unmark', () => {
+    const before = ws({ bookedAuto: [A] });
+    expect(toggleBooked(before, A)).toBe(before);
+    expect(bookedSet(before).has(A)).toBe(true);
   });
   it('unmarking a manual mark just removes it from bookedOn', () => {
     const marked = toggleBooked(ws(), A);
