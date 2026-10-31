@@ -32,7 +32,7 @@ function send(w: FakeWin, data: unknown, origin: string, source: unknown) {
   w.dispatchEvent(e);
 }
 function run(w: FakeWin) {
-  runOldSite(document, w as unknown as Window, NOW);
+  return runOldSite(document, w as unknown as Window, NOW);
 }
 const text = () => document.body.textContent ?? '';
 const btn = (label: string) =>
@@ -61,7 +61,7 @@ function seedPlans() {
 describe('old site migration page', () => {
   test('a #p= share link is forwarded to the new site untouched', () => {
     const w = fakeWin('#p=abc123');
-    run(w);
+    expect(run(w)).toBeNull(); // nothing for main.ts to draw behind a page that is leaving
     expect(w.location.replace).toHaveBeenCalledWith(SITE_ORIGIN + '/#p=abc123');
     expect(text()).not.toContain('has moved');
   });
@@ -90,7 +90,7 @@ describe('old site migration page', () => {
 
     document.body.innerHTML = '<div id="app"></div>';
     seedPlans();
-    run(fakeWin());
+    expect(run(fakeWin())?.plan?.entries).toHaveLength(1); // what main.ts draws behind the card
     expect(text()).toContain('This browser has 1 saved plan.');
     expect(btn('Move my plans to tritonplan.cn')).toBeDefined();
     expect(btn('Download a backup file')).toBeDefined();

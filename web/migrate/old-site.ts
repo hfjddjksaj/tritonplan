@@ -1,7 +1,8 @@
 /**
  * The old GitHub Pages site, reduced to a hand-off page: it finds the plans in
  * this browser's localStorage and passes them to tritonplan.cn. Plain DOM, no
- * React, so the page stays tiny. It only ever READS storage — the old data is
+ * React, so the card is up at once (main.ts then loads the blurred backdrop
+ * of the old planner behind it). It only ever READS storage — the old data is
  * the student's fallback until they have confirmed the move — and it hands the
  * payload over only when the tab it opened asks for it (`ready`), never
  * unprompted, and only to SITE_ORIGIN.
@@ -29,12 +30,13 @@ function localDate(iso: string): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-export function runOldSite(doc: Document, win: Window, nowIso: string): void {
+/** Draws the card and returns what it gathered (null when it redirected or found nothing readable). */
+export function runOldSite(doc: Document, win: Window, nowIso: string): MigrationPayload | null {
   // A shared plan link must reach the new site without a flash of this page.
   // `#m=` (a bookmarked own plan) is not a share link: it feeds the payload below.
   if (new URLSearchParams(win.location.hash.replace(/^#/, '')).has('p')) {
     win.location.replace(SITE_ORIGIN + '/' + win.location.hash);
-    return;
+    return null;
   }
 
   // Corrupt storage must not strand the student on a blank page: degrade to what we could gather.
@@ -49,7 +51,7 @@ export function runOldSite(doc: Document, win: Window, nowIso: string): void {
 
   const root = doc.getElementById('app') ?? doc.body;
   root.textContent = '';
-  const card = el(doc, 'main', undefined, 'card');
+  const card = el(doc, 'main', undefined, 'moved');
   card.append(
     el(doc, 'h1', 'TritonPlan has moved to tritonplan.cn'),
     el(
@@ -57,17 +59,17 @@ export function runOldSite(doc: Document, win: Window, nowIso: string): void {
       'Your plans now live in your account, so they follow you to any device. Sign in on the new site with Google or with your email.',
     ),
   );
-  const status = el(doc, 'p', undefined, 'status');
+  const status = el(doc, 'p', undefined, 'moved__status');
   status.setAttribute('role', 'status');
 
   if (payload && (n === null || n > 0)) {
     const data = payload;
-    const move = el(doc, 'button', 'Move my plans to tritonplan.cn', 'btn btn--primary');
+    const move = el(doc, 'button', 'Move my plans to tritonplan.cn', 'moved__btn moved__btn--primary');
     move.type = 'button';
-    const backup = el(doc, 'button', 'Download a backup file', 'btn');
+    const backup = el(doc, 'button', 'Download a backup file', 'moved__btn');
     backup.type = 'button';
-    if (n !== null) card.append(el(doc, 'p', `This browser has ${n} saved ${pluralize(n, 'plan')}.`, 'count'));
-    const row = el(doc, 'div', undefined, 'actions');
+    if (n !== null) card.append(el(doc, 'p', `This browser has ${n} saved ${pluralize(n, 'plan')}.`, 'moved__count'));
+    const row = el(doc, 'div', undefined, 'moved__actions');
     row.append(move, backup);
     card.append(row, status);
 
@@ -110,9 +112,9 @@ export function runOldSite(doc: Document, win: Window, nowIso: string): void {
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     });
   } else {
-    const go = el(doc, 'a', 'Go to tritonplan.cn', 'btn btn--primary');
+    const go = el(doc, 'a', 'Go to tritonplan.cn', 'moved__btn moved__btn--primary');
     go.href = SITE_ORIGIN + '/';
-    const row = el(doc, 'div', undefined, 'actions');
+    const row = el(doc, 'div', undefined, 'moved__actions');
     row.append(go);
     card.append(row);
   }
@@ -124,8 +126,9 @@ export function runOldSite(doc: Document, win: Window, nowIso: string): void {
       'p',
       'After the TritonPlan extension updates, Chrome may switch it off until you allow its new site. ' +
         'If the + TritonPlan button disappears from TSS, open chrome://extensions and turn TritonPlan back on.',
-      'foot',
+      'moved__foot',
     ),
   );
   root.append(card);
+  return payload;
 }
