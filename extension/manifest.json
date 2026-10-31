@@ -52,6 +52,12 @@
       "matches": ["https://tritonplan.cn/*"],
       "js": ["content/planner-bridge.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.ratemyprofessors.com/*"],
+      "js": ["content/rmp-consent.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ]
 }

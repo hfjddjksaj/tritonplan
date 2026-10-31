@@ -209,6 +209,7 @@ async function run() {
       'content/tss-inject': resolve(root, 'src/content/tss-inject.ts'),
       'content/soc-sort': resolve(root, 'src/content/soc-sort.ts'),
       'content/planner-bridge': resolve(root, 'src/content/planner-bridge.ts'),
+      'content/rmp-consent': resolve(root, 'src/content/rmp-consent.ts'),
       popup: resolve(root, 'src/popup/popup.ts'),
     },
   };

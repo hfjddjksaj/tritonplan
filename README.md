@@ -54,7 +54,7 @@ This passive design is the product's hard rule:
 - **Zero requests of its own.** The extension only observes responses the TSS page itself fetched (`response.clone()` on the page's own `fetch`/`XHR`). It never issues, replays, retries, prefetches, or polls.
 - **Zero automation.** It never clicks TSS buttons or submits anything on your behalf.
 - **Indistinguishable traffic.** Because it adds nothing, your traffic is byte-for-byte identical to any other student's.
-- **Minimal permissions.** `storage` and `tabs`, plus host access to `tss.ucsd.edu` and the planner site only. No analytics, no tracking.
+- **Minimal permissions.** `storage` and `tabs`, plus host access to `tss.ucsd.edu` and the planner site, and one small script on `www.ratemyprofessors.com` that keeps RMP from failing in Chinese-language browsers (it only repairs RMP's own consent cookie). No analytics, no tracking.
 
 ---
 

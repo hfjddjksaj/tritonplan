@@ -54,8 +54,9 @@ The extension is a *passive observer*. On `tss.ucsd.edu`, it reads the course da
 | `tabs` | To open or focus the TritonPlan planner tab when you click "+ TritonPlan" or open the planner from the extension popup. |
 | Host access to `tss.ucsd.edu` | To read the course data TSS has already displayed to you. Read-only and passive — no extra requests are made to TSS. |
 | Host access to `tritonplan.cn` | To hand the captured courses from the extension to the planner page you open. |
+| A script on `www.ratemyprofessors.com` | To keep Rate My Professors working in a browser set to Chinese (or another language whose time-zone names aren't English). RMP's own cookie banner saves your consent with the time-zone name written in that language, and RMP's server then fails every page with "Something went wrong". The script removes that time-zone name from that one cookie (`OptanonConsent`) as it is saved. It reads no other cookie or page content, makes no requests, and sends nothing to us or anyone else. |
 
-The extension requests **no** broad web access and **no** access to any other site.
+The extension requests **no** broad web access and **no** access to any site not listed above.
 
 ## Cookies
 

@@ -45,6 +45,14 @@ export const BRIDGE_VERSION = 1 as const;
 /** Envelope source for requests the planner PAGE posts to us (see web bridge `postOpenTss`). */
 export const PAGE_BRIDGE_SOURCE = 'triton-planner-page';
 
+/**
+ * Rate My Professors, where the planner's "rate my professor" links go. The
+ * extension repairs one cookie there, OneTrust's consent record, whose
+ * non-ASCII time-zone name makes RMP fail every request (content/rmp-consent.ts).
+ */
+export const RMP_COOKIE_DOMAIN = 'ratemyprofessors.com';
+export const RMP_CONSENT_COOKIE = 'OptanonConsent';
+
 /** The only origin the open-tss handler will ever navigate to. */
 export const TSS_URL_PREFIX = 'https://tss.ucsd.edu/';
 
