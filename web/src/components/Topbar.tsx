@@ -67,7 +67,7 @@ export function Topbar({
 
         <button
           type="button"
-          className="btn btn--sm"
+          className="btn btn--sm topbar__map"
           onClick={onOpenMap}
           {...tip("See where this term's classes meet on a campus map")}
         >
