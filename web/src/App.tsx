@@ -63,7 +63,8 @@ export default function App({
   const plannerView: PlannerView = view === 'courses' ? 'calendar' : view;
   const [toast, setToast] = useState<string | null>(initialFlash ?? null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
-  const [campusOpen, setCampusOpen] = useState(false);
+  // The campus map: null while shut; {} from the top bar; a building from a class location's popover.
+  const [campus, setCampus] = useState<{ focusBuilding?: string } | null>(null);
   const [sheetBlock, setSheetBlock] = useState<PositionedBlock | null>(null);
   // A teacher's name on the calendar opens the same ratings dialog as the course card's button.
   const [rmpCourseId, setRmpCourseId] = useState<string | null>(null);
@@ -220,7 +221,7 @@ export default function App({
           )
         }
         onReset={handleReset}
-        onOpenMap={() => setCampusOpen(true)}
+        onOpenMap={() => setCampus({})}
       />
       <SyncBanner engine={boot.engine} />
       {/* For students upgrading from the old extension, who all have an account to sign in to. */}
@@ -351,6 +352,10 @@ export default function App({
         <BuildingPopover
           building={mapLoc.building}
           room={mapLoc.room}
+          onOpenCampusMap={() => {
+            setMapLoc(null);
+            setCampus({ focusBuilding: mapLoc.building });
+          }}
           onClose={() => setMapLoc(null)}
         />
       )}
@@ -364,7 +369,7 @@ export default function App({
         />
       )}
 
-      {campusOpen && (
+      {campus && (
         <Suspense
           fallback={
             <div className="campusmap campusmap--pending" role="dialog" aria-modal="true" aria-label="Campus map">
@@ -377,7 +382,8 @@ export default function App({
             booked={ctl.bookedIds}
             readOnly={ctl.readOnly}
             initialView={plannerView}
-            onClose={() => setCampusOpen(false)}
+            focusBuilding={campus.focusBuilding}
+            onClose={() => setCampus(null)}
           />
         </Suspense>
       )}

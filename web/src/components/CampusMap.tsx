@@ -75,6 +75,11 @@ interface Props {
   readOnly: boolean;
   /** The tab the map opens on — the planner's current view. One-way: switching tabs here never changes the planner. */
   initialView?: PlannerView;
+  /**
+   * A class location the student clicked in the planner (TSS's raw building text):
+   * the map opens on every day, with that building's card open and in view.
+   */
+  focusBuilding?: string;
   onClose: () => void;
 }
 
@@ -183,7 +188,7 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
  * the gesture entirely. A `suppressClick` guard is only needed when the
  * markers live INSIDE the element being dragged, and here they don't.
  */
-export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', onClose }: Props) {
+export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', focusBuilding, onClose }: Props) {
   const [data, setData] = useState<{ geo: CampusGeo; map: CampusMapData } | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
   const isMobile = useIsMobile();
@@ -328,7 +333,8 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   // same tab is a no-op, not a reset — but the view-switch handler below clears it
   // the moment the view actually changes, so the today rule gets to run again; it
   // also yields early if Booked only has removed its slice from what's offered.
-  const [picked, setPicked] = useState<string | null>(null);
+  // A focused building opens on "All": an exam view's today rule could land on a sitting elsewhere.
+  const [picked, setPicked] = useState<string | null>(focusBuilding ? ALL_SLICE_ID : null);
   const today = useMemo(() => todayKey(by), [by]);
   const sliceId =
     picked !== null && slices.some((s) => s.id === picked)
@@ -397,6 +403,18 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', on
   const openMarker = placed.find((m) => m.group.key === openKey) ?? null;
   const open = openMarker?.group ?? null;
   // (Escape is wired below the Distance state, which it peels too.)
+
+  // Open the focused building's card once, as soon as the map can show it, and bring
+  // it into view if the opening frame left it out (the card only shows on canvas).
+  const focusDone = useRef(false);
+  useEffect(() => {
+    if (!focusBuilding || focusDone.current || !gl.ready || !gl.map) return;
+    const g = groups.find((x) => x.pins.some((p) => p.building === focusBuilding));
+    if (!g) return;
+    focusDone.current = true;
+    setOpenKey(g.key);
+    if (!gl.map.getBounds().contains([g.lng, g.lat])) gl.map.easeTo({ center: [g.lng, g.lat] });
+  }, [focusBuilding, gl.ready, gl.map, groups]);
 
   const openPlace = open ? (open.place ?? open.building) : undefined;
   // Without a working camera there is no home frame, so nothing is "on canvas" —

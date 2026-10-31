@@ -1,19 +1,25 @@
-import { googleMapsLink, matchBuilding, UCSD_CAMPUS_MAP_URL } from '../lib/buildings';
+import { googleMapsLink, matchBuilding } from '../lib/buildings';
 import { useEscapeKey } from '../hooks/useEscapeKey';
-import { External, X } from './icons';
+import { External, MapPinIcon, X } from './icons';
 
 interface Props {
   /** Raw building name from TSS (possibly truncated). */
   building: string;
   room?: string;
+  /**
+   * Show the building on TritonPlan's own campus map. Absent inside that map
+   * (it is already there), and offered only for a building the map can place.
+   */
+  onOpenCampusMap?: () => void;
   onClose: () => void;
 }
 
 /**
- * "Where is this class?" — shows the repaired building name plus map links.
- * Maps open only on the user's click (deep links), keeping the page request-free.
+ * "Where is this class?" — shows the repaired building name plus map links:
+ * TritonPlan's campus map first, Google Maps second. Google opens only on the
+ * user's click (a deep link), keeping the page request-free.
  */
-export function BuildingPopover({ building, room, onClose }: Props) {
+export function BuildingPopover({ building, room, onOpenCampusMap, onClose }: Props) {
   const hit = matchBuilding(building);
   const name = hit?.name ?? building;
 
@@ -38,24 +44,20 @@ export function BuildingPopover({ building, room, onClose }: Props) {
           <div className="mappop__raw">Listed in TSS as “{building}”</div>
         )}
         <div className="mappop__actions">
+          {onOpenCampusMap && hit && (
+            <button type="button" className="btn btn--sm btn--primary" onClick={onOpenCampusMap}>
+              <MapPinIcon size={14} /> TritonPlan map
+            </button>
+          )}
           <a
-            className="btn btn--sm btn--primary"
+            className={`btn btn--sm${onOpenCampusMap && hit ? '' : ' btn--primary'}`}
             href={googleMapsLink(hit ?? building)}
             target="_blank"
             rel="noopener noreferrer"
           >
             <External size={14} /> Google Maps
           </a>
-          <a
-            className="btn btn--sm"
-            href={UCSD_CAMPUS_MAP_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <External size={14} /> UCSD campus map
-          </a>
         </div>
-        <p className="mappop__hint">The UCSD map opens at campus view — search “{name}” there.</p>
       </div>
     </div>
   );

@@ -230,10 +230,3 @@ export function googleMapsDirections(
   });
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
-
-/**
- * UCSD's own campus map (ArcGIS Experience app). It exposes no per-building
- * deep-link parameters, so this opens at campus view for a manual search.
- */
-export const UCSD_CAMPUS_MAP_URL =
-  'https://experience.arcgis.com/experience/c97d6e2efd7947d38738d5184b2debc7';

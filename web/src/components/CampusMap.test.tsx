@@ -352,6 +352,34 @@ describe('CampusMap', () => {
     expect(container.querySelector('.campusmap__empty')).not.toBeNull();
   });
 
+  it('opens on a clicked location’s building: everything shown, that building’s card open', async () => {
+    // Finals on Dec 09 (York Hall) and Dec 10 (Center Hall). On Dec 09 the today rule
+    // alone opens on Dec 09, where the Center Hall final the student clicked is not.
+    vi.setSystemTime(new Date(2026, 11, 9, 9));
+    const plan = planWithFinal();
+    const other = courseWithMeeting();
+    other.id = 'MATH-20C|2026|2';
+    other.courseCode = 'MATH-20C';
+    other.options[0]!.final = {
+      date: '2026-12-10', start: '08:00', end: '10:59', modality: 'In Person',
+      location: 'Center Hall Room 109', building: 'Center Hall', room: '109',
+    };
+    plan.entries.push({ course: other, selectedOptionId: other.options[0]!.id, color: '12' });
+
+    render({ plan, initialView: 'finals', focusBuilding: 'Center Hall' });
+    await settle();
+    expect(sliceOn()).toBe('All');
+    expect(container.querySelector('.campusmap__card .campusmap__card-place')!.textContent).toBe('Center Hall');
+
+    // Without a focus the map opens as before: on today's sitting, no card.
+    act(() => root.unmount());
+    root = createRoot(container);
+    render({ plan, initialView: 'finals' });
+    await settle();
+    expect(sliceOn()).toBe('Dec 09');
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+  });
+
   it('Escape peels one layer at a time: popover, then the marker card, then the map', async () => {
     // Nothing booked ⇒ no booked-only toggle can hide the marker we need to click.
     const onClose = render({ plan: planWithMeeting() });
