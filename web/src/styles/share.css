@@ -147,11 +147,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The "no longer works" page: a link drawn as the card's primary button. */
-.share-gone__home {
-  text-decoration: none;
-}
-
 @media (max-width: 760px) {
   .shared__bar {
     padding: 0 12px;

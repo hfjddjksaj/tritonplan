@@ -1,16 +1,15 @@
 import { useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { apiDelete, type Me } from '../lib/cloud/api';
 import { nav } from '../lib/nav';
 import { clearPendingMigration } from '../lib/migration';
 import { clearReceived } from '../lib/storage';
-import { useEscapeKey } from '../hooks/useEscapeKey';
-import { AuthField } from './auth/AuthCard';
+import { Dialog } from './Dialog';
+import { Field, Message } from './Field';
+import { WarnTriangle } from './icons';
 import { failureText } from './auth/copy';
 
 /** Typing the address is the speed bump; the server checks it again. */
 export function DeleteAccountDialog({ me, onClose }: { me: Me; onClose: () => void }) {
-  useEscapeKey(onClose);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,43 +32,36 @@ export function DeleteAccountDialog({ me, onClose }: { me: Me; onClose: () => vo
     setBusy(false);
   }
 
-  return createPortal(
-    <div className="mappop__backdrop" onClick={onClose}>
-      <div
-        className="mappop acctdlg"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Delete account"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="planpick__title">Delete account</h2>
-        <p className="planpick__sub">This deletes your account, every plan in it, your shared links and your calendar link. It can't be undone.</p>
-        <form className="auth__form" onSubmit={submit}>
-          <AuthField
-            label={`Type ${me.email} to confirm`}
-            type="email"
-            name="confirmEmail"
-            autoComplete="off"
-            autoFocus
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-          />
-          {error && (
-            <p className="auth__msg auth__msg--error" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="acctdlg__actions">
-            <button type="button" className="btn btn--sm" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn--sm acctdlg__danger" disabled={busy || !matches}>
-              Delete account
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Dialog label="Delete account" onClose={onClose} eyebrow="Account" title="Delete account">
+      <p className="callout callout--danger callout--note">
+        <WarnTriangle size={14} />
+        <span>This deletes your account, every plan in it, your shared links and your calendar link. It can't be undone.</span>
+      </p>
+      <form className="fields" onSubmit={submit}>
+        <Field
+          label={
+            <>
+              Type <span className="field__nocaps mono">{me.email}</span> to confirm
+            </>
+          }
+          type="email"
+          name="confirmEmail"
+          autoComplete="off"
+          autoFocus
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+        />
+        {error && <Message tone="error">{error}</Message>}
+        <div className="mappop__actions">
+          <button type="submit" className="btn btn--sm btn--danger" disabled={busy || !matches}>
+            Delete account
+          </button>
+          <button type="button" className="btn btn--sm" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

@@ -10,7 +10,8 @@ import { batchOps } from '../../lib/cloud/engine';
 import { termsFromSnapshot, type WebSnapshot } from '../../lib/cloud/records';
 import { pluralize } from '../../lib/format';
 import { clearPendingMigration, mergeMigration, type MigrationPayload } from '../../lib/migration';
-import { AuthCard, AuthMessage } from '../auth/AuthCard';
+import { AuthCard } from '../auth/AuthCard';
+import { Message } from '../Field';
 
 export type ImportOutcome =
   | { kind: 'imported'; plans: number; coursesOnly: boolean }
@@ -129,7 +130,7 @@ export function ImportConfirm({
         </p>
         <button type="button" className="btn btn--primary auth__wide" onClick={clearAndFinish}>Discard</button>
         <p className="auth__switch">
-          <button type="button" className="auth__link" onClick={() => setView('ask')}>Keep</button>
+          <button type="button" className="tlink" onClick={() => setView('ask')}>Keep</button>
         </p>
       </AuthCard>
     );
@@ -144,13 +145,13 @@ export function ImportConfirm({
           ? 'We found your browsed courses and enrollment times from the old TritonPlan.'
           : `We found ${plans} ${pluralize(plans, 'plan')} in ${terms} ${pluralize(terms, 'term')} from the old TritonPlan.`}
       </p>
-      {failed && <AuthMessage tone="error">{failed === 'rejected' ? REJECTED : FAILED}</AuthMessage>}
+      {failed && <Message tone="error">{failed === 'rejected' ? REJECTED : FAILED}</Message>}
       <button type="button" className="btn btn--primary auth__wide" disabled={disabled} onClick={() => void add()}>
         {failed ? 'Try again' : 'Add to my account'}
       </button>
       <p className="auth__switch">
-        <button type="button" className="auth__link" disabled={disabled} onClick={() => finish({ kind: 'later' })}>Not now</button>
-        <button type="button" className="auth__link" disabled={disabled} onClick={() => setView('discard')}>Discard…</button>
+        <button type="button" className="tlink" disabled={disabled} onClick={() => finish({ kind: 'later' })}>Not now</button>
+        <button type="button" className="tlink" disabled={disabled} onClick={() => setView('discard')}>Discard…</button>
       </p>
     </AuthCard>
   );

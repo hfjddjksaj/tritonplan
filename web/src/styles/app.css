@@ -175,6 +175,7 @@ p {
   background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
+  text-decoration: none; /* an <a> drawn as a button (Google Maps, the calendar apps) */
   transition: background 0.14s ease, border-color 0.14s ease, transform 0.05s ease;
 }
 .btn:hover {
@@ -210,6 +211,21 @@ p {
   width: 30px;
   padding: 0;
   justify-content: center;
+}
+/* Destructive, in the conflict banner's colours: there is no solid red button. */
+.btn--danger {
+  color: var(--conflict-ink);
+  background: var(--conflict-soft);
+  border-color: var(--conflict-line);
+}
+.btn--danger:hover {
+  background: var(--conflict-soft);
+  border-color: var(--conflict);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
 }
 
 /* ===================================================================== rail */
@@ -1202,42 +1218,430 @@ p {
   box-shadow: 0 10px 28px rgba(11, 31, 58, 0.16);
   z-index: 40;
 }
-.menu__item {
-  display: block;
-  width: 100%;
-  padding: 9px 10px 10px;
-  text-align: left;
-  background: transparent;
-  border: none;
-  border-radius: var(--r-sm);
-}
-button.menu__item:hover {
-  background: var(--surface-2);
-}
-.menu__item + .menu__item {
-  margin-top: 2px;
-}
-.menu__item-title {
+/* ============================================================== shared parts
+   What every dialog, menu and signed-out page is assembled from (CLAUDE.md, "UI:
+   one look, one set of parts"). A feature brings content, never CSS of its own for
+   something these already do; a part that can't do a job is extended for everyone. */
+
+/* --- menu rows: the plan menu's row, for every list of choices (menus, MenuSelect,
+   PlanList). Check column in gold ink, a faint 13px icon or a course swatch, the
+   label, a mono count pushed right. --- */
+.menu__row {
   display: flex;
   align-items: center;
   gap: 7px;
+  width: 100%;
+  padding: 8px 10px 8px 8px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  text-align: left;
   font-size: 12px;
-  font-weight: 700;
+  line-height: 1.35;
   color: var(--ink);
 }
-.menu__item-desc {
-  display: block;
-  margin-top: 3px;
-  font-size: 10.5px;
-  line-height: 1.5;
+.menu__row:hover:not(:disabled),
+.menu__row:focus-visible {
+  background: var(--surface-2);
+}
+/* Inside a list the row's tint is the focus mark; the page's gold ring would overlap its neighbours. */
+.menu__row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.menu__row[aria-selected='true'] {
+  font-weight: 700;
+}
+.menu__row:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+.menu__row:disabled .menu__swatch {
+  opacity: 0.4;
+}
+/* The "none" choice (Not in calendar, Pick a place) reads as the absence of one —
+   even when it is the current choice: the check says so, bold would shout it. */
+.menu__row--faint,
+.menu__row--faint[aria-selected='true'] {
+  font-weight: 400;
   color: var(--text-muted);
 }
-
-/* A dialog's confirm-before line (the calendar link's Reset). */
-.acctdlg__ask {
-  margin: 6px 0 0;
-  font-size: 12px;
+.menu__row--danger:hover {
+  background: var(--conflict-soft);
+  color: var(--conflict-ink);
+}
+.menu__row--danger:hover .menu__icon {
+  color: var(--conflict);
+}
+.menu__check {
+  flex: none;
+  width: 14px;
+  display: inline-flex;
+  color: var(--gold-ink);
+}
+.menu__icon {
+  flex: none;
+  display: inline-flex;
   color: var(--text-faint);
+}
+.menu__swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.menu__label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.menu__count {
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.menu__div {
+  height: 1px;
+  margin: 4px 3px;
+  background: var(--line);
+}
+.menu__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px 8px;
+}
+.menu__head .acctbtn__initial {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  font-size: 12.5px;
+}
+.menu__headtext {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.menu__email {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.menu__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--conflict);
+  border-radius: 50%;
+}
+
+/* --- MenuSelect: a button showing the choice, opening the rows above. The list is
+   portaled and placed by inline coordinates, so the panel's own anchoring is off. --- */
+.msel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 200px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  transition: border-color 0.14s ease;
+}
+.msel:hover:not(:disabled),
+.msel[aria-expanded='true'] {
+  border-color: var(--text-faint);
+}
+.msel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.msel--fill {
+  flex: 1;
+  max-width: none;
+}
+.msel__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.msel--empty .msel__text {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.msel__chev {
+  flex: none;
+  color: var(--text-faint);
+}
+.msel__list {
+  top: auto;
+  right: auto;
+  z-index: 150; /* over the modal shell (90), the campus map (95) and the sign-in dialog (96); under tooltips */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* --- PlanList: the plan rows in one box, a hairline between plans. --- */
+.plist {
+  margin-top: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+}
+.plist__row {
+  padding: 10px 10px 10px 12px;
+  font-size: 12.5px;
+  border-radius: 0;
+}
+.plist__row + .plist__row {
+  border-top: 1px solid var(--line);
+}
+.plist__name {
+  font-weight: 600;
+}
+.plist .menu__count {
+  font-size: 11px;
+}
+.plist__chev {
+  flex: none;
+  color: var(--text-faint);
+  transition: color 0.14s ease, transform 0.14s ease;
+}
+.plist__row:hover:not(:disabled) .plist__chev {
+  color: var(--gold-ink);
+  transform: translateX(1px);
+}
+
+/* --- pill: a short caps tag beside a name (On screen, Your section). --- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-radius: 999px;
+}
+.pill--gold {
+  color: var(--gold-ink);
+  background: var(--gold-soft);
+  box-shadow: inset 0 0 0 1px var(--gold-line);
+}
+
+/* --- prow: a recessed panel row, caps label left, the value or control right (the
+   enrolled-section popover's row). Gold while it waits on the student. --- */
+.prow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 6px 6px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.prow__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.prow--ask {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+.prow--ask .prow__label {
+  color: var(--gold-ink);
+}
+.prow__ask {
+  margin: 5px 0 0 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--gold-ink);
+}
+
+/* --- callout: the one block a dialog is for, set off in gold (the calendar link), or
+   in red when it asks to confirm something that can't be undone. --- */
+.callout {
+  margin-top: 14px;
+  padding: 11px 12px 12px;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
+  border-radius: var(--r-md);
+}
+.callout__label {
+  margin-bottom: 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+}
+.callout__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.callout .btn:not(.btn--primary):not(.btn--danger) {
+  border-color: var(--gold-edge);
+}
+.callout .btn:not(.btn--primary):not(.btn--danger):hover {
+  background: var(--surface);
+  border-color: var(--gold);
+}
+.callout .btn > svg:first-child {
+  color: var(--gold);
+}
+.callout .btn > .callout__ext {
+  color: var(--text-faint);
+}
+.callout__hint {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--gold-ink);
+}
+.callout__text {
+  margin-bottom: 9px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.callout--danger {
+  color: var(--conflict-ink);
+  background: var(--conflict-soft);
+  border-color: var(--conflict-line);
+}
+/* A warning sentence with its mark and no actions (Delete account). */
+.callout--note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.callout--note > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--conflict);
+}
+
+/* --- text links: a quiet underline that darkens on hover. --- */
+.tlink {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
+  cursor: pointer;
+}
+.tlink:hover {
+  text-decoration-color: currentColor;
+}
+.tlink:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.tlink--danger {
+  color: var(--conflict-ink);
+  text-decoration-color: var(--conflict-line);
+}
+
+/* --- fields: the rail's filter box, under a caps label. --- */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.field__label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.field__nocaps {
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+.field__input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+.field__input:hover {
+  border-color: var(--text-faint);
+}
+.field__input:focus {
+  outline: none;
+  background: var(--surface);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+@media (max-width: 480px) {
+  /* Under 16px, iOS zooms the page when a field takes focus. */
+  .field__input {
+    font-size: 16px;
+  }
+}
+
+/* --- msg: an inline server answer or notice. --- */
+.msg {
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  border-radius: var(--r-sm);
+}
+.mappop > .msg {
+  margin-top: 12px;
+}
+.msg--notice {
+  color: var(--gold-ink);
+  background: var(--gold-soft);
+}
+.msg--error {
+  color: var(--conflict-ink);
+  background: var(--conflict-soft);
+}
+.msg .tlink {
+  color: inherit;
 }
 
 /* =============================== received plan (share link / imported JSON) banner */
@@ -1798,7 +2202,26 @@ button.menu__item:hover {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.01em;
-  color: var(--ink);
+  /* A dialog about one course (Dialog's accent) sets its code in the course's colour. */
+  color: var(--c-text, var(--ink));
+}
+.mappop__meta {
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+/* The small print after a dialog's main block, behind a hairline. */
+.mappop__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.mappop__foot .mappop__hint {
+  margin-top: 0;
 }
 .mappop__room {
   margin-top: 2px;
@@ -1815,9 +2238,6 @@ button.menu__item:hover {
   gap: 8px;
   margin-top: 14px;
 }
-.mappop__actions .btn {
-  text-decoration: none;
-}
 .mappop__hint {
   margin-top: 10px;
   font-size: 11px;
@@ -1831,13 +2251,6 @@ button.menu__item:hover {
    as a pair rather than as prose. */
 .bookedpop {
   width: min(380px, calc(100vw - 40px));
-}
-.bookedpop__course {
-  margin-top: 2px;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--c-text, var(--ink));
 }
 .bookedpop__rows {
   display: grid;
@@ -1879,13 +2292,6 @@ button.menu__item:hover {
 /* Rides on the mappop modal shell; groups are AND-ed, options within are OR. */
 .prereqpop {
   width: min(430px, calc(100vw - 40px));
-}
-.prereqpop__course {
-  margin-top: 2px;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--c-text, var(--ink));
 }
 .prereqpop__groups {
   margin-top: 12px;
@@ -2610,71 +3016,47 @@ button.menu__item:hover {
   .appt-capsule__text { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
 }
 
-/* ---- plan-add picker (term has several plans) ---- */
-.planpick {
-  max-width: 380px;
+/* ---- Rate My Professors: one recessed row per teacher; the plan's own section's
+   teacher in white with a gold ring (the term menu's "current" mark); each score in
+   RMP's own reading of it — green 4+, gold 3–4, red under 3 — so the eye lands on it. ---- */
+.rmp {
+  width: min(420px, calc(100vw - 40px));
 }
-.planpick__title {
-  margin: 0 0 4px;
-  font-size: 16px;
-}
-.planpick__sub {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-.planpick__list {
+.rmp__list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.planpick__item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  text-align: left;
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  transition: background 0.14s ease, border-color 0.14s ease;
-}
-.planpick__item:hover {
-  background: var(--surface-2);
-  border-color: var(--ink-2);
-}
-.planpick__name {
-  font-weight: 600;
-}
-.planpick__count {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-/* ---- Rate My Professors: one row per teacher, the plan's own section marked in gold ---- */
-.rmp {
-  width: min(460px, calc(100vw - 40px));
-  max-width: none;
+  gap: 7px;
+  margin-top: 12px;
 }
 .rmp__row {
+  display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 12px 14px;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 11px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  transition: background 0.14s ease, border-color 0.14s ease;
 }
-.rmp__row--mine {
-  background: var(--gold-soft);
-  border-color: var(--gold);
-  box-shadow: inset 3px 0 0 var(--gold);
+.rmp__row:hover {
+  background: var(--surface);
+  border-color: var(--line-strong);
 }
+.rmp__row--mine,
 .rmp__row--mine:hover {
-  background: var(--gold-soft);
-  border-color: var(--gold-ink);
+  background: var(--surface);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
 }
 .rmp__who {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 4px;
   min-width: 0;
 }
 .rmp__name {
@@ -2682,125 +3064,79 @@ button.menu__item:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1.3;
   color: var(--ink);
-}
-.rmp__row--mine .rmp__name {
-  font-weight: 800;
 }
 /* The row is the link; the underline on the name is what says so. */
 .rmp__link {
   text-decoration: underline;
-  text-decoration-color: var(--text-faint);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
   transition: text-decoration-color 0.14s ease;
 }
 .rmp__row:hover .rmp__link,
 .rmp__row:focus-visible .rmp__link {
   text-decoration-color: currentColor;
 }
-.rmp__row--mine .rmp__link {
-  text-decoration-color: var(--gold);
-}
-.rmp__tag {
-  padding: 2px 6px;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--gold-ink);
-  background: var(--surface);
-  border: 1px solid var(--gold);
-  border-radius: 4px;
-}
 .rmp__sections {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-}
-.rmp__sec {
-  padding: 2px 6px;
   font-size: 11px;
-  white-space: nowrap;
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 4px;
+  color: var(--text-faint);
+}
+.rmp__sec + .rmp__sec::before {
+  content: '·';
+  padding: 0 5px;
 }
 .rmp__sec--mine {
   font-weight: 700;
-  color: var(--gold-ink);
-  background: var(--surface);
-  border-color: var(--gold);
+  color: var(--c-text, var(--ink));
 }
 .rmp__score {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 3px;
   flex-shrink: 0;
   margin-left: auto;
-  padding-top: 1px;
 }
 .rmp__avg {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 15px;
+  gap: 4px;
+  padding: 2px 8px 2px 7px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--ink);
+  border-radius: 999px;
 }
-.rmp__star {
+.rmp__avg--good {
+  color: var(--ok-ink);
+  background: var(--ok-soft);
+}
+.rmp__avg--good .rmp__star {
+  color: var(--ok);
+}
+.rmp__avg--mid {
+  color: var(--gold-ink);
+  background: var(--gold-soft);
+}
+.rmp__avg--mid .rmp__star {
   color: var(--gold);
 }
+.rmp__avg--low {
+  color: var(--conflict-ink);
+  background: var(--conflict-soft);
+}
+.rmp__avg--low .rmp__star {
+  color: var(--conflict);
+}
 .rmp__count {
-  font-size: 11.5px;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-faint);
   white-space: nowrap;
-}
-.rmp__note {
-  margin-top: 4px;
-}
-.planpick__cancel {
-  width: 100%;
-  justify-content: center;
-}
-
-/* ---- Share: which plan (the picker's rows), then which calendar app (rows that are links) ---- */
-.sharecal__app {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  color: inherit;
-  text-decoration: none;
-}
-.sharecal__title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.sharecal__desc {
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--text-muted);
-}
-.sharecal__link {
-  padding: 0;
-  font: inherit;
-  font-weight: 700;
-  color: var(--ink);
-  text-decoration: underline;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-.mappop__hint + .sharecal__back {
-  margin-top: 12px;
 }
 
 /* ---- term switcher ---- */
@@ -3728,23 +4064,6 @@ button.termsw__cell:hover {
   font-size: 9.5px;
   font-weight: 700;
 }
-.campusmap__dist-select {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 7px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: var(--surface);
-  font: inherit;
-  font-size: 12px;
-  color: var(--ink);
-}
-.campusmap__dist-swatch {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-}
 .campusmap__dist-swap {
   align-self: center;
   padding: 1px 9px;
@@ -3972,116 +4291,15 @@ button.termsw__cell:hover {
   border-radius: 50%;
 }
 .acctmenu {
-  width: 220px;
+  width: 244px;
 }
-.acctmenu__email {
-  padding: 8px 10px;
-  font-size: 11.5px;
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 4px;
-}
-.acctmenu__item {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.acctdlg {
-  width: min(380px, calc(100vw - 40px));
-}
-.acctdlg .planpick__sub {
-  margin-bottom: 12px;
-}
-.acctdlg__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-}
-.acctmenu__dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-left: 6px;
-  vertical-align: middle;
-  background: var(--conflict);
-  border-radius: 50%;
-}
-/* ---- Calendar subscription: the Share dialog's shell; each term a card with its plan picker ---- */
+/* Calendar subscription: the dialog scrolls inside a short window rather than off it. */
 .caldlg {
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
 }
-.caldlg__terms {
-  padding: 0;
-  list-style: none;
-}
 .caldlg__term {
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-}
-/* A term still waiting for a plan, in the planner's gold (as on the received-plan banner). */
-.caldlg__term--ask {
-  background: var(--gold-soft);
-  border-color: var(--gold);
-}
-.caldlg__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.caldlg__name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.caldlg__select {
-  min-width: 0;
-  max-width: 62%;
-  height: 30px;
-  padding: 0 8px;
-  font: inherit;
-  font-size: 12.5px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-}
-.caldlg__hint {
-  margin: 6px 0 0;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--gold-ink);
-}
-.caldlg__hint--error {
-  margin: -4px 0 12px;
-  color: var(--conflict);
-}
-.caldlg__create {
-  width: 100%;
-  justify-content: center;
-}
-.caldlg__label {
-  margin: 2px 0 8px;
-}
-.caldlg__reset {
-  margin-top: 10px;
-}
-/* The calendar icon on Share's and this dialog's app rows carries the planner's gold. */
-.sharecal__title svg {
-  color: var(--gold);
-}
-.acctdlg__danger {
-  color: #fff;
-  background: var(--conflict);
-  border-color: var(--conflict);
-}
-.acctdlg__danger:disabled {
-  opacity: 0.45;
+  margin-top: 12px;
 }
 @media (max-width: 760px) {
   /* The initial alone is the account button on a phone — the chevron would

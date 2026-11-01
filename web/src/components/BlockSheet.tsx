@@ -1,11 +1,10 @@
-import { createPortal } from 'react-dom';
 import { formatDisplay } from '@triton/shared';
 import type { PositionedBlock } from '../lib/layout';
 import { colorsForHue } from '../lib/colors';
 import { weekdayLong } from '../lib/format';
 import { isNamedInstructor } from '../lib/rmp';
-import { useEscapeKey } from '../hooks/useEscapeKey';
-import { External, Warning, X } from './icons';
+import { Dialog } from './Dialog';
+import { External, Warning } from './icons';
 
 interface Props {
   block: PositionedBlock;
@@ -23,22 +22,15 @@ interface Props {
  * course card) into one sheet with explicit buttons. Portaled to <body> like PrereqPopover.
  */
 export function BlockSheet({ block, onOpenCourse, onOpenLocation, onOpenInstructor, onFocusCourse, onClose }: Props) {
-  useEscapeKey(onClose);
   const c = colorsForHue(block.hue);
-  return createPortal(
-    <div className="mappop__backdrop" onClick={onClose}>
-      <div
-        className="mappop blocksheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${block.courseCode} ${block.typeText}`}
-        style={{ ['--c-spine' as string]: c.spine, ['--c-text' as string]: c.text }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
-          <X size={14} />
-        </button>
-        <div className="eyebrow">{block.typeText}</div>
+  return (
+    <Dialog
+      label={`${block.courseCode} ${block.typeText}`}
+      className="blocksheet"
+      onClose={onClose}
+      accent={c}
+      eyebrow={block.typeText}
+    >
         <div className="blocksheet__code mono">{block.courseCode}</div>
         {block.full && <div className="blocksheet__full">No seats left in this section</div>}
         <div className="blocksheet__time">
@@ -76,8 +68,6 @@ export function BlockSheet({ block, onOpenCourse, onOpenLocation, onOpenInstruct
         {block.location && block.building && (
           <p className="mappop__hint">The location button shows where the building is on campus.</p>
         )}
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

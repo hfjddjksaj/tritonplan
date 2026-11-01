@@ -43,6 +43,8 @@ import { PROFILES, PROFILE_ORDER, type Profile } from '../lib/walk-cost';
 import type { WalkPlace } from '../lib/walk-places';
 import type { WalkResult } from '../lib/walk-route';
 import { tip } from './Tooltip';
+import { MenuSelect, type MenuOption } from './MenuSelect';
+import { MapPinIcon } from './icons';
 
 interface Props {
   places: WalkPlace[];
@@ -111,7 +113,7 @@ const flights = (n: number): string => `${n} flight${n === 1 ? '' : 's'}`;
  * dropping it looks like the planner lost their course.
  */
 const placeLabel = (p: WalkPlace): string => {
-  if (p.dropped) return `📍 ${p.label}`;
+  if (p.dropped) return p.label;
   const where = p.place ? ` — ${p.place}` : '';
   const why =
     p.disabledReason === 'online'
@@ -146,41 +148,36 @@ function Picker({
   // The pin is not a place in the plan, so it is not in `places`: it gets an
   // option of its own while it holds this end, or the select would read blank.
   const pinned = value?.dropped ? value : null;
-  const id = useId();
+  const pin = <MapPinIcon size={13} />;
+  const options: MenuOption[] = [
+    { value: '', label: 'Pick a place…', faint: true },
+    // First, above the classes: a parking spot is the usual other end.
+    { value: MAP_CHOICE, label: 'Choose on map…', icon: pin },
+    ...(pinned ? [{ value: pinned.id, label: placeLabel(pinned), icon: pin }] : []),
+    // Each class in its course's colour, the colour its pin and route end wear on the map.
+    ...places.map((p, i) => ({
+      value: p.id,
+      label: placeLabel(p),
+      swatch: colorsForHue(p.hue).spine,
+      disabled: p.disabled,
+      divider: i === 0,
+    })),
+  ];
   return (
     <div className="campusmap__dist-row">
       <span className="campusmap__dist-lab" aria-hidden="true">
         {end.toUpperCase()}
       </span>
-      <label className="sr-only" htmlFor={id}>
-        {label}
-      </label>
-      <select
-        id={id}
-        className="campusmap__dist-select"
+      <MenuSelect
+        label={label}
+        fill
         value={awaiting ? MAP_CHOICE : (value?.id ?? '')}
-        onChange={(e) => {
-          if (e.target.value === MAP_CHOICE) onChooseMap(end);
-          else onPick(end, places.find((p) => p.id === e.target.value) ?? null);
+        options={options}
+        onChange={(v) => {
+          if (v === MAP_CHOICE) onChooseMap(end);
+          else onPick(end, places.find((p) => p.id === v) ?? null);
         }}
-      >
-        <option value="">Pick a place…</option>
-        {/* First, above the classes: a parking spot is the usual other end. */}
-        <option value={MAP_CHOICE}>📍 Choose on map…</option>
-        {pinned && <option value={pinned.id}>{placeLabel(pinned)}</option>}
-        {places.map((p) => (
-          <option key={p.id} value={p.id} disabled={p.disabled}>
-            {placeLabel(p)}
-          </option>
-        ))}
-      </select>
-      {value && !value.dropped && (
-        <span
-          className="campusmap__dist-swatch"
-          style={{ background: colorsForHue(value.hue).spine }}
-          aria-hidden="true"
-        />
-      )}
+      />
     </div>
   );
 }

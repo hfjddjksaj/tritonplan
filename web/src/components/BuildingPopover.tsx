@@ -1,6 +1,6 @@
 import { googleMapsLink, matchBuilding } from '../lib/buildings';
-import { useEscapeKey } from '../hooks/useEscapeKey';
-import { External, MapPinIcon, X } from './icons';
+import { Dialog } from './Dialog';
+import { External, MapPinIcon } from './icons';
 
 interface Props {
   /** Raw building name from TSS (possibly truncated). */
@@ -23,22 +23,8 @@ export function BuildingPopover({ building, room, onOpenCampusMap, onClose }: Pr
   const hit = matchBuilding(building);
   const name = hit?.name ?? building;
 
-  useEscapeKey(onClose);
-
   return (
-    <div className="mappop__backdrop" onClick={onClose}>
-      <div
-        className="mappop"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${name} location`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
-          <X size={14} />
-        </button>
-        <div className="eyebrow">Building</div>
-        <div className="mappop__name">{name}</div>
+    <Dialog label={`${name} location`} onClose={onClose} inline eyebrow="Building" title={name}>
         {room && <div className="mappop__room mono">Room {room}</div>}
         {hit && hit.name !== building && (
           <div className="mappop__raw">Listed in TSS as “{building}”</div>
@@ -58,7 +44,6 @@ export function BuildingPopover({ building, room, onOpenCampusMap, onClose }: Pr
             <External size={14} /> Google Maps
           </a>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

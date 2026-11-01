@@ -7,7 +7,8 @@ import { useState, type FormEvent } from 'react';
 import { apiPost } from '../../lib/cloud/api';
 import { nav } from '../../lib/nav';
 import { safeReturnTo } from '../../lib/site';
-import { AuthCard, AuthField, AuthMessage, type AuthDialog } from './AuthCard';
+import { AuthCard, type AuthDialog } from './AuthCard';
+import { Field, Message } from '../Field';
 import {
   CHECK_SPAM_NOTE, failureText, isUcsdAddress, PASSWORDS_DIFFER, UCSD_CHECK_NOTE, UCSD_MAIL_NOTE, WRONG_CREDENTIALS,
 } from './copy';
@@ -99,7 +100,7 @@ export function LoginScreen({
   if (mode === 'check-email') {
     return (
       <AuthCard heading="Check your email" dialog={dialog}>
-        <AuthMessage tone="notice">{sentText}</AuthMessage>
+        <Message tone="notice">{sentText}</Message>
         <p className="auth__lede">{isUcsdAddress(sentTo) ? UCSD_CHECK_NOTE : CHECK_SPAM_NOTE}</p>
         <button type="button" className="btn auth__wide" onClick={() => go('signin')}>
           Back to sign in
@@ -114,7 +115,7 @@ export function LoginScreen({
 
   return (
     <AuthCard heading={title} dialog={dialog}>
-      {notice && showNotice && <AuthMessage tone="notice">{notice}</AuthMessage>}
+      {notice && showNotice && <Message tone="notice">{notice}</Message>}
       {mode === 'forgot' ? (
         <p className="auth__lede">Enter your email and we'll send you a link to choose a new password.</p>
       ) : (
@@ -128,8 +129,8 @@ export function LoginScreen({
         </>
       )}
 
-      <form className="auth__form" onSubmit={submit}>
-        <AuthField
+      <form className="fields" onSubmit={submit}>
+        <Field
           label="Email"
           type="email"
           name="email"
@@ -137,9 +138,9 @@ export function LoginScreen({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        {mode === 'signup' && isUcsdAddress(addr) && <AuthMessage tone="notice">{UCSD_MAIL_NOTE}</AuthMessage>}
+        {mode === 'signup' && isUcsdAddress(addr) && <Message tone="notice">{UCSD_MAIL_NOTE}</Message>}
         {mode !== 'forgot' && (
-          <AuthField
+          <Field
             label="Password"
             type="password"
             name="password"
@@ -150,7 +151,7 @@ export function LoginScreen({
           />
         )}
         {mode === 'signup' && (
-          <AuthField
+          <Field
             label="Confirm password"
             type="password"
             name="confirm"
@@ -159,14 +160,14 @@ export function LoginScreen({
             onChange={(e) => setConfirm(e.target.value)}
           />
         )}
-        {error && <AuthMessage tone="error">{error}</AuthMessage>}
+        {error && <Message tone="error">{error}</Message>}
         {unconfirmed && (
-          <AuthMessage tone="error">
+          <Message tone="error">
             Confirm your email first — we sent a link to {unconfirmed}.{' '}
-            <button type="button" className="auth__link" onClick={resend} disabled={busy}>
+            <button type="button" className="tlink" onClick={resend} disabled={busy}>
               Resend link
             </button>
-          </AuthMessage>
+          </Message>
         )}
         <button type="submit" className="btn btn--primary auth__wide" disabled={busy}>
           {mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
@@ -176,10 +177,10 @@ export function LoginScreen({
       <div className="auth__switch">
         {mode === 'signin' && (
           <>
-            <button type="button" className="auth__link" onClick={() => go('forgot')}>
+            <button type="button" className="tlink" onClick={() => go('forgot')}>
               Forgot password?
             </button>
-            <button type="button" className="auth__link" onClick={() => go('signup')}>
+            <button type="button" className="tlink" onClick={() => go('signup')}>
               Create an account
             </button>
           </>
@@ -187,13 +188,13 @@ export function LoginScreen({
         {mode === 'signup' && (
           <span>
             Already have an account?{' '}
-            <button type="button" className="auth__link" onClick={() => go('signin')}>
+            <button type="button" className="tlink" onClick={() => go('signin')}>
               Sign in
             </button>
           </span>
         )}
         {mode === 'forgot' && (
-          <button type="button" className="auth__link" onClick={() => go('signin')}>
+          <button type="button" className="tlink" onClick={() => go('signin')}>
             Back to sign in
           </button>
         )}

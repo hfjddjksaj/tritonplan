@@ -1,5 +1,5 @@
 /** The frame every signed-out screen shares: brand, heading, then the screen's own content. */
-import { useId, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { PRODUCT_NAME } from '../../lib/brand';
 import { Trident, X } from '../icons';
@@ -14,7 +14,7 @@ export interface AuthDialog {
 function Brand() {
   return (
     <div className="brand auth__brand">
-      <Trident className="brand__mark" size={22} />
+      <Trident className="brand__mark" size={18} />
       <span>{PRODUCT_NAME}</span>
     </div>
   );
@@ -54,23 +54,5 @@ function AuthCardDialog({ heading, children, dialog }: { heading: string; childr
         {children}
       </div>
     </div>
-  );
-}
-
-export function AuthField({ label, ...input }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <label className="auth__field">
-      <span className="auth__label">{label}</span>
-      <input className="auth__input" required {...input} />
-    </label>
-  );
-}
-
-/** A server answer or notice under the heading. Errors interrupt (alert); notices don't. */
-export function AuthMessage({ tone, children }: { tone: 'notice' | 'error'; children: ReactNode }) {
-  return (
-    <p className={`auth__msg auth__msg--${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
-      {children}
-    </p>
   );
 }

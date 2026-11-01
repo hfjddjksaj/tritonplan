@@ -4,10 +4,10 @@ import { nav } from '../lib/nav';
 import { clearPendingMigration } from '../lib/migration';
 import { clearReceived } from '../lib/storage';
 import { useClickAway } from '../hooks/useClickAway';
-import { ChevronDown } from './icons';
+import { Calendar, ChevronDown, Download, Key, SignOut, Trash, Unlink } from './icons';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
-import { CalendarDialog, calendarNeedsPick, calendarRows } from './CalendarDialog';
+import { CalendarDialog, calendarNeedsPick, calendarRow } from './CalendarDialog';
 import type { TermsState } from '../lib/terms-state';
 import { failureText } from './auth/copy';
 
@@ -50,7 +50,8 @@ export function AccountMenu({
     return () => { liveRef.current = false; };
   }, [refreshCalendar]);
   // Only subscribers get nudged: someone who never made a link has no calendar to keep current.
-  const calendarDot = cal !== null && cal.https !== null && calendarNeedsPick(calendarRows(terms), cal);
+  // The dialog picks for the term on screen, so the dot speaks for that term too.
+  const calendarDot = cal !== null && cal.https !== null && calendarNeedsPick(calendarRow(terms), cal);
 
   const choose = (fn: () => void | Promise<void>) => () => {
     setOpen(false);
@@ -112,22 +113,45 @@ export function AccountMenu({
         </button>
         {open && (
           <div className="menu menu--right acctmenu" role="menu">
-            <div className="acctmenu__email">{me.email}</div>
+            <div className="menu__head">
+              <span className="acctbtn__initial" aria-hidden="true">
+                {me.email.charAt(0).toUpperCase()}
+              </span>
+              <span className="menu__headtext">
+                <span className="eyebrow">Signed in as</span>
+                <span className="menu__email">{me.email}</span>
+              </span>
+            </div>
+            <div className="menu__div" role="separator" />
+            <MenuButton icon={<Calendar size={13} />} onClick={choose(() => setDialog('calendar'))}>
+              Calendar subscription
+              {calendarDot && <span className="menu__dot" aria-label="needs attention" />}
+            </MenuButton>
+            <MenuButton icon={<Download size={13} />} onClick={choose(importBackup)}>
+              Import from old TritonPlan
+            </MenuButton>
+            <div className="menu__div" role="separator" />
             {me.hasPassword ? (
-              <MenuButton onClick={choose(() => setDialog('password'))}>Change password</MenuButton>
+              <MenuButton icon={<Key size={13} />} onClick={choose(() => setDialog('password'))}>
+                Change password
+              </MenuButton>
             ) : (
-              <MenuButton onClick={choose(setPassword)}>Set a password</MenuButton>
+              <MenuButton icon={<Key size={13} />} onClick={choose(setPassword)}>
+                Set a password
+              </MenuButton>
             )}
             {me.hasGoogle && me.hasPassword && (
-              <MenuButton onClick={choose(disconnectGoogle)}>Disconnect Google</MenuButton>
+              <MenuButton icon={<Unlink size={13} />} onClick={choose(disconnectGoogle)}>
+                Disconnect Google
+              </MenuButton>
             )}
-            <MenuButton onClick={choose(() => setDialog('calendar'))}>
-              Calendar subscription
-              {calendarDot && <span className="acctmenu__dot" aria-label="needs attention" />}
+            <div className="menu__div" role="separator" />
+            <MenuButton icon={<SignOut size={13} />} onClick={choose(signOut)}>
+              Sign out
             </MenuButton>
-            <MenuButton onClick={choose(importBackup)}>Import from old TritonPlan</MenuButton>
-            <MenuButton onClick={choose(() => setDialog('delete'))}>Delete account…</MenuButton>
-            <MenuButton onClick={choose(signOut)}>Sign out</MenuButton>
+            <MenuButton icon={<Trash size={13} />} danger onClick={choose(() => setDialog('delete'))}>
+              Delete account…
+            </MenuButton>
           </div>
         )}
       </div>
@@ -142,15 +166,26 @@ export function AccountMenu({
           onChanged={() => void refreshCalendar()}
         />
       )}
-      {dialog === 'delete' &&<DeleteAccountDialog me={me} onClose={() => setDialog(null)} />}
+      {dialog === 'delete' && <DeleteAccountDialog me={me} onClose={() => setDialog(null)} />}
     </>
   );
 }
 
-function MenuButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function MenuButton({
+  icon,
+  danger = false,
+  onClick,
+  children,
+}: {
+  icon: ReactNode;
+  danger?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
-    <button type="button" className="menu__item acctmenu__item" role="menuitem" onClick={onClick}>
-      {children}
+    <button type="button" className={`menu__row${danger ? ' menu__row--danger' : ''}`} role="menuitem" onClick={onClick}>
+      <span className="menu__icon" aria-hidden="true">{icon}</span>
+      <span className="menu__label">{children}</span>
     </button>
   );
 }

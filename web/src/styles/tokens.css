@@ -51,10 +51,18 @@
      list, not an alarm on one row, and full gold at that frequency shouts. */
   --wl-spine: #f0c469;
 
+  /* A gold-soft panel's own hairline, and the edge of a white control sitting on it
+     (the calendar link block): line-strong's blue-grey looks dirty on cream. */
+  --gold-line: #f0dca6;
+  --gold-edge: #e2c579;
+
   --conflict: #e5484d;
   --conflict-soft: #fdecec;
   --conflict-ink: #a01820;
+  --conflict-line: #f4c9cb;
   --ok: #1f9d63;
+  --ok-soft: #e3f4ea;
+  --ok-ink: #17643f;
 
   /* Radius / elevation */
   --r-sm: 6px;

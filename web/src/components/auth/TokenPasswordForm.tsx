@@ -7,7 +7,7 @@
 import { useState, type FormEvent } from 'react';
 import { apiPost } from '../../lib/cloud/api';
 import { nav } from '../../lib/nav';
-import { AuthField, AuthMessage } from './AuthCard';
+import { Field, Message } from '../Field';
 import { failureText, PASSWORDS_DIFFER } from './copy';
 
 export function TokenPasswordForm({
@@ -49,8 +49,8 @@ export function TokenPasswordForm({
 
   return (
     <>
-      <form className="auth__form" onSubmit={submit}>
-        <AuthField
+      <form className="fields" onSubmit={submit}>
+        <Field
           label="Password"
           type="password"
           name="password"
@@ -60,7 +60,7 @@ export function TokenPasswordForm({
           onChange={(e) => setPassword(e.target.value)}
         />
         {fresh && (
-          <AuthField
+          <Field
             label="Confirm password"
             type="password"
             name="confirm"
@@ -69,13 +69,13 @@ export function TokenPasswordForm({
             onChange={(e) => setConfirm(e.target.value)}
           />
         )}
-        {error && <AuthMessage tone="error">{error}</AuthMessage>}
+        {error && <Message tone="error">{error}</Message>}
         <button type="submit" className="btn btn--primary auth__wide" disabled={busy}>
           {submitLabel}
         </button>
       </form>
       <div className="auth__switch">
-        <a className="auth__link" href="/">
+        <a className="tlink" href="/">
           Back to sign in
         </a>
       </div>

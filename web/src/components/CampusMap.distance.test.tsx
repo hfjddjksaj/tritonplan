@@ -48,6 +48,7 @@ import { CampusMap } from './CampusMap';
 import { LAYER, PIN_SOURCE, ROUTE_SOURCE } from '../lib/map-style';
 import type { WalkPlace } from '../lib/walk-places';
 import type { WalkResult } from '../lib/walk-route';
+import { menuOptions, menuPick, menuSelects, menuShown, menuValue } from '../test/menu-select';
 
 /** A two-point route: 910 m of gold line, the ordinary case. */
 const ROUTE = {
@@ -205,21 +206,19 @@ describe('CampusMap · Distance', () => {
   const map = () => FakeMap.instances[0]!;
   const bar = () => container.querySelector<HTMLButtonElement>('.campusmap__dist-bar')!;
   const expand = () => act(() => bar().click());
-  const selects = () => [...container.querySelectorAll('.campusmap__dist-select')] as HTMLSelectElement[];
+  const selects = () => menuSelects(container.querySelector('.campusmap__dist')!);
 
   /** Pick one end by the building its option names. */
   function pick(end: 'a' | 'b', building: string) {
     const sel = selects()[end === 'a' ? 0 : 1]!;
-    const opt = [...sel.options].find((o) => o.textContent?.includes(building));
-    if (!opt) throw new Error(`no option for ${building}: ${[...sel.options].map((o) => o.textContent)}`);
-    act(() => {
-      sel.value = opt.value;
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    // The select is controlled by CampusMap's own state, so React snaps it back
-    // to '' if the pick did not actually land — without this, a broken mount
-    // point would leave every assertion below passing over two empty ends.
-    expect(selects()[end === 'a' ? 0 : 1]!.value).toBe(opt.value);
+    const opts = menuOptions(sel);
+    const opt = opts.find((o) => o.label.includes(building));
+    if (!opt) throw new Error(`no option for ${building}: ${opts.map((o) => o.label)}`);
+    menuPick(sel, opt.value);
+    // The select is controlled by CampusMap's own state, so it reads '' again if
+    // the pick did not actually land — without this, a broken mount point would
+    // leave every assertion below passing over two empty ends.
+    expect(menuValue(selects()[end === 'a' ? 0 : 1]!)).toBe(opt.value);
   }
 
   /** Both ends of a measurement, with the answer the hook will give for them. */
@@ -308,14 +307,14 @@ describe('CampusMap · Distance', () => {
     render();
     await settle();
     measure(ROUTE);
-    const before = selects().map((s) => s.value);
+    const before = selects().map(menuValue);
     const finals = [...container.querySelectorAll('.campusmap__island [role="tab"]')].find(
       (t) => t.textContent === 'Finals',
     ) as HTMLButtonElement;
     act(() => finals.click());
     // Classes → Finals resets `picked` and `openKey`; a distance is not scoped
     // to a view and must not join them.
-    expect(selects().map((s) => s.value)).toEqual(before);
+    expect(selects().map(menuValue)).toEqual(before);
     expect(drawn()).toBe(true);
   });
 
@@ -330,7 +329,7 @@ describe('CampusMap · Distance', () => {
     // B is a Wednesday class, so its marker is gone from the canvas — the line
     // between the two buildings is not.
     expect(drawn()).toBe(true);
-    expect(selects()[1]!.value).not.toBe('');
+    expect(menuValue(selects()[1]!)).not.toBe('');
   });
 
   // ---- an end chosen on the map (the parking-lot case) ----
@@ -341,12 +340,10 @@ describe('CampusMap · Distance', () => {
   function chooseMap(end: 'a' | 'b') {
     if (bar().getAttribute('aria-expanded') !== 'true') expand();
     const sel = selects()[end === 'a' ? 0 : 1]!;
-    const opt = [...sel.options].find((o) => /choose on map/i.test(o.textContent ?? ''));
-    if (!opt) throw new Error(`no map option: ${[...sel.options].map((o) => o.textContent)}`);
-    act(() => {
-      sel.value = opt.value;
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const opts = menuOptions(sel);
+    const opt = opts.find((o) => /choose on map/i.test(o.label));
+    if (!opt) throw new Error(`no map option: ${opts.map((o) => o.label)}`);
+    menuPick(sel, opt.value);
   }
   const click = (x: number, y: number) => act(() => map().simulateMapClick(x, y));
   /** The points the pin source was last given, one per dropped end. */
@@ -373,7 +370,7 @@ describe('CampusMap · Distance', () => {
     expand();
     for (const sel of selects()) {
       // [0] is the empty "Pick a place…"; the map choice comes right after it.
-      expect(sel.options[1]!.textContent).toMatch(/choose on map/i);
+      expect(menuOptions(sel)[1]!.label).toMatch(/choose on map/i);
     }
   });
 
@@ -391,7 +388,7 @@ describe('CampusMap · Distance', () => {
     const first = ends()[0]!;
     expect(first.dropped).toBe(true);
     expect(first.label).toBe('Dropped pin');
-    expect(selects()[0]!.selectedOptions[0]!.textContent).toMatch(/Dropped pin/);
+    expect(menuShown(selects()[0]!)).toMatch(/Dropped pin/);
     expect(layers()).toContain(LAYER.pin);
     expect(pins()).toHaveLength(1);
     const was = pins()[0];

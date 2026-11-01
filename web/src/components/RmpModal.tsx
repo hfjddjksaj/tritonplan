@@ -3,36 +3,52 @@
  *  course rail is overflow:hidden. Laid out like the Share dialog; whoever teaches
  *  the section on the plan stands out, so a student sees their own professor at a glance. */
 import { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import type { CourseOffering, RmpLookup } from '@triton/shared';
 import { lookupRmp } from '../lib/cloud/api';
 import { pluralize } from '../lib/format';
 import { courseInstructors, rmpSearchUrl, type CourseInstructor } from '../lib/rmp';
-import { useEscapeKey } from '../hooks/useEscapeKey';
-import { Star, X } from './icons';
+import { Dialog, type DialogAccent } from './Dialog';
+import { Star } from './icons';
 
 interface Props {
   courseCode: string;
   instructors: CourseInstructor[];
   /** Code of the section chosen on the plan ("P-002-001"), if any. */
   selectedCode?: string | null;
+  /** The course's own colours: its code in the title, as on its card and blocks. */
+  accent?: DialogAccent;
   onClose: () => void;
+}
+
+/** RMP's own reading of a 5-point average: 4+ is good, under 3 is poor. */
+export function ratingTone(avg: number): 'good' | 'mid' | 'low' {
+  return avg >= 4 ? 'good' : avg >= 3 ? 'mid' : 'low';
 }
 
 /** The dialog for one course of the plan: its teachers, the plan's section marked. */
 export function CourseRmpModal({
   course,
   selectedOptionId,
+  accent,
   onClose,
 }: {
   course: CourseOffering;
   selectedOptionId: string | null;
+  accent?: DialogAccent;
   onClose: () => void;
 }) {
   // Memoized: the dialog looks its teachers up again whenever this list changes identity.
   const instructors = useMemo(() => courseInstructors(course), [course]);
   const selectedCode = course.options.find((o) => o.id === selectedOptionId)?.code ?? null;
-  return <RmpModal courseCode={course.courseCode} instructors={instructors} selectedCode={selectedCode} onClose={onClose} />;
+  return (
+    <RmpModal
+      courseCode={course.courseCode}
+      instructors={instructors}
+      selectedCode={selectedCode}
+      accent={accent}
+      onClose={onClose}
+    />
+  );
 }
 
 /** "A", "A and B", "A, B and C". */
@@ -40,8 +56,7 @@ function names(list: string[]): string {
   return list.length <= 2 ? list.join(' and ') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
 }
 
-export function RmpModal({ courseCode, instructors, selectedCode = null, onClose }: Props) {
-  useEscapeKey(onClose);
+export function RmpModal({ courseCode, instructors, selectedCode = null, accent, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [found, setFound] = useState<RmpLookup[] | null>(null);
 
@@ -59,80 +74,73 @@ export function RmpModal({ courseCode, instructors, selectedCode = null, onClose
 
   const mine = selectedCode ? instructors.filter((who) => who.sections.includes(selectedCode)) : [];
 
-  return createPortal(
-    <div className="mappop__backdrop" onClick={onClose}>
-      <div
-        className="mappop planpick rmp"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Rate My Professors — ${courseCode}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
-          <X size={16} />
-        </button>
-        <div className="eyebrow">Rate My Professors</div>
-        <div className="mappop__name">{courseCode}</div>
-        <p className="planpick__sub">
-          {mine.length > 0
-            ? `Your section, ${selectedCode}, is taught by ${names(mine.map((who) => who.name))}.`
-            : 'Click a name to open their page on Rate My Professors.'}
-        </p>
-        <div className="planpick__list">
-          {instructors.map((who, i) => {
-            const hit = found?.[i];
-            const m = hit?.match ?? null;
-            const rated = m !== null && m.numRatings > 0 && m.avgRating !== null;
-            const isMine = mine.includes(who);
-            // Before the answer arrives (or when it never does) a row still works: RMP's own search.
-            const url = m?.url ?? hit?.searchUrl ?? rmpSearchUrl(who.name);
-            return (
-              <button
-                key={who.name}
-                type="button"
-                className={`planpick__item rmp__row${isMine ? ' rmp__row--mine' : ''}`}
-                onClick={() => window.open(url, '_blank', 'noopener')}
-              >
-                <span className="rmp__who">
-                  <span className="rmp__name">
-                    <span className="rmp__link">{who.name}</span>
-                    {isMine && <span className="rmp__tag">Your section</span>}
-                  </span>
-                  <span className="rmp__sections">
-                    {who.sections.map((code) => (
-                      <span key={code} className={`rmp__sec mono${code === selectedCode ? ' rmp__sec--mine' : ''}`}>
-                        {code}
-                      </span>
-                    ))}
-                  </span>
+  return (
+    <Dialog
+      label={`Rate My Professors — ${courseCode}`}
+      className="rmp"
+      onClose={onClose}
+      accent={accent}
+      eyebrow="Rate My Professors"
+      title={courseCode}
+      meta={
+        mine.length > 0
+          ? `Your section, ${selectedCode}, is taught by ${names(mine.map((who) => who.name))}.`
+          : 'Click a name to open their page on Rate My Professors.'
+      }
+    >
+      <div className="rmp__list">
+        {instructors.map((who, i) => {
+          const hit = found?.[i];
+          const m = hit?.match ?? null;
+          const rated = m !== null && m.numRatings > 0 && m.avgRating !== null;
+          const isMine = mine.includes(who);
+          // Before the answer arrives (or when it never does) a row still works: RMP's own search.
+          const url = m?.url ?? hit?.searchUrl ?? rmpSearchUrl(who.name);
+          return (
+            <button
+              key={who.name}
+              type="button"
+              className={`rmp__row${isMine ? ' rmp__row--mine' : ''}`}
+              onClick={() => window.open(url, '_blank', 'noopener')}
+            >
+              <span className="rmp__who">
+                <span className="rmp__name">
+                  <span className="rmp__link">{who.name}</span>
+                  {isMine && <span className="pill pill--gold">Your section</span>}
                 </span>
-                {/* No answer (the lookup failed) says nothing: "no ratings" would claim a zero we don't know. */}
-                {hit && (
-                  <span className="rmp__score">
-                    {rated ? (
-                      <>
-                        <span className="rmp__avg">
-                          <Star size={14} className="rmp__star" />
-                          <span className="mono">{m.avgRating!.toFixed(1)}</span>
-                        </span>
-                        <span className="rmp__count">
-                          {m.numRatings} {pluralize(m.numRatings, 'rating')}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="rmp__count">no ratings</span>
-                    )}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <p className="mappop__hint rmp__note">
-          {loading ? 'Loading ratings…' : 'Ratings from RateMyProfessors.com, updated monthly.'}
-        </p>
+                <span className="rmp__sections">
+                  {who.sections.map((code) => (
+                    <span key={code} className={`rmp__sec mono${code === selectedCode ? ' rmp__sec--mine' : ''}`}>
+                      {code}
+                    </span>
+                  ))}
+                </span>
+              </span>
+              {/* No answer (the lookup failed) says nothing: "no ratings" would claim a zero we don't know. */}
+              {hit && (
+                <span className="rmp__score">
+                  {rated ? (
+                    <>
+                      <span className={`rmp__avg rmp__avg--${ratingTone(m.avgRating!)}`}>
+                        <Star size={12} className="rmp__star" />
+                        <span className="mono">{m.avgRating!.toFixed(1)}</span>
+                      </span>
+                      <span className="rmp__count">
+                        {m.numRatings} {pluralize(m.numRatings, 'rating')}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="rmp__count">no ratings</span>
+                  )}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
-    </div>,
-    document.body,
+      <p className="mappop__hint">
+        {loading ? 'Loading ratings…' : 'Ratings from RateMyProfessors.com, updated monthly.'}
+      </p>
+    </Dialog>
   );
 }

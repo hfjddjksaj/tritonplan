@@ -145,6 +145,42 @@ export const ChevronDown = (p: P) => (
     <path d="m6 9 6 6 6-6" />
   </svg>
 );
+export const ChevronRight = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m9 6 6 6-6 6" />
+  </svg>
+);
+/** Account menu: password. */
+export const Key = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="7.5" cy="15.5" r="4.5" />
+    <path d="m10.7 12.3 9.3-9.3M17 6l3 3M14.5 8.5l2 2" />
+  </svg>
+);
+/** Account menu: disconnect a sign-in method. */
+export const Unlink = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+    <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+    <path d="M3 3l18 18" />
+  </svg>
+);
+/** Account menu: sign out. */
+export const SignOut = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
+    <path d="M10 17l-5-5 5-5" />
+    <path d="M5 12h11" />
+  </svg>
+);
+/** Account menu: bring plans in from elsewhere. */
+export const Download = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3v12" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M5 21h14" />
+  </svg>
+);
 export const External = (p: P) => (
   <svg {...base(p)}>
     <path d="M14 4h6v6" />

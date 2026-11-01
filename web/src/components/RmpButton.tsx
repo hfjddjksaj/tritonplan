@@ -4,6 +4,7 @@ import { courseInstructors } from '../lib/rmp';
 import { External } from './icons';
 import { tip } from './Tooltip';
 import { CourseRmpModal } from './RmpModal';
+import type { DialogAccent } from './Dialog';
 
 const NO_INSTRUCTOR = "TSS doesn't list an instructor for this course yet.";
 
@@ -11,13 +12,15 @@ interface Props {
   course: CourseOffering;
   /** The section on the plan: its teachers are marked in the dialog. */
   selectedOptionId?: string | null;
+  /** The card's colours, carried into the dialog (a portal leaves the card's DOM). */
+  accent?: DialogAccent;
 }
 
 /**
  * Opens the ratings dialog, even for a course with one teacher: the stars are
  * there to compare inside the planner, and RMP is a click on a row away.
  */
-export function RmpButton({ course, selectedOptionId = null }: Props) {
+export function RmpButton({ course, selectedOptionId = null, accent }: Props) {
   const instructors = useMemo(() => courseInstructors(course), [course]);
   const [modal, setModal] = useState(false);
 
@@ -47,7 +50,9 @@ export function RmpButton({ course, selectedOptionId = null }: Props) {
       >
         rate my professor <External size={11} strokeWidth={2.2} />
       </button>
-      {modal && <CourseRmpModal course={course} selectedOptionId={selectedOptionId} onClose={() => setModal(false)} />}
+      {modal && (
+        <CourseRmpModal course={course} selectedOptionId={selectedOptionId} accent={accent} onClose={() => setModal(false)} />
+      )}
     </>
   );
 }

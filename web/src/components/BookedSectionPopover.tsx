@@ -1,6 +1,4 @@
-import { createPortal } from 'react-dom';
-import { useEscapeKey } from '../hooks/useEscapeKey';
-import { X } from './icons';
+import { Dialog } from './Dialog';
 
 interface Props {
   courseCode: string;
@@ -35,28 +33,15 @@ interface Props {
 export function BookedSectionPopover({
   courseCode, booked, queued = false, selected, accent, onShowSections, onClose,
 }: Props) {
-  useEscapeKey(onClose);
-
-  return createPortal(
-    <div className="mappop__backdrop" onClick={onClose}>
-      <div
-        className="mappop bookedpop"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${courseCode} ${queued ? 'waitlisted' : 'enrolled'} section`}
-        style={
-          accent && {
-            ['--c-text' as string]: accent.text,
-            ['--c-spine' as string]: accent.spine,
-          }
-        }
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
-          <X size={14} />
-        </button>
-        <div className="eyebrow">{queued ? 'Waitlisted section' : 'Enrolled section'}</div>
-        <div className="bookedpop__course">{courseCode}</div>
+  return (
+    <Dialog
+      label={`${courseCode} ${queued ? 'waitlisted' : 'enrolled'} section`}
+      className="bookedpop"
+      onClose={onClose}
+      accent={accent}
+      eyebrow={queued ? 'Waitlisted section' : 'Enrolled section'}
+      title={courseCode}
+    >
 
         <div className="bookedpop__rows">
           <div className="bookedpop__row">
@@ -93,8 +78,6 @@ export function BookedSectionPopover({
             </>
           )}
         </p>
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

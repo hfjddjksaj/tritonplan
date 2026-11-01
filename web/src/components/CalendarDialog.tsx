@@ -1,34 +1,40 @@
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
   createCalendarLink, fetchCalendar, googleCalendarUrl, resetCalendarLink, saveCalendarTerms,
   type CalendarLinks, type CalendarState,
 } from '../lib/cloud/api';
 import type { TermsState } from '../lib/terms-state';
-import { chronoIndex, displayTermLabel, isArchived, termKey } from '../lib/terms';
-import { useEscapeKey } from '../hooks/useEscapeKey';
-import { Calendar, X } from './icons';
+import { displayTermLabel, isArchived, termKey } from '../lib/terms';
+import { Dialog } from './Dialog';
+import { Message } from './Field';
+import { MenuSelect, type MenuOption } from './MenuSelect';
+import { Calendar, External } from './icons';
 
 export interface CalendarRow { key: string; label: string; plans: { id: string; name: string }[] }
 
-/** Only open terms with a plan can feed the calendar; a term nobody planned in, or one already over, has nothing to pick. */
-export function calendarRows(terms: TermsState, now: Date = new Date()): CalendarRow[] {
-  return Object.values(terms.terms)
-    .filter((w) => w.plans.plans.length > 0 && !isArchived(w.term, now))
-    .sort((a, b) => (chronoIndex(a.term) ?? Infinity) - (chronoIndex(b.term) ?? Infinity))
-    .map((w) => ({
-      key: termKey(w.term),
-      label: displayTermLabel(w.term),
-      plans: w.plans.plans.map((p) => ({ id: p.id, name: p.name })),
-    }));
+/**
+ * The term on screen, which is the one this dialog picks a plan for: switching term in the
+ * topbar is how a student reaches another term's pick. A term that is over feeds no calendar.
+ */
+export function calendarRow(terms: TermsState, now: Date = new Date()): CalendarRow | null {
+  const w = terms.terms[terms.activeTermKey];
+  if (!w || w.plans.plans.length === 0 || isArchived(w.term, now)) return null;
+  return {
+    key: termKey(w.term),
+    label: displayTermLabel(w.term),
+    plans: w.plans.plans.map((p) => ({ id: p.id, name: p.name })),
+  };
 }
 
-/** A term needs attention when it has no pick, or its pick was deleted. */
-export function calendarNeedsPick(rows: CalendarRow[], cal: Pick<CalendarState, 'terms' | 'missing'>): boolean {
-  return rows.some((r) => !cal.terms[r.key] || cal.missing.includes(r.key));
+/** The term on screen needs attention when it has no pick, or its pick was deleted. */
+export function calendarNeedsPick(row: CalendarRow | null, cal: Pick<CalendarState, 'terms' | 'missing'>): boolean {
+  return row !== null && (!cal.terms[row.key] || cal.missing.includes(row.key));
 }
 
-/** Pick one plan per term and subscribe to the result in Apple or Google Calendar. */
+const INTRO =
+  'Pick one plan per term. Your calendar shows the classes, midterms and finals of the plans you pick, and drops a term once its finals are over.';
+
+/** Pick the on-screen term's plan and subscribe to the result in Apple or Google Calendar. */
 export function CalendarDialog({
   terms,
   onClose,
@@ -41,7 +47,6 @@ export function CalendarDialog({
   /** Called after the server accepted a change, so the account menu can refresh its dot. */
   onChanged: () => void;
 }) {
-  useEscapeKey(onClose);
   // undefined = loading, null = could not load
   const [cal, setCal] = useState<CalendarState | null | undefined>(undefined);
   const [picks, setPicks] = useState<Record<string, string>>({});
@@ -50,7 +55,8 @@ export function CalendarDialog({
   const [busy, setBusy] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const rows = calendarRows(terms);
+  const row = calendarRow(terms);
+  const onScreen = terms.terms[terms.activeTermKey];
 
   useEffect(() => {
     let live = true;
@@ -69,7 +75,7 @@ export function CalendarDialog({
   async function choose(key: string, planId: string) {
     if (busy) return;
     const before = { picks, missing };
-    // The server replaces the whole map, so send every pick (including ones for terms not listed here).
+    // The server replaces the whole map, so send every pick (including other terms').
     const next = { ...picks };
     if (planId) next[key] = planId;
     else delete next[key];
@@ -111,64 +117,57 @@ export function CalendarDialog({
     }
   }
 
-  // The Share dialog's shell and rows: the terms as cards, the two apps as rows that are links.
-  return createPortal(
-    <div className="mappop__backdrop" onClick={onClose}>
-      <div
-        className="mappop planpick caldlg"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Calendar subscription"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
-          <X size={14} />
-        </button>
-        <div className="eyebrow">Calendar subscription</div>
-        <div className="mappop__name">Your calendar</div>
-        <p className="planpick__sub">
-          Pick one plan per term. Your calendar shows the classes, midterms and finals of the plans you pick, and
-          drops a term once its finals are over.
-        </p>
-        {cal === undefined && <p className="planpick__sub">Loading…</p>}
-        {cal === null && <p className="planpick__sub">Couldn't load your calendar settings.</p>}
-        {cal && (
-          <>
-            <ul className="planpick__list caldlg__terms">
-              {rows.map((r) => {
-                const gone = missing.includes(r.key);
-                const value = gone ? '' : (picks[r.key] ?? '');
-                return (
-                  <li key={r.key} className={`caldlg__term${gone || !value ? ' caldlg__term--ask' : ''}`}>
-                    <label className="caldlg__row">
-                      <span className="caldlg__name">{r.label}</span>
-                      <select
-                        className="caldlg__select"
-                        value={value}
-                        disabled={busy}
-                        onChange={(e) => void choose(r.key, e.target.value)}
-                      >
-                        <option value="">Not in calendar</option>
-                        {r.plans.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    {gone && (
-                      <p className="caldlg__hint">The plan you picked for {r.label} was deleted — pick another.</p>
-                    )}
-                    {!gone && !value && (
-                      <p className="caldlg__hint">Pick a plan to add {r.label} to your calendar.</p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            {saveFailed && <p className="caldlg__hint caldlg__hint--error" role="alert">Couldn't save. Please try again.</p>}
+  const gone = row !== null && missing.includes(row.key);
+  const value = row === null || gone ? '' : (picks[row.key] ?? '');
+  const options: MenuOption[] = row
+    ? [
+        { value: '', label: 'Not in calendar', faint: true },
+        ...row.plans.map((p, i) => ({ value: p.id, label: p.name, divider: i === 0 })),
+      ]
+    : [];
+
+  return (
+    <Dialog
+      label="Calendar subscription"
+      className="caldlg"
+      onClose={onClose}
+      eyebrow="Calendar subscription"
+      title="Your calendar"
+      meta={INTRO}
+    >
+      {cal === undefined && <p className="mappop__hint">Loading…</p>}
+      {cal === null && <Message tone="error">Couldn't load your calendar settings.</Message>}
+      {cal && (
+        <>
+          {row ? (
+            <div className="caldlg__term">
+              <div className={`prow${gone || !value ? ' prow--ask' : ''}`}>
+                <span className="prow__label">{row.label}</span>
+                <MenuSelect
+                  label={`Plan for ${row.label}`}
+                  value={value}
+                  options={options}
+                  align="end"
+                  disabled={busy}
+                  onChange={(v) => void choose(row.key, v)}
+                />
+              </div>
+              {gone && <p className="prow__ask">The plan you picked for {row.label} was deleted — pick another.</p>}
+              {!gone && !value && <p className="prow__ask">Pick a plan to add {row.label} to your calendar.</p>}
+            </div>
+          ) : (
+            onScreen && (
+              <p className="mappop__hint">
+                {displayTermLabel(onScreen.term)} is over. A term that is over is no longer in calendars.
+              </p>
+            )
+          )}
+          {saveFailed && <Message tone="error">Couldn't save. Please try again.</Message>}
+          <div className="callout">
             {!links ? (
               <button
                 type="button"
-                className="btn btn--primary caldlg__create"
+                className="btn btn--sm btn--primary"
                 disabled={busy}
                 onClick={() => void makeLink(createCalendarLink, "Couldn't create the link. Please try again.")}
               >
@@ -176,68 +175,59 @@ export function CalendarDialog({
               </button>
             ) : (
               <>
-                <div className="eyebrow caldlg__label">Add it to</div>
-                <div className="planpick__list">
-                  <a className="planpick__item sharecal__app" href={links.webcal}>
-                    <span className="sharecal__title">
-                      <Calendar size={15} /> Subscribe in Apple Calendar
-                    </span>
-                    <span className="sharecal__desc">Opens Calendar to subscribe. Changes show up within an hour.</span>
+                <div className="callout__label">Add it to</div>
+                <div className="callout__actions">
+                  <a className="btn btn--sm" href={links.webcal}>
+                    <Calendar size={14} /> Apple Calendar
                   </a>
-                  <a
-                    className="planpick__item sharecal__app"
-                    href={googleCalendarUrl(links.webcal)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <span className="sharecal__title">
-                      <Calendar size={15} /> Add to Google Calendar
-                    </span>
-                    <span className="sharecal__desc">
-                      Opens Google Calendar to add it. Changes can take several hours to a day — it can't be sped up.
-                    </span>
+                  <a className="btn btn--sm" href={googleCalendarUrl(links.webcal)} target="_blank" rel="noopener noreferrer">
+                    <Calendar size={14} /> Google Calendar <External size={11} className="callout__ext" />
                   </a>
                 </div>
+                <p className="callout__hint">
+                  Each opens the app to subscribe. Changes show up in Apple Calendar within an hour; Google Calendar can
+                  take several hours to a day, and that can't be sped up.
+                </p>
+              </>
+            )}
+          </div>
+          {links &&
+            (confirmingReset ? (
+              <div className="callout callout--danger">
+                <p className="callout__text">Your old link stops working right away, and you'll need to subscribe again.</p>
+                <div className="callout__actions">
+                  <button
+                    type="button"
+                    className="btn btn--sm btn--danger"
+                    disabled={busy}
+                    onClick={() => void makeLink(resetCalendarLink, "Couldn't reset the link. Please try again.")}
+                  >
+                    Reset
+                  </button>
+                  <button type="button" className="btn btn--sm" onClick={() => setConfirmingReset(false)}>
+                    Keep
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mappop__foot">
                 <p className="mappop__hint">
                   Another app, or Google didn't open?{' '}
-                  <button type="button" className="sharecal__link" onClick={() => void copy(links.https)}>
+                  <button type="button" className="tlink" onClick={() => void copy(links.https)}>
                     Copy the link
                   </button>{' '}
                   and add it as a calendar from a URL.
                 </p>
-                {confirmingReset ? (
-                  <div className="caldlg__reset">
-                    <p className="acctdlg__ask">
-                      Your old link stops working right away, and you'll need to subscribe again.
-                    </p>
-                    <div className="acctdlg__actions">
-                      <button type="button" className="btn btn--sm" onClick={() => setConfirmingReset(false)}>
-                        Keep
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--sm acctdlg__danger"
-                        disabled={busy}
-                        onClick={() => void makeLink(resetCalendarLink, "Couldn't reset the link. Please try again.")}
-                      >
-                        Reset
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="mappop__hint">
-                    Shared the link by mistake?{' '}
-                    <button type="button" className="sharecal__link" onClick={() => setConfirmingReset(true)}>
-                      Reset link
-                    </button>
-                  </p>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </div>,
-    document.body,
+                <p className="mappop__hint">
+                  Shared the link by mistake?{' '}
+                  <button type="button" className="tlink tlink--danger" onClick={() => setConfirmingReset(true)}>
+                    Reset link
+                  </button>
+                </p>
+              </div>
+            ))}
+        </>
+      )}
+    </Dialog>
   );
 }

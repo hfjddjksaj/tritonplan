@@ -27,7 +27,8 @@ import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
 import { Check } from './components/icons';
 import { ViewTabs, type PlannerView } from './components/ViewTabs';
 import { TooltipLayer } from './components/Tooltip';
-import { countConflictPairs } from './lib/plan';
+import { countConflictPairs, entryHue } from './lib/plan';
+import { colorsForHue } from './lib/colors';
 import { displayTermLabel } from './lib/terms';
 import { pluralize } from './lib/format';
 import { loadCalView, saveCalView, type CalView } from './lib/storage';
@@ -344,6 +345,7 @@ export default function App({
         <CourseRmpModal
           course={rmpEntry.course}
           selectedOptionId={rmpEntry.selectedOptionId}
+          accent={colorsForHue(entryHue(ctl.viewPlan, rmpEntry))}
           onClose={() => setRmpCourseId(null)}
         />
       )}

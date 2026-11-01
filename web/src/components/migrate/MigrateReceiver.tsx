@@ -9,7 +9,8 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { isMigrationPayload, MIGRATE_MSG, savePendingMigration, type MigrationPayload } from '../../lib/migration';
 import { OLD_SITE_ORIGIN } from '../../lib/site';
-import { AuthCard, AuthMessage } from '../auth/AuthCard';
+import { AuthCard } from '../auth/AuthCard';
+import { Message } from '../Field';
 
 const WAIT_MS = 8000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -88,7 +89,7 @@ export function MigrateReceiver({ onReceived }: { onReceived: () => void }) {
 
   return (
     <AuthCard heading="Moving your plans from the old TritonPlan…">
-      {error && <AuthMessage tone="error">{error}</AuthMessage>}
+      {error && <Message tone="error">{error}</Message>}
       {fallback && (
         <>
           <p className="auth__lede">Didn't work? Download a backup file on the old site and import it here.</p>

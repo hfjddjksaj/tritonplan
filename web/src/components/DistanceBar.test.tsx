@@ -9,6 +9,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { DistanceBar } from './DistanceBar';
 import type { WalkPlace } from '../lib/walk-places';
 import type { WalkResult } from '../lib/walk-route';
+import { menuOptions, menuPick, menuSelects, menuShown } from '../test/menu-select';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -138,7 +139,7 @@ describe('DistanceBar', () => {
   const toggle = () => container.querySelector<HTMLButtonElement>('.campusmap__dist-bar')!;
   const clear = () => container.querySelector<HTMLButtonElement>('[aria-label="Clear distance"]');
   const panel = () => container.querySelector<HTMLElement>('.campusmap__dist-panel');
-  const selects = () => [...container.querySelectorAll<HTMLSelectElement>('select')];
+  const selects = () => menuSelects(container);
   const modes = () => [...container.querySelectorAll<HTMLButtonElement>('.campusmap__dist-mode')];
   const expand = () => act(() => toggle().click());
 
@@ -186,29 +187,26 @@ describe('DistanceBar', () => {
   it('offers every place, disabling the unusable ones but showing why', () => {
     render(props());
     expand();
-    const opts = [...selects()[0]!.options];
-    expect(opts.map((o) => o.textContent)).toEqual([
+    const opts = menuOptions(selects()[0]!);
+    expect(opts.map((o) => o.label)).toEqual([
       'Pick a place…',
-      '📍 Choose on map…',
+      'Choose on map…',
       'CSE 11 · LEC — Center Hall',
       'MATH 20C · DI — Applied Physics and Mathematics',
       'MUIR 40 · LEC (online)',
       'TDGE 1 · DI — Somewhere Unmapped (no location)',
     ]);
-    expect(opts.find((o) => o.textContent?.includes('MUIR 40'))!.disabled).toBe(true);
-    expect(opts.find((o) => o.textContent?.includes('TDGE 1'))!.disabled).toBe(true);
-    expect(opts.find((o) => o.textContent?.includes('CSE 11'))!.disabled).toBe(false);
+    expect(opts.find((o) => o.label.includes('MUIR 40'))!.disabled).toBe(true);
+    expect(opts.find((o) => o.label.includes('TDGE 1'))!.disabled).toBe(true);
+    expect(opts.find((o) => o.label.includes('CSE 11'))!.disabled).toBe(false);
   });
 
   it('reports "Choose on map" as its own choice, never as a pick', () => {
     const p = render(props());
     expand();
     const to = selects()[1]!;
-    const opt = [...to.options].find((o) => o.textContent === '📍 Choose on map…')!;
-    act(() => {
-      to.value = opt.value;
-      to.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const opt = menuOptions(to).find((o) => o.label === 'Choose on map…')!;
+    menuPick(to, opt.value);
     expect(p.onChooseMap).toHaveBeenCalledWith('b');
     expect(p.onPick).not.toHaveBeenCalled();
   });
@@ -216,11 +214,11 @@ describe('DistanceBar', () => {
   it('shows the map choice selected while its end waits for a click, then the pin', () => {
     render(props({ pinEnd: 'a' }));
     expand();
-    expect(selects()[0]!.selectedOptions[0]!.textContent).toBe('📍 Choose on map…');
+    expect(menuShown(selects()[0]!)).toBe('Choose on map…');
     const pin = { id: 'dropped-pin:1', courseCode: '', label: 'Hopkins Parking', hue: 0,
       place: 'Hopkins Parking', coords: { lat: 32.88, lng: -117.24 }, disabled: false, dropped: true as const };
     render(props({ pinEnd: 'a', a: pin }));
-    expect(selects()[0]!.selectedOptions[0]!.textContent).toBe('📍 Hopkins Parking');
+    expect(menuShown(selects()[0]!)).toBe('Hopkins Parking');
     // Waiting with nothing picked yet must still offer a way out.
     render(props({ pinEnd: 'b' }));
     expect(clear()).not.toBeNull();
@@ -229,11 +227,7 @@ describe('DistanceBar', () => {
   it('reports a pick and a swap', () => {
     const p = render(props());
     expand();
-    const from = selects()[0]!;
-    act(() => {
-      from.value = 'b';
-      from.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    menuPick(selects()[0]!, 'b');
     expect(p.onPick).toHaveBeenCalledWith('a', PLACES[1]);
     act(() => container.querySelector<HTMLButtonElement>('.campusmap__dist-swap')!.click());
     expect(p.onSwap).toHaveBeenCalledOnce();
@@ -365,7 +359,7 @@ describe('DistanceBar', () => {
     expect(localStorage.length).toBe(0);
   });
 
-  it('is operable from the keyboard — every control is a real button or select', () => {
+  it('is operable from the keyboard — every control is a real button', () => {
     render(props({ a: PLACES[0]!, b: PLACES[1]!, route: ROUTE, results: { walk: ROUTE } }));
     expand();
     const focusable = [...container.querySelectorAll('button, select, a[href]')];

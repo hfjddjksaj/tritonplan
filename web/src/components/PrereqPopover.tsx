@@ -1,9 +1,8 @@
 import { Fragment } from 'react';
-import { createPortal } from 'react-dom';
 import type { CourseOffering } from '@triton/shared';
-import { useEscapeKey } from '../hooks/useEscapeKey';
 import { PRODUCT_NAME } from '../lib/brand';
-import { External, X } from './icons';
+import { Dialog } from './Dialog';
+import { External } from './icons';
 
 interface Props {
   course: CourseOffering;
@@ -24,28 +23,15 @@ interface Props {
 export function PrereqPopover({ course, accent, onOpenTss, onClose }: Props) {
   const groups = course.prereqs;
 
-  useEscapeKey(onClose);
-
-  return createPortal(
-    <div className="mappop__backdrop" onClick={onClose}>
-      <div
-        className="mappop prereqpop"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${course.courseCode} enrollment requirements`}
-        style={
-          accent && {
-            ['--c-text' as string]: accent.text,
-            ['--c-spine' as string]: accent.spine,
-          }
-        }
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
-          <X size={14} />
-        </button>
-        <div className="eyebrow">Enrollment requirements</div>
-        <div className="prereqpop__course">{course.courseCode}</div>
+  return (
+    <Dialog
+      label={`${course.courseCode} enrollment requirements`}
+      className="prereqpop"
+      onClose={onClose}
+      accent={accent}
+      eyebrow="Enrollment requirements"
+      title={course.courseCode}
+    >
 
         {groups === undefined ? (
           <>
@@ -88,8 +74,6 @@ export function PrereqPopover({ course, accent, onOpenTss, onClose }: Props) {
             ? 'Once captured, they’ll show right here.'
             : 'As listed in TSS when this course was last browsed. Check the course in TSS for the authoritative version.'}
         </p>
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

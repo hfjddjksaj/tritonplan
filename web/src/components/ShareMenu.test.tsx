@@ -59,7 +59,8 @@ async function render(archived = false) {
 // The dialog is portaled to <body>.
 const dialog = () => document.body.querySelector('[role="dialog"]');
 const text = () => dialog()?.textContent ?? '';
-const rows = () => [...document.body.querySelectorAll('.planpick__item')];
+// Plan rows (step one) and calendar apps (step two).
+const rows = () => [...document.body.querySelectorAll('.plist__row, [role="dialog"] .callout a')];
 const row = (t: string) => rows().find((e) => e.textContent?.includes(t));
 const button = (t: string) => [...document.body.querySelectorAll('button')].find((b) => b.textContent?.includes(t));
 async function press(el: Element | undefined | null) {
@@ -81,7 +82,7 @@ describe('ShareMenu', () => {
     await share();
     expect(text()).toContain('Which plan?');
     expect(text()).toContain('Your calendar shows one plan for Fall 2026.');
-    expect(rows().map((e) => e.textContent)).toEqual(['Mine1 course · on screen', 'Backup0 courses']);
+    expect(rows().map((e) => e.textContent)).toEqual(['MineOn screen1 course', 'Backup0 courses']);
   });
 
   it('a first export makes the calendar link, then offers Apple and Google; choosing one saves the pick beside the others', async () => {
@@ -93,8 +94,11 @@ describe('ShareMenu', () => {
     expect(callsTo('POST', '/api/calendar/link')).toHaveLength(1);
     expect(text()).toContain('Which calendar?');
     expect(text()).toContain('“Backup” · Fall 2026');
-    const apple = row('Export to Apple Calendar') as HTMLAnchorElement;
-    const google = row('Export to Google Calendar') as HTMLAnchorElement;
+    const apple = row('Apple Calendar') as HTMLAnchorElement;
+    const google = row('Google Calendar') as HTMLAnchorElement;
+    expect(text()).toContain(
+      'Each opens the app to subscribe. Changes show up in Apple Calendar within an hour; Google Calendar can take several hours to a day.',
+    );
     expect(apple.getAttribute('href')).toBe(WEBCAL);
     // Google's add page with the feed filled in, under a URL of its own, so Google cannot answer from its cache.
     expect(google.getAttribute('href')).toMatch(

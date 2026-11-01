@@ -1,6 +1,4 @@
-import { createPortal } from 'react-dom';
 import type { ApptTimes } from '@triton/shared';
-import { useEscapeKey } from '../hooks/useEscapeKey';
 import {
   apptWindowStatus,
   deviceZone,
@@ -12,7 +10,8 @@ import {
 import { relativeTime } from '../lib/format';
 import { openApptTimesInTss } from '../lib/tss';
 import { PRODUCT_NAME } from '../lib/brand';
-import { External, X } from './icons';
+import { Dialog } from './Dialog';
+import { External } from './icons';
 
 interface Props {
   /** null = nothing captured yet — show the "open TSS once" prompt instead. */
@@ -27,21 +26,9 @@ const STATUS_LABEL: Record<ApptStatus, string> = {
 /** Every enrollment window of the shown term, with live status. Rendered from
  *  passively captured data; refreshing = reopening the TSS tile. */
 export function ApptPopover({ appt, onClose }: Props) {
-  useEscapeKey(onClose);
   const now = new Date();
-  return createPortal(
-    <div className="mappop__backdrop" onClick={onClose}>
-      <div
-        className="mappop apptpop"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Your appointment times"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="mappop__close" onClick={onClose} aria-label="Close">
-          <X size={14} />
-        </button>
-        <div className="eyebrow">Appointment times</div>
+  return (
+    <Dialog label="Your appointment times" className="apptpop" onClose={onClose} eyebrow="Appointment times">
 
         {appt === null ? (
           <>
@@ -62,9 +49,7 @@ export function ApptPopover({ appt, onClose }: Props) {
         ) : (
           <ApptPopoverBody appt={appt} now={now} />
         )}
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }
 
