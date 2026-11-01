@@ -43,7 +43,7 @@ export function ShareMenu(props: Props) {
   return (
     <>
       <button type="button" className="btn btn--sm btn--primary" aria-haspopup="dialog" onClick={() => setOpen(true)}>
-        <Share size={15} /> Share
+        <Share size={15} /> Calendar
       </button>
       {open && <ShareDialog {...props} onClose={() => setOpen(false)} />}
     </>

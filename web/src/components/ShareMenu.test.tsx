@@ -70,7 +70,7 @@ async function press(el: Element | undefined | null) {
     for (let i = 0; i < 10; i++) await Promise.resolve();
   });
 }
-const share = () => press(button('Share'));
+const share = () => press(document.body.querySelector('button[aria-haspopup="dialog"]'));
 const callsTo = (method: string, url: string) =>
   fetchMock.mock.calls.filter(([u, init]) => u === url && (init?.method ?? 'GET') === method);
 const putBody = () => JSON.parse(callsTo('PUT', '/api/calendar').at(-1)![1].body as string);
