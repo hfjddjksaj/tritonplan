@@ -76,7 +76,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
           {readOnly
             ? 'This plan is read-only — a plan someone sent you, or a past term kept as an archive.'
             : isMobile
-              ? 'Courses can only be added on a computer. Open a plan here via a share link or QR code, save it as yours, and edit its sections below.'
+              ? 'Your plans follow your account, so they’re the same here as on your computer. New courses come in from TSS on a computer; switch a section below to clear a conflict.'
               : 'Sections you pick in TSS land here. Switch a section below to clear a conflict.'}
         </p>
       </div>
@@ -154,9 +154,9 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
             {isMobile ? (
               // No extension on phones — say so instead of a store link that can't help here.
               <p>
-                Adding courses isn’t possible on a phone — the {PRODUCT_NAME} extension runs in a
-                desktop browser only. Build your plan on a computer, open it here via Share →
-                link or QR code, then save it as yours to edit its sections.
+                Courses you open in TSS on a computer show up here too — your courses and plans
+                follow your account. The {PRODUCT_NAME} extension runs in a desktop browser
+                only, so a phone can’t bring in new ones.
               </p>
             ) : ctl.extensionSeen ? (
               // The extension is here and simply has nothing yet: send them to TSS, not to the store.
