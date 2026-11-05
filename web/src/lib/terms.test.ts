@@ -8,12 +8,14 @@ import {
   chronoIndex,
   archiveBoundary,
   isArchived,
+  calendarYear,
   buildSwitcherRows,
   layoutRows,
 } from './terms';
 
 const FALL26: Term = { year: '2026', period: '2', label: 'Fall 2026' };
-const WINTER27: Term = { year: '2027', period: '3', label: 'Period 3 2027' }; // calendar year 2027
+// SAP's AcYear is the ACADEMIC year: Winter 2027 (Jan–Mar) arrives as AcYear 2026.
+const WINTER27: Term = { year: '2026', period: '3', label: 'Period 3 2026' };
 const UNKNOWN: Term = { year: '2027', period: '9', label: 'Period 9 2027' };
 
 describe('termKey', () => {
@@ -39,6 +41,10 @@ describe('displayTermLabel', () => {
     expect(displayYear(WINTER27)).toBe(2026);
     expect(displayTermLabel(WINTER27)).toBe('Winter 2026');
   });
+  it('Winter runs in the calendar year after its academic year starts', () => {
+    expect(calendarYear(WINTER27)).toBe(2027);
+    expect(calendarYear(FALL26)).toBe(2026);
+  });
   it('unknown period falls back to the captured label', () => {
     expect(displayTermLabel(UNKNOWN)).toBe('Period 9 2027');
   });
@@ -49,7 +55,7 @@ describe('displayTermLabel', () => {
 
 describe('chronoIndex', () => {
   it('orders winter < spring < fall within a calendar year, across years by year', () => {
-    const w27 = chronoIndex({ year: '2027', period: '3', label: '' })!;
+    const w27 = chronoIndex({ year: '2026', period: '3', label: '' })!;
     const f26 = chronoIndex({ year: '2026', period: '2', label: '' })!;
     const f27 = chronoIndex({ year: '2027', period: '2', label: '' })!;
     expect(f26).toBeLessThan(w27); // Fall 2026 precedes Winter (Jan–Mar) 2027
@@ -65,10 +71,13 @@ describe('isArchived (fixed month-day boundaries: Fall 12/20, Winter 3/22, Sprin
     expect(isArchived(FALL26, new Date(2026, 11, 19))).toBe(false);
     expect(isArchived(FALL26, new Date(2026, 11, 20))).toBe(true);
   });
-  it('Winter (calendar 2027) archives on Mar 22 2027', () => {
-    const w: Term = { year: '2027', period: '3', label: '' };
-    expect(isArchived(w, new Date(2027, 2, 21))).toBe(false);
-    expect(isArchived(w, new Date(2027, 2, 22))).toBe(true);
+  it('Winter of AY 2026 (Jan–Mar 2027) archives on Mar 22 2027', () => {
+    expect(isArchived(WINTER27, new Date(2027, 2, 21))).toBe(false);
+    expect(isArchived(WINTER27, new Date(2027, 2, 22))).toBe(true);
+  });
+  it('Winter is live while its registration runs in November', () => {
+    // TSS's own URL for a Winter 2027 class: AcademicYear='2026',AcademicPeriod='3'.
+    expect(isArchived(WINTER27, new Date(2026, 10, 5))).toBe(false);
   });
   it('unknown periods NEVER auto-archive', () => {
     expect(isArchived({ year: '2020', period: '9', label: '' }, new Date(2030, 0, 1))).toBe(false);
@@ -90,19 +99,19 @@ describe('buildSwitcherRows', () => {
     expect(rows.otherRows).toHaveLength(0);
   });
 
-  it('Winter (calendar 2027) lands in the Fall-2026 row and marks archived terms', () => {
+  it('Winter of AY 2026 lands in the Fall-2026 row and marks archived terms', () => {
     const rows = buildSwitcherRows(
       [
         { year: '2026', period: '2', label: 'Fall 2026' },
-        { year: '2027', period: '3', label: '' },
+        { year: '2026', period: '3', label: '' },
       ],
-      K('2027', '3'),
+      K('2026', '3'),
       new Date(2027, 0, 10), // Jan 2027: Fall archived (>=12/20/2026), Winter live
     );
     expect(rows.quarterRows).toHaveLength(1);
     const [fall, winter] = rows.quarterRows[0]!;
     expect(fall).toMatchObject({ key: '2026|2', archived: true, selectable: true, current: false });
-    expect(winter).toMatchObject({ key: '2027|3', label: 'Winter 2026', current: true, archived: false });
+    expect(winter).toMatchObject({ key: '2026|3', label: 'Winter 2026', current: true, archived: false });
   });
 
   it('rows sort ascending by academic year', () => {

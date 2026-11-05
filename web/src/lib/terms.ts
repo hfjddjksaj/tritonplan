@@ -1,10 +1,14 @@
 /**
  * ALL knowledge about SAP academic periods lives HERE and nowhere else:
  * season codes, display labels, academic-year math, archive boundaries.
- * When real Winter/Spring/Summer captures arrive (expected Nov 2026), this is
- * the single file to update. Do NOT guess codes (repo convention) — unknown
- * periods flow through fallbacks: fallback label, no year-grid slot, never
- * auto-archived.
+ * Do NOT guess codes (repo convention) — unknown periods flow through
+ * fallbacks: fallback label, no year-grid slot, never auto-archived.
+ *
+ * `term.year` is SAP's ACADEMIC year (`AcYear` / `Peryr`), not the calendar
+ * year the quarter runs in: the Fall 2026 feed sends academicYear "2026" with
+ * academicYear_Text "2026/2027", and Winter 2027 arrives as
+ * AcademicYear='2026', AcademicPeriod='3' (live TSS, verified 2026-11-05).
+ * Calendar-year math goes through `calendarYear`.
  */
 import type { Term } from '@triton/shared';
 
@@ -37,24 +41,32 @@ const SEASON_NAMES: Record<Season, string> = {
   summer2: 'Summer II',
 };
 
+/** Seasons that run in the calendar year AFTER their academic year starts. */
+function startsNextCalendarYear(season: Season | null): boolean {
+  return season === 'winter' || season === 'spring';
+}
+
+/** The calendar year the quarter actually runs in: Winter/Spring of AY 2026 run in 2027. */
+export function calendarYear(term: Term): number {
+  return Number(term.year) + (startsNextCalendarYear(seasonOf(term)) ? 1 : 0);
+}
+
 /**
- * Display-year rule: Winter shows the
- * ACADEMIC-year start year — the winter after Fall 2026 displays "Winter 2026"
- * even though it runs Jan–Mar 2027. Other seasons show the calendar year.
- * `term.year` is treated as the quarter's own calendar year until verified
- * against real Winter data.
+ * Display-year rule: Winter shows the ACADEMIC-year start year — the winter
+ * after Fall 2026 displays "Winter 2026" even though it runs Jan–Mar 2027.
+ * Other seasons show the calendar year.
  */
 export function displayYear(term: Term): number {
-  const y = Number(term.year);
-  return seasonOf(term) === 'winter' ? y - 1 : y;
+  return seasonOf(term) === 'winter' ? Number(term.year) : calendarYear(term);
 }
 
 /** Label for a term whose season is already known (the layoutRows test seam
  *  passes seasons explicitly, before the real SAP codes are mapped). */
 function labelFor(term: Term, season: Season | null): string {
   if (!season) return term.label || `Period ${term.period} ${term.year}`;
+  // Winter keeps the academic-year start year (see displayYear); Spring runs the year after.
   const y = Number(term.year);
-  return `${SEASON_NAMES[season]} ${season === 'winter' ? y - 1 : y}`;
+  return `${SEASON_NAMES[season]} ${season === 'spring' ? y + 1 : y}`;
 }
 
 export function displayTermLabel(term: Term): string {
@@ -74,7 +86,7 @@ const SEASON_ORDER: Record<Season, number> = {
 export function chronoIndex(term: Term): number | null {
   const season = seasonOf(term);
   if (!season) return null;
-  return Number(term.year) * 10 + SEASON_ORDER[season];
+  return calendarYear(term) * 10 + SEASON_ORDER[season];
 }
 
 // Fixed month-day archive boundaries: a term is archived once `now`
@@ -89,12 +101,12 @@ const BOUNDARY: Record<Season, { month: number; day: number }> = {
   summer2: { month: 9, day: 15 },
 };
 
-/** The boundary falls in the quarter's own calendar year (= term.year). */
+/** The boundary falls in the quarter's own calendar year. */
 export function archiveBoundary(term: Term): Date | null {
   const season = seasonOf(term);
   if (!season) return null;
   const { month, day } = BOUNDARY[season];
-  return new Date(Number(term.year), month - 1, day);
+  return new Date(calendarYear(term), month - 1, day);
 }
 
 export function isArchived(term: Term, now: Date): boolean {
@@ -140,9 +152,6 @@ export function layoutRows(
   activeKey: TermKey,
   now: Date,
 ): SwitcherRows {
-  // Academic-year start for a quarter: fall → its year; winter/spring → year − 1.
-  const ayOf = (season: Season, year: number) => (season === 'fall' ? year : year - 1);
-
   const byAy = new Map<number, Partial<Record<'fall' | 'winter' | 'spring', Term>>>();
   const bySummerYear = new Map<number, Partial<Record<'summer1' | 'summer2', Term>>>();
   const otherRows: SwitcherCell[] = [];
@@ -150,7 +159,7 @@ export function layoutRows(
   for (const { term, season } of items) {
     const year = Number(term.year);
     if (season === 'fall' || season === 'winter' || season === 'spring') {
-      const ay = ayOf(season, year);
+      const ay = year;
       const row = byAy.get(ay) ?? {};
       row[season] = term;
       byAy.set(ay, row);

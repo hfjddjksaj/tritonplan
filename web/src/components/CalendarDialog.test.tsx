@@ -23,7 +23,7 @@ const terms = {
   terms: {
     '2025|2': ws(term('2025', '2'), [['old', 'Old plan']]),
     '2026|2': ws(term('2026', '2'), [['a', 'Plan A'], ['b', 'Plan B']]),
-    '2027|3': ws(term('2027', '3'), [['w', 'Winter plan']]),
+    '2026|3': ws(term('2026', '3'), [['w', 'Winter plan']]),
     '2027|1': ws(term('2027', '1'), []),
   },
 } as unknown as TermsState;
@@ -43,7 +43,7 @@ const onClose = vi.fn();
 const onChanged = vi.fn();
 
 const cal = (over: Record<string, unknown> = {}) => () =>
-  json(200, { ...linked, terms: { '2026|2': 'a', '2027|3': 'w' }, missing: [], ...over });
+  json(200, { ...linked, terms: { '2026|2': 'a', '2026|3': 'w' }, missing: [], ...over });
 
 beforeEach(() => {
   // Which terms count as open or archived depends on today's date; pin it to mid-October 2026 (Fall 2026 under way).
@@ -120,7 +120,7 @@ describe('CalendarDialog', () => {
   });
 
   it('switching term in the topbar is how another term is picked', async () => {
-    await renderDialog({ ...terms, activeTermKey: '2027|3' });
+    await renderDialog({ ...terms, activeTermKey: '2026|3' });
     expect(text()).toContain('Winter 2026');
     expect(text()).not.toContain('Fall 2026');
     expect(options(selects()[0]!)).toEqual(['Not in calendar', 'Winter plan']);
@@ -170,10 +170,10 @@ describe('CalendarDialog', () => {
     await renderDialog();
     await pick(selects()[0]!, 'b');
     // Winter's pick is not on screen, and still goes along untouched.
-    expect(puts()).toEqual([{ terms: { '2026|2': 'b', '2027|3': 'w' } }]);
+    expect(puts()).toEqual([{ terms: { '2026|2': 'b', '2026|3': 'w' } }]);
     expect(menuValue(selects()[0]!)).toBe('b');
     await pick(selects()[0]!, '');
-    expect(puts()[1]).toEqual({ terms: { '2027|3': 'w' } });
+    expect(puts()[1]).toEqual({ terms: { '2026|3': 'w' } });
     expect(onChanged).toHaveBeenCalledTimes(2);
   });
 
@@ -186,7 +186,7 @@ describe('CalendarDialog', () => {
   });
 
   it('the term on screen with no pick asks for one', async () => {
-    answers['GET /api/calendar'] = cal({ terms: { '2027|3': 'w' } });
+    answers['GET /api/calendar'] = cal({ terms: { '2026|3': 'w' } });
     await renderDialog();
     expect(text()).toContain('Pick a plan to add Fall 2026 to your calendar.');
   });
@@ -208,7 +208,7 @@ describe('CalendarDialog', () => {
   });
 
   it('a missing key for a term that is not on screen is ignored', async () => {
-    answers['GET /api/calendar'] = cal({ missing: ['2027|3'], terms: { '2026|2': 'a', '2027|3': 'w' } });
+    answers['GET /api/calendar'] = cal({ missing: ['2026|3'], terms: { '2026|2': 'a', '2026|3': 'w' } });
     await renderDialog();
     expect(text()).not.toContain('was deleted');
   });
@@ -247,7 +247,7 @@ describe('AccountMenu calendar item', () => {
   const open = () => act(async () => { document.body.querySelector<HTMLElement>('button[aria-haspopup="menu"]')!.click(); });
 
   it('has a dot when the term on screen has no pick', async () => {
-    answers['GET /api/calendar'] = cal({ terms: { '2027|3': 'w' } });
+    answers['GET /api/calendar'] = cal({ terms: { '2026|3': 'w' } });
     await renderMenu();
     await open();
     expect(btns('Calendar subscription')).toHaveLength(1);
@@ -271,7 +271,7 @@ describe('AccountMenu calendar item', () => {
   it('shows the dot once the link is created in the dialog while a term is unpicked', async () => {
     let made = false;
     answers['GET /api/calendar'] = () =>
-      json(200, { ...(made ? linked : unlinked), terms: { '2027|3': 'w' }, missing: [] });
+      json(200, { ...(made ? linked : unlinked), terms: { '2026|3': 'w' }, missing: [] });
     answers['POST /api/calendar/link'] = () => { made = true; return json(200, linked); };
     await renderMenu();
     await open();
@@ -291,7 +291,7 @@ describe('AccountMenu calendar item', () => {
   });
 
   it('has no dot when the term on screen is picked, even if another term is missing', async () => {
-    answers['GET /api/calendar'] = cal({ missing: ['2027|3'] });
+    answers['GET /api/calendar'] = cal({ missing: ['2026|3'] });
     await renderMenu();
     await open();
     expect(dot()).toBeNull();

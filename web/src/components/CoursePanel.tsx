@@ -4,6 +4,7 @@ import { findOption } from '../lib/plan';
 import { bookedElsewhere } from '../lib/booked-section';
 import { relativeTime } from '../lib/format';
 import { TSS_HOME_URL, tssBookingLink } from '../lib/tss';
+import { displayTermLabel } from '../lib/terms';
 import type { PlanController } from '../hooks/usePlan';
 import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -302,7 +303,7 @@ export function bookedTitle(
   if (!synced) return `Enrolled courses not read yet. ${how}`;
   if (at === null) {
     return count > 0
-      ? `${count} enrolled in ${viewedTerm.label}, from an earlier read. ${how}`
+      ? `${count} enrolled in ${displayTermLabel(viewedTerm)}, from an earlier read. ${how}`
       : `Nothing read from TSS this session. ${how}`;
   }
 
@@ -315,19 +316,19 @@ export function bookedTitle(
   const enrolled = rows.filter((r) => !r.waitlisted);
   const queuedHere = rows.filter((r) => r.waitlisted && isHere(r)).length;
   const alsoQueued = queuedHere > 0 ? `, plus ${queuedHere} waitlisted` : '';
-  if (count > 0) return `${count} enrolled in ${viewedTerm.label}${alsoQueued}${read}. ${how}`;
+  if (count > 0) return `${count} enrolled in ${displayTermLabel(viewedTerm)}${alsoQueued}${read}. ${how}`;
   if (queuedHere > 0) {
     return (
-      `Not enrolled in anything in ${viewedTerm.label} — ${queuedHere} waitlisted${read}. ` +
+      `Not enrolled in anything in ${displayTermLabel(viewedTerm)} — ${queuedHere} waitlisted${read}. ` +
       `A place in a queue is not an enrolment. ${how}`
     );
   }
 
-  const elsewhere = [...new Set(enrolled.filter((r) => !isHere(r)).map((r) => r.term.label))];
+  const elsewhere = [...new Set(enrolled.filter((r) => !isHere(r)).map((r) => displayTermLabel(r.term)))];
   if (elsewhere.length > 0) {
     return (
       `TSS reports ${enrolled.length} enrolled, but in ${elsewhere.join(' and ')} — none in ` +
-      `${viewedTerm.label}, the term on screen${read}. ${how}`
+      `${displayTermLabel(viewedTerm)}, the term on screen${read}. ${how}`
     );
   }
   return `TSS reports no enrolled courses at all${read}. ${how}`;
