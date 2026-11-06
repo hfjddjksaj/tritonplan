@@ -40,7 +40,8 @@ npm run dev -w @triton/server        # API server (tsx watch, reads server/.env.
 npm test -w @triton/server           # server tests
 npm run build -w @triton/server      # esbuild → server/dist/main.mjs
 
-npm test                             # vitest across all workspaces
+npm test                             # vitest across all workspaces, then the web suite again at the next two archive boundaries
+npm run test:clock -w @triton/web    # just that future-clock run (scripts/test-future-clocks.mjs; TP_TEST_DAYS=2026-12-21,2027-03-23 to pick days)
 npm run typecheck                    # tsc --noEmit across all workspaces
 ```
 
