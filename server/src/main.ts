@@ -6,6 +6,7 @@ import { openDb } from './db/db';
 import { createConsoleMailer, createMemoryMailer, type Mailer } from './mail/mailer';
 import { createResendMailer } from './mail/resend';
 import { startRmpRefresh } from './rmp/refresh';
+import { startSharedSweep } from './share/routes';
 
 assertArgon2Available();
 const config = loadConfig(process.env);
@@ -25,6 +26,7 @@ function buildMailer(): Mailer {
 const deps = { db, config, mailer: buildMailer(), now: () => new Date(), fetch };
 const app = createApp(deps);
 const stopRmp = config.rmpRefresh ? startRmpRefresh(deps) : () => {};
+const stopSweep = startSharedSweep(deps);
 const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
   console.log(`TritonPlan API listening on ${info.address}:${info.port}`);
 });
@@ -32,6 +34,7 @@ const server = serve({ fetch: app.fetch, port: config.port, hostname: config.hos
 // systemd sends SIGTERM on stop/restart: drain the listener, then close SQLite so WAL checkpoints cleanly.
 process.on('SIGTERM', () => {
   stopRmp();
+  stopSweep();
   server.close(() => {
     db.close();
     process.exit(0);

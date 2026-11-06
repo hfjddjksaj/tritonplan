@@ -1,145 +1,170 @@
 import { expect, test } from 'vitest';
+import { SHARED_PLAN_TTL_MS } from '@triton/shared';
 import { createApp } from '../app';
 import { createSession } from '../auth/sessions';
 import { createUser } from '../auth/users';
 import { testDeps } from '../test-helpers';
+import { startSharedSweep } from './routes';
 
-const now = new Date('2026-01-15T12:00:00.000Z');
-const T = now.toISOString();
-const plan = { version: 1, term: { year: '2026', period: '2', label: 'Fall 2026' }, entries: [{ courseId: 'CSE 100' }] };
+const start = new Date('2026-01-15T12:00:00.000Z');
+const entry = (id: string, options: string[], selected: string | null = options[0]!) => ({
+  course: { id, title: id, options: options.map((o) => ({ id: o, label: o, components: [] })) },
+  selectedOptionId: selected,
+});
+const plan = {
+  version: 1,
+  term: { year: '2026', period: '010', label: 'Winter 2026' },
+  entries: [entry('CSE 100', ['a', 'b']), entry('MATH 20C', ['x'])],
+};
 
 function setup() {
-  const deps = testDeps();
+  const clock = { t: start };
+  const deps = testDeps({ now: () => clock.t });
   const app = createApp(deps);
   const mk = (email: string) => {
-    const u = createUser(deps.db, { email, verified: true, passwordHash: null, googleSub: null }, now);
-    return { ...u, email, token: createSession(deps.db, u.id, now) };
+    const u = createUser(deps.db, { email, verified: true, passwordHash: null, googleSub: null }, start);
+    return { ...u, email, token: createSession(deps.db, u.id, start) };
   };
-  const send = (method: string, path: string, body: unknown, token?: string, raw?: string) =>
+  const send = (method: string, path: string, body: unknown, token?: string, raw?: string, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
-      headers: { Origin: 'https://tritonplan.cn', 'Content-Type': 'application/json', ...(token ? { Cookie: `tp_session=${token}` } : {}) },
+      headers: { Origin: 'https://tritonplan.cn', 'Content-Type': 'application/json', ...(token ? { Cookie: `tp_session=${token}` } : {}), ...headers },
       body: raw ?? JSON.stringify(body),
     });
   const get = (path: string, token?: string, headers: Record<string, string> = {}) =>
     app.request(path, { headers: { ...(token ? { Cookie: `tp_session=${token}` } : {}), ...headers } });
   const create = async (token: string, name = 'My plan', p: unknown = plan) => {
-    const res = await send('POST', '/api/shares', { name, plan: p }, token);
-    return (await res.json()) as { code: string; url: string };
+    const res = await send('POST', '/api/shared', { name, plan: p }, token);
+    return (await res.json()) as { code: string; url: string; expiresAt: string };
   };
-  return { deps, mk, send, get, create };
+  const select = (code: string, body: unknown, headers?: Record<string, string>) =>
+    send('POST', `/api/s/${code}/select`, body, undefined, undefined, headers);
+  return { deps, clock, mk, send, get, create, select };
 }
 
-test.skip('every share route that needs an account answers 401 without a session', async () => {
+test('signed-in share routes answer 401 without a session', async () => {
   const { send, get } = setup();
-  expect((await send('POST', '/api/shares', { name: 'x', plan })).status).toBe(401);
-  expect((await get('/api/shares')).status).toBe(401);
-  expect((await send('DELETE', '/api/shares/AAAAAAAAAA', {})).status).toBe(401);
+  expect((await send('POST', '/api/shared', { name: 'x', plan })).status).toBe(401);
+  expect((await get('/api/shared')).status).toBe(401);
 });
 
-test.skip('a share is a snapshot: later edits to my plan do not change it', async () => {
-  const { deps, mk, send, get } = setup();
+test('create returns a code, url and expiry seven days out', async () => {
+  const { mk, send } = setup();
   const u = mk('a@ucsd.edu');
-  deps.db.prepare('INSERT INTO plan_docs VALUES (?, ?, ?, 1, ?, ?)').run(u.id, 'p1', 'FA26', JSON.stringify(plan), T);
-  const created = await send('POST', '/api/shares', { name: 'My plan', plan }, u.token);
-  expect(created.status).toBe(200);
-  const { code, url } = (await created.json()) as { code: string; url: string };
-  expect(code).toMatch(/^[0-9A-Za-z]{10}$/);
-  expect(url).toBe(`https://tritonplan.cn/s/${code}`);
-
-  deps.db.prepare('UPDATE plan_docs SET data = ?, version = 2 WHERE user_id = ?').run(JSON.stringify({ ...plan, entries: [] }), u.id);
-  const res = await get(`/api/s/${code}`);
+  const res = await send('POST', '/api/shared', { name: 'My plan', plan }, u.token);
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ name: 'My plan', plan, createdAt: T });
+  const b = (await res.json()) as { code: string; url: string; expiresAt: string };
+  expect(b.code).toMatch(/^[0-9A-Za-z]{10}$/);
+  expect(b.url).toBe(`https://tritonplan.cn/s/${b.code}`);
+  expect(b.expiresAt).toBe(new Date(start.getTime() + SHARED_PLAN_TTL_MS).toISOString());
 });
 
-test.skip('anyone can open a share without signing in, and sees no owner data', async () => {
+test('anyone can read a shared plan, and the response carries no owner data', async () => {
   const { mk, create, get } = setup();
   const u = mk('owner@ucsd.edu');
-  const { code } = await create(u.token);
-  const res = await get(`/api/s/${code}`); // no cookie, no Origin
+  const { code, expiresAt } = await create(u.token);
+  const res = await get(`/api/s/${code}`);
   expect(res.status).toBe(200);
   expect(res.headers.get('cache-control')).toBe('no-store');
-  const body = await res.json();
-  expect(Object.keys(body as object).sort()).toEqual(['createdAt', 'name', 'plan']);
+  const body = (await res.json()) as Record<string, unknown>;
+  expect(Object.keys(body).sort()).toEqual(['expiresAt', 'name', 'plan', 'version']);
+  expect(body).toMatchObject({ name: 'My plan', version: 1, expiresAt });
   const text = JSON.stringify(body);
   expect(text).not.toContain('owner@ucsd.edu');
   expect(text).not.toContain(u.id);
+  const v = await get(`/api/s/${code}/version`);
+  expect(await v.json()).toEqual({ version: 1 });
+  expect(v.headers.get('cache-control')).toBe('no-store');
 });
 
-test.skip('revoked, unknown and malformed codes are 404', async () => {
-  const { mk, send, create, get } = setup();
+test('select switches a section, bumps the version, and the next read shows it', async () => {
+  const { mk, create, get, select } = setup();
   const u = mk('a@ucsd.edu');
   const { code } = await create(u.token);
-  expect((await send('DELETE', `/api/shares/${code}`, {}, u.token)).status).toBe(200);
-  for (const c of [code, 'ZZZZZZZZZZ', 'short', 'AAAAAAAAAAA', 'AAAAAAAAA-', '%20AAAAAAAAA']) {
-    const res = await get(`/api/s/${c}`);
-    expect(res.status, c).toBe(404);
-    expect(await res.json()).toEqual({ error: 'not_found' });
-  }
+  const res = await select(code, { courseId: 'CSE 100', optionId: 'b' });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ version: 2 });
+  const read = (await (await get(`/api/s/${code}`)).json()) as { plan: typeof plan; version: number };
+  expect(read.version).toBe(2);
+  expect(read.plan.entries[0]!.selectedOptionId).toBe('b');
+  expect(read.plan.entries[1]!.selectedOptionId).toBe('x');
+  expect(((await (await get(`/api/s/${code}/version`)).json()) as { version: number }).version).toBe(2);
 });
 
-test.skip('only the owner can list and revoke their shares', async () => {
-  const { mk, send, create, get } = setup();
+test('select rejects anything but an existing option', async () => {
+  const { mk, create, get, select, send } = setup();
+  const u = mk('a@ucsd.edu');
+  const { code } = await create(u.token);
+  const bad: unknown[] = [
+    { courseId: 'NOPE 1', optionId: 'a' },
+    { courseId: 'CSE 100', optionId: 'zzz' },
+    { courseId: 'CSE 100', optionId: 'b', extra: 1 },
+    { courseId: 'CSE 100' },
+    { optionId: 'b' },
+    { courseId: '', optionId: 'b' },
+    { courseId: 'c'.repeat(201), optionId: 'b' },
+    { courseId: 5, optionId: 'b' },
+    [],
+  ];
+  for (const b of bad) expect((await select(code, b)).status, JSON.stringify(b)).toBe(400);
+  expect((await send('POST', `/api/s/${code}/select`, null, undefined, '{nope')).status).toBe(400);
+  expect(((await (await get(`/api/s/${code}/version`)).json()) as { version: number }).version).toBe(1);
+});
+
+test('select needs the same origin and a JSON body', async () => {
+  const { mk, create, select, send } = setup();
+  const u = mk('a@ucsd.edu');
+  const { code } = await create(u.token);
+  expect((await select(code, { courseId: 'CSE 100', optionId: 'b' }, { Origin: 'https://evil.example' })).status).toBe(403);
+  expect((await send('POST', `/api/s/${code}/select`, null, undefined, 'x', { 'Content-Type': 'text/plain' })).status).toBe(403);
+});
+
+test('unknown, malformed and expired codes are 404 everywhere', async () => {
+  const { mk, create, get, select, clock } = setup();
+  const u = mk('a@ucsd.edu');
+  const { code } = await create(u.token);
+  const body = { courseId: 'CSE 100', optionId: 'b' };
+  for (const c of ['ZZZZZZZZZZ', 'short', 'AAAAAAAAAAA', 'AAAAAAAAA-']) {
+    expect((await get(`/api/s/${c}`)).status, c).toBe(404);
+    expect((await get(`/api/s/${c}/version`)).status, c).toBe(404);
+    expect((await select(c, body)).status, c).toBe(404);
+  }
+  clock.t = new Date(start.getTime() + SHARED_PLAN_TTL_MS);
+  for (const res of [await get(`/api/s/${code}`), await get(`/api/s/${code}/version`), await select(code, body)]) {
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'not_found' });
+  }
+  expect(((await (await get('/api/shared', u.token)).json()) as { shared: unknown[] }).shared).toEqual([]);
+});
+
+test('the list shows only my live copies', async () => {
+  const { mk, create, get } = setup();
   const a = mk('a@ucsd.edu');
   const b = mk('b@ucsd.edu');
   const first = await create(a.token, 'first');
-  const second = await create(a.token, 'second');
-
-  const list = (await (await get('/api/shares', a.token)).json()) as { shares: { code: string; name: string; url: string; createdAt: string }[] };
-  expect(list.shares.map((s) => s.code).sort()).toEqual([first.code, second.code].sort());
-  expect(list.shares[0]).toEqual({ code: expect.any(String), name: expect.any(String), url: expect.stringContaining('https://tritonplan.cn/s/'), createdAt: T });
-  expect(((await (await get('/api/shares', b.token)).json()) as { shares: unknown[] }).shares).toEqual([]);
-
-  const other = await send('DELETE', `/api/shares/${first.code}`, {}, b.token);
-  expect(other.status).toBe(404);
-  expect(await other.json()).toEqual({ error: 'not_found' });
-  expect((await get(`/api/s/${first.code}`)).status).toBe(200);
-
-  expect((await send('DELETE', `/api/shares/${first.code}`, {}, a.token)).status).toBe(200);
-  expect((await send('DELETE', `/api/shares/${first.code}`, {}, a.token)).status).toBe(404);
-  expect((await get(`/api/s/${first.code}`)).status).toBe(404);
-  expect((await get(`/api/s/${second.code}`)).status).toBe(200);
+  await create(b.token, 'theirs');
+  const list = (await (await get('/api/shared', a.token)).json()) as { shared: Record<string, unknown>[] };
+  expect(list.shared).toEqual([
+    { code: first.code, name: 'first', termKey: '2026|010', createdAt: start.toISOString(), expiresAt: first.expiresAt, url: first.url },
+  ]);
 });
 
-test.skip('write guards apply to create and revoke', async () => {
-  const { deps, mk, create } = setup();
-  const u = mk('a@ucsd.edu');
-  const app = createApp(deps);
-  const { code } = await create(u.token);
-  const cookie = { Cookie: `tp_session=${u.token}` };
-  const wrongOrigin = await app.request('/api/shares', { method: 'POST', headers: { ...cookie, Origin: 'https://evil.example', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'x', plan }) });
-  expect(wrongOrigin.status).toBe(403);
-  const noJson = await app.request(`/api/shares/${code}`, { method: 'DELETE', headers: { ...cookie, Origin: 'https://tritonplan.cn' } });
-  expect(noJson.status).toBe(403);
-  expect(((await (await app.request('/api/shares', { headers: cookie })).json()) as { shares: unknown[] }).shares).toHaveLength(1);
-});
-
-test.skip('deleting the account deletes its shares', async () => {
-  const { mk, send, create, get } = setup();
-  const u = mk('a@ucsd.edu');
-  const o = mk('o@ucsd.edu');
-  const mine = await create(u.token);
-  const theirs = await create(o.token);
-  const res = await send('DELETE', '/api/account', { confirmEmail: 'a@ucsd.edu' }, u.token);
-  expect(res.status).toBe(200);
-  expect((await get(`/api/s/${mine.code}`)).status).toBe(404);
-  expect((await get(`/api/s/${theirs.code}`)).status).toBe(200);
-});
-
-test.skip('oversized plan -> 413, malformed plan -> 400', async () => {
+test('create validates the body and size', async () => {
   const { mk, send, get } = setup();
   const u = mk('a@ucsd.edu');
-  const big = await send('POST', '/api/shares', { name: 'big', plan: { ...plan, entries: ['x'.repeat(1_000_001)] } }, u.token);
+  const pad = (n: number) => [{ ...entry('CSE 100', ['a']), pad: 'x'.repeat(n) }];
+  const big = await send('POST', '/api/shared', { name: 'big', plan: { ...plan, entries: pad(1_000_001) } }, u.token);
   expect(big.status).toBe(413);
   expect(await big.json()).toEqual({ error: 'doc_too_large' });
-  const huge = await send('POST', '/api/shares', { name: 'huge', plan: { ...plan, entries: ['x'.repeat(1_300_000)] } }, u.token);
+  const huge = await send('POST', '/api/shared', { name: 'huge', plan: { ...plan, entries: pad(1_300_000) } }, u.token);
   expect(huge.status).toBe(413);
   expect(await huge.json()).toEqual({ error: 'too_large' });
 
   const bad: unknown[] = [
     { name: 'x', plan: { ...plan, version: 2 } },
     { name: 'x', plan: { ...plan, entries: 'nope' } },
+    { name: 'x', plan: { ...plan, entries: ['x'] } },
+    { name: 'x', plan: { ...plan, entries: [{ course: { id: 'a' } }] } },
     { name: 'x', plan: { ...plan, term: { year: '2026' } } },
     { name: 'x' },
     { name: '', plan },
@@ -147,40 +172,73 @@ test.skip('oversized plan -> 413, malformed plan -> 400', async () => {
     { plan },
     [],
   ];
-  for (const b of bad) expect((await send('POST', '/api/shares', b, u.token)).status, JSON.stringify(b).slice(0, 60)).toBe(400);
-  expect((await send('POST', '/api/shares', null, u.token, '{not json')).status).toBe(400);
-  expect(((await (await get('/api/shares', u.token)).json()) as { shares: unknown[] }).shares).toEqual([]);
+  for (const b of bad) expect((await send('POST', '/api/shared', b, u.token)).status, JSON.stringify(b).slice(0, 60)).toBe(400);
+  expect((await send('POST', '/api/shared', null, u.token, '{not json')).status).toBe(400);
+  expect(((await (await get('/api/shared', u.token)).json()) as { shared: unknown[] }).shared).toEqual([]);
 });
 
-test.skip('the 61st share in an hour is 429 with retryAfter, per user', async () => {
+test('the 51st live copy is 409 too_many_shares', async () => {
   const { mk, send } = setup();
   const u = mk('a@ucsd.edu');
-  const o = mk('o@ucsd.edu');
-  for (let i = 0; i < 60; i++) expect((await send('POST', '/api/shares', { name: `s${i}`, plan }, u.token)).status).toBe(200);
-  const res = await send('POST', '/api/shares', { name: 'one more', plan }, u.token);
-  expect(res.status).toBe(429);
-  const b = (await res.json()) as { error: string; retryAfter: number };
-  expect(b.error).toBe('rate_limited');
-  expect(b.retryAfter).toBeGreaterThan(0);
-  expect((await send('POST', '/api/shares', { name: 'other user', plan }, o.token)).status).toBe(200);
-});
-
-test.skip('a user with 500 live shares gets 409 too_many_shares', async () => {
-  const { deps, mk, send } = setup();
-  const u = mk('a@ucsd.edu');
-  const ins = deps.db.prepare('INSERT INTO shares VALUES (?, ?, ?, ?, ?)');
-  for (let i = 0; i < 500; i++) ins.run(`code${String(i).padStart(6, '0')}`, u.id, 'n', '{}', T);
-  const res = await send('POST', '/api/shares', { name: 'x', plan }, u.token);
+  for (let i = 0; i < 50; i++) expect((await send('POST', '/api/shared', { name: `s${i}`, plan }, u.token)).status).toBe(200);
+  const res = await send('POST', '/api/shared', { name: 'x', plan }, u.token);
   expect(res.status).toBe(409);
   expect(await res.json()).toEqual({ error: 'too_many_shares' });
 });
 
-test.skip('opening shares is limited to 300 per 15 minutes per IP', async () => {
-  const { get } = setup();
+test('the 61st create in an hour is 429 with retryAfter, per user', async () => {
+  const { deps, mk, send } = setup();
+  const u = mk('a@ucsd.edu');
+  const o = mk('o@ucsd.edu');
+  // Free the live cap so the hourly limit is what trips.
+  for (let i = 0; i < 60; i++) {
+    expect((await send('POST', '/api/shared', { name: `s${i}`, plan }, u.token)).status === 200 || i >= 50).toBe(true);
+    if (i === 49) deps.db.prepare('DELETE FROM shared_plans').run();
+  }
+  const res = await send('POST', '/api/shared', { name: 'one more', plan }, u.token);
+  expect(res.status).toBe(429);
+  expect(((await res.json()) as { error: string; retryAfter: number }).retryAfter).toBeGreaterThan(0);
+  expect((await send('POST', '/api/shared', { name: 'other', plan }, o.token)).status).toBe(200);
+});
+
+test('public reads, polls and selects each have a per-IP budget', async () => {
+  const { get, select } = setup();
   const ip = { 'x-real-ip': '203.0.113.7' };
-  for (let i = 0; i < 300; i++) expect((await get('/api/s/AAAAAAAAAA', undefined, ip)).status).toBe(404);
-  const res = await get('/api/s/AAAAAAAAAA', undefined, ip);
+  for (let i = 0; i < 300; i++) await get('/api/s/AAAAAAAAAA', undefined, ip);
+  const read = await get('/api/s/AAAAAAAAAA', undefined, ip);
+  expect(read.status).toBe(429);
+  expect(((await read.json()) as { retryAfter: number }).retryAfter).toBeGreaterThan(0);
+  expect((await get('/api/s/AAAAAAAAAA', undefined, { 'x-real-ip': '203.0.113.8' })).status).toBe(404);
+  // Polling is budgeted separately, so the exhausted read budget leaves it open.
+  expect((await get('/api/s/AAAAAAAAAA/version', undefined, ip)).status).toBe(404);
+
+  const sip = { 'x-real-ip': '203.0.113.9' };
+  for (let i = 0; i < 600; i++) await select('AAAAAAAAAA', { courseId: 'a', optionId: 'b' }, sip);
+  const res = await select('AAAAAAAAAA', { courseId: 'a', optionId: 'b' }, sip);
   expect(res.status).toBe(429);
   expect(((await res.json()) as { retryAfter: number }).retryAfter).toBeGreaterThan(0);
-  expect((await get('/api/s/AAAAAAAAAA', undefined, { 'x-real-ip': '203.0.113.8' })).status).toBe(404);
+});
+
+test('the old snapshot routes are gone', async () => {
+  const { mk, get } = setup();
+  const u = mk('a@ucsd.edu');
+  expect((await get('/api/shares', u.token)).status).toBe(404);
+});
+
+test('the sweep timer removes expired rows and stops when asked', async () => {
+  const { deps, mk, create, clock } = setup();
+  const u = mk('a@ucsd.edu');
+  await create(u.token);
+  const count = () => (deps.db.prepare('SELECT COUNT(*) AS n FROM shared_plans').get() as { n: number }).n;
+  const { vi } = await import('vitest');
+  vi.useFakeTimers();
+  try {
+    const stop = startSharedSweep(deps);
+    clock.t = new Date(start.getTime() + SHARED_PLAN_TTL_MS);
+    vi.advanceTimersByTime(3_600_000);
+    expect(count()).toBe(0);
+    stop();
+  } finally {
+    vi.useRealTimers();
+  }
 });

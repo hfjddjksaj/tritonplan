@@ -46,7 +46,7 @@ CREATE TABLE rmp_teachers (legacy_id INTEGER PRIMARY KEY, first_name TEXT NOT NU
 CREATE INDEX rmp_by_name ON rmp_teachers(name_key);
 CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `,
-  // The snapshot shares are dropped without migration; shared plans are 7-day copies that peers can switch sections in.
+  // Shared plans are 7-day server-side copies that peers can switch sections in, which replaces the static snapshot shares.
   `
 DROP INDEX IF EXISTS shares_by_user;
 DROP TABLE IF EXISTS shares;
