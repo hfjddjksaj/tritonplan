@@ -6,7 +6,8 @@ import App from './App';
 import { makeTestBoot } from './test/boot';
 import { makeGuestBoot } from './lib/cloud/boot';
 import { clearRmpCache } from './lib/cloud/api';
-import { makeCourse } from './lib/fixtures';
+import { makeCourse, makePlan } from './lib/fixtures';
+import { saveReceived, saveViewing } from './lib/storage';
 import type { TermsState } from './lib/terms-state';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -149,6 +150,9 @@ describe('App → a teacher on the calendar', () => {
   beforeEach(() => {
     localStorage.clear();
     clearRmpCache();
+    // Fall 2026 is still open (it archives on Dec 20), so the planner opens on it.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-06T20:00:00Z'));
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [] }), { status: 200 })));
     boot = makeTestBoot({ terms: account() });
     container = document.createElement('div');
@@ -160,6 +164,7 @@ describe('App → a teacher on the calendar', () => {
     container.remove();
     boot.engine.dispose();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("opens the course's ratings dialog, the plan's section marked", async () => {
@@ -173,5 +178,77 @@ describe('App → a teacher on the calendar', () => {
     expect([...dialog.querySelectorAll('.rmp__link')].map((n) => n.textContent)).toEqual(['Ada Lovelace', 'Leo Porter']);
     await act(async () => dialog.querySelector<HTMLButtonElement>('.mappop__close')!.click());
     expect(document.body.querySelector('.rmp')).toBeNull();
+  });
+});
+
+describe("App → the next term's enrollment bar", () => {
+  const OPEN = 'Winter 2026 enrollment is open';
+  let container: HTMLDivElement;
+  let root: Root;
+  let boot: ReturnType<typeof makeTestBoot> | null;
+
+  /** Fall 2026 with a planned course, and no Winter yet. */
+  function fallAccount(): TermsState {
+    const plan = makePlan();
+    return {
+      version: 1,
+      activeTermKey: '2026|2',
+      terms: { '2026|2': { term: plan.term, plans: { activeId: 'p', plans: [{ id: 'p', name: 'Plan', plan, createdAt: 'c', updatedAt: 'u', browsed: [] }] } } },
+    };
+  }
+  const bar = () => [...container.querySelectorAll('.received--active')].find((n) => n.textContent?.includes(OPEN)) ?? null;
+  const termChip = () => container.querySelector('.topbar__term-label')?.textContent ?? '';
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    clearRmpCache();
+    // Winter 2026 enrollment opened on Nov 5; Fall 2026 is not over until Dec 20.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-06T20:00:00Z'));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [] }), { status: 200 })));
+    boot = null;
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    boot?.engine.dispose();
+    sessionStorage.clear();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('shows on a Fall-with-courses account; its button creates Winter, opens it and the bar goes', async () => {
+    boot = makeTestBoot({ terms: fallAccount() });
+    await act(async () => root.render(<App boot={boot!} />));
+    expect(termChip()).toContain('Fall 2026');
+    const shown = bar();
+    expect(shown).not.toBeNull();
+    const create = [...shown!.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Create Winter 2026')!;
+    await act(async () => create.click());
+    expect(bar()).toBeNull();
+    expect(termChip()).toContain('Winter 2026');
+  });
+
+  it('is not shown signed out: the guest bar is', async () => {
+    // Even with a Fall plan on screen and no Winter, which would show it to a signed-in student.
+    await act(async () => root.render(<App boot={{ ...makeGuestBoot(), terms: fallAccount() }} onSignIn={() => {}} />));
+    expect(termChip()).toContain('Fall 2026');
+    expect(bar()).toBeNull();
+    expect(container.textContent).toContain('You’re not signed in');
+  });
+
+  it('is not shown while a plan someone sent is up', async () => {
+    const course = makeCourse('MATH-18|2026|2', 'MATH-18');
+    const sent = { ...makePlan(), entries: [{ course, selectedOptionId: course.options[0]!.id, color: '120' }] };
+    saveReceived({ plan: sent, source: 'link', receivedAt: '2026-11-01T00:00:00.000Z' });
+    saveViewing('received');
+    boot = makeTestBoot({ terms: fallAccount() });
+    await act(async () => root.render(<App boot={boot!} />));
+    expect(container.textContent).toContain('Viewing a shared plan');
+    expect(bar()).toBeNull();
   });
 });

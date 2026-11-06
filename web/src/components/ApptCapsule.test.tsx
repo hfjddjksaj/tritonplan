@@ -61,6 +61,12 @@ describe('ApptCapsule', () => {
     act(() => container.querySelector<HTMLButtonElement>('.appt-capsule')!.click());
     expect(document.body.textContent).toContain('Not captured for Fall 2027 yet');
   });
+  it('a record for the viewed term with no windows prompts, and the popover says none are listed', () => {
+    render([fall, { ...winter, windows: [] }], WINTER_2026);
+    expect(text()).toBe('Appointment times');
+    act(() => container.querySelector<HTMLButtonElement>('.appt-capsule')!.click());
+    expect(document.body.textContent).toContain('No enrollment windows listed for this term yet.');
+  });
   it('renders nothing on mobile when the term has no data', () => {
     mobile = true;
     render([], FALL_2027);

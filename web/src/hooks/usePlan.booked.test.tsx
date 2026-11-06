@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { usePlan } from './usePlan';
@@ -54,12 +54,16 @@ describe('usePlan: what TSS reported as enrolled', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    // Fall 2026 is still open (it archives on Dec 20), so the planner opens on it.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-06T20:00:00Z'));
   });
   afterEach(() => {
     act(() => root?.unmount());
     root = null;
     container.remove();
     boot.engine.dispose();
+    vi.useRealTimers();
   });
 
   it("counts the term's saved TSS report with no push this session", async () => {
