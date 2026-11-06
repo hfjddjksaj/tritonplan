@@ -7,6 +7,7 @@ import type { Term } from '@triton/shared';
 import { buildSwitcherRows, type SwitcherCell, type TermKey } from '../lib/terms';
 import { useClickAway } from '../hooks/useClickAway';
 import { ChevronDown } from './icons';
+import { tip } from './Tooltip';
 
 interface Props {
   terms: Term[];
@@ -32,7 +33,8 @@ function Cell({
       <button
         type="button"
         className="termsw__cell termsw__cell--placeholder"
-        title={`Create ${term.label}`}
+        aria-label={`Create ${term.label}`}
+        {...tip(`Create ${term.label}`)}
         onClick={() => onCreate(term)}
       >
         {cell.label}

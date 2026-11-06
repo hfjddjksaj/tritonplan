@@ -50,9 +50,10 @@ describe('TermSwitcher creatable cells', () => {
     expect(spring).toBeTruthy();
 
     const winter = container.querySelector<HTMLButtonElement>(
-      'button.termsw__cell--placeholder[title="Create Winter 2026"]',
+      'button.termsw__cell--placeholder[aria-label="Create Winter 2026"]',
     );
     expect(winter).toBeTruthy();
+    expect(winter!.hasAttribute('title')).toBe(false); // the shared tip(), never the OS tooltip
     act(() => winter!.click());
 
     expect(onCreate).toHaveBeenCalledTimes(1);
