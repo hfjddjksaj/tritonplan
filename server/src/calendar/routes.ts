@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import type { PlanState, StoredPlanDoc } from '@triton/shared';
+import { instructionSpans, type PlanState, type StoredPlanDoc } from '@triton/shared';
 import type { Deps } from '../app';
 import { randomToken } from '../auth/tokens';
 import type { Db } from '../db/db';
@@ -9,7 +9,6 @@ import { clientIp, requireUser, type AppEnv } from '../http/guard';
 import type { RateLimiter } from '../http/rate-limit';
 import { buildCalendar } from './ics';
 import { UCSD_HOLIDAYS } from './holidays';
-import { UCSD_INSTRUCTION } from './terms';
 
 const QUARTER = 900_000;
 const MAX_TERMS = 40;
@@ -121,7 +120,7 @@ export function calendarRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     }
     c.header('Content-Type', 'text/calendar; charset=utf-8');
     c.header('Cache-Control', 'no-cache');
-    return c.body(buildCalendar({ plans, now: deps.now(), holidays: UCSD_HOLIDAYS, instruction: UCSD_INSTRUCTION }));
+    return c.body(buildCalendar({ plans, now: deps.now(), holidays: UCSD_HOLIDAYS, instruction: instructionSpans() }));
   });
 
   return r;
