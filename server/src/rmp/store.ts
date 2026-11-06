@@ -33,12 +33,17 @@ interface Row {
   num_ratings: number;
 }
 
-/** A wrong professor is worse than none: only a unique exact full-name match counts. */
+/**
+ * A wrong professor is worse than none: only a unique exact full-name match counts.
+ * RMP's own blank duplicates (same name, no ratings) do not count as a second person when
+ * some other row with that name has ratings; two rated rows, or two blank ones, still do not match.
+ */
 export function lookupTeachers(db: Db, names: string[]): RmpLookup[] {
-  const q = db.prepare('SELECT legacy_id, first_name, last_name, department, avg_rating, num_ratings FROM rmp_teachers WHERE name_key = ? LIMIT 2');
+  const q = db.prepare('SELECT legacy_id, first_name, last_name, department, avg_rating, num_ratings FROM rmp_teachers WHERE name_key = ? LIMIT 5');
   return names.map((name) => {
-    const rows = q.all(nameKey(name)) as unknown as Row[];
+    let rows = q.all(nameKey(name)) as unknown as Row[];
     const searchUrl = `https://www.ratemyprofessors.com/search/professors/1079?q=${encodeURIComponent(name)}`;
+    if (rows.length > 1 && rows.some((r) => r.num_ratings > 0)) rows = rows.filter((r) => r.num_ratings > 0);
     if (rows.length !== 1) return { name, match: null, searchUrl };
     const r = rows[0]!;
     return {

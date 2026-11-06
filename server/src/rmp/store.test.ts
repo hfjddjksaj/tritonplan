@@ -66,3 +66,20 @@ test('partial names never match, even when they are a unique substring or prefix
   expect(lookupTeachers(db, ['Mia Ann Chen'])[0]!.match?.legacyId).toBe(2);
   expect(lookupTeachers(db, ['Leo Porter'])[0]!.match?.legacyId).toBe(1);
 });
+
+test('a blank duplicate entry on RMP does not hide the rated professor, but two rated or two blank entries still do not match', () => {
+  const db = openDb(':memory:');
+  replaceTeachers(db, [
+    t(10, 'Pranav', 'Upadrashta', { numRatings: 19, avgRating: 3.4 }),
+    t(11, ' Pranav', 'Upadrashta', { numRatings: 0, avgRating: 0 }), // RMP's blank duplicate
+    t(20, 'Ann', 'Lee', { numRatings: 0, avgRating: 0 }),
+    t(21, 'Ann', 'Lee', { numRatings: 0, avgRating: 0 }),
+    t(30, 'Joe', 'Politz', { numRatings: 5 }),
+    t(31, 'Joe', 'Politz', { numRatings: 8 }),
+  ], '2026-01-15T00:00:00.000Z');
+
+  const [pranav, ann, politz] = lookupTeachers(db, ['Pranav Upadrashta', 'Ann Lee', 'Joe Politz']);
+  expect(pranav!.match).toMatchObject({ legacyId: 10, numRatings: 19, avgRating: 3.4 });
+  expect(ann!.match).toBeNull(); // two blank entries: still no guess
+  expect(politz!.match).toBeNull(); // two rated people: no guess
+});
