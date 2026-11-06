@@ -58,6 +58,7 @@ export function PlannerBackdrop({ view, now }: { view: BackdropView; now: Date }
             activeLabel={displayTermLabel(plan.term)}
             archived={isArchived(plan.term, now)}
             onSwitch={noop}
+            onCreate={noop}
           />
         }
         units={units}
@@ -73,7 +74,7 @@ export function PlannerBackdrop({ view, now }: { view: BackdropView; now: Date }
             onDelete={noop}
           />
         }
-        apptSlot={<ApptCapsule appt={view.appt} />}
+        apptSlot={<ApptCapsule appt={view.appt} term={plan.term} />}
         onReset={noop}
         onOpenMap={noop}
       />
