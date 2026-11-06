@@ -7,8 +7,8 @@
  * Every mutator preserves them (deletePlan refuses the last plan; migratePlans
  * repairs a dangling activeId).
  */
-import type { PlanState, StoredPlanDoc } from '@triton/shared';
-import { emptyPlan } from './plan';
+import type { PlanState, StoredPlanDoc, Term } from '@triton/shared';
+import { DEFAULT_TERM, emptyPlan } from './plan';
 
 /** Synced as-is as one plan doc; the server's calendar feed reads the StoredPlanDoc fields. */
 export interface NamedPlan extends StoredPlanDoc {
@@ -49,6 +49,7 @@ export function migratePlans(
   existing: PlansState | null,
   legacy: PlanState | null,
   now: string,
+  bootstrapTerm: Term = DEFAULT_TERM,
 ): PlansState {
   if (existing && existing.plans.length > 0) {
     if (existing.plans.some((p) => p.id === existing.activeId)) return existing;
@@ -57,7 +58,7 @@ export function migratePlans(
   const id = newPlanId();
   return {
     activeId: id,
-    plans: [{ id, name: 'My plan', plan: legacy ?? emptyPlan(), createdAt: now, updatedAt: now }],
+    plans: [{ id, name: 'My plan', plan: legacy ?? emptyPlan(bootstrapTerm), createdAt: now, updatedAt: now }],
   };
 }
 

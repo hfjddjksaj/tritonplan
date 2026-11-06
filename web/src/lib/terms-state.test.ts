@@ -3,7 +3,8 @@ import type { Term } from '@triton/shared';
 import {
   newWorkspace, ensureWorkspace, activeWorkspace, adoptPlanIn, updateWorkspace,
   switchTermIn, newestTermKey, allPlansEmpty, adoptSeedPlan, migrateToTermsState,
-  archiveSweep, routeCapture, type TermsState,
+  archiveSweep, routeCapture, hasPlannedCourses, defaultTermKey, openUpcomingTerm,
+  type TermsState,
 } from './terms-state';
 import { emptyPlan } from './plan';
 import { makeCourse } from './fixtures';
@@ -230,4 +231,87 @@ describe('routeCapture', () => {
     const { state } = routeCapture(base(), [], [winterCourse], NOW, NOW_D); // base() Fall ws is pristine
     expect(Object.keys(state.terms)).toEqual(['2027|3']);
   });
+});
+
+const WINTER26: Term = { year: '2026', period: '3', label: 'Winter 2026' };
+const FALL25: Term = { year: '2025', period: '2', label: 'Fall 2025' };
+
+/** Put one course into a workspace's active plan (and its browsed list). */
+function planned(state: TermsState, key: string, id = 'CHEM-043A'): TermsState {
+  const course = makeCourse(id);
+  return updateWorkspace(state, key, (ps) => {
+    const withEntry = updateActivePlan(ps, (p) => ({ ...p, entries: [{ course, selectedOptionId: null }] }), NOW);
+    return addBrowsed(withEntry, withEntry.activeId, [course.id], NOW);
+  });
+}
+const NOV6 = new Date('2026-11-06T20:00:00Z');
+const NOV4 = new Date('2026-11-04T20:00:00Z');
+
+describe('hasPlannedCourses', () => {
+  it('counts planned entries only, not browsed ones', () => {
+    expect(hasPlannedCourses(base().terms['2026|2']!)).toBe(false);
+    const browsedOnly = updateWorkspace(base(), '2026|2', (ps) => addBrowsed(ps, ps.activeId, ['X-1'], NOW));
+    expect(hasPlannedCourses(browsedOnly.terms['2026|2']!)).toBe(false);
+    expect(hasPlannedCourses(planned(base(), '2026|2').terms['2026|2']!)).toBe(true);
+  });
+});
+
+describe('defaultTermKey', () => {
+  it('Fall with courses + empty Winter -> Fall', () => {
+    const s = planned(ensureWorkspace(base(), WINTER26, NOW), '2026|2');
+    expect(defaultTermKey(s, NOV6)).toBe('2026|2');
+  });
+  it('Fall with courses + Winter with courses -> Winter', () => {
+    let s = ensureWorkspace(base(), WINTER26, NOW);
+    s = planned(planned(s, '2026|2'), '2026|3', 'CSE-100');
+    expect(defaultTermKey(s, NOV6)).toBe('2026|3');
+  });
+  it('nothing planned, Winter present, Nov 6 -> Winter', () => {
+    expect(defaultTermKey(ensureWorkspace(base(), WINTER26, NOW), NOV6)).toBe('2026|3');
+  });
+  it('only an archived Fall 2025 plan + Winter present, Nov 6 -> Winter', () => {
+    let s = ensureWorkspace(ensureWorkspace(base(), FALL25, NOW), WINTER26, NOW);
+    s = planned(s, '2025|2');
+    expect(defaultTermKey(s, NOV6)).toBe('2026|3');
+  });
+  it('nothing planned, Nov 4 -> newestTermKey', () => {
+    const s = ensureWorkspace(base(), WINTER26, NOW);
+    expect(defaultTermKey(s, NOV4)).toBe(newestTermKey(s));
+  });
+});
+
+describe('openUpcomingTerm', () => {
+  it('pristine Fall bootstrap, Nov 6 -> only Winter remains, active repaired', () => {
+    const next = openUpcomingTerm(base(), NOV6, NOW);
+    expect(Object.keys(next.terms)).toEqual(['2026|3']);
+    expect(next.activeTermKey).toBe('2026|3');
+  });
+  it('Fall browsed-but-unplanned (not pristine), Nov 6 -> Fall and Winter', () => {
+    const s = updateWorkspace(base(), '2026|2', (ps) => addBrowsed(ps, ps.activeId, ['X-1'], NOW));
+    const next = openUpcomingTerm(s, NOV6, NOW);
+    expect(Object.keys(next.terms).sort()).toEqual(['2026|2', '2026|3']);
+    expect(next.activeTermKey).toBe('2026|2');
+  });
+  it('Fall with courses, Nov 6 -> same reference', () => {
+    const s = planned(base(), '2026|2');
+    expect(openUpcomingTerm(s, NOV6, NOW)).toBe(s);
+  });
+  it('Winter already present -> same reference', () => {
+    const s = ensureWorkspace(base(), WINTER26, NOW);
+    expect(openUpcomingTerm(s, NOV6, NOW)).toBe(s);
+  });
+  it('Nov 4 -> same reference', () => {
+    const s = base();
+    expect(openUpcomingTerm(s, NOV4, NOW)).toBe(s);
+  });
+  it('everything archived on 2027-03-23 -> same reference', () => {
+    const s = base();
+    expect(openUpcomingTerm(s, new Date('2027-03-23T20:00:00Z'), NOW)).toBe(s);
+  });
+});
+
+it('migrateToTermsState bootstraps on the given term', () => {
+  const s = migrateToTermsState(null, null, null, [], NOW, WINTER26);
+  expect(Object.keys(s.terms)).toEqual(['2026|3']);
+  expect(s.activeTermKey).toBe('2026|3');
 });
