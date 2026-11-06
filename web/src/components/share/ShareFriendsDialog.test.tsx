@@ -148,3 +148,67 @@ describe('ShareFriendsDialog', () => {
     expect(onCopied).not.toHaveBeenCalled();
   });
 });
+
+// WebKit (every iPhone browser) lets a page write the clipboard only inside the click itself.
+describe('ShareFriendsDialog where ClipboardItem exists', () => {
+  class FakeClipboardItem {
+    constructor(readonly data: Record<string, Promise<Blob>>) {}
+  }
+  let blobs: Blob[];
+  let cbWrite: ReturnType<typeof vi.fn>;
+  const blobText = (b: Blob) =>
+    new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result as string);
+      r.onerror = () => rej(r.error);
+      r.readAsText(b);
+    });
+
+  beforeEach(() => {
+    blobs = [];
+    vi.stubGlobal('ClipboardItem', FakeClipboardItem);
+    cbWrite = vi.fn(async (items: FakeClipboardItem[]) => {
+      blobs.push(await items[0]!.data['text/plain']!);
+    });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write: cbWrite, writeText: write } });
+  });
+
+  it('starts the clipboard write inside the click, before the link exists', async () => {
+    let finish!: (r: Response) => void;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Promise<Response>((res) => { finish = res; });
+      return json(200, { shared: listed });
+    });
+    await render([A]);
+    btn('New share')!.click(); // outside act's drain: only the synchronous part has run
+    expect(cbWrite).toHaveBeenCalledTimes(1);
+    expect(onCopied).not.toHaveBeenCalled();
+    await act(async () => {
+      finish(createAnswer());
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+    });
+    expect(await blobText(blobs[0]!)).toBe('https://tritonplan.test/s/new1');
+    expect(write).not.toHaveBeenCalled();
+    expect(onCopied).toHaveBeenCalledWith('Link copied');
+  });
+
+  it('the plan choice copies in its click too', async () => {
+    await render([A, B]);
+    await click(btn('New share'));
+    expect(cbWrite).not.toHaveBeenCalled();
+    await click(btn('Plan B'));
+    expect(cbWrite).toHaveBeenCalledTimes(1);
+    expect(onCopied).toHaveBeenCalledWith('Link copied');
+  });
+
+  it('a failed create writes nothing', async () => {
+    createAnswer = () => json(409, { error: 'too_many_shares' });
+    await render([A]);
+    await click(btn('New share'));
+    expect(cbWrite).toHaveBeenCalledTimes(1);
+    expect(blobs).toEqual([]);
+    expect(write).not.toHaveBeenCalled();
+    expect(onCopied).not.toHaveBeenCalled();
+    expect(text()).toContain('You have too many live links.');
+  });
+});

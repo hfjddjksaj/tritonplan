@@ -71,7 +71,24 @@ export function ShareFriendsDialog({
     setBusy(true);
     setAsking(false);
     setError(null);
-    const r = await createSharedPlan(p.name, p.plan);
+    const created = createSharedPlan(p.name, p.plan);
+    // WebKit (every iPhone browser) lets a page write the clipboard only inside the click, and the link
+    // arrives after it. A ClipboardItem takes a promise, so the write starts now and fills in once the link
+    // exists; a failed create rejects that promise and nothing is written.
+    let copied: Promise<boolean> | null = null;
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      const text = created.then((r) => {
+        if ('error' in r) throw new Error(r.error);
+        return new Blob([r.url], { type: 'text/plain' });
+      });
+      void text.catch(() => {}); // a failed create is reported below, from `created`
+      try {
+        copied = navigator.clipboard.write([new ClipboardItem({ 'text/plain': text })]).then(() => true, () => false);
+      } catch {
+        // A ClipboardItem that refuses a promise: copy the text once the link exists instead.
+      }
+    }
+    const r = await created;
     if (!live.current) return;
     if ('error' in r) {
       setBusy(false);
@@ -83,7 +100,8 @@ export function ShareFriendsDialog({
     if (!live.current) return;
     setBusy(false);
     if (l) setLinks([...l].sort(newestFirst));
-    await copy(r.url);
+    if (copied) onCopied((await copied) ? 'Link copied' : `Couldn't copy automatically — the link is ${r.url}`);
+    else await copy(r.url);
   }
 
   function newShare() {
