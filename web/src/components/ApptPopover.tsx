@@ -1,4 +1,4 @@
-import type { ApptTimes } from '@triton/shared';
+import type { ApptTimes, Term } from '@triton/shared';
 import {
   apptWindowStatus,
   deviceZone,
@@ -10,12 +10,15 @@ import {
 import { relativeTime } from '../lib/format';
 import { openApptTimesInTss } from '../lib/tss';
 import { PRODUCT_NAME } from '../lib/brand';
+import { displayTermLabel } from '../lib/terms';
 import { Dialog } from './Dialog';
 import { External } from './icons';
 
 interface Props {
   /** null = nothing captured yet — show the "open TSS once" prompt instead. */
   appt: ApptTimes | null;
+  /** The term being viewed — named in the prompt when nothing is captured for it. */
+  term: Term;
   onClose: () => void;
 }
 
@@ -25,7 +28,7 @@ const STATUS_LABEL: Record<ApptStatus, string> = {
 
 /** Every enrollment window of the shown term, with live status. Rendered from
  *  passively captured data; refreshing = reopening the TSS tile. */
-export function ApptPopover({ appt, onClose }: Props) {
+export function ApptPopover({ appt, term, onClose }: Props) {
   const now = new Date();
   return (
     <Dialog label="Your appointment times" className="apptpop" onClose={onClose} eyebrow="Appointment times">
@@ -33,9 +36,10 @@ export function ApptPopover({ appt, onClose }: Props) {
         {appt === null ? (
           <>
             <p className="apptpop__none">
-              Not captured yet. Open “My Appointment Times” in TSS once — with the {PRODUCT_NAME}{' '}
-              extension installed, your enrollment windows (First Pass, Second Pass, …) are picked
-              up automatically and will show here, kept fresh every time you revisit that page.
+              Not captured for {displayTermLabel(term)} yet. Open “My Appointment Times” in TSS and pick{' '}
+              {displayTermLabel(term)} in its term list — with the {PRODUCT_NAME} extension installed,
+              your enrollment windows (First Pass, Second Pass, …) are picked up automatically and
+              will show here, kept fresh every time you revisit that page.
             </p>
             <div className="mappop__actions">
               <button type="button" className="btn btn--sm btn--primary" onClick={openApptTimesInTss}>

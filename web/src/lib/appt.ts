@@ -1,10 +1,10 @@
 /** Pure logic for the student's enrollment-appointment windows: status by
- *  clock, which term/window the topbar capsule features, PT-anchored display.
+ *  clock, which window the topbar capsule features for the viewed term, PT-anchored display.
  *  Comparisons use the UTC instants; display uses America/Los_Angeles (with an
  *  explicit "PT" label appended by callers) — matching how TSS shows them,
  *  regardless of the device's timezone. Status is computed from timestamps,
  *  never from TSS's timelimitStatus (only 'U' was ever observed). */
-import type { ApptTimes, ApptWindow } from '@triton/shared';
+import type { ApptTimes, ApptWindow, Term } from '@triton/shared';
 
 export type ApptStatus = 'upcoming' | 'open' | 'ended';
 
@@ -25,31 +25,10 @@ export function nextRelevantWindow(appt: ApptTimes, now: Date): ApptWindow | nul
   return null;
 }
 
-/** Which captured term to show: the one whose next not-ended window begins
- *  soonest; if every term is over, the most recently captured all-ended term.
- *  A term with an empty `windows[]` never displays — treated as no-data
- *  (stored, but the capsule stays hidden), not as "ended". */
-export function pickDisplayTerm(list: ApptTimes[], now: Date): ApptTimes | null {
-  let best: ApptTimes | null = null;
-  let bestBegin = Infinity;
-  for (const a of list) {
-    const next = nextRelevantWindow(a, now);
-    if (!next) continue;
-    const begin = Date.parse(next.beginsAt);
-    if (begin < bestBegin) {
-      best = a;
-      bestBegin = begin;
-    }
-  }
-  if (best) return best;
-  return latestCapturedTerm(list.filter((a) => a.windows.length > 0));
-}
-
-/** The most recently captured term regardless of its windows — what the popover
- *  falls back to when nothing is display-worthy (e.g. captured but TSS lists no
- *  windows yet), so the user still sees WHAT was captured and when. */
-export function latestCapturedTerm(list: ApptTimes[]): ApptTimes | null {
-  return [...list].sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0] ?? null;
+/** The captured record of one term, or null when that term was never captured.
+ *  The capsule shows the term being viewed, nothing else. */
+export function apptForTerm(list: ApptTimes[], term: Term): ApptTimes | null {
+  return list.find((a) => a.academicYear === term.year && a.academicSession === term.period) ?? null;
 }
 
 const PT_DATE = new Intl.DateTimeFormat('en-US', {

@@ -206,7 +206,7 @@ export default function App({
           />
           )
         }
-        apptSlot={<ApptCapsule appt={appt} />}
+        apptSlot={<ApptCapsule appt={appt} term={ctl.viewPlan.term} />}
         accountSlot={
           // Signed out, the banner under the top bar carries the Sign in button.
           boot.me && <AccountMenu me={boot.me} terms={ctl.termsState} onFlash={flash} flush={boot.engine.flush} />
