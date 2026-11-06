@@ -2441,11 +2441,14 @@ p {
   overflow-y: auto;
 }
 
-/* finals-week calendar card, below the timeline */
+/* exam calendar card, between the intro and the timeline. The gap below it
+   lives on the card, not the timeline, so a midterms view with no dated exams
+   (no calendar) keeps the plain intro→timeline spacing. */
 .fincal__title {
-  margin: 26px 2px 10px;
+  margin: 0 2px 10px;
 }
 .fincal {
+  margin-bottom: 26px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);

@@ -50,6 +50,22 @@ export function FinalsView({
         Final exams for your selected sections, earliest first. Overlapping finals on the same
         day are flagged — those are the ones you can’t sit for at once.
       </p>
+      <div className="eyebrow fincal__title">Finals week at a glance</div>
+      <FinalsCalendar
+        finals={finals}
+        onOpenCourse={onOpenCourse}
+        onFocusCourse={onFocusCourse}
+        onOpenLocation={
+          onOpenLocation
+            ? (b) => {
+                if (b.building) onOpenLocation({ building: b.building, room: b.room });
+              }
+            : undefined
+        }
+        onBlockDetail={onBlockDetail}
+        variant={variant}
+      />
+
       <div className="finals__timeline">
         {finals.map((f) => {
           const c = colorsForHue(f.hue);
@@ -101,22 +117,6 @@ export function FinalsView({
           );
         })}
       </div>
-
-      <div className="eyebrow fincal__title">Finals week at a glance</div>
-      <FinalsCalendar
-        finals={finals}
-        onOpenCourse={onOpenCourse}
-        onFocusCourse={onFocusCourse}
-        onOpenLocation={
-          onOpenLocation
-            ? (b) => {
-                if (b.building) onOpenLocation({ building: b.building, room: b.room });
-              }
-            : undefined
-        }
-        onBlockDetail={onBlockDetail}
-        variant={variant}
-      />
     </div>
   );
 }
