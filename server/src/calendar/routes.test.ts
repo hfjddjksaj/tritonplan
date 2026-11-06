@@ -340,3 +340,54 @@ test('the feed is limited to 600 requests per 15 minutes per IP', async () => {
   expect(((await res.json()) as { retryAfter: number }).retryAfter).toBeGreaterThan(0);
   expect((await app.request(file, { headers: { 'x-real-ip': '203.0.113.8' } })).status).toBe(404);
 });
+
+test("a term's own feed holds only that term and is named after it", async () => {
+  const { mk, send, get, savePlan, link, path } = setup();
+  const u = mk('a@ucsd.edu');
+  await savePlan(u.token, 'fall', '2026|2', planFor('CSE', 'CSE 100|2026|2'));
+  const winter = planFor('MATH', 'MATH 100|2026|3');
+  winter.term = { year: '2026', period: '3', label: 'Winter 2027' };
+  winter.entries[0]!.course.term = winter.term;
+  await savePlan(u.token, 'winter', '2026|3', winter);
+  await send('PUT', '/api/calendar', { terms: { '2026|2': 'fall', '2026|3': 'winter' } }, u.token);
+  const base = path((await link(u.token)).https).replace(/\.ics$/, '');
+
+  const w = await get(`${base}/2026-3.ics`);
+  expect(w.status).toBe(200);
+  expect(w.headers.get('content-type')).toBe('text/calendar; charset=utf-8');
+  const wb = await w.text();
+  expect(wb).toContain('X-WR-CALNAME:Winter 26 Schedule\r\n');
+  expect(events(wb)).toHaveLength(1);
+  expect(wb).toContain('SUMMARY:MATH 100 Lecture');
+  expect(wb).not.toContain('CSE 100');
+
+  const f = await (await get(`${base}/2026-2.ics`)).text();
+  expect(f).toContain('X-WR-CALNAME:Fall 26 Schedule\r\n');
+  expect(f).not.toContain('MATH 100');
+
+  // The link from before per-term feeds keeps every term in one calendar.
+  const all = await (await get(`${base}.ics`)).text();
+  expect(all).toContain('X-WR-CALNAME:TritonPlan\r\n');
+  expect(events(all)).toHaveLength(2);
+});
+
+test("a term with no pick is an empty calendar that still carries the term's name", async () => {
+  const { mk, get, link, path } = setup();
+  const u = mk('a@ucsd.edu');
+  const base = path((await link(u.token)).https).replace(/\.ics$/, '');
+  const res = await get(`${base}/2026-3.ics`);
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain('X-WR-CALNAME:Winter 26 Schedule\r\n');
+  expect(events(body)).toHaveLength(0);
+});
+
+test('bad term feed paths and unknown secrets are 404', async () => {
+  const { mk, get, link, path } = setup();
+  const u = mk('a@ucsd.edu');
+  const base = path((await link(u.token)).https).replace(/\.ics$/, '');
+  const unknown = `/api/cal/${'A'.repeat(43)}`;
+  for (const p of [`${unknown}/2026-3.ics`, `${base}/2026|3.ics`, `${base}/2026-3.ICS`, `${base}/26-3.ics`, `${base}/2026-.ics`, `${base}.ics/2026-3.ics`]) {
+    expect((await get(p)).status, p).toBe(404);
+  }
+});

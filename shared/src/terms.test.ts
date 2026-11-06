@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Term } from '@triton/shared';
+import type { Term } from './types.js';
 import {
   termKey,
   seasonOf,

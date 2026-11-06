@@ -5,3 +5,4 @@ export * from './midterms.js';
 export * from './exam-location.js';
 export * from './sync.js';
 export * from './rmp.js';
+export * from './terms.js';

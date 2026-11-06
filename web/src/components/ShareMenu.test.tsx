@@ -99,10 +99,11 @@ describe('ShareMenu', () => {
     expect(text()).toContain(
       'Each opens the app to subscribe. Changes show up in Apple Calendar within an hour; Google Calendar can take several hours to a day.',
     );
-    expect(apple.getAttribute('href')).toBe(WEBCAL);
+    // Fall 2026's own feed, so the Winter pick already saved stays out of this subscription.
+    expect(apple.getAttribute('href')).toBe('webcal://tritonplan.cn/api/cal/secret/2026-2.ics');
     // Google's add page with the feed filled in, under a URL of its own, so Google cannot answer from its cache.
     expect(google.getAttribute('href')).toMatch(
-      /^https:\/\/calendar\.google\.com\/calendar\/r\?cid=webcal%3A%2F%2Ftritonplan\.cn%2Fapi%2Fcal%2Fsecret\.ics%3Fv%3D[a-z0-9]+$/,
+      /^https:\/\/calendar\.google\.com\/calendar\/r\?cid=webcal%3A%2F%2Ftritonplan\.cn%2Fapi%2Fcal%2Fsecret%2F2026-2\.ics%3Fv%3D[a-z0-9]+$/,
     );
     expect(google.getAttribute('target')).toBe('_blank');
     expect(text()).not.toContain('Already in your calendar?');
@@ -126,6 +127,14 @@ describe('ShareMenu', () => {
     await press(button('Just switch it to this plan'));
     expect(putBody()).toEqual({ terms: { '2026|2': 'plan-2' } });
     expect(flash).toHaveBeenCalledWith('Your calendar shows “Backup” for Fall 2026.');
+  });
+
+  it('a calendar link that only another term was picked for: this term is not in a calendar app yet', async () => {
+    calendar = () => json(200, { https: HTTPS, webcal: WEBCAL, terms: { '2026|3': 'winter-plan' }, missing: [] });
+    await render();
+    await share();
+    await press(row('Backup'));
+    expect(text()).not.toContain('Already in your calendar?');
   });
 
   it('Back returns to the plans; ×, Escape and the backdrop close it', async () => {

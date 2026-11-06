@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlanState } from '@triton/shared';
 import {
-  apiDelete, apiPost, fetchMe, fetchShare, fetchState, googleCalendarUrl, postSync, syncTimeoutMs, UnauthorizedError,
+  apiDelete, apiPost, fetchMe, fetchShare, fetchState, googleCalendarUrl, postSync, syncTimeoutMs, termCalendarLinks, UnauthorizedError,
 } from './api';
 
 const res = (status: number, body: unknown = {}) =>
@@ -197,5 +197,12 @@ describe('googleCalendarUrl', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('termCalendarLinks', () => {
+  it("puts one term's feed under the account's link", () => {
+    expect(termCalendarLinks({ https: 'https://tritonplan.cn/api/cal/s.ics', webcal: 'webcal://tritonplan.cn/api/cal/s.ics' }, '2026|3'))
+      .toEqual({ https: 'https://tritonplan.cn/api/cal/s/2026-3.ics', webcal: 'webcal://tritonplan.cn/api/cal/s/2026-3.ics' });
   });
 });

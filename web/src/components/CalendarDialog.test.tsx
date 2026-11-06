@@ -105,7 +105,7 @@ describe('CalendarDialog', () => {
     await renderDialog();
     expect(text()).toContain('Calendar subscription');
     expect(text()).toContain(
-      'Pick one plan per term. Your calendar shows the classes, midterms and finals of the plans you pick, and drops a term once its finals are over.',
+      "Each term is a calendar of its own. It shows the classes, midterms and finals of the plan you pick for it, and empties once the term's finals are over.",
     );
   });
 
@@ -149,19 +149,20 @@ describe('CalendarDialog', () => {
   it('Apple is the webcal:// link, Google opens its add page, and the https:// link can still be copied', async () => {
     await renderDialog();
     const a = document.body.querySelector<HTMLAnchorElement>('a[href^="webcal://"]')!;
-    expect(a.getAttribute('href')).toBe(WEBCAL);
-    expect(text()).toContain('Add it to');
+    // Fall 2026's own feed: subscribing to one term never brings another along.
+    expect(a.getAttribute('href')).toBe('webcal://tritonplan.cn/cal/secret/2026-2.ics');
+    expect(text()).toContain('Add Fall 2026 to');
     expect(a.textContent).toContain('Apple Calendar');
     expect(text()).toContain(
       "Each opens the app to subscribe. Changes show up in Apple Calendar within an hour; Google Calendar can take several hours to a day, and that can't be sped up.",
     );
     const g = [...document.body.querySelectorAll('a')].find((e) => e.textContent?.includes('Google Calendar'))!;
     expect(g.getAttribute('href')).toMatch(
-      /^https:\/\/calendar\.google\.com\/calendar\/r\?cid=webcal%3A%2F%2Ftritonplan\.cn%2Fcal%2Fsecret\.ics%3Fv%3D[a-z0-9]+$/,
+      /^https:\/\/calendar\.google\.com\/calendar\/r\?cid=webcal%3A%2F%2Ftritonplan\.cn%2Fcal%2Fsecret%2F2026-2\.ics%3Fv%3D[a-z0-9]+$/,
     );
     expect(g.getAttribute('target')).toBe('_blank');
     await click(btns('Copy the link')[0]!);
-    expect(writeText).toHaveBeenCalledWith(HTTPS);
+    expect(writeText).toHaveBeenCalledWith('https://tritonplan.cn/cal/secret/2026-2.ics');
     expect(flash).toHaveBeenCalledWith('Calendar link copied.');
   });
 
@@ -216,7 +217,7 @@ describe('CalendarDialog', () => {
   it('Reset asks first, and Keep sends nothing', async () => {
     await renderDialog();
     await click(btns('Reset link')[0]!);
-    expect(text()).toContain("Your old link stops working right away, and you'll need to subscribe again.");
+    expect(text()).toContain("Your old links stop working right away, and you'll need to subscribe to each term again.");
     await click(btns('Keep')[0]!);
     expect(fetchMock.mock.calls.some((c) => c[0] === '/api/calendar/reset')).toBe(false);
     expect(btns('Reset link')).toHaveLength(1);
@@ -229,10 +230,10 @@ describe('CalendarDialog', () => {
     await click(btns('Reset link')[0]!);
     await click(btns('Reset')[0]!);
     expect(document.body.querySelector('a[href^="webcal://"]')!.getAttribute('href')).toBe(
-      'webcal://tritonplan.cn/cal/new.ics',
+      'webcal://tritonplan.cn/cal/new/2026-2.ics',
     );
     await click(btns('Copy the link')[0]!);
-    expect(writeText).toHaveBeenCalledWith('https://tritonplan.cn/cal/new.ics');
+    expect(writeText).toHaveBeenCalledWith('https://tritonplan.cn/cal/new/2026-2.ics');
   });
 
   it('a failed load says so', async () => {

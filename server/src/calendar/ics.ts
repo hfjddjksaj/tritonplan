@@ -186,18 +186,20 @@ function examEvent(course: CourseOffering, kind: 'Final' | 'Midterm', uid: strin
 
 export function buildCalendar(input: {
   plans: { plan: PlanState }[];
+  /** What the calendar app names the subscription. */
+  name?: string;
   now: Date;
   holidays: readonly string[];
   /** Weeks of instruction by term key, for meetings that carry no dates of their own. */
   instruction?: Readonly<Record<string, TermSpan>>;
 }): string {
-  const { now, holidays, instruction = {} } = input;
+  const { now, holidays, instruction = {}, name = 'TritonPlan' } = input;
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//TritonPlan//Calendar//EN',
     'CALSCALE:GREGORIAN',
-    'X-WR-CALNAME:TritonPlan',
+    `X-WR-CALNAME:${esc(name)}`,
     `X-WR-TIMEZONE:${TZID}`,
     'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
     'X-PUBLISHED-TTL:PT1H',

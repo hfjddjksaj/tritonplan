@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Term } from '@triton/shared';
 import {
-  createCalendarLink, fetchCalendar, googleCalendarUrl, saveCalendarTerms, type CalendarLinks,
+  createCalendarLink, fetchCalendar, googleCalendarUrl, saveCalendarTerms, termCalendarLinks, type CalendarLinks,
 } from '../lib/cloud/api';
 import { displayTermLabel, termKey } from '../lib/terms';
 import { Dialog } from './Dialog';
@@ -22,19 +22,19 @@ interface Props {
 
 const UNREACHABLE = "Couldn't reach your calendar settings. Check your connection and try again.";
 
-/** What step two needs: the plan picked, the account's calendar link, and the term → plan picks it already has. */
+/** What step two needs: the plan picked, this term's calendar link, and the term → plan picks the account already has. */
 interface Picked {
   plan: { id: string; name: string };
   links: CalendarLinks;
   picks: Record<string, string>;
-  /** The account had a calendar link before: it is probably in a calendar app already. */
+  /** This term already had a plan in the calendar: it is probably in a calendar app already. */
   subscribed: boolean;
 }
 
 /**
  * Share — puts a plan into the student's calendar, in a dialog like the building one: first which
- * plan of this term, then which calendar app. Both apps subscribe to the account's one calendar
- * link, which shows one plan per term, so exporting a plan makes it this term's. Picking the plan
+ * plan of this term, then which calendar app. Both apps subscribe to this term's own calendar,
+ * which shows the one plan picked for it, so exporting a plan makes it this term's. Picking the plan
  * fetches (or makes) the link, so the app choices are plain links the browser follows inside the
  * click; a webcal:// opened after an await could be refused for want of a user gesture.
  */
@@ -68,7 +68,7 @@ function ShareDialog({ term, plans, activeId, archived, flush, onFlash, onClose 
       onFlash(UNREACHABLE);
       return;
     }
-    setPicked({ plan, links, picks: cal.terms, subscribed: cal.https !== null });
+    setPicked({ plan, links: termCalendarLinks(links, key), picks: cal.terms, subscribed: cal.https !== null && !!cal.terms[key] });
   }
 
   /** The server replaces the whole map, so every other term's pick goes along unchanged. */

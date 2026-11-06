@@ -240,7 +240,8 @@ instead); the share routes stay so links made before then keep opening.
 | `GET /calendar`, `PUT /calendar` | signed in | Read / save which plan is picked per term. |
 | `POST /calendar/link` | signed in | Create the feed link, or return the existing one. |
 | `POST /calendar/reset` | signed in | Issue a new secret; the old URL stops working. |
-| `GET /cal/:file` | **public** | The `.ics` feed at `/api/cal/<secret>.ics`; the secret is the credential. Rate-limited per IP. |
+| `GET /cal/:file` | **public** | Every picked term in one `.ics` feed at `/api/cal/<secret>.ics` (named `TritonPlan`; links handed out before per-term feeds); the secret is the credential. Rate-limited per IP. |
+| `GET /cal/:secret/:file` | **public** | One term's feed at `/api/cal/<secret>/<year>-<period>.ics`, named e.g. `Winter 26 Schedule`; what the planner's Apple/Google buttons subscribe to. A term with no pick is an empty calendar. Same rate limit. |
 | `GET /rmp?name=…` | signed in | Look up RMP ratings for up to 20 instructor names. |
 
 ## Reference material

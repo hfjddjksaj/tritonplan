@@ -1,7 +1,7 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import type { PlanState, StoredPlanDoc } from '@triton/shared';
+import { displayTermLabel, termKey, type PlanState, type StoredPlanDoc, type Term } from '@triton/shared';
 import type { Deps } from '../app';
 import { randomToken } from '../auth/tokens';
 import type { Db } from '../db/db';
@@ -15,7 +15,10 @@ const QUARTER = 900_000;
 const MAX_TERMS = 40;
 // Twice the largest valid body (40 picks of 100-character keys and ids, about 8 KB).
 const BODY_LIMIT = 16 * 1024;
+const SECRET_RE = /^[A-Za-z0-9_-]{43}$/;
 const FILE_RE = /^([A-Za-z0-9_-]{43})\.ics$/;
+// One term's feed: `${year}-${period}.ics`, the term key with '|' made URL-safe.
+const TERM_FILE_RE = /^(\d{4})-([A-Za-z0-9]{1,10})\.ics$/;
 
 // Keys become object keys in responses; these names would poke at Object.prototype.
 const key = z.string().min(1).max(100).refine((k) => !['__proto__', 'constructor', 'prototype'].includes(k));
@@ -48,6 +51,14 @@ function loadPick(db: Db, userId: string, termKey: string, planId: string): Plan
   } catch {
     return null;
   }
+}
+
+/**
+ * "Winter 26 Schedule": the term's label as the planner shows it, with a two-digit year. Each term is a
+ * subscription of its own, so the name is what tells them apart in the calendar app's list.
+ */
+export function termCalendarName(term: Term): string {
+  return `${displayTermLabel(term).replace(/\b\d{2}(\d{2})$/, '$1')} Schedule`;
 }
 
 export function calendarRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
@@ -104,24 +115,49 @@ export function calendarRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     return c.json(links(secret));
   });
 
+  const ownerOf = (secret: string | undefined) =>
+    secret
+      ? (db.prepare('SELECT user_id FROM calendar_feeds WHERE secret = ?').get(secret) as { user_id: string } | undefined)?.user_id
+      : undefined;
+  const feed = (c: Context<AppEnv>, body: string) => {
+    c.header('Content-Type', 'text/calendar; charset=utf-8');
+    c.header('Cache-Control', 'no-cache');
+    return c.body(body);
+  };
+  const calendar = (plans: { plan: PlanState }[], name?: string) =>
+    buildCalendar({ plans, name, now: deps.now(), holidays: UCSD_HOLIDAYS, instruction: UCSD_INSTRUCTION });
+
   // Public: the secret in the path is the credential. The body is calendar text only, with nothing about the owner.
+  // Every picked term in one calendar: the link the planner handed out before each term had its own.
   r.get('/cal/:file', (c) => {
     const hit = limiter.hit(`cal:ip:${clientIp(c)}`, 600, QUARTER);
     if (!hit.ok) return c.json({ error: 'rate_limited', retryAfter: hit.retryAfterSec }, 429);
-    const secret = FILE_RE.exec(c.req.param('file'))?.[1];
-    const owner = secret
-      ? (db.prepare('SELECT user_id FROM calendar_feeds WHERE secret = ?').get(secret) as { user_id: string } | undefined)
-      : undefined;
+    const owner = ownerOf(FILE_RE.exec(c.req.param('file'))?.[1]);
     if (!owner) return c.text('Not found', 404);
-    const terms = readTerms(db, owner.user_id);
+    const terms = readTerms(db, owner);
     const plans: { plan: PlanState }[] = [];
     for (const k of Object.keys(terms).sort()) {
-      const plan = loadPick(db, owner.user_id, k, terms[k]!);
+      const plan = loadPick(db, owner, k, terms[k]!);
       if (plan) plans.push({ plan });
     }
-    c.header('Content-Type', 'text/calendar; charset=utf-8');
-    c.header('Cache-Control', 'no-cache');
-    return c.body(buildCalendar({ plans, now: deps.now(), holidays: UCSD_HOLIDAYS, instruction: UCSD_INSTRUCTION }));
+    return feed(c, calendar(plans));
+  });
+
+  // One term's calendar. A term with no pick yet is an empty calendar, not a 404: the subscription stays good and fills once a plan is picked.
+  r.get('/cal/:secret/:file', (c) => {
+    const hit = limiter.hit(`cal:ip:${clientIp(c)}`, 600, QUARTER);
+    if (!hit.ok) return c.json({ error: 'rate_limited', retryAfter: hit.retryAfterSec }, 429);
+    const secret = c.req.param('secret');
+    const m = TERM_FILE_RE.exec(c.req.param('file'));
+    const owner = m && SECRET_RE.test(secret) ? ownerOf(secret) : undefined;
+    if (!m || !owner) return c.text('Not found', 404);
+    const key = termKey({ year: m[1]!, period: m[2]!, label: '' });
+    const pickId = readTerms(db, owner)[key];
+    const plan = pickId ? loadPick(db, owner, key, pickId) : null;
+    // TSS's own label stands in for a season the planner has no code for yet.
+    const term = plan?.entries.map((e) => e.course?.term).find((t) => t && termKey(t) === key && typeof t.label === 'string')
+      ?? { year: m[1]!, period: m[2]!, label: '' };
+    return feed(c, calendar(plan ? [{ plan }] : [], termCalendarName(term)));
   });
 
   return r;

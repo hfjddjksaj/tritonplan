@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  createCalendarLink, fetchCalendar, googleCalendarUrl, resetCalendarLink, saveCalendarTerms,
+  createCalendarLink, fetchCalendar, googleCalendarUrl, resetCalendarLink, saveCalendarTerms, termCalendarLinks,
   type CalendarLinks, type CalendarState,
 } from '../lib/cloud/api';
 import type { TermsState } from '../lib/terms-state';
@@ -32,7 +32,7 @@ export function calendarNeedsPick(row: CalendarRow | null, cal: Pick<CalendarSta
 }
 
 const INTRO =
-  'Pick one plan per term. Your calendar shows the classes, midterms and finals of the plans you pick, and drops a term once its finals are over.';
+  "Each term is a calendar of its own. It shows the classes, midterms and finals of the plan you pick for it, and empties once the term's finals are over.";
 
 /** Pick the on-screen term's plan and subscribe to the result in Apple or Google Calendar. */
 export function CalendarDialog({
@@ -118,6 +118,7 @@ export function CalendarDialog({
   }
 
   const gone = row !== null && missing.includes(row.key);
+  const feed = links && row ? termCalendarLinks(links, row.key) : null;
   const value = row === null || gone ? '' : (picks[row.key] ?? '');
   const options: MenuOption[] = row
     ? [
@@ -163,8 +164,8 @@ export function CalendarDialog({
             )
           )}
           {saveFailed && <Message tone="error">Couldn't save. Please try again.</Message>}
-          <div className="callout">
-            {!links ? (
+          {!links ? (
+            <div className="callout">
               <button
                 type="button"
                 className="btn btn--sm btn--primary"
@@ -173,14 +174,16 @@ export function CalendarDialog({
               >
                 Create my calendar link
               </button>
-            ) : (
-              <>
-                <div className="callout__label">Add it to</div>
+            </div>
+          ) : (
+            feed && row && (
+              <div className="callout">
+                <div className="callout__label">Add {row.label} to</div>
                 <div className="callout__actions">
-                  <a className="btn btn--sm" href={links.webcal}>
+                  <a className="btn btn--sm" href={feed.webcal}>
                     <Calendar size={14} /> Apple Calendar
                   </a>
-                  <a className="btn btn--sm" href={googleCalendarUrl(links.webcal)} target="_blank" rel="noopener noreferrer">
+                  <a className="btn btn--sm" href={googleCalendarUrl(feed.webcal)} target="_blank" rel="noopener noreferrer">
                     <Calendar size={14} /> Google Calendar <External size={11} className="callout__ext" />
                   </a>
                 </div>
@@ -188,13 +191,13 @@ export function CalendarDialog({
                   Each opens the app to subscribe. Changes show up in Apple Calendar within an hour; Google Calendar can
                   take several hours to a day, and that can't be sped up.
                 </p>
-              </>
-            )}
-          </div>
+              </div>
+            )
+          )}
           {links &&
             (confirmingReset ? (
               <div className="callout callout--danger">
-                <p className="callout__text">Your old link stops working right away, and you'll need to subscribe again.</p>
+                <p className="callout__text">Your old links stop working right away, and you'll need to subscribe to each term again.</p>
                 <div className="callout__actions">
                   <button
                     type="button"
@@ -211,13 +214,15 @@ export function CalendarDialog({
               </div>
             ) : (
               <div className="mappop__foot">
-                <p className="mappop__hint">
-                  Another app, or Google didn't open?{' '}
-                  <button type="button" className="tlink" onClick={() => void copy(links.https)}>
-                    Copy the link
-                  </button>{' '}
-                  and add it as a calendar from a URL.
-                </p>
+                {feed && (
+                  <p className="mappop__hint">
+                    Another app, or Google didn't open?{' '}
+                    <button type="button" className="tlink" onClick={() => void copy(feed.https)}>
+                      Copy the link
+                    </button>{' '}
+                    and add it as a calendar from a URL.
+                  </p>
+                )}
                 <p className="mappop__hint">
                   Shared the link by mistake?{' '}
                   <button type="button" className="tlink tlink--danger" onClick={() => setConfirmingReset(true)}>

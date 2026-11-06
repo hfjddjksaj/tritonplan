@@ -121,6 +121,16 @@ export async function fetchShare(
 export interface CalendarLinks { https: string; webcal: string }
 
 /**
+ * One term's feed under the account's link: `<secret>.ics` → `<secret>/<year>-<period>.ics`. Each term is a
+ * subscription of its own, named after the term, so subscribing to Winter never brings Fall along.
+ */
+export function termCalendarLinks(links: CalendarLinks, key: string): CalendarLinks {
+  const file = `/${key.replace('|', '-')}.ics`;
+  const at = (url: string) => url.replace(/\.ics$/, file);
+  return { https: at(links.https), webcal: at(links.webcal) };
+}
+
+/**
  * Google's "add a calendar by URL", with the feed already filled in. Google keeps a copy of a feed per URL and
  * answers a re-add from it for hours, so each link adds the feed under a URL of its own: the server ignores the
  * `v` query, and Google fetches what the feed holds now.
