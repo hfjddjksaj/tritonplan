@@ -136,15 +136,15 @@ test('putAppt merges per term', () => {
   const u = mk('a@ucsd.edu');
   const appt = (academicSession: string, capturedAt: string): ApptTimes =>
     ({ academicYear: '2026', academicSession, yearText: '2026', sessionText: 's', windows: [], capturedAt });
-  const fall = appt('3', '2026-09-01T00:00:00Z');
-  const winter = appt('1', '2026-11-01T00:00:00Z');
+  const fall = appt('2', '2026-09-01T00:00:00Z');
+  const winter = appt('3', '2026-11-01T00:00:00Z');
   applyOps(db, u, [{ op: 'putAppt', data: [fall] }], T);
   applyOps(db, u, [{ op: 'putAppt', data: [winter] }], T);
-  expect(getSnapshot(db, u).appt).toEqual([winter, fall]);
-  applyOps(db, u, [{ op: 'putAppt', data: [appt('3', '2026-08-01T00:00:00Z')] }], T);
-  expect(getSnapshot(db, u).appt).toEqual([winter, fall]);
+  expect(getSnapshot(db, u).appt).toEqual([fall, winter]);
+  applyOps(db, u, [{ op: 'putAppt', data: [appt('2', '2026-08-01T00:00:00Z')] }], T);
+  expect(getSnapshot(db, u).appt).toEqual([fall, winter]);
   applyOps(db, u, [{ op: 'putAppt', data: [] }], T);
-  expect(getSnapshot(db, u).appt).toEqual([winter, fall]);
+  expect(getSnapshot(db, u).appt).toEqual([fall, winter]);
 });
 
 test('users are fully isolated', () => {

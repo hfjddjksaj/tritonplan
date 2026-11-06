@@ -23,8 +23,8 @@ const appt = (academicSession: string, capturedAt: string): ApptTimes => ({
   windows: [],
   capturedAt,
 });
-const fall = appt('3', '2026-09-01T00:00:00Z');
-const winter = appt('1', '2026-11-01T00:00:00Z');
+const fall = appt('2', '2026-09-01T00:00:00Z');
+const winter = appt('3', '2026-11-01T00:00:00Z');
 
 describe('useApptTimes', () => {
   let container: HTMLDivElement;
@@ -52,8 +52,8 @@ describe('useApptTimes', () => {
   it('merges a push for another term and saves the merged list', async () => {
     const spy = vi.spyOn(boot.engine, 'setAppt');
     await act(async () => push([winter]));
-    expect(value).toEqual([winter, fall]);
-    expect(spy).toHaveBeenCalledWith([winter, fall]);
+    expect(value).toEqual([fall, winter]);
+    expect(spy).toHaveBeenCalledWith([fall, winter]);
   });
 
   it('an empty push changes nothing', async () => {

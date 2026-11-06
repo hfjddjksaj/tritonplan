@@ -16,9 +16,9 @@ describe('mergeApptTimes', () => {
     expect(apptTermKey(appt('3', 'x'))).toBe('2026|3');
   });
   it('adds a term the account does not have', () => {
-    const fall = appt('3', '2026-09-01T00:00:00Z');
-    const winter = appt('1', '2026-11-01T00:00:00Z');
-    expect(mergeApptTimes([fall], [winter]).map(apptTermKey)).toEqual(['2026|1', '2026|3']);
+    const fall = appt('2', '2026-09-01T00:00:00Z');
+    const winter = appt('3', '2026-11-01T00:00:00Z');
+    expect(mergeApptTimes([fall], [winter]).map(apptTermKey)).toEqual(['2026|2', '2026|3']);
   });
   it('replaces a term with a newer capture', () => {
     const merged = mergeApptTimes([appt('3', '2026-09-01T00:00:00Z')], [appt('3', '2026-10-01T00:00:00Z')]);
