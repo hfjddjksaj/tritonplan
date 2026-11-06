@@ -32,6 +32,18 @@ export const PLANNER_MATCH =
     ? __PLANNER_MATCH__
     : 'https://tritonplan.cn/*';
 
+/** Shared plans live under this path; those pages are never a planner (no pushes, no focus). */
+export const SHARED_PLAN_PATH_PREFIX = '/s/';
+
+export function isSharedPlanUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    return new URL(url).pathname.startsWith(SHARED_PLAN_PATH_PREFIX);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * window.postMessage channel used by the MAIN-world interceptor → isolated relay.
  * MUST stay byte-identical to `CHANNEL` in content/interceptor.ts.

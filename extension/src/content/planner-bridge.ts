@@ -16,6 +16,7 @@ import {
   BRIDGE_VERSION,
   MSG,
   PAGE_BRIDGE_SOURCE,
+  isSharedPlanUrl,
   TSS_URL_PREFIX,
   type PlanAddIntent,
 } from '../config.js';
@@ -121,6 +122,9 @@ async function flushPlanAdds(): Promise<void> {
 }
 
 async function syncAll(): Promise<void> {
+  // A shared-plan page is a viewer, not a planner: it must not receive courses
+  // or swallow the queued "+ TritonPlan" adds meant for the real planner.
+  if (isSharedPlanUrl(window.location.href)) return;
   await pushCourses();
   await pushApptTimes();
   await pushBooked();

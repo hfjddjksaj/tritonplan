@@ -37,6 +37,9 @@ const PLANNER_MATCH = `${PLANNER_URL}*`;
 /** Planner match the --dev build adds so the bridge also runs on the local Vite server. */
 const DEV_PLANNER_MATCH = 'http://localhost:5173/*';
 
+/** Shared-plan pages on the local server stay bridge-free, like production's /s/*. */
+const DEV_SHARED_PLAN_MATCH = 'http://localhost:5173/s/*';
+
 const SHARED_ENTRY = resolve(root, '../shared/src/index.ts');
 
 /** Options common to every esbuild call. */
@@ -180,6 +183,7 @@ function writeManifest() {
       cs.js.includes('content/planner-bridge.js'),
     );
     bridge.matches.push(DEV_PLANNER_MATCH);
+    bridge.exclude_matches.push(DEV_SHARED_PLAN_MATCH);
   }
   writeFileSync(resolve(dist, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 }

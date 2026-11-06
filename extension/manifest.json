@@ -50,6 +50,7 @@
     },
     {
       "matches": ["https://tritonplan.cn/*"],
+      "exclude_matches": ["https://tritonplan.cn/s/*"],
       "js": ["content/planner-bridge.js"],
       "run_at": "document_idle"
     },

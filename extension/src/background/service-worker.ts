@@ -16,6 +16,7 @@ import {
   TSS_URL_PREFIX,
   type PlanAddIntent,
 } from '../config.js';
+import { pickPlannerTab, plannerTabsOnly } from '../lib/planner-tabs.js';
 import type { CourseOffering } from '@triton/shared';
 
 const STORE_KEY = 'tp:store';
@@ -64,7 +65,7 @@ async function openOrFocusPlanner(): Promise<chrome.tabs.Tab | undefined> {
   } catch {
     tabs = [];
   }
-  const existing = tabs.find((t) => t.id != null);
+  const existing = pickPlannerTab(tabs);
   if (existing && existing.id != null) {
     try {
       await chrome.tabs.update(existing.id, { active: true });
@@ -103,7 +104,7 @@ function schedulePlannerRefresh(): void {
       } catch {
         return;
       }
-      for (const t of tabs) {
+      for (const t of plannerTabsOnly(tabs)) {
         if (t.id == null) continue;
         try {
           await chrome.tabs.sendMessage(t.id, { type: MSG.FLUSH });

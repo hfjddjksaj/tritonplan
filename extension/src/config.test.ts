@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { PLANNER_URL, PLANNER_MATCH } from './config.js';
+import { PLANNER_URL, PLANNER_MATCH, isSharedPlanUrl } from './config.js';
 
 interface ContentScript {
   matches: string[];
@@ -27,5 +27,22 @@ describe('planner origin', () => {
     const bridge = manifest.content_scripts.find((c) => c.js.includes('content/planner-bridge.js'));
     expect(bridge?.matches).toEqual([PLANNER_MATCH]);
     expect(JSON.stringify(manifest)).not.toContain('github.io');
+  });
+});
+
+describe('isSharedPlanUrl', () => {
+  it('is true only for /s/ paths', () => {
+    expect(isSharedPlanUrl('https://tritonplan.cn/s/Ab3dE9xQ2k')).toBe(true);
+    expect(isSharedPlanUrl('https://tritonplan.cn/')).toBe(false);
+    expect(isSharedPlanUrl('https://tritonplan.cn/settings')).toBe(false);
+    expect(isSharedPlanUrl('https://tritonplan.cn/sx')).toBe(false);
+    expect(isSharedPlanUrl(undefined)).toBe(false);
+    expect(isSharedPlanUrl('not a url')).toBe(false);
+  });
+
+  it('manifest keeps the bridge off /s/ pages and stays free of localhost', () => {
+    const bridge = manifest.content_scripts.find((c) => c.js.includes('content/planner-bridge.js'));
+    expect((bridge as { exclude_matches?: string[] }).exclude_matches).toEqual(['https://tritonplan.cn/s/*']);
+    expect(JSON.stringify(manifest)).not.toContain('localhost');
   });
 });
