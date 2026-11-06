@@ -15,7 +15,7 @@ import { Dialog } from './Dialog';
 import { External } from './icons';
 
 interface Props {
-  /** null = nothing captured yet — show the "open TSS once" prompt instead. */
+  /** null = nothing captured for this term — show the "open TSS once" prompt instead. */
   appt: ApptTimes | null;
   /** The term being viewed — named in the prompt when nothing is captured for it. */
   term: Term;

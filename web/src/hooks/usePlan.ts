@@ -102,10 +102,14 @@ function initialState(boot: CloudBoot): {
   // Its first workspace is the live upcoming term when there is one.
   const terms = boot.terms ?? migrateToTermsState(null, null, null, pool, iso, upcomingTerm ?? DEFAULT_TERM);
   const swept = archiveSweep(terms, pool, now);
-  // The upcoming term is opened when nothing is planned yet; then the default view is the newest term with
-  // planned courses (see defaultTermKey). The stored activeTermKey is ignored on load.
-  // Plans they chose to save before signing in are kept after that, and shown (their switch wins).
-  const opened = openUpcomingTerm(swept.state, now, iso);
+  // The upcoming term is opened when no non-archived term has planned courses; then the default view is the newest
+  // non-archived term with planned courses (see defaultTermKey). The stored activeTermKey is ignored on load.
+  // Plans they chose to save before signing in are kept after that, and shown (their switch wins). An adopted plan
+  // of a term that is not over counts as planned, so no empty upcoming term is opened beside it. That is checked
+  // here rather than by opening after adoptInto, which would take an adopted empty plan for a pristine placeholder
+  // and drop it.
+  const adoptsLive = adopt.some((a) => !isArchived(a.plan.term, now));
+  const opened = adoptsLive ? swept.state : openUpcomingTerm(swept.state, now, iso);
   const state = switchTermIn(opened, defaultTermKey(opened, now));
   if (adopt.length === 0) return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds, upcomingTerm };
   return {
@@ -735,6 +739,7 @@ export function usePlan(boot: CloudBoot) {
     termList,
     archived,
     switchTerm,
+    // The live upcoming term as of boot (liveUpcomingTerm): null when none has opened enrollment, or it is archived.
     upcomingTerm: bootRef.current.upcomingTerm,
     createTerm,
     // plan-add picker — lists the plans of the COURSE's term, not the viewed term
