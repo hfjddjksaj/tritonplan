@@ -1,6 +1,7 @@
 /** The topbar term chip, upgraded to a switcher: anchored panel with one row
  *  per academic year (Fall | Winter | Spring), a bold divider, then Summer
- *  rows. Grey placeholder cells are not clickable. */
+ *  rows. Grey placeholder cells are not clickable, except a Fall/Winter one the
+ *  account may still create (`cell.create`): that is a button that creates it. */
 import { useRef, useState } from 'react';
 import type { Term } from '@triton/shared';
 import { buildSwitcherRows, type SwitcherCell, type TermKey } from '../lib/terms';
@@ -13,9 +14,31 @@ interface Props {
   activeLabel: string;
   archived: boolean;
   onSwitch: (key: TermKey) => void;
+  onCreate: (term: Term) => void;
 }
 
-function Cell({ cell, onPick }: { cell: SwitcherCell; onPick: (key: TermKey) => void }) {
+function Cell({
+  cell,
+  onPick,
+  onCreate,
+}: {
+  cell: SwitcherCell;
+  onPick: (key: TermKey) => void;
+  onCreate: (term: Term) => void;
+}) {
+  if (cell.create) {
+    const term = cell.create;
+    return (
+      <button
+        type="button"
+        className="termsw__cell termsw__cell--placeholder"
+        title={`Create ${term.label}`}
+        onClick={() => onCreate(term)}
+      >
+        {cell.label}
+      </button>
+    );
+  }
   if (!cell.selectable || cell.key === null) {
     return <span className="termsw__cell termsw__cell--placeholder">{cell.label}</span>;
   }
@@ -31,7 +54,7 @@ function Cell({ cell, onPick }: { cell: SwitcherCell; onPick: (key: TermKey) => 
   );
 }
 
-export function TermSwitcher({ terms, activeKey, activeLabel, archived, onSwitch }: Props) {
+export function TermSwitcher({ terms, activeKey, activeLabel, archived, onSwitch, onCreate }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useClickAway(open, ref, () => setOpen(false));
@@ -40,6 +63,10 @@ export function TermSwitcher({ terms, activeKey, activeLabel, archived, onSwitch
   const pick = (key: TermKey) => {
     setOpen(false);
     onSwitch(key);
+  };
+  const create = (term: Term) => {
+    setOpen(false);
+    onCreate(term);
   };
 
   return (
@@ -63,7 +90,7 @@ export function TermSwitcher({ terms, activeKey, activeLabel, archived, onSwitch
           {rows.quarterRows.map((row, i) => (
             <div className="termsw__row" key={`q${i}`}>
               {row.map((cell, j) => (
-                <Cell cell={cell} onPick={pick} key={j} />
+                <Cell cell={cell} onPick={pick} onCreate={create} key={j} />
               ))}
             </div>
           ))}
@@ -71,13 +98,13 @@ export function TermSwitcher({ terms, activeKey, activeLabel, archived, onSwitch
           {rows.summerRows.map((row, i) => (
             <div className="termsw__row termsw__row--summer" key={`s${i}`}>
               {row.map((cell, j) => (
-                <Cell cell={cell} onPick={pick} key={j} />
+                <Cell cell={cell} onPick={pick} onCreate={create} key={j} />
               ))}
             </div>
           ))}
           {rows.otherRows.map((cell) => (
             <div className="termsw__row termsw__row--other" key={cell.key ?? cell.label}>
-              <Cell cell={cell} onPick={pick} />
+              <Cell cell={cell} onPick={pick} onCreate={create} />
             </div>
           ))}
         </div>

@@ -187,6 +187,7 @@ export default function App({
               activeLabel={displayTermLabel(ctl.viewPlan.term)}
               archived={ctl.archived}
               onSwitch={ctl.switchTerm}
+              onCreate={ctl.createTerm}
             />
           )
         }
