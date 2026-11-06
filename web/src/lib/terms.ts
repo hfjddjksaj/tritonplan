@@ -40,7 +40,7 @@ export function periodOf(season: Season): string | null {
   return null;
 }
 
-const SEASON_NAMES: Record<Season, string> = {
+export const SEASON_NAMES: Record<Season, string> = {
   fall: 'Fall',
   winter: 'Winter',
   spring: 'Spring',

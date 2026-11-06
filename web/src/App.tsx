@@ -29,7 +29,8 @@ import { ViewTabs, type PlannerView } from './components/ViewTabs';
 import { TooltipLayer } from './components/Tooltip';
 import { countConflictPairs, entryHue } from './lib/plan';
 import { colorsForHue } from './lib/colors';
-import { displayTermLabel } from './lib/terms';
+import { displayTermLabel, termKey } from './lib/terms';
+import { TermOpenBanner } from './components/TermOpenBanner';
 import { pluralize } from './lib/format';
 import { loadCalView, saveCalView, type CalView } from './lib/storage';
 import type { PositionedBlock } from './lib/layout';
@@ -50,6 +51,7 @@ export default function App({
 }) {
   const own = usePlan(boot);
   const ctl = own.guest ? lockedForGuest(own, onSignIn) : own;
+  const upcoming = ctl.upcomingTerm;
   const isMobile = useIsMobile();
   const appt = useApptTimes(boot);
   const [tab, setTab] = useState<MobileTab>('calendar');
@@ -227,6 +229,13 @@ export default function App({
       <SyncBanner engine={boot.engine} />
       {/* For students upgrading from the old extension, who all have an account to sign in to. */}
       {!ctl.guest && <ExtensionUpdateNote />}
+      {upcoming && !ctl.guest && ctl.viewing === 'mine' && !ctl.termsState.terms[termKey(upcoming)] && (
+        <TermOpenBanner
+          term={upcoming}
+          activeLabel={displayTermLabel(ctl.viewPlan.term)}
+          onCreate={() => ctl.createTerm(upcoming)}
+        />
+      )}
       {ctl.guest && <GuestBanner onSignIn={onSignIn} />}
       {ctl.received && (
         <ReceivedBanner

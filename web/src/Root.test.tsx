@@ -33,6 +33,12 @@ vi.mock('./lib/cloud/boot', async (importOriginal) => {
   };
 });
 
+// These tests are about the guest / received banners; the real clock must not add the term-open bar.
+vi.mock('./lib/terms', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('./lib/terms')>();
+  return { ...mod, liveUpcomingTerm: () => null };
+});
+
 /** A stopped engine takes edits but never has anything to send. */
 function disposed(boot: CloudBoot): boolean {
   boot.engine.setPool([...boot.pool, makeCourse('PROBE|2026|2')]);
