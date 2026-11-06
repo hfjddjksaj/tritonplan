@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
+import { applySelection, SHARED_PLAN_TTL_MS, type PlanState } from '@triton/shared';
 import { tx, type Db } from '../db/db';
 
-export const MAX_SHARES_PER_USER = 500;
+export const MAX_LIVE_SHARED_PER_USER = 50;
 const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const CODE_LENGTH = 10;
 const MAX_INSERT_TRIES = 5;
@@ -20,39 +21,73 @@ export function newShareCode(): string {
   return out;
 }
 
-export interface ShareRow { code: string; name: string; createdAt: string }
+export interface SharedRow { code: string; name: string; termKey: string; createdAt: string; expiresAt: string }
 
-/** `gen` is injectable so a test can force collisions. Returns null when the user is at the cap. */
-export function createShare(
-  db: Db, userId: string, name: string, planJson: string, createdAt: string, gen: () => string = newShareCode,
-): string | null {
+/** `gen` is injectable so a test can force collisions. Returns null when the owner is at the live cap. */
+export function createShared(
+  db: Db, ownerId: string, name: string, termKey: string, planJson: string, now: Date, gen: () => string = newShareCode,
+): { code: string; expiresAt: string } | null {
+  const createdAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + SHARED_PLAN_TTL_MS).toISOString();
   // The count and the insert share one write lock, so two racing requests cannot both slip under the cap.
   return tx(db, () => {
-    const { n } = db.prepare('SELECT COUNT(*) AS n FROM shares WHERE user_id = ?').get(userId) as { n: number };
-    if (n >= MAX_SHARES_PER_USER) return null;
-    const insert = db.prepare('INSERT OR IGNORE INTO shares (code, user_id, name, data, created_at) VALUES (?, ?, ?, ?, ?)');
+    const { n } = db
+      .prepare('SELECT COUNT(*) AS n FROM shared_plans WHERE owner_id = ? AND expires_at > ?')
+      .get(ownerId, createdAt) as { n: number };
+    if (n >= MAX_LIVE_SHARED_PER_USER) return null;
+    const insert = db.prepare(
+      `INSERT OR IGNORE INTO shared_plans (code, owner_id, name, term_key, data, version, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+    );
     for (let i = 0; i < MAX_INSERT_TRIES; i++) {
       const code = gen();
-      if (insert.run(code, userId, name, planJson, createdAt).changes === 1) return code;
+      if (insert.run(code, ownerId, name, termKey, planJson, createdAt, expiresAt).changes === 1) return { code, expiresAt };
     }
     throw new Error('share code collision limit reached');
   });
 }
 
-export function listShares(db: Db, userId: string): ShareRow[] {
+export function listShared(db: Db, ownerId: string, now: Date): SharedRow[] {
   return db
-    .prepare('SELECT code, name, created_at AS createdAt FROM shares WHERE user_id = ? ORDER BY created_at DESC, rowid DESC')
-    .all(userId) as unknown as ShareRow[];
+    .prepare(
+      `SELECT code, name, term_key AS termKey, created_at AS createdAt, expires_at AS expiresAt
+       FROM shared_plans WHERE owner_id = ? AND expires_at > ? ORDER BY created_at DESC, rowid DESC`,
+    )
+    .all(ownerId, now.toISOString()) as unknown as SharedRow[];
 }
 
-/** Scoped by owner: someone else's code deletes nothing. */
-export function deleteShare(db: Db, userId: string, code: string): boolean {
-  return Number(db.prepare('DELETE FROM shares WHERE code = ? AND user_id = ?').run(code, userId).changes) === 1;
+/** Selects no owner column on purpose: the public route can only leak what this returns. */
+export function readShared(
+  db: Db, code: string, now: Date,
+): { name: string; plan: PlanState; version: number; expiresAt: string } | null {
+  const row = db
+    .prepare('SELECT name, data, version, expires_at AS expiresAt FROM shared_plans WHERE code = ? AND expires_at > ?')
+    .get(code, now.toISOString()) as { name: string; data: string; version: number; expiresAt: string } | undefined;
+  return row ? { name: row.name, plan: JSON.parse(row.data) as PlanState, version: row.version, expiresAt: row.expiresAt } : null;
 }
 
-/** Selects no user column on purpose: the public route can only leak what this returns. */
-export function getShare(db: Db, code: string): { name: string; plan: unknown; createdAt: string } | null {
-  const row = db.prepare('SELECT name, data, created_at AS createdAt FROM shares WHERE code = ?').get(code) as
-    { name: string; data: string; createdAt: string } | undefined;
-  return row ? { name: row.name, plan: JSON.parse(row.data), createdAt: row.createdAt } : null;
+export function sharedVersion(db: Db, code: string, now: Date): number | null {
+  const row = db.prepare('SELECT version FROM shared_plans WHERE code = ? AND expires_at > ?').get(code, now.toISOString()) as
+    { version: number } | undefined;
+  return row ? row.version : null;
+}
+
+/** Read, apply and write in one transaction so concurrent switches serialize and each bumps the version once. */
+export function selectInShared(
+  db: Db, code: string, courseId: string, optionId: string, now: Date,
+): { version: number } | 'not-found' | 'invalid' {
+  return tx(db, () => {
+    const row = db.prepare('SELECT data, version FROM shared_plans WHERE code = ? AND expires_at > ?').get(code, now.toISOString()) as
+      { data: string; version: number } | undefined;
+    if (!row) return 'not-found';
+    const next = applySelection(JSON.parse(row.data) as PlanState, courseId, optionId);
+    if (!next) return 'invalid';
+    const version = row.version + 1;
+    db.prepare('UPDATE shared_plans SET data = ?, version = ? WHERE code = ?').run(JSON.stringify(next), version, code);
+    return { version };
+  });
+}
+
+export function sweepExpiredShared(db: Db, now: Date): number {
+  return Number(db.prepare('DELETE FROM shared_plans WHERE expires_at <= ?').run(now.toISOString()).changes);
 }

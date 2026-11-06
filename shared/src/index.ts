@@ -8,3 +8,4 @@ export * from './rmp.js';
 export * from './academic-calendar.js';
 export * from './appt.js';
 export * from './terms.js';
+export * from './shared-plan.js';
