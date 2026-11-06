@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { ApptTimes } from '@triton/shared';
 import {
+  apptForTerm,
   apptWindowStatus,
   formatApptInstant,
   formatApptRangeInZone,
-  latestCapturedTerm,
   localZoneIfNotPacific,
   nextRelevantWindow,
-  pickDisplayTerm,
 } from './appt';
 
 const W1 = { label: 'First Pass', beginsAt: '2026-08-10T21:00:00Z', endsAt: '2026-08-14T05:59:59Z' };
@@ -36,30 +35,18 @@ describe('nextRelevantWindow', () => {
   });
 });
 
-describe('pickDisplayTerm', () => {
+describe('apptForTerm', () => {
   const fall = term({});
   const winter = term({
     academicSession: '3', sessionText: 'Winter Quarter', capturedAt: '2026-07-26T12:00:00Z',
     windows: [{ label: 'First Pass', beginsAt: '2026-11-10T22:00:00Z', endsAt: '2026-11-13T22:00:00Z' }],
   });
 
-  it('prefers the term whose next window begins soonest', () => {
-    expect(pickDisplayTerm([winter, fall], new Date('2026-07-25T00:00:00Z'))).toBe(fall);
+  it('finds the record of the given term', () => {
+    expect(apptForTerm([fall, winter], { year: '2026', period: '3', label: 'Winter 2026' })).toBe(winter);
   });
-  it('skips all-ended terms while any live one exists', () => {
-    expect(pickDisplayTerm([fall, winter], new Date('2026-10-01T00:00:00Z'))).toBe(winter);
-  });
-  it('falls back to the freshest capture when everything ended', () => {
-    expect(pickDisplayTerm([fall, winter], new Date('2027-01-01T00:00:00Z'))).toBe(winter);
-    expect(pickDisplayTerm([], new Date())).toBeNull();
-  });
-  it('never features an empty-windows term (no data, not ended)', () => {
-    const empty = term({ capturedAt: '2026-07-27T12:00:00Z', windows: [] });
-    expect(pickDisplayTerm([empty], new Date('2026-07-25T00:00:00Z'))).toBeNull();
-  });
-  it('prefers an older all-ended term over a freshest-captured empty one', () => {
-    const empty = term({ capturedAt: '2026-07-27T12:00:00Z', windows: [] });
-    expect(pickDisplayTerm([fall, winter, empty], new Date('2027-01-01T00:00:00Z'))).toBe(winter);
+  it('returns null when that term was never captured', () => {
+    expect(apptForTerm([fall, winter], { year: '2027', period: '2', label: 'Fall 2027' })).toBeNull();
   });
 });
 
@@ -73,14 +60,6 @@ describe('formatApptInstant', () => {
   });
 });
 
-describe('latestCapturedTerm', () => {
-  it('returns the most recently captured term, empty-windows terms included', () => {
-    const emptyButFresh = term({ capturedAt: '2026-07-27T12:00:00Z', windows: [] });
-    const older = term({ capturedAt: '2026-07-25T12:00:00Z' });
-    expect(latestCapturedTerm([older, emptyButFresh])).toBe(emptyButFresh);
-    expect(latestCapturedTerm([])).toBeNull();
-  });
-});
 
 describe('localZoneIfNotPacific', () => {
   it('suppresses Pacific and unknown zones, passes others through', () => {

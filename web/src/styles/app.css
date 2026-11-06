@@ -3223,6 +3223,9 @@ button.termsw__cell:hover {
   opacity: 0.45;
   font-weight: 500;
 }
+button.termsw__cell--placeholder {
+  cursor: pointer;
+}
 .termsw__divider {
   border-top: 2px solid var(--line-strong);
   margin: 10px 0;

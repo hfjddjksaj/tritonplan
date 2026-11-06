@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import { displayTermLabel, termKey, type PlanState, type StoredPlanDoc, type Term } from '@triton/shared';
+import { displayTermLabel, instructionSpans, termKey, type PlanState, type StoredPlanDoc, type Term } from '@triton/shared';
 import type { Deps } from '../app';
 import { randomToken } from '../auth/tokens';
 import type { Db } from '../db/db';
@@ -9,7 +9,6 @@ import { clientIp, requireUser, type AppEnv } from '../http/guard';
 import type { RateLimiter } from '../http/rate-limit';
 import { buildCalendar } from './ics';
 import { UCSD_HOLIDAYS } from './holidays';
-import { UCSD_INSTRUCTION } from './terms';
 
 const QUARTER = 900_000;
 const MAX_TERMS = 40;
@@ -125,7 +124,7 @@ export function calendarRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
     return c.body(body);
   };
   const calendar = (plans: { plan: PlanState }[], name?: string) =>
-    buildCalendar({ plans, name, now: deps.now(), holidays: UCSD_HOLIDAYS, instruction: UCSD_INSTRUCTION });
+    buildCalendar({ plans, name, now: deps.now(), holidays: UCSD_HOLIDAYS, instruction: instructionSpans() });
 
   // Public: the secret in the path is the credential. The body is calendar text only, with nothing about the owner.
   // Every picked term in one calendar: the link the planner handed out before each term had its own.

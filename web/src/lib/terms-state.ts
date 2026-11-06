@@ -11,7 +11,7 @@ import {
   addBrowsed, addPlan, migratePlans, newPlanId, updateActivePlan,
   type NamedPlan, type PlansState,
 } from './plans';
-import { chronoIndex, isArchived, termKey, type TermKey } from './terms';
+import { chronoIndex, isArchived, liveUpcomingTerm, termKey, type TermKey } from './terms';
 
 export interface TermWorkspace {
   term: Term;
@@ -144,10 +144,53 @@ export function isPristine(ws: TermWorkspace): boolean {
   return only !== null && only.plan.entries.length === 0 && (only.browsed ?? []).length === 0;
 }
 
+/** Some plan of the workspace holds at least one planned course (browsed-only or booked-only does not count). */
+export function hasPlannedCourses(ws: TermWorkspace): boolean {
+  return ws.plans.plans.some((p) => p.plan.entries.length > 0);
+}
+
+/**
+ * The term to open on: the newest non-archived term with planned courses; else
+ * the live upcoming term when the account has it; else the chronologically newest.
+ * Workspaces of unknown season are skipped in step 1 (newestTermKey handles them).
+ */
+export function defaultTermKey(state: TermsState, now: Date): TermKey {
+  let best: { key: TermKey; idx: number } | null = null;
+  for (const [key, ws] of Object.entries(state.terms)) {
+    if (isArchived(ws.term, now) || !hasPlannedCourses(ws)) continue;
+    const idx = chronoIndex(ws.term);
+    if (idx !== null && (best === null || idx > best.idx)) best = { key, idx };
+  }
+  if (best) return best.key;
+  const upcoming = liveUpcomingTerm(now);
+  if (upcoming && state.terms[termKey(upcoming)]) return termKey(upcoming);
+  return newestTermKey(state);
+}
+
+/**
+ * When enrollment for the next term is open and nothing live is planned, create
+ * that term and drop the pristine placeholder workspaces (never a touched one),
+ * as routeCapture does. Same reference when there is nothing to do.
+ */
+export function openUpcomingTerm(state: TermsState, now: Date, nowIso: string): TermsState {
+  const upcoming = liveUpcomingTerm(now);
+  if (!upcoming) return state;
+  const key = termKey(upcoming);
+  if (state.terms[key]) return state;
+  if (Object.values(state.terms).some((ws) => !isArchived(ws.term, now) && hasPlannedCourses(ws))) return state;
+  const withTerm = ensureWorkspace(state, upcoming, nowIso);
+  const terms: Record<TermKey, TermWorkspace> = {};
+  for (const [k, ws] of Object.entries(withTerm.terms)) {
+    if (k === key || !isPristine(ws)) terms[k] = ws;
+  }
+  const activeTermKey = terms[withTerm.activeTermKey] ? withTerm.activeTermKey : key;
+  return { ...withTerm, activeTermKey, terms };
+}
+
 /**
  * Build the working TermsState. Precedence: valid stored terms:v1 (repairing a
  * dangling activeTermKey) → flat plans:v1 / legacy plan:v1 grouped by term →
- * fresh DEFAULT_TERM bootstrap. Old keys are read-only rollback backstops.
+ * fresh bootstrap on `bootstrapTerm` (DEFAULT_TERM when omitted). Old keys are read-only rollback backstops.
  */
 export function migrateToTermsState(
   existing: TermsState | null,
@@ -155,13 +198,14 @@ export function migrateToTermsState(
   legacyPlan: PlanState | null,
   pool: CourseOffering[],
   now: string,
+  bootstrapTerm?: Term,
 ): TermsState {
   if (existing && Object.keys(existing.terms).length > 0) {
     if (existing.terms[existing.activeTermKey]) return existing;
     return { ...existing, activeTermKey: newestTermKey(existing) };
   }
 
-  const flat = migratePlans(plansV1, legacyPlan, now);
+  const flat = migratePlans(plansV1, legacyPlan, now, bootstrapTerm);
   const poolIdsByTerm = new Map<TermKey, string[]>();
   for (const c of pool) {
     const key = termKey(c.term);
@@ -224,8 +268,7 @@ export function archiveSweep(state: TermsState, pool: CourseOffering[], now: Dat
   const terms: Record<TermKey, TermWorkspace> = {};
   for (const [key, ws] of Object.entries(state.terms)) {
     if (!archivedKeys.has(key)) { terms[key] = ws; continue; }
-    const hasCourses = ws.plans.plans.some((p) => p.plan.entries.length > 0);
-    if (!hasCourses) { termsChanged = true; continue; } // delete empty archived term
+    if (!hasPlannedCourses(ws)) { termsChanged = true; continue; } // delete empty archived term
     const cleared = clearAllBrowsed(ws.plans, nowIso);
     if (cleared === ws.plans) { terms[key] = ws; continue; }
     termsChanged = true;

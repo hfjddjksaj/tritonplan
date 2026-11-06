@@ -66,3 +66,45 @@ test('partial names never match, even when they are a unique substring or prefix
   expect(lookupTeachers(db, ['Mia Ann Chen'])[0]!.match?.legacyId).toBe(2);
   expect(lookupTeachers(db, ['Leo Porter'])[0]!.match?.legacyId).toBe(1);
 });
+
+test('a blank duplicate entry on RMP does not hide the rated professor, but two rated or two blank entries still do not match', () => {
+  const db = openDb(':memory:');
+  replaceTeachers(db, [
+    t(10, 'Pranav', 'Upadrashta', { numRatings: 19, avgRating: 3.4 }),
+    t(11, ' Pranav', 'Upadrashta', { numRatings: 0, avgRating: 0 }), // RMP's blank duplicate
+    t(20, 'Ann', 'Lee', { numRatings: 0, avgRating: 0 }),
+    t(21, 'Ann', 'Lee', { numRatings: 0, avgRating: 0 }),
+    t(30, 'Joe', 'Politz', { numRatings: 5 }),
+    t(31, 'Joe', 'Politz', { numRatings: 8 }),
+  ], '2026-01-15T00:00:00.000Z');
+
+  const [pranav, ann, politz] = lookupTeachers(db, ['Pranav Upadrashta', 'Ann Lee', 'Joe Politz']);
+  expect(pranav!.match).toMatchObject({ legacyId: 10, numRatings: 19, avgRating: 3.4 });
+  expect(ann!.match).toBeNull(); // two blank entries: still no guess
+  expect(politz!.match).toBeNull(); // two rated people: no guess
+});
+
+test('rated entries are looked at first, however many blank duplicates share the name', () => {
+  const db = openDb(':memory:');
+  const blank = { numRatings: 0, avgRating: 0 };
+  replaceTeachers(db, [
+    t(40, 'Kim', 'Ng', { numRatings: 7, avgRating: 4.1 }),
+    t(41, 'Kim', 'Ng', blank),
+    t(42, 'Kim', 'Ng', blank),
+    t(50, 'Sam', 'Roe', blank),
+    t(51, 'Sam', 'Roe', { numRatings: 3 }),
+    t(52, 'Sam', 'Roe', { numRatings: 6 }),
+    // More same-name rows than the lookup reads, the blank ones stored first.
+    ...[60, 61, 62, 63, 64].map((id) => t(id, 'Uma', 'Diaz', blank)),
+    t(65, 'Uma', 'Diaz', { numRatings: 12, avgRating: 3.9 }),
+    ...[70, 71, 72, 73].map((id) => t(id, 'Eli', 'Fox', blank)),
+    t(74, 'Eli', 'Fox', { numRatings: 2 }),
+    t(75, 'Eli', 'Fox', { numRatings: 9 }),
+  ], '2026-01-15T00:00:00.000Z');
+
+  const [kim, sam, uma, eli] = lookupTeachers(db, ['Kim Ng', 'Sam Roe', 'Uma Diaz', 'Eli Fox']);
+  expect(kim!.match).toMatchObject({ legacyId: 40, numRatings: 7 }); // rated + 2 blank: the rated one
+  expect(sam!.match).toBeNull(); // 2 rated + 1 blank: no guess
+  expect(uma!.match).toMatchObject({ legacyId: 65, numRatings: 12, avgRating: 3.9 }); // past 5 blank ones
+  expect(eli!.match).toBeNull(); // the second rated person is not cut off by the blank ones
+});

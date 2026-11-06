@@ -45,6 +45,12 @@ describe('migratePlans', () => {
     expect(s.plans[0]!.plan.entries).toEqual([]);
   });
 
+  it('bootstraps the fresh plan on the given term; DEFAULT_TERM without one', () => {
+    const winter = { year: '2026', period: '3', label: 'Winter 2026' };
+    expect(migratePlans(null, null, NOW, winter).plans[0]!.plan.term).toEqual(winter);
+    expect(migratePlans(null, null, NOW).plans[0]!.plan.term).toEqual(DEFAULT_TERM);
+  });
+
   it('passes an existing PlansState through, repairing a dangling activeId', () => {
     const existing = seeded();
     expect(migratePlans(existing, makePlan(), NOW)).toBe(existing);

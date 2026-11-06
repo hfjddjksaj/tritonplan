@@ -3,7 +3,7 @@
  * in-memory server that acks every put with a fresh version and records each
  * request in `sent`. Nothing reaches fetch.
  */
-import type { CourseOffering, SyncOp, SyncVersions } from '@triton/shared';
+import type { ApptTimes, CourseOffering, SyncOp, SyncVersions } from '@triton/shared';
 import type { Me } from '../lib/cloud/api';
 import { makeBoot, type CloudBoot } from '../lib/cloud/boot';
 import type { SendResult } from '../lib/cloud/engine';
@@ -28,7 +28,7 @@ export function snapshotOf(terms?: TermsState, pool: CourseOffering[] = []): Web
 }
 
 export function makeTestBoot(
-  o: { terms?: TermsState; pool?: CourseOffering[] } = {},
+  o: { terms?: TermsState; pool?: CourseOffering[]; appt?: ApptTimes[] } = {},
 ): CloudBoot & { sent: SyncOp[][] } {
   const sent: SyncOp[][] = [];
   let counter = 1000;
@@ -41,5 +41,5 @@ export function makeTestBoot(
     }
     return { ok: true, versions };
   };
-  return { ...makeBoot(TEST_ME, snapshotOf(o.terms, o.pool), send), sent };
+  return { ...makeBoot(TEST_ME, { ...snapshotOf(o.terms, o.pool), appt: o.appt ?? null }, send), sent };
 }

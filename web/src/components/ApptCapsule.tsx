@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { ApptTimes } from '@triton/shared';
+import type { ApptTimes, Term } from '@triton/shared';
 import {
   apptWindowStatus,
   formatApptInstant,
-  latestCapturedTerm,
+  apptForTerm,
   nextRelevantWindow,
-  pickDisplayTerm,
 } from '../lib/appt';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { ApptPopover } from './ApptPopover';
@@ -14,16 +13,18 @@ import { tip } from './Tooltip';
 
 interface Props {
   appt: ApptTimes[];
+  /** The term being viewed in the planner — the capsule shows only its windows. */
+  term: Term;
 }
 
-/** Topbar capsule for the student's next enrollment window: "First Pass ·
+/** Topbar capsule for the viewed term's next enrollment window: "First Pass ·
  *  8/10 2:00 PM PT", gold while a window is open, dimmed once all have ended.
- *  ALWAYS rendered on desktop — with nothing captured it reads "Appointment
+ *  ALWAYS rendered on desktop — with nothing captured for the viewed term it reads "Appointment
  *  times" and its popover explains how to get the data (open the TSS tile
  *  once), so the feature is discoverable. Mobile is the exception: phones
  *  can't run the extension, so a no-data prompt would be a dead end there —
  *  the capsule only shows on mobile when data exists. */
-export function ApptCapsule({ appt }: Props) {
+export function ApptCapsule({ appt, term }: Props) {
   const [open, setOpen] = useState(false);
   // Minute tick so upcoming→open→ended flips without a reload (matches the
   // seats-age ticker convention in CourseCard).
@@ -35,17 +36,17 @@ export function ApptCapsule({ appt }: Props) {
   const isMobile = useIsMobile();
 
   const now = new Date();
-  const term = pickDisplayTerm(appt, now);
-  // Captured-but-windowless terms aren't display-worthy, but their popover
+  const record = apptForTerm(appt, term);
+  // A captured-but-windowless record isn't display-worthy, but its popover
   // (term header + "no windows listed yet" + captured-ago) still is.
-  const popoverTerm = term ?? latestCapturedTerm(appt);
-  if (!term && isMobile) return null;
+  const shown = record && record.windows.length > 0 ? record : null;
+  if (!shown && isMobile) return null;
 
-  const next = term ? nextRelevantWindow(term, now) : null;
+  const next = shown ? nextRelevantWindow(shown, now) : null;
   const status = next ? apptWindowStatus(next, now) : 'ended';
 
   let text: string;
-  if (!term) text = 'Appointment times'; // nothing captured (or none listed) — prompt state
+  if (!shown) text = 'Appointment times'; // nothing captured (or none listed) — prompt state
   else if (!next) text = 'Enrollment ended';
   else if (status === 'open') text = isMobile ? 'open now' : `${next.label} · open now`;
   else if (isMobile) text = formatApptInstant(next.beginsAt).split(' ')[0]!; // "8/10"
@@ -57,8 +58,8 @@ export function ApptCapsule({ appt }: Props) {
         type="button"
         className={
           'appt-capsule' +
-          (term && status === 'open' ? ' appt-capsule--open' : '') +
-          (term && !next ? ' appt-capsule--ended' : '')
+          (shown && status === 'open' ? ' appt-capsule--open' : '') +
+          (shown && !next ? ' appt-capsule--ended' : '')
         }
         {...tip('Your enrollment appointment times')}
         aria-haspopup="dialog"
@@ -68,7 +69,7 @@ export function ApptCapsule({ appt }: Props) {
         <Clock size={13} />
         <span className="appt-capsule__text">{text}</span>
       </button>
-      {open && <ApptPopover appt={popoverTerm} onClose={() => setOpen(false)} />}
+      {open && <ApptPopover appt={record} term={term} onClose={() => setOpen(false)} />}
     </>
   );
 }

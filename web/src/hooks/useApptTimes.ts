@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { ApptTimes } from '@triton/shared';
+import { useEffect, useRef, useState } from 'react';
+import { mergeApptTimes, type ApptTimes } from '@triton/shared';
 import { installApptTimesListener } from '../lib/bridge';
 import type { CloudBoot } from '../lib/cloud/boot';
 
@@ -8,11 +8,15 @@ import type { CloudBoot } from '../lib/cloud/boot';
  *  of plans and of the received/read-only view. */
 export function useApptTimes(boot: CloudBoot): ApptTimes[] {
   const [appt, setAppt] = useState<ApptTimes[]>(() => boot.appt ?? []);
+  const current = useRef(appt);
   useEffect(() => {
     return installApptTimesListener((incoming) => {
       if (incoming.length === 0) return; // defense-in-depth: a push never wipes
-      setAppt(incoming);
-      boot.engine.setAppt(incoming);
+      // Another device may have captured other terms: merge per term, never overwrite.
+      const merged = mergeApptTimes(current.current, incoming);
+      current.current = merged;
+      setAppt(merged);
+      boot.engine.setAppt(merged);
     });
   }, [boot.engine]);
   return appt;

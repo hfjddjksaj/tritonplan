@@ -5,4 +5,6 @@ export * from './midterms.js';
 export * from './exam-location.js';
 export * from './sync.js';
 export * from './rmp.js';
+export * from './academic-calendar.js';
+export * from './appt.js';
 export * from './terms.js';

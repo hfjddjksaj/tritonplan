@@ -10,6 +10,7 @@
  * AcademicYear='2026', AcademicPeriod='3' (live TSS, verified 2026-11-05).
  * Calendar-year math goes through `calendarYear`.
  */
+import { upcomingTerm } from './academic-calendar.js';
 import type { Term } from './types.js';
 
 /** `${year}|${period}` — the same encoding as the CourseOffering id suffix. */
@@ -33,7 +34,13 @@ export function seasonOf(term: Term): Season | null {
   return SEASON_BY_PERIOD[term.period] ?? null;
 }
 
-const SEASON_NAMES: Record<Season, string> = {
+/** Inverse of `seasonOf`'s table: only grounded seasons have a SAP code. */
+export function periodOf(season: Season): string | null {
+  for (const [period, s] of Object.entries(SEASON_BY_PERIOD)) if (s === season) return period;
+  return null;
+}
+
+export const SEASON_NAMES: Record<Season, string> = {
   fall: 'Fall',
   winter: 'Winter',
   spring: 'Spring',
@@ -114,12 +121,26 @@ export function isArchived(term: Term, now: Date): boolean {
   return b !== null && now.getTime() >= b.getTime();
 }
 
+/** A planner Term from SAP's academic year + period, labelled like every other term. */
+export function termOf(year: string, period: string): Term {
+  return { year, period, label: displayTermLabel({ year, period, label: '' }) };
+}
+
+/** The next term whose enrollment is open, unless it is already archived. */
+export function liveUpcomingTerm(now: Date): Term | null {
+  const t = upcomingTerm(now);
+  if (!t) return null;
+  const term = termOf(t.year, t.period);
+  return isArchived(term, now) ? null : term;
+}
+
 export interface SwitcherCell {
   key: TermKey | null; // null = grey placeholder, not clickable
   label: string;
   selectable: boolean;
   current: boolean;
   archived: boolean;
+  create?: Term; // placeholder that can be created on click (key stays null)
 }
 
 export interface SwitcherRows {
@@ -139,8 +160,16 @@ function cellFor(term: Term, season: Season | null, activeKey: TermKey, now: Dat
   };
 }
 
-function placeholder(label: string): SwitcherCell {
-  return { key: null, label, selectable: false, current: false, archived: false };
+function placeholder(label: string, create?: Term): SwitcherCell {
+  return { key: null, label, selectable: false, current: false, archived: false, ...(create ? { create } : {}) };
+}
+
+/** Fall/Winter of `ay` is creatable while it is not archived; other seasons have no verified code. */
+function creatable(ay: number, season: 'fall' | 'winter', now: Date): Term | undefined {
+  const period = periodOf(season);
+  if (!period) return undefined;
+  const term = termOf(String(ay), period);
+  return isArchived(term, now) ? undefined : term;
 }
 
 /**
@@ -175,8 +204,8 @@ export function layoutRows(
   const quarterRows = [...byAy.keys()].sort((a, b) => a - b).map((ay) => {
     const row = byAy.get(ay)!;
     return [
-      row.fall ? cellFor(row.fall, 'fall', activeKey, now) : placeholder(`Fall ${ay}`),
-      row.winter ? cellFor(row.winter, 'winter', activeKey, now) : placeholder(`Winter ${ay}`),
+      row.fall ? cellFor(row.fall, 'fall', activeKey, now) : placeholder(`Fall ${ay}`, creatable(ay, 'fall', now)),
+      row.winter ? cellFor(row.winter, 'winter', activeKey, now) : placeholder(`Winter ${ay}`, creatable(ay, 'winter', now)),
       row.spring ? cellFor(row.spring, 'spring', activeKey, now) : placeholder(`Spring ${ay + 1}`),
     ];
   });

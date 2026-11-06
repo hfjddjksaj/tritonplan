@@ -11,6 +11,7 @@ import {
   calendarYear,
   buildSwitcherRows,
   layoutRows,
+  liveUpcomingTerm,
 } from './terms';
 
 const FALL26: Term = { year: '2026', period: '2', label: 'Fall 2026' };
@@ -151,5 +152,21 @@ describe('layoutRows (summer, via the test seam until real codes exist)', () => 
     const [a, b] = rows.summerRows[0]!;
     expect(a).toMatchObject({ key: '2027|S1', label: 'Summer I 2027', selectable: true });
     expect(b).toMatchObject({ key: null, label: 'Summer II 2027', selectable: false });
+  });
+});
+
+describe('creatable placeholders', () => {
+  it('liveUpcomingTerm: Winter 2026 from Nov 5 2026, null before, null once archived', () => {
+    // UTC instants at PT noon: the machine's own timezone must not move the day (the dev box may be far east of PT)
+    expect(liveUpcomingTerm(new Date('2026-11-05T20:00:00Z'))).toEqual({ year: '2026', period: '3', label: 'Winter 2026' });
+    expect(liveUpcomingTerm(new Date('2026-11-04T20:00:00Z'))).toBeNull();
+    expect(liveUpcomingTerm(new Date('2027-03-22T20:00:00Z'))).toBeNull();
+  });
+  it('a missing Winter of a used AY is creatable while live; Spring never; an archived Fall never (Review Focus 5)', () => {
+    const rows = buildSwitcherRows([FALL26], '2026|2', new Date('2026-11-06T20:00:00Z'));
+    expect(rows.quarterRows[0]![1]).toMatchObject({ key: null, selectable: false, create: { year: '2026', period: '3', label: 'Winter 2026' } });
+    expect(rows.quarterRows[0]![2]!.create).toBeUndefined();
+    const later = buildSwitcherRows([WINTER27], '2026|3', new Date('2026-12-21T20:00:00Z'));
+    expect(later.quarterRows[0]![0]!.create).toBeUndefined();
   });
 });

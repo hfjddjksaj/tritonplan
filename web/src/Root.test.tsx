@@ -289,6 +289,8 @@ beforeEach(() => {
   resetBridgeHubForTests();
   boots.length = 0;
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+  // Before enrollment for the next term opens, so the term-open bar does not share `.received` with these scenarios.
+  vi.setSystemTime(new Date('2026-10-01T19:00:00Z'));
   // Every request timeout on the fake clock (the GETs' own timer already is; this covers postSync's).
   vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
     const c = new AbortController();

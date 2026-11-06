@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { PlanState } from '@triton/shared';
@@ -60,6 +60,9 @@ describe('usePlan: opening a #m= mirror hash', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    // Fall 2026 is still open (it archives on Dec 20), so the planner opens on it.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-06T20:00:00Z'));
   });
   afterEach(() => {
     act(() => root?.unmount());
@@ -67,6 +70,7 @@ describe('usePlan: opening a #m= mirror hash', () => {
     container.remove();
     boot.engine.dispose();
     window.history.replaceState(null, '', '/');
+    vi.useRealTimers();
   });
 
   it("opens another device's plan instead of the account's own (iPad bookmark repro)", async () => {

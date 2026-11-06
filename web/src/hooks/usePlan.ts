@@ -4,6 +4,7 @@ import {
   type BookedModule,
   type CourseOffering,
   type PlanState,
+  type Term,
   type SectionOption,
   courseIdsInConflicts,
   findWeeklyConflicts,
@@ -53,17 +54,19 @@ import {
   ensureWorkspace,
   mapWorkspaces,
   migrateToTermsState,
-  newestTermKey,
+  defaultTermKey,
+  openUpcomingTerm,
   routeCapture,
   switchTermIn,
   updateWorkspace,
   type TermsState,
 } from '../lib/terms-state';
-import { isArchived, termKey, type TermKey } from '../lib/terms';
+import { isArchived, liveUpcomingTerm, termKey, type TermKey } from '../lib/terms';
 import { mirrorTokenFromHash, readHash } from '../lib/share';
 import { openBooking, openInTss, openTssHome } from '../lib/tss';
 import {
   buildSelectedCourses,
+  DEFAULT_TERM,
   emptyPlan,
   finalsSorted,
   meetingInstances,
@@ -78,8 +81,14 @@ import {
 const SAMPLE = import.meta.env.DEV ? (sampleCourses as unknown as CourseOffering[]) : [];
 
 /** One-shot boot from the account: pool repository + terms container + the archive sweep's forget list. */
-function initialState(boot: CloudBoot): { pool: CourseOffering[]; terms: TermsState; forgetModuleIds: string[] } {
+function initialState(boot: CloudBoot): {
+  pool: CourseOffering[];
+  terms: TermsState;
+  forgetModuleIds: string[];
+  upcomingTerm: Term | null;
+} {
   const now = new Date();
+  const upcomingTerm = liveUpcomingTerm(now);
   const iso = now.toISOString();
   const pool = mergeCourses(SAMPLE, boot.pool);
   const adopt = boot.adopt ?? [];
@@ -87,16 +96,28 @@ function initialState(boot: CloudBoot): { pool: CourseOffering[]; terms: TermsSt
   // A new account that starts with plans they chose to save holds just those, not an empty "My plan" beside them —
   // unless they are all from terms that are over, which leave nothing to edit.
   if (!boot.terms && adopt.some((a) => !isArchived(a.plan.term, now))) {
-    return { pool: mergeCourses(pool, adopted), terms: adoptInto(null, adopt, iso), forgetModuleIds: [] };
+    return { pool: mergeCourses(pool, adopted), terms: adoptInto(null, adopt, iso), forgetModuleIds: [], upcomingTerm };
   }
   // An account with no terms yet starts from the same single empty plan a new device always did.
-  const terms = boot.terms ?? migrateToTermsState(null, null, null, pool, iso);
+  // Its first workspace is the live upcoming term when there is one.
+  const terms = boot.terms ?? migrateToTermsState(null, null, null, pool, iso, upcomingTerm ?? DEFAULT_TERM);
   const swept = archiveSweep(terms, pool, now);
-  // Default view is always the NEWEST term: the stored activeTermKey is
-  // ignored on load. Plans they chose to save before signing in are kept now, and shown.
-  const state = switchTermIn(swept.state, newestTermKey(swept.state));
-  if (adopt.length === 0) return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds };
-  return { pool: mergeCourses(swept.pool, adopted), terms: adoptInto(state, adopt, iso), forgetModuleIds: swept.forgetModuleIds };
+  // The upcoming term is opened when no non-archived term has planned courses; then the default view is the newest
+  // non-archived term with planned courses (see defaultTermKey). The stored activeTermKey is ignored on load.
+  // Plans they chose to save before signing in are kept after that, and shown (their switch wins). An adopted plan
+  // of a term that is not over counts as planned, so no empty upcoming term is opened beside it. That is checked
+  // here rather than by opening after adoptInto, which would take an adopted empty plan for a pristine placeholder
+  // and drop it.
+  const adoptsLive = adopt.some((a) => !isArchived(a.plan.term, now));
+  const opened = adoptsLive ? swept.state : openUpcomingTerm(swept.state, now, iso);
+  const state = switchTermIn(opened, defaultTermKey(opened, now));
+  if (adopt.length === 0) return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds, upcomingTerm };
+  return {
+    pool: mergeCourses(swept.pool, adopted),
+    terms: adoptInto(state, adopt, iso),
+    forgetModuleIds: swept.forgetModuleIds,
+    upcomingTerm,
+  };
 }
 
 /** Each plan they chose to save, as a new plan with a name of its own in its term; the planner opens on the last. */
@@ -250,6 +271,12 @@ export function usePlan(boot: CloudBoot) {
   // ---- term switching ----------------------------------------------------
   const switchTerm = useCallback((key: TermKey) => {
     setTermsState((s) => switchTermIn(s, key));
+    switchViewing('mine');
+  }, [switchViewing]);
+
+  /** Open a term that has no workspace yet (the upcoming one) and show it. */
+  const createTerm = useCallback((term: Term) => {
+    setTermsState((s) => switchTermIn(ensureWorkspace(s, term, new Date().toISOString()), termKey(term)));
     switchViewing('mine');
   }, [switchViewing]);
 
@@ -712,6 +739,9 @@ export function usePlan(boot: CloudBoot) {
     termList,
     archived,
     switchTerm,
+    // The live upcoming term as of boot (liveUpcomingTerm): null when none has opened enrollment, or it is archived.
+    upcomingTerm: bootRef.current.upcomingTerm,
+    createTerm,
     // plan-add picker — lists the plans of the COURSE's term, not the viewed term
     pendingAdd,
     pendingAddPlans:
@@ -776,6 +806,7 @@ export function lockedForGuest(ctl: PlanController, ask: () => void): PlanContro
     clearBrowsed: ask,
     toggleBooked: ask,
     switchPlan: ask,
+    createTerm: ask,
     createNewPlan: ask,
     renamePlan: ask,
     duplicatePlan: ask,
