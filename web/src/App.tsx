@@ -1,39 +1,23 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { lockedForGuest, usePlan } from './hooks/usePlan';
 import { useIsMobile } from './hooks/useIsMobile';
 import { useApptTimes } from './hooks/useApptTimes';
 import { Topbar } from './components/Topbar';
 import { PlanSwitcher } from './components/PlanSwitcher';
 import { ApptCapsule } from './components/ApptCapsule';
-import { CoursePanel } from './components/CoursePanel';
-import { CalendarGrid } from './components/CalendarGrid';
-import { CalViewToggle } from './components/CalViewToggle';
-import { FinalsView } from './components/FinalsView';
-import { MidtermsView } from './components/MidtermsView';
 import { SyncBanner } from './components/SyncBanner';
 import { ExtensionUpdateNote } from './components/ExtensionUpdateNote';
 import { AccountMenu } from './components/AccountMenu';
-import { ConflictBanner } from './components/ConflictBanner';
 import { ShareMenu } from './components/ShareMenu';
 import { ReceivedBanner } from './components/ReceivedBanner';
 import { GuestBanner } from './components/GuestBanner';
-import { BuildingPopover } from './components/BuildingPopover';
-const CampusMap = lazy(() => import('./components/CampusMap').then((m) => ({ default: m.CampusMap })));
-import { PlanPickerModal } from './components/PlanPickerModal';
-import { CourseRmpModal } from './components/RmpModal';
+import { PlannerBody, type CampusOpen } from './components/PlannerBody';
 import { TermSwitcher } from './components/TermSwitcher';
-import { BlockSheet } from './components/BlockSheet';
-import { MobileTabBar, type MobileTab } from './components/MobileTabBar';
 import { Check } from './components/icons';
-import { ViewTabs, type PlannerView } from './components/ViewTabs';
 import { TooltipLayer } from './components/Tooltip';
-import { countConflictPairs, entryHue } from './lib/plan';
-import { colorsForHue } from './lib/colors';
 import { displayTermLabel, termKey } from './lib/terms';
 import { TermOpenBanner } from './components/TermOpenBanner';
 import { pluralize } from './lib/format';
-import { loadCalView, saveCalView, type CalView } from './lib/storage';
-import type { PositionedBlock } from './lib/layout';
 import type { CloudBoot } from './lib/cloud/boot';
 import { installUnloadGuard } from './lib/cloud/engine';
 
@@ -54,27 +38,8 @@ export default function App({
   const upcoming = ctl.upcomingTerm;
   const isMobile = useIsMobile();
   const appt = useApptTimes(boot);
-  const [tab, setTab] = useState<MobileTab>('calendar');
-  const [calPulse, setCalPulse] = useState(false);
-  const [calView, setCalView] = useState<CalView>(loadCalView);
-  const handleCalView = useCallback((v: CalView) => {
-    setCalView(v);
-    saveCalView(v);
-  }, []);
-  // Desktop has no Courses tab — the rail is always visible there.
-  const view: MobileTab = !isMobile && tab === 'courses' ? 'calendar' : tab;
-  const plannerView: PlannerView = view === 'courses' ? 'calendar' : view;
   const [toast, setToast] = useState<string | null>(initialFlash ?? null);
-  const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
-  // The campus map: null while shut; {} from the top bar; a building from a class location's popover.
-  const [campus, setCampus] = useState<{ focusBuilding?: string } | null>(null);
-  const [sheetBlock, setSheetBlock] = useState<PositionedBlock | null>(null);
-  // A teacher's name on the calendar opens the same ratings dialog as the course card's button.
-  const [rmpCourseId, setRmpCourseId] = useState<string | null>(null);
-  const rmpEntry = rmpCourseId ? ctl.viewPlan.entries.find((e) => e.course.id === rmpCourseId) : undefined;
-  // Clicking a calendar block reveals that course's card in the rail. The nonce
-  // makes a second click on the same course re-trigger the scroll/expand.
-  const [focusReq, setFocusReq] = useState<{ courseId: string; nonce: number } | null>(null);
+  const [campus, setCampus] = useState<CampusOpen>(null);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -89,22 +54,6 @@ export default function App({
     const t = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(t);
   }, [toast]);
-
-  useEffect(() => {
-    setSheetBlock(null);
-  }, [view]);
-
-  // When the plan changes while the calendar is off-screen (mobile Courses tab),
-  // pulse the Calendar tab as a "your week updated" hint. No auto-switching.
-  const prevPlanRef = useRef(ctl.plan);
-  useEffect(() => {
-    const changed = prevPlanRef.current !== ctl.plan;
-    prevPlanRef.current = ctl.plan;
-    if (!changed || !isMobile || view !== 'courses') return;
-    setCalPulse(true);
-    const t = setTimeout(() => setCalPulse(false), 1600);
-    return () => clearTimeout(t);
-  }, [ctl.plan, isMobile, view]);
 
   const handleSaveAsMine = useCallback(() => {
     const n = ctl.plan.entries.length;
@@ -136,22 +85,6 @@ export default function App({
     }
   }, [ctl]);
 
-  const handleOpenCourse = useCallback(
-    (courseId: string) => {
-      const course = ctl.courseById.get(courseId);
-      if (course) ctl.openCourseInTss(course);
-    },
-    [ctl.courseById, ctl.openCourseInTss],
-  );
-
-  const handleFocusCourse = useCallback(
-    (courseId: string) => {
-      if (isMobile) setTab('courses'); // the card lives on the Courses tab
-      setFocusReq((prev) => ({ courseId, nonce: (prev?.nonce ?? 0) + 1 }));
-    },
-    [isMobile],
-  );
-
   const handleReset = useCallback(() => {
     if (ctl.plan.entries.length === 0) return;
     if (window.confirm('Remove every course from the plan? Browsed courses stay.')) {
@@ -159,17 +92,6 @@ export default function App({
       flash('Plan cleared');
     }
   }, [ctl, flash]);
-
-  const conflictCount = useMemo(
-    () => countConflictPairs(ctl.weeklyConflicts, ctl.finalConflicts),
-    [ctl.weeklyConflicts, ctl.finalConflicts],
-  );
-
-  function hintText(): string {
-    if (conflictCount > 0) return `${conflictCount} ${pluralize(conflictCount, 'conflict')}`;
-    if (ctl.selectedCourses.length > 0) return 'No conflicts — looks clear';
-    return 'Bring in a course to begin';
-  }
 
   return (
     <div className={`app${isMobile ? ' app--mobile' : ''}`}>
@@ -249,155 +171,12 @@ export default function App({
           onDiscard={handleDiscardReceived}
         />
       )}
-      <div className="app__body">
-        <CoursePanel ctl={ctl} focus={focusReq} hidden={isMobile && view !== 'courses'} />
-
-        {(!isMobile || view !== 'courses') && (
-          <main className="main">
-            <div className="toolbar">
-              {isMobile && view !== 'courses' && (
-                <CalViewToggle value={calView} onChange={handleCalView} />
-              )}
-              <ViewTabs
-                value={plannerView}
-                onChange={setTab}
-                finalsBadge={ctl.finalConflicts.length}
-              />
-              <div className="toolbar__spacer" />
-              <span className="toolbar__hint">{hintText()}</span>
-            </div>
-
-            {view === 'calendar' && (
-              <ConflictBanner
-                weekly={ctl.weeklyConflicts}
-                finals={ctl.finalConflicts}
-                codeById={ctl.codeById}
-              />
-            )}
-
-            {view === 'calendar' ? (
-              <CalendarGrid
-                instances={ctl.instances}
-                onOpenCourse={handleOpenCourse}
-                onOpenLocation={(block) => {
-                  if (block.building) setMapLoc({ building: block.building, room: block.room });
-                }}
-                onOpenInstructor={(block) => setRmpCourseId(block.courseId)}
-                onFocusCourse={handleFocusCourse}
-                onBlockDetail={isMobile ? setSheetBlock : undefined}
-                variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
-              />
-            ) : view === 'midterms' ? (
-              <MidtermsView
-                dated={ctl.midterms.dated}
-                tbd={ctl.midterms.tbd}
-                onOpenCourse={handleOpenCourse}
-                onFocusCourse={handleFocusCourse}
-                onOpenLocation={(l) => setMapLoc(l)}
-                onBlockDetail={isMobile ? setSheetBlock : undefined}
-                variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
-              />
-            ) : (
-              <FinalsView
-                finals={ctl.finals}
-                conflicts={ctl.finalConflicts}
-                onOpenCourse={handleOpenCourse}
-                onFocusCourse={handleFocusCourse}
-                onOpenLocation={(l) => setMapLoc(l)}
-                onBlockDetail={isMobile ? setSheetBlock : undefined}
-                variant={isMobile ? (calView === 'scroll' ? 'scroll' : 'fit') : 'desktop'}
-              />
-            )}
-          </main>
-        )}
-      </div>
-
-      {isMobile && (
-        <MobileTabBar
-          tab={view}
-          onTab={setTab}
-          coursesCount={ctl.viewPlan.entries.length}
-          finalsBadge={ctl.finalConflicts.length}
-          pulse={calPulse}
-        />
-      )}
+      <PlannerBody ctl={ctl} campus={campus} setCampus={setCampus} flash={flash} />
 
       {toast && (
         <div className="toast" role="status">
           <Check size={16} className="toast__check" /> {toast}
         </div>
-      )}
-
-      {sheetBlock && (
-        <BlockSheet
-          block={sheetBlock}
-          onClose={() => setSheetBlock(null)}
-          onOpenCourse={(id) => {
-            setSheetBlock(null);
-            handleOpenCourse(id);
-          }}
-          onOpenLocation={(b) => {
-            setSheetBlock(null);
-            if (b.building) setMapLoc({ building: b.building, room: b.room });
-          }}
-          onOpenInstructor={(b) => {
-            setSheetBlock(null);
-            setRmpCourseId(b.courseId);
-          }}
-          onFocusCourse={(id) => {
-            setSheetBlock(null);
-            handleFocusCourse(id);
-          }}
-        />
-      )}
-
-      {rmpEntry && (
-        <CourseRmpModal
-          course={rmpEntry.course}
-          selectedOptionId={rmpEntry.selectedOptionId}
-          accent={colorsForHue(entryHue(ctl.viewPlan, rmpEntry))}
-          onClose={() => setRmpCourseId(null)}
-        />
-      )}
-
-      {mapLoc && (
-        <BuildingPopover
-          building={mapLoc.building}
-          room={mapLoc.room}
-          onOpenCampusMap={() => {
-            setMapLoc(null);
-            setCampus({ focusBuilding: mapLoc.building });
-          }}
-          onClose={() => setMapLoc(null)}
-        />
-      )}
-
-      {ctl.pendingAdd && (
-        <PlanPickerModal
-          course={ctl.pendingAdd.course}
-          plans={ctl.pendingAddPlans}
-          onPick={ctl.confirmPendingAdd}
-          onCancel={ctl.cancelPendingAdd}
-        />
-      )}
-
-      {campus && (
-        <Suspense
-          fallback={
-            <div className="campusmap campusmap--pending" role="dialog" aria-modal="true" aria-label="Campus map">
-              <div className="campusmap__loading">Loading campus…</div>
-            </div>
-          }
-        >
-          <CampusMap
-            plan={ctl.viewPlan}
-            booked={ctl.bookedIds}
-            readOnly={ctl.readOnly}
-            initialView={plannerView}
-            focusBuilding={campus.focusBuilding}
-            onClose={() => setCampus(null)}
-          />
-        </Suspense>
       )}
 
       {/* One bubble for the whole app — every `tip(...)` in the tree renders here.

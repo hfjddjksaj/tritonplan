@@ -77,6 +77,21 @@ export function planUnits(plan: PlanState): number {
   return plan.entries.reduce((sum, e) => sum + (e.course.units ?? 0), 0);
 }
 
+/** Course code by course id, for naming the courses in a conflict. */
+export function codesById(plan: PlanState): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const e of plan.entries) m.set(e.course.id, e.course.courseCode);
+  return m;
+}
+
+/** Course by id from the pool and the plan, the plan's own copy winning — for TSS jump-back from a block. */
+export function coursesById(pool: readonly CourseOffering[], plan: PlanState): Map<string, CourseOffering> {
+  const m = new Map<string, CourseOffering>();
+  for (const c of pool) m.set(c.id, c);
+  for (const e of plan.entries) m.set(e.course.id, e.course);
+  return m;
+}
+
 /** The hue chosen for an entry, by its persisted color or its position. */
 export function entryHue(plan: PlanState, entry: PlanEntry): number {
   const idx = plan.entries.indexOf(entry);

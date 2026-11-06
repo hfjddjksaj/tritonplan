@@ -16,6 +16,8 @@ interface Props {
   conflicted: boolean;
   /** Received (shared/imported) plan: no removing, no section switching. */
   readOnly?: boolean;
+  /** A plan opened from a share link: read-only, except that its sections stay switchable. */
+  shared?: boolean;
   /** Bumped when this course's calendar block is clicked — expand sections and scroll here. */
   focusNonce?: number | undefined;
   onSelect: (optionId: string) => void;
@@ -37,7 +39,7 @@ interface Props {
   onToggleBooked?: () => void;
 }
 
-export function CourseCard({ entry, index, conflicted, readOnly = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, waitlisted = false, bookedByTss = false, bookedOptionCode, onToggleBooked }: Props) {
+export function CourseCard({ entry, index, conflicted, readOnly = false, shared = false, focusNonce, onSelect, onRemove, onOpenTss, onBook, booked, waitlisted = false, bookedByTss = false, bookedOptionCode, onToggleBooked }: Props) {
   const hue = hueFromEntryColor(entry.color, index);
   const c = colorsForHue(hue);
   const { course } = entry;
@@ -265,7 +267,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, focusNo
         course={course}
         selectedOptionId={entry.selectedOptionId}
         onSelect={onSelect}
-        readOnly={readOnly}
+        readOnly={readOnly && !shared}
         booked={booked}
         collapsed={!sectionsOpen}
         onToggle={() => setSectionsOpen((v) => !v)}

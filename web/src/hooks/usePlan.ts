@@ -66,6 +66,8 @@ import { mirrorTokenFromHash, readHash } from '../lib/share';
 import { openBooking, openInTss, openTssHome } from '../lib/tss';
 import {
   buildSelectedCourses,
+  codesById,
+  coursesById,
   DEFAULT_TERM,
   emptyPlan,
   finalsSorted,
@@ -330,7 +332,8 @@ export function usePlan(boot: CloudBoot) {
   }, [addIntoTerm]);
 
   // ---- plan-add picker queue (course's term has several plans) -----------
-  const pendingAdd = pendingQueue[0] ?? null;
+  // at(), not [0]: an index reads as never-undefined, which would type a null head as non-null.
+  const pendingAdd = pendingQueue.at(0) ?? null;
   const confirmPendingAdd = useCallback((planId: string) => {
     const head = pendingQueue[0];
     if (!head) return;
@@ -685,19 +688,8 @@ export function usePlan(boot: CloudBoot) {
   const midterms = useMemo(() => midtermsSorted(viewPlan, bookedIds), [viewPlan, bookedIds]);
   const units = useMemo(() => planUnits(viewPlan), [viewPlan]);
 
-  const codeById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const e of viewPlan.entries) m.set(e.course.id, e.course.courseCode);
-    return m;
-  }, [viewPlan]);
-
-  /** Resolve a course by id (pool + viewed plan) — used for TSS jump-back from a block. */
-  const courseById = useMemo(() => {
-    const m = new Map<string, CourseOffering>();
-    for (const c of pool) m.set(c.id, c);
-    for (const e of viewPlan.entries) m.set(e.course.id, e.course);
-    return m;
-  }, [pool, viewPlan]);
+  const codeById = useMemo(() => codesById(viewPlan), [viewPlan]);
+  const courseById = useMemo(() => coursesById(pool, viewPlan), [pool, viewPlan]);
 
   /** THIS plan's browsed list, minus courses already added, resolved from the pool repository. */
   const browsedNotAdded = useMemo(() => {
@@ -767,6 +759,8 @@ export function usePlan(boot: CloudBoot) {
     viewPlan,
     readOnly,
     guest,
+    // Only a plan opened from a share link is shared (sharedController): switching sections is its one edit.
+    shared: false,
     switchViewing,
     saveReceivedAsMine,
     saveReceivedAsNewPlan,

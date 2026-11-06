@@ -74,11 +74,13 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
           )}
         </div>
         <p className="rail__lede">
-          {readOnly
-            ? 'This plan is read-only — a plan someone sent you, or a past term kept as an archive.'
-            : isMobile
-              ? 'Your plans follow your account, so they’re the same here as on your computer. New courses come in from TSS on a computer; switch a section below to clear a conflict.'
-              : 'Sections you pick in TSS land here. Switch a section below to clear a conflict.'}
+          {ctl.shared
+            ? 'Anyone with the link can switch a section below — everyone who has this plan open sees the change.'
+            : readOnly
+              ? 'This plan is read-only — a plan someone sent you, or a past term kept as an archive.'
+              : isMobile
+                ? 'Your plans follow your account, so they’re the same here as on your computer. New courses come in from TSS on a computer; switch a section below to clear a conflict.'
+                : 'Sections you pick in TSS land here. Switch a section below to clear a conflict.'}
         </p>
       </div>
 
@@ -103,8 +105,9 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                 index={i}
                 conflicted={ctl.conflictedCourseIds.has(entry.course.id)}
                 readOnly={readOnly}
+                shared={ctl.shared}
                 focusNonce={focus && focus.courseId === entry.course.id ? focus.nonce : undefined}
-                onSelect={readOnly ? () => {} : (optionId) => ctl.selectOption(entry.course.id, optionId)}
+                onSelect={readOnly && !ctl.shared ? () => {} : (optionId) => ctl.selectOption(entry.course.id, optionId)}
                 onRemove={() => ctl.removeCourse(entry.course.id)}
                 onOpenTss={() => ctl.openCourseInTss(entry.course)}
                 onBook={

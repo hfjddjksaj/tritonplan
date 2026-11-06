@@ -1,5 +1,5 @@
 /** "+ TritonPlan" landed in a term that has several plans — ask which one.
- *  Shown by App when ctl.pendingAdd is non-null; queued adds surface one at a time.
+ *  Shown by PlannerBody when ctl.pendingAdd is non-null; queued adds surface one at a time.
  *  The same question as Share's first step, so the same list. */
 import type { CourseOffering } from '@triton/shared';
 import { displayTermLabel } from '../lib/terms';
