@@ -81,7 +81,7 @@ async function renderDialog(on: TermsState = terms) {
 const me: Me = { email: 's@ucsd.edu', hasPassword: true, hasGoogle: false };
 async function renderMenu() {
   await act(async () => {
-    root.render(<AccountMenu me={me} terms={terms} onFlash={flash} flush={async () => {}} />);
+    root.render(<AccountMenu me={me} terms={terms} sharePlans={[]} onFlash={flash} flush={async () => {}} />);
     await settle();
   });
 }

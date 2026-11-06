@@ -4,14 +4,15 @@ import { nav } from '../lib/nav';
 import { clearPendingMigration } from '../lib/migration';
 import { clearReceived } from '../lib/storage';
 import { useClickAway } from '../hooks/useClickAway';
-import { Calendar, ChevronDown, Download, Key, SignOut, Trash, Unlink } from './icons';
+import { Calendar, ChevronDown, Download, Key, Link, SignOut, Trash, Unlink } from './icons';
+import { ShareFriendsDialog, type SharablePlan } from './share/ShareFriendsDialog';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
 import { CalendarDialog, calendarNeedsPick, calendarRow } from './CalendarDialog';
 import type { TermsState } from '../lib/terms-state';
 import { failureText } from './auth/copy';
 
-type Dialog = 'password' | 'calendar' | 'delete' | null;
+type Dialog = 'password' | 'calendar' | 'share' | 'delete' | null;
 
 /** How long leaving the planner (sign-out, import) waits for unsaved edits to reach the account before going anyway. */
 const LEAVE_SAVE_MS = 3000;
@@ -19,12 +20,15 @@ const LEAVE_SAVE_MS = 3000;
 export function AccountMenu({
   me: initial,
   terms,
+  sharePlans,
   onFlash,
   flush,
 }: {
   me: Me;
   /** The student's plans, so the calendar item can tell when a term still needs a pick. */
   terms: TermsState;
+  /** The plans of the term on screen, which New share offers. */
+  sharePlans: SharablePlan[];
   onFlash: (msg: string) => void;
   /** Sends unsaved edits now (the sync engine's flush). */
   flush: () => Promise<void>;
@@ -127,6 +131,9 @@ export function AccountMenu({
               Calendar subscription
               {calendarDot && <span className="menu__dot" aria-label="needs attention" />}
             </MenuButton>
+            <MenuButton icon={<Link size={13} />} onClick={choose(() => setDialog('share'))}>
+              Share with friends
+            </MenuButton>
             <MenuButton icon={<Download size={13} />} onClick={choose(importBackup)}>
               Import from old TritonPlan
             </MenuButton>
@@ -165,6 +172,9 @@ export function AccountMenu({
           onFlash={onFlash}
           onChanged={() => void refreshCalendar()}
         />
+      )}
+      {dialog === 'share' && (
+        <ShareFriendsDialog plans={sharePlans} onClose={() => setDialog(null)} onCopied={onFlash} />
       )}
       {dialog === 'delete' && <DeleteAccountDialog me={me} onClose={() => setDialog(null)} />}
     </>

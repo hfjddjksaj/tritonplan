@@ -2,6 +2,7 @@ import { MIGRATION_PENDING_KEY } from '../lib/migration';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { PlanState } from '@triton/shared';
 import type { Me } from '../lib/cloud/api';
 import { nav } from '../lib/nav';
 import type { TermsState } from '../lib/terms-state';
@@ -43,8 +44,9 @@ afterEach(() => {
 
 const noTerms = { version: 1, activeTermKey: '', terms: {} } as TermsState;
 const both: Me = { email: 'Student@ucsd.edu', hasPassword: true, hasGoogle: true };
+const noPlans: { id: string; name: string; plan: PlanState }[] = [];
 async function render(me: Me = both) {
-  await act(async () => root.render(<AccountMenu me={me} terms={noTerms} onFlash={flash} flush={flush} />));
+  await act(async () => root.render(<AccountMenu me={me} terms={noTerms} sharePlans={noPlans} onFlash={flash} flush={flush} />));
 }
 const q = (sel: string) => document.body.querySelector<HTMLElement>(sel);
 const buttons = () => [...document.body.querySelectorAll('button')].map((b) => b.textContent?.trim());
@@ -85,6 +87,15 @@ describe('AccountMenu items', () => {
     await click('Import from old TritonPlan');
     expect(flush).toHaveBeenCalledTimes(1);
     expect(assign).toHaveBeenCalledWith('/migrate');
+  });
+
+  it('Share with friends opens the dialog and lists the live links', async () => {
+    answers['undefined /api/shared'] = () => json(200, { shared: [] });
+    await render();
+    await openMenu();
+    await click('Share with friends');
+    expect(q('[role="dialog"][aria-label="Share with friends"]')).not.toBeNull();
+    expect(document.body.textContent).toContain('Nothing shared right now.');
   });
 
   it('Google-only: Set a password, no Change password, no Disconnect Google', async () => {

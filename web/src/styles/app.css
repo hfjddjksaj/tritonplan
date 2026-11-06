@@ -4321,3 +4321,79 @@ button.termsw__cell--placeholder {
     margin-right: 8px;
   }
 }
+
+/* Share with friends: live links, each a copy target with a QR beside it. */
+.sharedlg {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.sharelist {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sharelist__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 0;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.sharelist__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 4px 4px 11px;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+}
+.sharelist__name {
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sharelist__meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.sharelist__icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+.sharelist__qr {
+  width: 176px;
+  max-width: 100%;
+  margin: 8px auto 2px;
+}
+.sharelist__qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.sharelist__ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.sharelist__ask .mappop__hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.sharedlg__new {
+  margin-top: 12px;
+  width: 100%;
+}
