@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import type { SyncOp } from '@triton/shared';
+import type { ApptTimes, SyncOp } from '@triton/shared';
 import { createUser } from '../auth/users';
 import { testDeps } from '../test-helpers';
 import { applyOps, getSnapshot } from './store';
@@ -123,12 +123,28 @@ test('missing row with base > 0 conflicts on put; delete of a missing row succee
   expect(v).toBeGreaterThan(0);
 });
 
-test('deleteCourses removes, putCourses upserts, putAppt replaces', () => {
+test('deleteCourses removes, putCourses upserts, putAppt stores the list', () => {
   const { db, mk } = setup();
   const u = mk('a@ucsd.edu');
   applyOps(db, u, [{ op: 'putCourses', courses: [course('a'), course('b')] }, { op: 'putAppt', data: [] }], T);
   applyOps(db, u, [{ op: 'deleteCourses', ids: ['a'] }, { op: 'putCourses', courses: [{ id: 'b', n: 2 } as never] }], T);
   expect(getSnapshot(db, u).pool).toEqual([{ id: 'b', n: 2 }]);
+});
+
+test('putAppt merges per term', () => {
+  const { db, mk } = setup();
+  const u = mk('a@ucsd.edu');
+  const appt = (academicSession: string, capturedAt: string): ApptTimes =>
+    ({ academicYear: '2026', academicSession, yearText: '2026', sessionText: 's', windows: [], capturedAt });
+  const fall = appt('3', '2026-09-01T00:00:00Z');
+  const winter = appt('1', '2026-11-01T00:00:00Z');
+  applyOps(db, u, [{ op: 'putAppt', data: [fall] }], T);
+  applyOps(db, u, [{ op: 'putAppt', data: [winter] }], T);
+  expect(getSnapshot(db, u).appt).toEqual([winter, fall]);
+  applyOps(db, u, [{ op: 'putAppt', data: [appt('3', '2026-08-01T00:00:00Z')] }], T);
+  expect(getSnapshot(db, u).appt).toEqual([winter, fall]);
+  applyOps(db, u, [{ op: 'putAppt', data: [] }], T);
+  expect(getSnapshot(db, u).appt).toEqual([winter, fall]);
 });
 
 test('users are fully isolated', () => {

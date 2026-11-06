@@ -6,3 +6,4 @@ export * from './exam-location.js';
 export * from './sync.js';
 export * from './rmp.js';
 export * from './academic-calendar.js';
+export * from './appt.js';

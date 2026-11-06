@@ -1,3 +1,4 @@
+import { mergeApptTimes } from '@triton/shared';
 import type { ApptTimes, CourseOffering, StateSnapshot, SyncOp, SyncResponse, SyncVersions } from '@triton/shared';
 import { tx, type Db } from '../db/db';
 
@@ -67,6 +68,7 @@ export function applyOps(db: Db, userId: string, ops: SyncOp[], nowIso: string, 
        ON CONFLICT (user_id, course_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
     ),
     delCourse: db.prepare('DELETE FROM pool_courses WHERE user_id = ? AND course_id = ?'),
+    getAppt: db.prepare(`SELECT data FROM user_docs WHERE user_id = ? AND kind = 'appt'`),
     putAppt: db.prepare(
       `INSERT INTO user_docs (user_id, kind, data, updated_at) VALUES (?, 'appt', ?, ?)
        ON CONFLICT (user_id, kind) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
@@ -119,9 +121,13 @@ export function applyOps(db: Db, userId: string, ops: SyncOp[], nowIso: string, 
           case 'deleteCourses':
             for (const id of op.ids) q.delCourse.run(userId, id);
             break;
-          case 'putAppt':
-            q.putAppt.run(userId, docJson(op.data, cache), nowIso);
+          case 'putAppt': {
+            // Devices capture different terms: merge per term, newer capture wins.
+            const row = q.getAppt.get(userId) as { data: string } | undefined;
+            const data = row ? mergeApptTimes(JSON.parse(row.data) as ApptTimes[], op.data) : op.data;
+            q.putAppt.run(userId, docJson(data, cache), nowIso);
             break;
+          }
         }
       }
       if (conflicts.length) throw new Conflict();
