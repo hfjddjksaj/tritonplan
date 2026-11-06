@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlanState } from '@triton/shared';
 import {
-  apiDelete, apiPost, fetchMe, fetchShare, fetchState, googleCalendarUrl, postSync, syncTimeoutMs, termCalendarLinks, UnauthorizedError,
+  apiDelete, apiPost, createSharedPlan, fetchMe, fetchShare, fetchSharedPlan, fetchSharedVersion, fetchState, listSharedPlans, selectSharedOption, googleCalendarUrl, postSync, syncTimeoutMs, termCalendarLinks, UnauthorizedError,
 } from './api';
 
 const res = (status: number, body: unknown = {}) =>
@@ -160,21 +160,98 @@ describe('apiPost / apiDelete', () => {
 describe('shares', () => {
   const plan: PlanState = { version: 1, term: { year: '2026', period: '2', label: 'Fall 2026' }, entries: [] };
 
-  it('fetchShare: data on 200, not-found on 404, null for everything else', async () => {
-    const data = { name: 'n', plan, createdAt: '2026-01-01T00:00:00Z' };
-    stub(async () => res(200, data));
-    expect(await fetchShare('abc')).toEqual(data);
-    expect(calls()[0]![0]).toBe('/api/s/abc');
+  const doc = { name: 'n', plan, version: 3, expiresAt: '2026-01-08T00:00:00Z' };
+
+  it('fetchSharedPlan: doc on 200, not-found on 404, null for everything else', async () => {
+    stub(async () => res(200, doc));
+    expect(await fetchSharedPlan('a/b')).toEqual(doc);
+    expect(calls()[0]![0]).toBe('/api/s/a%2Fb');
     stub(async () => res(404, { error: 'not_found' }));
-    expect(await fetchShare('abc')).toBe('not-found');
+    expect(await fetchSharedPlan('abc')).toBe('not-found');
     stub(async () => res(429, { error: 'rate_limited' }));
-    expect(await fetchShare('abc')).toBeNull();
+    expect(await fetchSharedPlan('abc')).toBeNull();
     stub(async () => res(503));
-    expect(await fetchShare('abc')).toBeNull();
+    expect(await fetchSharedPlan('abc')).toBeNull();
     stub(async () => { throw new TypeError('offline'); });
-    expect(await fetchShare('abc')).toBeNull();
+    expect(await fetchSharedPlan('abc')).toBeNull();
     stub(async () => res(200, 'not json'));
-    expect(await fetchShare('abc')).toBeNull();
+    expect(await fetchSharedPlan('abc')).toBeNull();
+  });
+
+  it('fetchShare wraps fetchSharedPlan in the old shape', async () => {
+    stub(async () => res(200, doc));
+    expect(await fetchShare('abc')).toEqual({ name: 'n', plan, createdAt: '' });
+    stub(async () => res(404));
+    expect(await fetchShare('abc')).toBe('not-found');
+  });
+
+  it('fetchSharedVersion: number on 200, not-found on 404, null otherwise', async () => {
+    stub(async () => res(200, { version: 5 }));
+    expect(await fetchSharedVersion('a b')).toBe(5);
+    expect(calls()[0]![0]).toBe('/api/s/a%20b/version');
+    stub(async () => res(200, { version: 'x' }));
+    expect(await fetchSharedVersion('abc')).toBeNull();
+    stub(async () => res(404));
+    expect(await fetchSharedVersion('abc')).toBe('not-found');
+    stub(async () => res(429, { error: 'rate_limited' }));
+    expect(await fetchSharedVersion('abc')).toBeNull();
+    stub(async () => { throw new TypeError('x'); });
+    expect(await fetchSharedVersion('abc')).toBeNull();
+  });
+
+  it('selectSharedOption: posts the pick; version, not-found, invalid, null', async () => {
+    stub(async () => res(200, { version: 4 }));
+    expect(await selectSharedOption('a/b', 'c1', 'o1')).toBe(4);
+    expect(calls()[0]![0]).toBe('/api/s/a%2Fb/select');
+    expect(calls()[0]![1].method).toBe('POST');
+    expect(JSON.parse(String(calls()[0]![1].body))).toEqual({ courseId: 'c1', optionId: 'o1' });
+    stub(async () => res(404));
+    expect(await selectSharedOption('abc', 'c', 'o')).toBe('not-found');
+    stub(async () => res(400, { error: 'invalid_request' }));
+    expect(await selectSharedOption('abc', 'c', 'o')).toBe('invalid');
+    stub(async () => res(500));
+    expect(await selectSharedOption('abc', 'c', 'o')).toBeNull();
+    stub(async () => res(429, { error: 'rate_limited', retryAfter: 3 }));
+    expect(await selectSharedOption('abc', 'c', 'o')).toBeNull();
+    stub(async () => { throw new TypeError('x'); });
+    expect(await selectSharedOption('abc', 'c', 'o')).toBeNull();
+    stub(async () => res(200, {}));
+    expect(await selectSharedOption('abc', 'c', 'o')).toBeNull();
+  });
+
+  it('listSharedPlans: the list on 200, null on failure', async () => {
+    const item = { code: 'abcdefghij', url: 'https://x/s/abcdefghij', name: 'n', termKey: '2026|2', createdAt: 'a', expiresAt: 'b' };
+    stub(async () => res(200, { shared: [item] }));
+    expect(await listSharedPlans()).toEqual([item]);
+    expect(calls()[0]![0]).toBe('/api/shared');
+    stub(async () => res(200, {}));
+    expect(await listSharedPlans()).toBeNull();
+    stub(async () => res(401, { error: 'unauthorized' }));
+    expect(await listSharedPlans()).toBeNull();
+    stub(async () => { throw new TypeError('x'); });
+    expect(await listSharedPlans()).toBeNull();
+  });
+
+  it('createSharedPlan: link on 200, the server error string otherwise', async () => {
+    const out = { code: 'abcdefghij', url: 'https://x/s/abcdefghij', expiresAt: 'b' };
+    stub(async () => res(200, out));
+    expect(await createSharedPlan('n', plan)).toEqual(out);
+    expect(calls()[0]![0]).toBe('/api/shared');
+    expect(JSON.parse(String(calls()[0]![1].body))).toEqual({ name: 'n', plan });
+    stub(async () => res(409, { error: 'too_many_shares' }));
+    expect(await createSharedPlan('n', plan)).toEqual({ error: 'too_many_shares' });
+    stub(async () => res(413, { error: 'doc_too_large' }));
+    expect(await createSharedPlan('n', plan)).toEqual({ error: 'doc_too_large' });
+    stub(async () => res(429, { error: 'rate_limited', retryAfter: 9 }));
+    expect(await createSharedPlan('n', plan)).toEqual({ error: 'rate_limited' });
+    stub(async () => res(401, { error: 'unauthorized' }));
+    expect(await createSharedPlan('n', plan)).toEqual({ error: 'unauthorized' });
+    stub(async () => res(502, 'bad gateway'));
+    expect(await createSharedPlan('n', plan)).toEqual({ error: 'server' });
+    stub(async () => res(200, { nope: 1 }));
+    expect(await createSharedPlan('n', plan)).toEqual({ error: 'server' });
+    stub(async () => { throw new TypeError('x'); });
+    expect(await createSharedPlan('n', plan)).toEqual({ error: 'network' });
   });
 });
 

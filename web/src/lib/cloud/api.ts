@@ -101,21 +101,83 @@ export const apiPost = (path: string, body: unknown): Promise<ApiResult> => send
 export const apiPut = (path: string, body: unknown): Promise<ApiResult> => send('PUT', path, body);
 export const apiDelete = (path: string, body: unknown): Promise<ApiResult> => send('DELETE', path, body);
 
+export interface SharedLink { code: string; url: string; name: string; termKey: string; createdAt: string; expiresAt: string }
+export interface SharedDoc { name: string; plan: PlanState; version: number; expiresAt: string }
+
 /**
- * Opening someone's link. Only a 404 means "this link is dead"; a rate limit, a 5xx or a dropped
+ * GET a public shared-plan route. Only a 404 means "this link is dead"; a rate limit, a 5xx or a dropped
  * connection says nothing about the link, so those come back null and the caller can offer a retry.
  */
-export async function fetchShare(
-  code: string,
-): Promise<{ name: string; plan: PlanState; createdAt: string } | 'not-found' | null> {
+async function getShared(path: string): Promise<unknown | 'not-found' | null> {
   try {
-    const r = await getWithTimeout(`/api/s/${encodeURIComponent(code)}`);
+    const r = await getWithTimeout(path);
     if (r.status === 404) return 'not-found';
     if (!r.ok) return null;
-    return (await r.json()) as { name: string; plan: PlanState; createdAt: string };
+    return await r.json();
   } catch {
     return null;
   }
+}
+
+export async function fetchSharedPlan(code: string): Promise<SharedDoc | 'not-found' | null> {
+  const b = await getShared(`/api/s/${encodeURIComponent(code)}`);
+  if (b === 'not-found' || b === null) return b;
+  const d = b as Partial<SharedDoc>;
+  return d && typeof d === 'object' && d.plan && typeof d.name === 'string'
+    ? (d as SharedDoc) : null;
+}
+
+/** The cheap poll: viewers compare this against the version they hold before downloading the plan again. */
+export async function fetchSharedVersion(code: string): Promise<number | 'not-found' | null> {
+  const b = await getShared(`/api/s/${encodeURIComponent(code)}/version`);
+  if (b === 'not-found' || b === null) return b;
+  const v = (b as { version?: unknown }).version;
+  return typeof v === 'number' ? v : null;
+}
+
+/** Switch a course to another section of the same course; the server's new version comes back. */
+export async function selectSharedOption(
+  code: string, courseId: string, optionId: string,
+): Promise<number | 'not-found' | 'invalid' | null> {
+  const r = await apiPost(`/api/s/${encodeURIComponent(code)}/select`, { courseId, optionId });
+  if (r.ok) {
+    const v = (r.body as { version?: unknown } | null)?.version;
+    return typeof v === 'number' ? v : null;
+  }
+  if (r.status === 404) return 'not-found';
+  if (r.status === 400) return 'invalid';
+  return null;
+}
+
+/** null = could not load. */
+export async function listSharedPlans(): Promise<SharedLink[] | null> {
+  try {
+    const r = await getWithTimeout('/api/shared');
+    if (!r.ok) return null;
+    const b = (await r.json()) as { shared?: unknown };
+    return Array.isArray(b.shared) ? (b.shared as SharedLink[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** On failure `error` is the server's code (too_many_shares, doc_too_large, rate_limited, ...), 'network', or 'server'. */
+export async function createSharedPlan(
+  name: string, plan: PlanState,
+): Promise<{ code: string; url: string; expiresAt: string } | { error: string }> {
+  const r = await apiPost('/api/shared', { name, plan });
+  if (!r.ok) return { error: r.status >= 500 || r.error === 'error' ? 'server' : r.error };
+  const b = (r.body ?? {}) as { code?: unknown; url?: unknown; expiresAt?: unknown };
+  return typeof b.code === 'string' && typeof b.url === 'string' && typeof b.expiresAt === 'string'
+    ? { code: b.code, url: b.url, expiresAt: b.expiresAt } : { error: 'server' };
+}
+
+/** Kept until the viewer page moves to fetchSharedPlan; the new response carries no creation time. */
+export async function fetchShare(
+  code: string,
+): Promise<{ name: string; plan: PlanState; createdAt: string } | 'not-found' | null> {
+  const s = await fetchSharedPlan(code);
+  return s === null || s === 'not-found' ? s : { name: s.name, plan: s.plan, createdAt: '' };
 }
 
 export interface CalendarLinks { https: string; webcal: string }
