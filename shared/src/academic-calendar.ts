@@ -31,16 +31,18 @@ export function academicTermKey(t: AcademicTerm): string {
   return `${t.year}|${t.period}`;
 }
 
-const PT_DAY = new Intl.DateTimeFormat('en-CA', {
+const PT_DAY = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/Los_Angeles',
   year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
+  month: 'numeric',
+  day: 'numeric',
 });
 
-/** The America/Los_Angeles calendar day of `now`, as YYYY-MM-DD. */
+/** The America/Los_Angeles calendar day of `now`, as YYYY-MM-DD. Built from the parts, not a locale's layout. */
 export function todayPT(now: Date): string {
-  return PT_DAY.format(now);
+  const p: Record<string, string> = {};
+  for (const part of PT_DAY.formatToParts(now)) if (part.type !== 'literal') p[part.type] = part.value;
+  return `${p.year!.padStart(4, '0')}-${p.month!.padStart(2, '0')}-${p.day!.padStart(2, '0')}`;
 }
 
 /** The term whose enrollment opened most recently (on or before today, Pacific); null if none has opened. */
