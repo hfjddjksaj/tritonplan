@@ -103,7 +103,8 @@ export function useSharedPlan(code: string, opts?: { pollMs?: number }): SharedP
           server = { ...server, plan: confirmed ?? server.plan, version: res };
           // Anything but prev+1 means someone else wrote in between, so our plan isn't version `res`.
           if (res !== prev + 1) stale = true;
-          // Answers arrive in commit order, so once none are pending the mirror is the truth, whatever order we clicked in.
+          // Parallel requests can finish out of order, so the version alone can't say whose write is newest; the
+          // res !== prev + 1 check above marks the mirror stale then, and once none are pending the mirror is shown.
           if (inflight === 0) { held = server; show(); }
           else if (held) held = { ...held, version: res };
         }

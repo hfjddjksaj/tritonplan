@@ -139,7 +139,7 @@ describe('SaveSharedDialog', () => {
     click(button('Save'));
     click(button('Replace'));
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    expect(onConfirm.mock.calls[0]![0].mode).toEqual({ kind: 'replace', planId: 'plan-2' });
+    expect(onConfirm.mock.calls[0]![0].mode).toEqual({ kind: 'replace', planId: 'plan-2', name: 'Fall draft' });
     expect(ids(onConfirm.mock.calls[0]!)).toEqual(['CSE-8A|2026|2', 'MATH-18|2026|2']);
   });
 

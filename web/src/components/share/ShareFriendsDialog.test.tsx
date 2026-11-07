@@ -86,6 +86,13 @@ describe('ShareFriendsDialog', () => {
     expect(text()).toContain('Fall 2026 · expires today');
   });
 
+  it('sends at most 100 characters of a long plan name', async () => {
+    await render([{ ...A, name: 'x'.repeat(150) }]);
+    await click(btn('New share'));
+    const post = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === 'POST')!;
+    expect(JSON.parse((post[1] as RequestInit).body as string).name).toBe('x'.repeat(100));
+  });
+
   it('copies a link when its row is clicked', async () => {
     listed = [link('abc', 'Plan A', Date.now())];
     await render([A]);

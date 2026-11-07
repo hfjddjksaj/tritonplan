@@ -79,7 +79,7 @@ describe('AccountMenu items', () => {
     expect(buttons()).not.toContain('Set a password');
   });
 
-  it('Import from old TritonPlan saves pending edits, then opens the import page; share links are gone', async () => {
+  it('Import from old TritonPlan saves pending edits, then opens the import page; no Shared links entry', async () => {
     await render();
     await openMenu();
     expect(buttons()).not.toContain('Shared links');

@@ -50,7 +50,7 @@ export function SaveSharedDialog({ doc, myPlans, termArchived, saving, error, on
   const confirm = () => {
     if (!ready || saving) return;
     const plan = { ...doc.plan, entries };
-    if (targetPlan) onConfirm({ plan, mode: { kind: 'replace', planId: targetPlan.id } });
+    if (targetPlan) onConfirm({ plan, mode: { kind: 'replace', planId: targetPlan.id, name: doc.name } });
     else onConfirm({ plan, mode: { kind: 'new', name: name.trim() || doc.name } });
   };
 

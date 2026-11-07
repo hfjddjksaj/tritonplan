@@ -63,7 +63,7 @@ export function ShareFriendsDialog({
     setBusy(true);
     setAsking(false);
     setError(null);
-    const created = createSharedPlan(p.name, p.plan);
+    const created = createSharedPlan(p.name.slice(0, 100), p.plan);
     // WebKit (every iPhone browser) lets a page write the clipboard only inside the click, and the link
     // arrives after it. A ClipboardItem takes a promise, so the write starts now and fills in once the link
     // exists; a failed create rejects that promise and nothing is written.

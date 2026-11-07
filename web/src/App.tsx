@@ -128,7 +128,7 @@ export default function App({
 
       {toast && (
         <div className="toast" role="status">
-          <Check size={16} className="toast__check" /> {toast}
+          {toast !== OLD_LINK && <Check size={16} className="toast__check" />} {toast}
         </div>
       )}
 

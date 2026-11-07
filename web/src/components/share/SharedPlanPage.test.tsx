@@ -319,6 +319,18 @@ describe('SharedPlanPage: Save to my plans', () => {
     expect(container.querySelector('.toast')?.textContent).toContain('Saved to your plans as "Fall draft"');
   });
 
+  it('a save that throws leaves the dialog closable with the same error', async () => {
+    fetchState.mockResolvedValueOnce(snapshotOf(account()));
+    await render();
+    await press(button('Save to my plans'));
+    fetchState.mockResolvedValueOnce({ pool: null } as never);
+    await press(inDialog('Save'));
+    expect(dialog()?.querySelector('[role="alert"]')?.textContent).toBe("Couldn't save. Try again.");
+    expect(container.querySelector('.toast')).toBeNull();
+    await press(dialog()!.querySelector<HTMLElement>('[aria-label="Close"]')!);
+    expect(dialog()).toBeNull();
+  });
+
   it('signed out, the sign-in card opens over the page and comes back here with the dialog open', async () => {
     fetchMe.mockResolvedValue(null);
     await render();

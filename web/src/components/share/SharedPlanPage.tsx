@@ -153,7 +153,13 @@ function SharedPlanReady({
       const open = stepRef.current;
       if (open.kind !== 'dialog' || open.saving) return;
       go({ ...open, saving: true, error: null });
-      const r = await saveSharedToAccount(save);
+      let r: Awaited<ReturnType<typeof saveSharedToAccount>>;
+      try {
+        r = await saveSharedToAccount(save);
+      } catch {
+        // Odd account data can throw while applying the save; the dialog must not stay stuck on "saving".
+        r = { ok: false, reason: 'failed' };
+      }
       if (!alive.current) return;
       if (r.ok) {
         go({ kind: 'idle' });

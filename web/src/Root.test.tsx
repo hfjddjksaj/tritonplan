@@ -553,12 +553,18 @@ describe('Root: a shared plan link', () => {
 
   it('Copy link copies the link to this page', async () => {
     const write = vi.fn(async () => {});
+    const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
-    serveShare();
-    await mount(`/s/${CODE}`);
-    await click('Copy link');
-    expect(write).toHaveBeenCalledWith(`${window.location.origin}/s/${CODE}`);
-    expect(text()).toContain('Link copied');
+    try {
+      serveShare();
+      await mount(`/s/${CODE}`);
+      await click('Copy link');
+      expect(write).toHaveBeenCalledWith(`${window.location.origin}/s/${CODE}`);
+      expect(text()).toContain('Link copied');
+    } finally {
+      if (original) Object.defineProperty(navigator, 'clipboard', original);
+      else delete (navigator as unknown as { clipboard?: unknown }).clipboard;
+    }
   });
 
   it('the rail has no remove button, and switching a section posts it to the shared plan', async () => {
@@ -626,6 +632,7 @@ describe('Root: a shared plan link', () => {
     expect(container.querySelector('.app')).not.toBeNull();
     expect(window.location.hash).toBe('');
     expect(text()).toContain(OLD_LINK);
+    expect(container.querySelector('.toast .toast__check')).toBeNull();
     expect(courseCodes()).not.toContain('MATH-18');
     expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
 

@@ -16,7 +16,7 @@ import { termKey } from './terms';
 /** `plan` holds only the picked courses, on the sections the shared plan shows. */
 export type SharedSave = {
   plan: PlanState;
-  mode: { kind: 'new'; name: string } | { kind: 'replace'; planId: string };
+  mode: { kind: 'new'; name: string } | { kind: 'replace'; planId: string; name: string };
 };
 export type SharedSaveOutcome = { kind: 'new' | 'replaced'; planName: string };
 export type SharedSaveResult =
@@ -41,10 +41,10 @@ export function applySharedSave(
     const replaced = replacePlanEntriesIn(terms, planId, save.plan, iso);
     const target = terms.terms[key]?.plans.plans.find((p) => p.id === planId);
     if (replaced && target) return { terms: replaced, pool: nextPool, outcome: { kind: 'replaced', planName: target.name } };
-    // Deleted on another device since the dialog listed it: the picked courses are saved all the same.
+    // Deleted on another device since the dialog listed it: the picked courses are saved as a new plan under the shared plan's name.
   }
   const before = terms?.terms[key];
-  const name = freeSharedName(before?.plans.plans.map((p) => p.name) ?? [], save.mode.kind === 'new' ? save.mode.name : '');
+  const name = freeSharedName(before?.plans.plans.map((p) => p.name) ?? [], save.mode.name);
   let next = adoptPlanIn(terms ?? { version: 1, activeTermKey: key, terms: {} }, save.plan, name, iso);
   if (terms) next = { ...next, activeTermKey: terms.activeTermKey };
   if (before) next = updateWorkspace(next, key, (ps) => switchActive(ps, before.plans.activeId));

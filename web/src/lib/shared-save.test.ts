@@ -70,7 +70,10 @@ function account(): TermsState {
 /** The friend's MATH-18 + CSE-12, of which only MATH-18 was picked. */
 const picked = (term: Term = FA) => planOf(term, 'MATH-18');
 const asNew = (name: string, plan: PlanState = picked()): SharedSave => ({ plan, mode: { kind: 'new', name } });
-const asReplace = (planId: string, plan: PlanState = picked()): SharedSave => ({ plan, mode: { kind: 'replace', planId } });
+const asReplace = (planId: string, plan: PlanState = picked(), name = 'Fall draft'): SharedSave => ({
+  plan,
+  mode: { kind: 'replace', planId, name },
+});
 
 const plansIn = (t: TermsState, key = '2026|2') => t.terms[key]!.plans.plans;
 
@@ -124,8 +127,8 @@ describe('applySharedSave', () => {
   });
 
   it('replace falls back to new when target is missing', () => {
-    const r = applySharedSave(account(), [], asReplace('deleted-on-phone'), NOW);
-    expect(r.outcome.kind).toBe('new');
+    const r = applySharedSave(account(), [], asReplace('deleted-on-phone', picked(), "Alex's plan"), NOW);
+    expect(r.outcome).toEqual({ kind: 'new', planName: "Alex's plan" });
     const plans = plansIn(r.terms);
     expect(plans).toHaveLength(3);
     expect(plans.slice(0, 2).map((p) => p.plan.entries.map((e) => e.course.id))).toEqual([['CSE-8A|2026|2'], ['CSE-11|2026|2']]);
