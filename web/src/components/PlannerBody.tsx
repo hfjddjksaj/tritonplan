@@ -96,11 +96,14 @@ export function PlannerBody({
     [ctl.weeklyConflicts, ctl.finalConflicts],
   );
 
-  function hintText(): string {
+  /** The toolbar's right-hand note: a conflict count, or a nudge while the plan is
+   *  empty. A clear plan says nothing — the slot stays empty rather than reassuring. */
+  function hintText(): string | null {
     if (conflictCount > 0) return `${conflictCount} ${pluralize(conflictCount, 'conflict')}`;
-    if (ctl.selectedCourses.length > 0) return 'No conflicts — looks clear';
+    if (ctl.selectedCourses.length > 0) return null;
     return ctl.shared ? 'No courses in this plan' : 'Bring in a course to begin';
   }
+  const hint = hintText();
 
   return (
     <>
@@ -119,7 +122,7 @@ export function PlannerBody({
                 finalsBadge={ctl.finalConflicts.length}
               />
               <div className="toolbar__spacer" />
-              <span className="toolbar__hint">{hintText()}</span>
+              {hint && <span className="toolbar__hint">{hint}</span>}
             </div>
 
             {view === 'calendar' && (

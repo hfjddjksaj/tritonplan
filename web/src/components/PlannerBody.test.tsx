@@ -39,4 +39,20 @@ describe('PlannerBody with a shared plan', () => {
     act(() => p002.click());
     expect(onSelect.mock.calls).toEqual([['CSE-8A|2026|2', 'o2']]);
   });
+
+  it('says nothing in the toolbar once the plan is clear, and still nudges while it is empty', () => {
+    const clear = makeClashPlan();
+    clear.entries[0]!.selectedOptionId = 'o2'; // clears both clashes (see the fixture)
+    act(() =>
+      root.render(<PlannerBody ctl={sharedController(clear, vi.fn())} campus={null} setCampus={vi.fn()} />),
+    );
+    expect(container.querySelector('.toolbar__hint')).toBeNull();
+
+    act(() =>
+      root.render(
+        <PlannerBody ctl={sharedController({ ...clear, entries: [] }, vi.fn())} campus={null} setCampus={vi.fn()} />,
+      ),
+    );
+    expect(container.querySelector('.toolbar__hint')?.textContent).toBe('No courses in this plan');
+  });
 });

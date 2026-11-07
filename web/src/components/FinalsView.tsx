@@ -46,11 +46,6 @@ export function FinalsView({
 
   return (
     <div className="finals">
-      <p className="finals__intro">
-        Final exams for your selected sections, earliest first. Overlapping finals on the same
-        day are flagged — those are the ones you can’t sit for at once.
-      </p>
-      <div className="eyebrow fincal__title">Finals week at a glance</div>
       <FinalsCalendar
         finals={finals}
         onOpenCourse={onOpenCourse}

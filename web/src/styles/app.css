@@ -2508,16 +2508,13 @@ p {
 
 /* ===================================================================== finals */
 .finals {
-  padding: 4px 18px 22px;
+  padding: 0 18px 22px;
   overflow-y: auto;
 }
 
-/* exam calendar card, between the intro and the timeline. The gap below it
-   lives on the card, not the timeline, so a midterms view with no dated exams
-   (no calendar) keeps the plain intro→timeline spacing. */
-.fincal__title {
-  margin: 0 2px 10px;
-}
+/* exam calendar card, above the timeline and flush under the toolbar like the
+   week view's card. The gap below it lives on the card, not the timeline, so a
+   midterms view with no dated exams (no calendar) starts straight at its rows. */
 .fincal {
   margin-bottom: 26px;
   background: var(--surface);
@@ -2535,12 +2532,6 @@ p {
 }
 .cal-head__day--dim .cal-head__dow {
   color: var(--text-faint);
-}
-.finals__intro {
-  max-width: 640px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  color: var(--text-muted);
 }
 .finals__timeline {
   display: flex;
@@ -2949,7 +2940,6 @@ p {
   .final-row {
     grid-template-columns: 86px 1fr auto;
   }
-  .finals__intro,
   .finals__timeline {
     max-width: none;
   }

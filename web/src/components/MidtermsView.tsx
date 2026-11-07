@@ -57,37 +57,30 @@ export function MidtermsView({
 
   return (
     <div className="finals">
-      <p className="finals__intro">
-        Midterm exams for your selected sections, earliest first. Courses whose midterm isn’t
-        announced in TSS yet are listed as TBD — check back after browsing the course again.
-      </p>
       {dated.length > 0 && (
-        <>
-          <div className="eyebrow fincal__title">Midterms at a glance</div>
-          <FinalsCalendar
-            finals={dated.map((m) => ({
-              courseId: m.courseId,
-              courseCode: m.courseCode,
-              title: m.title,
-              hue: m.hue,
-              final: m.midterm,
-              full: m.full,
-            }))}
-            onOpenCourse={onOpenCourse}
-            onFocusCourse={onFocusCourse}
-            onOpenLocation={
-              onOpenLocation
-                ? (b) => {
-                    if (b.building) onOpenLocation({ building: b.building, room: b.room });
-                  }
-                : undefined
-            }
-            onBlockDetail={onBlockDetail}
-            variant={variant}
-            examLabel="Midterm"
-            ariaLabel="Midterms calendar"
-          />
-        </>
+        <FinalsCalendar
+          finals={dated.map((m) => ({
+            courseId: m.courseId,
+            courseCode: m.courseCode,
+            title: m.title,
+            hue: m.hue,
+            final: m.midterm,
+            full: m.full,
+          }))}
+          onOpenCourse={onOpenCourse}
+          onFocusCourse={onFocusCourse}
+          onOpenLocation={
+            onOpenLocation
+              ? (b) => {
+                  if (b.building) onOpenLocation({ building: b.building, room: b.room });
+                }
+              : undefined
+          }
+          onBlockDetail={onBlockDetail}
+          variant={variant}
+          examLabel="Midterm"
+          ariaLabel="Midterms calendar"
+        />
       )}
 
       <div className="finals__timeline">
