@@ -237,7 +237,7 @@ A shared plan is a server-side copy of one plan that lives exactly 7 days from c
 |---|---|---|
 | `POST /shared`, `GET /shared` | signed in | Copy one plan into a shared plan; list your live ones. |
 | `GET /s/:code` | **public** | Read a shared plan (name, plan, version, expiry; no owner). Rate-limited per IP. |
-| `GET /s/:code/version` | **public** | Cheap version number the open viewers poll (~5 s) to pick up changes. Own, larger rate limit. |
+| `GET /s/:code/version` | **public** | Cheap version number the open viewers poll (every 4 s) to pick up changes. Own, larger rate limit. |
 | `POST /s/:code/select` | **public** | Switch one course to another option it already has; the only edit a shared plan allows. |
 | `GET /calendar`, `PUT /calendar` | signed in | Read / save which plan is picked per term. |
 | `POST /calendar/link` | signed in | Create the feed link, or return the existing one. |
@@ -256,7 +256,8 @@ without the extension, post the bridge envelope from the page
 To look at a shared page without a server, stub the API in Playwright with
 `page.route('**/api/s/<code>', r => r.fulfill({json: {...}}))` (and `/api/s/<code>/version`); two
 browser contexts (owner, signed-out viewer) cover the share, switch, save and expiry flow, and
-setting `expires_at` in `shared_plans` to the past exercises the expired screen on the next poll.
+setting `expires_at` in `shared_plans` to the past exercises the expired screen on the next poll, e.g.
+`sqlite3 "$TP_DB_PATH" "UPDATE shared_plans SET expires_at = '2000-01-01T00:00:00.000Z';"`.
 
 ## Reference material
 
