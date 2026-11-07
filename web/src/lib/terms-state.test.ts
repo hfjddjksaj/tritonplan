@@ -90,7 +90,7 @@ describe('replacePlanEntriesIn', () => {
     return s;
   }
 
-  it('swaps the entries in place: same id, name, browsed and place in the list; the active plan stays', () => {
+  it('swaps the entries in place: same id, name and place in the list, browsed kept and joined by the new courses', () => {
     const start = twoPlans();
     const target = start.terms['2026|2']!.plans.plans[0]!;
     const s = replacePlanEntriesIn(start, target.id, planOf(FALL26, 'MATH-18', 'CSE-12'), LATER)!;
@@ -98,13 +98,21 @@ describe('replacePlanEntriesIn', () => {
     expect(ws.plans.plans.map((p) => p.name)).toEqual(['My plan', 'Other']);
     const replaced = ws.plans.plans[0]!;
     expect(replaced.id).toBe(target.id);
-    expect(replaced.browsed).toEqual(['CSE-8A|2026|2', 'CSE-11|2026|2']);
+    // A swapped-in course removed later still shows under "Browsed — not yet added", like any course added to a plan.
+    expect(replaced.browsed).toEqual(['CSE-8A|2026|2', 'CSE-11|2026|2', 'MATH-18|2026|2', 'CSE-12|2026|2']);
     expect(replaced.plan.entries.map((e) => e.course.id)).toEqual(['MATH-18|2026|2', 'CSE-12|2026|2']);
     expect(replaced.plan.term).toEqual(FALL26);
     expect(replaced.updatedAt).toBe(LATER);
     expect(replaced.createdAt).toBe(target.createdAt);
     expect(ws.plans.activeId).toBe(start.terms['2026|2']!.plans.activeId);
     expect(ws.plans.plans[1]).toBe(start.terms['2026|2']!.plans.plans[1]);
+  });
+
+  it('a course the plan already browsed is not listed twice', () => {
+    const start = twoPlans();
+    const target = start.terms['2026|2']!.plans.plans[0]!;
+    const s = replacePlanEntriesIn(start, target.id, planOf(FALL26, 'CSE-11', 'MATH-18'), LATER)!;
+    expect(s.terms['2026|2']!.plans.plans[0]!.browsed).toEqual(['CSE-8A|2026|2', 'CSE-11|2026|2', 'MATH-18|2026|2']);
   });
 
   it('null for a plan that is not there, or not in the plan’s own term', () => {

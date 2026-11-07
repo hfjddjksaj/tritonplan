@@ -118,7 +118,7 @@ describe('applySharedSave', () => {
     const plans = plansIn(r.terms);
     expect(plans.map((p) => [p.id, p.name])).toEqual([['plan-1', 'Mine'], ['plan-2', 'Backup']]);
     expect(plans[1]!.plan.entries.map((e) => e.course.id)).toEqual(['MATH-18|2026|2']);
-    expect(plans[1]!.browsed).toEqual(['CSE-11|2026|2', 'CSE-30|2026|2']);
+    expect(plans[1]!.browsed).toEqual(['CSE-11|2026|2', 'CSE-30|2026|2', 'MATH-18|2026|2']);
     expect(r.terms.terms['2026|2']!.plans.activeId).toBe('plan-1');
     expect(r.pool.map((c) => c.id)).toEqual(['MATH-18|2026|2']);
   });

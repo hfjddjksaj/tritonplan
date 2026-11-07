@@ -108,17 +108,21 @@ export function adoptPlanIn(state: TermsState, plan: PlanState, name: string, no
 
 /**
  * Swap one plan's courses for `plan`'s, in place: it keeps its id (so a calendar feed picking it
- * follows), its name, its browsed list and its place. Only a plan of `plan`'s own term that is not
- * over qualifies; null otherwise, so the caller can save the courses some other way.
+ * follows), its name and its place. Its browsed list keeps what it had and gains the new courses,
+ * as adding a course does, so one removed later still shows as browsed. Only a plan of `plan`'s own
+ * term that is not over qualifies; null otherwise, so the caller can save the courses some other way.
  */
 export function replacePlanEntriesIn(state: TermsState, planId: string, plan: PlanState, now: string): TermsState | null {
   const key = termKey(plan.term);
   const ws = state.terms[key];
   if (!ws || isArchived(ws.term, new Date(now)) || !ws.plans.plans.some((p) => p.id === planId)) return null;
-  return updateWorkspace(state, key, (ps) => ({
-    ...ps,
-    plans: ps.plans.map((p) => (p.id === planId ? { ...p, plan: { ...p.plan, entries: plan.entries }, updatedAt: now } : p)),
-  }));
+  return updateWorkspace(state, key, (ps) => {
+    const swapped: PlansState = {
+      ...ps,
+      plans: ps.plans.map((p) => (p.id === planId ? { ...p, plan: { ...p.plan, entries: plan.entries }, updatedAt: now } : p)),
+    };
+    return addBrowsed(swapped, planId, plan.entries.map((e) => e.course.id), now);
+  });
 }
 
 /** Latest plan-updatedAt inside a workspace — tie-breaker for unknown-season terms. */
