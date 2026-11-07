@@ -79,6 +79,33 @@ describe('AccountMenu items', () => {
     expect(buttons()).not.toContain('Set a password');
   });
 
+  it('Report a bug is a link to a new issue on the repository, opened in a new tab', async () => {
+    await render();
+    await openMenu();
+    const row = [...document.body.querySelectorAll<HTMLAnchorElement>('a[role="menuitem"]')].find(
+      (a) => a.textContent?.trim() === 'Report a bug',
+    );
+    expect(row?.href).toBe('https://github.com/hfjddjksaj/tritonplan/issues/new');
+    expect(row?.target).toBe('_blank');
+    expect(row?.rel).toContain('noopener');
+  });
+
+  it('groups the rows: calendar + share, import + bug, then the account rows', async () => {
+    await render();
+    await openMenu();
+    const rows = [...q('[role="menu"]')!.querySelectorAll('[role="menuitem"], [role="separator"]')].map((el) =>
+      el.getAttribute('role') === 'separator' ? '—' : el.textContent?.trim(),
+    );
+    expect(rows).toEqual([
+      '—',
+      'Calendar subscription', 'Share with friends',
+      '—',
+      'Import from old TritonPlan', 'Report a bug',
+      '—',
+      'Change password', 'Disconnect Google', 'Sign out', 'Delete account…',
+    ]);
+  });
+
   it('Import from old TritonPlan saves pending edits, then opens the import page; no Shared links entry', async () => {
     await render();
     await openMenu();

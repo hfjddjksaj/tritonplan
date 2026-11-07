@@ -3,7 +3,8 @@ import { apiPost, fetchCalendar, type CalendarState, type Me } from '../lib/clou
 import { nav } from '../lib/nav';
 import { clearPendingMigration } from '../lib/migration';
 import { useClickAway } from '../hooks/useClickAway';
-import { Calendar, ChevronDown, Download, Key, Link, SignOut, Trash, Unlink } from './icons';
+import { BUG_REPORT_URL } from '../lib/brand';
+import { Bug, Calendar, ChevronDown, Download, External, Key, Link, SignOut, Trash, Unlink } from './icons';
 import { ShareFriendsDialog, type SharablePlan } from './share/ShareFriendsDialog';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
@@ -125,38 +126,41 @@ export function AccountMenu({
               </span>
             </div>
             <div className="menu__div" role="separator" />
-            <MenuButton icon={<Calendar size={13} />} onClick={choose(() => setDialog('calendar'))}>
+            <MenuRow icon={<Calendar size={13} />} onClick={choose(() => setDialog('calendar'))}>
               Calendar subscription
               {calendarDot && <span className="menu__dot" aria-label="needs attention" />}
-            </MenuButton>
-            <MenuButton icon={<Link size={13} />} onClick={choose(() => setDialog('share'))}>
+            </MenuRow>
+            <MenuRow icon={<Link size={13} />} onClick={choose(() => setDialog('share'))}>
               Share with friends
-            </MenuButton>
-            <MenuButton icon={<Download size={13} />} onClick={choose(importBackup)}>
+            </MenuRow>
+            <div className="menu__div" role="separator" />
+            <MenuRow icon={<Download size={13} />} onClick={choose(importBackup)}>
               Import from old TritonPlan
-            </MenuButton>
+            </MenuRow>
+            <MenuRow icon={<Bug size={13} />} href={BUG_REPORT_URL} onClick={() => setOpen(false)}>
+              Report a bug
+            </MenuRow>
             <div className="menu__div" role="separator" />
             {me.hasPassword ? (
-              <MenuButton icon={<Key size={13} />} onClick={choose(() => setDialog('password'))}>
+              <MenuRow icon={<Key size={13} />} onClick={choose(() => setDialog('password'))}>
                 Change password
-              </MenuButton>
+              </MenuRow>
             ) : (
-              <MenuButton icon={<Key size={13} />} onClick={choose(setPassword)}>
+              <MenuRow icon={<Key size={13} />} onClick={choose(setPassword)}>
                 Set a password
-              </MenuButton>
+              </MenuRow>
             )}
             {me.hasGoogle && me.hasPassword && (
-              <MenuButton icon={<Unlink size={13} />} onClick={choose(disconnectGoogle)}>
+              <MenuRow icon={<Unlink size={13} />} onClick={choose(disconnectGoogle)}>
                 Disconnect Google
-              </MenuButton>
+              </MenuRow>
             )}
-            <div className="menu__div" role="separator" />
-            <MenuButton icon={<SignOut size={13} />} onClick={choose(signOut)}>
+            <MenuRow icon={<SignOut size={13} />} onClick={choose(signOut)}>
               Sign out
-            </MenuButton>
-            <MenuButton icon={<Trash size={13} />} danger onClick={choose(() => setDialog('delete'))}>
+            </MenuRow>
+            <MenuRow icon={<Trash size={13} />} danger onClick={choose(() => setDialog('delete'))}>
               Delete account…
-            </MenuButton>
+            </MenuRow>
           </div>
         )}
       </div>
@@ -179,21 +183,39 @@ export function AccountMenu({
   );
 }
 
-function MenuButton({
+/** One row of the menu: a button, or with `href` a link that leaves the site in a new tab (marked ↗). */
+function MenuRow({
   icon,
   danger = false,
+  href,
   onClick,
   children,
 }: {
   icon: ReactNode;
   danger?: boolean;
+  /** A real link, so middle-click and "copy link" work; the click handler then only closes the menu. */
+  href?: string;
   onClick: () => void;
   children: ReactNode;
 }) {
-  return (
-    <button type="button" className={`menu__row${danger ? ' menu__row--danger' : ''}`} role="menuitem" onClick={onClick}>
+  const className = `menu__row${danger ? ' menu__row--danger' : ''}`;
+  const body = (
+    <>
       <span className="menu__icon" aria-hidden="true">{icon}</span>
       <span className="menu__label">{children}</span>
+    </>
+  );
+  if (href) {
+    return (
+      <a className={className} role="menuitem" href={href} target="_blank" rel="noopener noreferrer" onClick={onClick}>
+        {body}
+        <span className="menu__icon" aria-hidden="true"><External size={11} /></span>
+      </a>
+    );
+  }
+  return (
+    <button type="button" className={className} role="menuitem" onClick={onClick}>
+      {body}
     </button>
   );
 }

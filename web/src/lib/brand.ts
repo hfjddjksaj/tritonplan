@@ -7,3 +7,6 @@ export const CHROME_STORE_URL =
 
 /** Public source repository, shown as a quiet "open source" note in the UI. */
 export const GITHUB_URL = 'https://github.com/hfjddjksaj/tritonplan';
+
+/** Where "Report a bug" sends a student: a fresh issue on that repository (GitHub asks them to sign in first if needed). */
+export const BUG_REPORT_URL = `${GITHUB_URL}/issues/new`;

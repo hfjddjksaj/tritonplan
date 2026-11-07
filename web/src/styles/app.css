@@ -1330,6 +1330,7 @@ p {
   font-size: 12px;
   line-height: 1.35;
   color: var(--ink);
+  text-decoration: none; /* an <a> drawn as a row (Report a bug) */
 }
 .menu__row:hover:not(:disabled),
 .menu__row:focus-visible {
