@@ -219,6 +219,42 @@ test('public reads, polls and selects each have a per-IP budget', async () => {
   expect(((await res.json()) as { retryAfter: number }).retryAfter).toBeGreaterThan(0);
 });
 
+test('the version poll allows 6000 requests per 15 minutes per IP', async () => {
+  const { get } = setup();
+  const ip = { 'x-real-ip': '203.0.113.20' };
+  for (let i = 0; i < 6000; i++) {
+    const res = await get('/api/s/AAAAAAAAAA/version', undefined, ip);
+    if (res.status !== 404) throw new Error(`request ${i + 1} got ${res.status}`);
+  }
+  expect((await get('/api/s/AAAAAAAAAA/version', undefined, ip)).status).toBe(429);
+});
+
+test('an oversized select body is turned away with 413 before it is read', async () => {
+  const { mk, create, get, select } = setup();
+  const { code } = await create(mk('a@ucsd.edu').token);
+  const big = { courseId: 'CSE 100', optionId: 'b', pad: 'x'.repeat(5000) };
+  const res = await select(code, big);
+  expect(res.status).toBe(413);
+  expect(await res.json()).toEqual({ error: 'too_large' });
+  expect(((await (await get(`/api/s/${code}/version`)).json()) as { version: number }).version).toBe(1);
+});
+
+test('a throwing sweep does not throw out of the timer callback', async () => {
+  const { deps } = setup();
+  const { vi } = await import('vitest');
+  vi.useFakeTimers();
+  const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const stop = startSharedSweep({ ...deps, db: { prepare: () => { throw new Error('boom'); } } as unknown as typeof deps.db });
+    expect(() => vi.advanceTimersByTime(3_600_000)).not.toThrow();
+    expect(err).toHaveBeenCalled();
+    stop();
+  } finally {
+    err.mockRestore();
+    vi.useRealTimers();
+  }
+});
+
 test('the old snapshot routes are gone', async () => {
   const { mk, get } = setup();
   const u = mk('a@ucsd.edu');

@@ -83,7 +83,7 @@ export function shareRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
 
   // Polled by open viewers, so it has its own, larger budget.
   r.get('/s/:code/version', (c) => {
-    const over = limited(`share:poll:${clientIp(c)}`, 1200);
+    const over = limited(`share:poll:${clientIp(c)}`, 6000);
     if (over) return c.json(over, 429);
     const code = c.req.param('code');
     const version = CODE_RE.test(code) ? sharedVersion(db, code, deps.now()) : null;
@@ -117,7 +117,14 @@ export function shareRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
 
 /** Hourly delete of expired rows; reads already ignore them, this only reclaims space. */
 export function startSharedSweep(deps: Deps): () => void {
-  const timer = setInterval(() => sweepExpiredShared(deps.db, deps.now()), HOUR);
+  const timer = setInterval(() => {
+    // An exception escaping a timer callback would take the process down; the next hour retries.
+    try {
+      sweepExpiredShared(deps.db, deps.now());
+    } catch (e) {
+      console.error(`Shared-plan sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+    }
+  }, HOUR);
   timer.unref();
   return () => clearInterval(timer);
 }

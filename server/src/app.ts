@@ -32,6 +32,8 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   const smallBody = bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ error: 'too_large' }, 413) });
   app.use('/api/auth/*', smallBody);
   app.use('/api/account/*', smallBody);
+  // The anonymous section switch carries two short ids.
+  app.use('/api/s/*', bodyLimit({ maxSize: 4 * 1024, onError: (c) => c.json({ error: 'too_large' }, 413) }));
 
   app.get('/api/health', (c) => c.json({ ok: true }));
 
