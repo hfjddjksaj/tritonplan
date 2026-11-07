@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { BookedModule, Term } from '@triton/shared';
 import { findOption } from '../lib/plan';
 import { bookedElsewhere } from '../lib/booked-section';
-import { relativeTime } from '../lib/format';
+import { pluralize, relativeTime } from '../lib/format';
 import { TSS_HOME_URL, tssBookingLink } from '../lib/tss';
 import { displayTermLabel } from '../lib/terms';
 import type { PlanController } from '../hooks/usePlan';
@@ -69,7 +69,8 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
             </button>
           ) : (
             <span className="rail__count mono">
-              {entries.length} added<span className="rail__units"> · {ctl.units} units</span>
+              {ctl.shared ? `${entries.length} ${pluralize(entries.length, 'course')}` : `${entries.length} added`}
+              <span className="rail__units"> · {ctl.units} units</span>
             </span>
           )}
         </div>
@@ -111,7 +112,8 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                 onRemove={() => ctl.removeCourse(entry.course.id)}
                 onOpenTss={() => ctl.openCourseInTss(entry.course)}
                 onBook={
-                  bookable ? () => ctl.openBookingInTss(entry.course, option) : undefined
+                  // Booking is done from the student's own plan, never from a shared one.
+                  bookable && !ctl.shared ? () => ctl.openBookingInTss(entry.course, option) : undefined
                 }
                 booked={ctl.bookedIds.has(entry.course.id)}
                 waitlisted={ctl.waitlistedIds.has(entry.course.id)}
@@ -125,8 +127,9 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
           <div className="rail__empty">
             <Cap size={30} className="empty__mark" strokeWidth={1.4} />
             <p style={{ marginTop: 10 }}>
-              Nothing planned yet. Bring a course over from your browsed list below, or add a
-              section straight from TSS.
+              {ctl.shared
+                ? 'No courses in this plan.'
+                : 'Nothing planned yet. Bring a course over from your browsed list below, or add a section straight from TSS.'}
             </p>
           </div>
         )}

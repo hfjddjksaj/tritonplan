@@ -64,6 +64,12 @@
   --ok-soft: #e3f4ea;
   --ok-ink: #17643f;
 
+  /* A shared plan (someone's link, open to everyone holding it): violet, so it is never
+     mistaken for the student's own white-and-gold planner. */
+  --shared: #6d4bd8;
+  --shared-ink: #3f2a8c;
+  --shared-soft: #f1ecff;
+
   /* Radius / elevation */
   --r-sm: 6px;
   --r-md: 10px;

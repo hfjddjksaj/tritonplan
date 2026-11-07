@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import Root from './Root';
 import './styles/app.css';
 import './styles/auth.css';
-import './styles/share.css';
 import { installBridgeHub } from './lib/bridge';
 import { installBfcacheReload } from './lib/nav';
 

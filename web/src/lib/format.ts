@@ -80,3 +80,13 @@ export function relativeTime(iso: string, now = new Date()): string {
   if (hr < 24) return `${hr}h ago`;
   return `${Math.floor(hr / 24)}d ago`;
 }
+
+const DAY_MS = 86_400_000;
+
+/** How long a shared plan has left: "expires today" in its last day, else whole days rounded up. */
+export function expiryText(expiresAt: string, now: number = Date.now()): string {
+  const left = Date.parse(expiresAt) - now;
+  if (left < DAY_MS) return 'expires today';
+  const days = Math.ceil(left / DAY_MS);
+  return `expires in ${days} ${pluralize(days, 'day')}`;
+}

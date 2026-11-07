@@ -14,7 +14,7 @@ interface Props {
   entry: PlanEntry;
   index: number;
   conflicted: boolean;
-  /** Received (shared/imported) plan: no removing, no section switching. */
+  /** Not the student's own editable plan (a received plan, an archived term, a shared plan): no removing. Sections stay fixed unless `shared`. */
   readOnly?: boolean;
   /** A plan opened from a share link: read-only, except that its sections stay switchable. */
   shared?: boolean;
@@ -201,7 +201,11 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, shared 
           {freshness && (
             <span
               className="course-card__fresh"
-              {...tip(`Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}). Open it in TSS to refresh them.`)}
+              {...tip(
+                `Seat counts are from when this course was last browsed in TSS (${new Date(course.capturedAt!).toLocaleString()}).` +
+                  // Browsing TSS refreshes the student's own copy of a course, never a shared plan's.
+                  (shared ? '' : ' Open it in TSS to refresh them.'),
+              )}
             >
               seats {freshness}
             </span>
@@ -268,6 +272,7 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, shared 
         selectedOptionId={entry.selectedOptionId}
         onSelect={onSelect}
         readOnly={readOnly && !shared}
+        shared={shared}
         booked={booked}
         collapsed={!sectionsOpen}
         onToggle={() => setSectionsOpen((v) => !v)}

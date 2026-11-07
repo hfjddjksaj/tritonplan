@@ -25,7 +25,7 @@ describe('PlannerBody with a shared plan', () => {
     const onSelect = vi.fn();
     act(() =>
       root.render(
-        <PlannerBody ctl={sharedController(makeClashPlan(), onSelect)} campus={null} setCampus={vi.fn()} flash={vi.fn()} />,
+        <PlannerBody ctl={sharedController(makeClashPlan(), onSelect)} campus={null} setCampus={vi.fn()} />,
       ),
     );
     expect(container.querySelectorAll('.course-card')).toHaveLength(2);

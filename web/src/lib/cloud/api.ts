@@ -124,6 +124,7 @@ export async function fetchSharedPlan(code: string): Promise<SharedDoc | 'not-fo
   if (b === 'not-found' || b === null) return b;
   const d = b as Partial<SharedDoc>;
   return d && typeof d === 'object' && d.plan && typeof d.name === 'string'
+    && typeof d.version === 'number' && typeof d.expiresAt === 'string'
     ? (d as SharedDoc) : null;
 }
 
@@ -170,14 +171,6 @@ export async function createSharedPlan(
   const b = (r.body ?? {}) as { code?: unknown; url?: unknown; expiresAt?: unknown };
   return typeof b.code === 'string' && typeof b.url === 'string' && typeof b.expiresAt === 'string'
     ? { code: b.code, url: b.url, expiresAt: b.expiresAt } : { error: 'server' };
-}
-
-/** Kept until the viewer page moves to fetchSharedPlan; the new response carries no creation time. */
-export async function fetchShare(
-  code: string,
-): Promise<{ name: string; plan: PlanState; createdAt: string } | 'not-found' | null> {
-  const s = await fetchSharedPlan(code);
-  return s === null || s === 'not-found' ? s : { name: s.name, plan: s.plan, createdAt: '' };
 }
 
 export interface CalendarLinks { https: string; webcal: string }

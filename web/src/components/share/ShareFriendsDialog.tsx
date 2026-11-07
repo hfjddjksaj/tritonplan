@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createSharedPlan, listSharedPlans, type SharedLink } from '../../lib/cloud/api';
+import { expiryText } from '../../lib/format';
 import { qrSvg } from '../../lib/qr';
 import { displayTermLabel, termOf } from '../../lib/terms';
 import type { PlanState } from '@triton/shared';
 import { Dialog } from '../Dialog';
 import { Message } from '../Field';
 import { Copy, QrCode } from '../icons';
-
-const DAY_MS = 86_400_000;
 
 export interface SharablePlan { id: string; name: string; plan: PlanState }
 
@@ -21,13 +20,6 @@ const ERRORS: Record<string, string> = {
 function termLabelOf(key: string): string {
   const [year, period] = key.split('|');
   return year && period ? displayTermLabel(termOf(year, period)) : key;
-}
-
-function expiryText(expiresAt: string, now: number): string {
-  const left = Date.parse(expiresAt) - now;
-  if (left < DAY_MS) return 'expires today';
-  const days = Math.ceil(left / DAY_MS);
-  return `expires in ${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
 /** Newest first, so a link made a moment ago is the first thing on screen. */

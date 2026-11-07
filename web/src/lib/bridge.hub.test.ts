@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BRIDGE_SOURCE,
+  DEFERRED_ADDS_KEY,
   PENDING_ADDS_KEY,
+  deferPlanAdds,
   installBridgeHub,
   installBridgeListener,
   installApptTimesListener,
@@ -41,12 +43,16 @@ function post(data: unknown, init: Partial<MessageEventInit> = {}) {
 beforeEach(() => {
   resetBridgeHubForTests();
   sessionStorage.clear();
+  localStorage.removeItem(DEFERRED_ADDS_KEY);
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   resetBridgeHubForTests();
   sessionStorage.clear();
-  vi.restoreAllMocks();
+  localStorage.removeItem(DEFERRED_ADDS_KEY);
 });
+
+const deferredIds = () => (JSON.parse(localStorage.getItem(DEFERRED_ADDS_KEY) ?? '[]') as unknown[]).map(idOf);
 
 describe('bridge hub', () => {
   it('a plan-add posted before anyone listens is delivered when usePlan subscribes', () => {
@@ -306,5 +312,51 @@ describe('bridge hub', () => {
     subscribeBridge(['plan-add'], (d) => ids.push(idOf(d)));
     expect(ids).toHaveLength(200);
     expect(ids[0]).toBe('c5');
+  });
+
+  it('on a shared plan, queued and later plan-adds go to localStorage for the own planner, not to this page', () => {
+    installBridgeHub();
+    post(planAdd('A'));
+    deferPlanAdds();
+    post(planAdd('B'));
+    expect(deferredIds()).toEqual(['A', 'B']);
+    expect(sessionStorage.getItem(PENDING_ADDS_KEY)).toBeNull();
+    const h = vi.fn();
+    subscribeBridge(['plan-add'], h);
+    expect(h).not.toHaveBeenCalled();
+  });
+
+  it('deferring adds to what another shared tab already left there', () => {
+    installBridgeHub();
+    localStorage.setItem(DEFERRED_ADDS_KEY, JSON.stringify([planAdd('X')]));
+    deferPlanAdds();
+    post(planAdd('A'));
+    expect(deferredIds()).toEqual(['X', 'A']);
+  });
+
+  it('the next page load takes deferred plan-adds into its queue, after its own, and clears the key', () => {
+    sessionStorage.setItem(PENDING_ADDS_KEY, JSON.stringify([planAdd('S')]));
+    localStorage.setItem(DEFERRED_ADDS_KEY, JSON.stringify([planAdd('D'), { type: 'plan-add' }]));
+    installBridgeHub();
+    expect(localStorage.getItem(DEFERRED_ADDS_KEY)).toBeNull();
+    // Mirrored in this tab at once: a sign-in round trip before anyone subscribes must not lose them.
+    expect((JSON.parse(sessionStorage.getItem(PENDING_ADDS_KEY)!) as unknown[]).map(idOf)).toEqual(['S', 'D']);
+    const ids: string[] = [];
+    subscribeBridge(['plan-add'], (d) => ids.push(idOf(d)));
+    expect(ids).toEqual(['S', 'D']);
+  });
+
+  it('a plan-add stays queued in this tab when localStorage cannot take it', () => {
+    installBridgeHub();
+    const setItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key === DEFERRED_ADDS_KEY) throw new Error('blocked');
+      setItem.call(this, key, value);
+    });
+    deferPlanAdds();
+    post(planAdd('A'));
+    const ids: string[] = [];
+    subscribeBridge(['plan-add'], (d) => ids.push(idOf(d)));
+    expect(ids).toEqual(['A']);
   });
 });

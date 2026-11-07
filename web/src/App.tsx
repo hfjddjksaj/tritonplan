@@ -171,7 +171,7 @@ export default function App({
           onDiscard={handleDiscardReceived}
         />
       )}
-      <PlannerBody ctl={ctl} campus={campus} setCampus={setCampus} flash={flash} />
+      <PlannerBody ctl={ctl} campus={campus} setCampus={setCampus} />
 
       {toast && (
         <div className="toast" role="status">

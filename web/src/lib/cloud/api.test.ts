@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlanState } from '@triton/shared';
 import {
-  apiDelete, apiPost, createSharedPlan, fetchMe, fetchShare, fetchSharedPlan, fetchSharedVersion, fetchState, listSharedPlans, selectSharedOption, googleCalendarUrl, postSync, syncTimeoutMs, termCalendarLinks, UnauthorizedError,
+  apiDelete, apiPost, createSharedPlan, fetchMe, fetchSharedPlan, fetchSharedVersion, fetchState, listSharedPlans, selectSharedOption, googleCalendarUrl, postSync, syncTimeoutMs, termCalendarLinks, UnauthorizedError,
 } from './api';
 
 const res = (status: number, body: unknown = {}) =>
@@ -178,11 +178,13 @@ describe('shares', () => {
     expect(await fetchSharedPlan('abc')).toBeNull();
   });
 
-  it('fetchShare wraps fetchSharedPlan in the old shape', async () => {
-    stub(async () => res(200, doc));
-    expect(await fetchShare('abc')).toEqual({ name: 'n', plan, createdAt: '' });
-    stub(async () => res(404));
-    expect(await fetchShare('abc')).toBe('not-found');
+  it('fetchSharedPlan: a 200 without a numeric version or a string expiry is no doc', async () => {
+    stub(async () => res(200, { name: 'n', plan, createdAt: '2026-01-01T00:00:00Z' })); // an old snapshot's shape
+    expect(await fetchSharedPlan('abc')).toBeNull();
+    stub(async () => res(200, { ...doc, version: '3' }));
+    expect(await fetchSharedPlan('abc')).toBeNull();
+    stub(async () => res(200, { ...doc, expiresAt: 0 }));
+    expect(await fetchSharedPlan('abc')).toBeNull();
   });
 
   it('fetchSharedVersion: number on 200, not-found on 404, null otherwise', async () => {

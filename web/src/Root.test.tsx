@@ -6,10 +6,10 @@ import Root from './Root';
 import { usePlan } from './hooks/usePlan';
 import { useApptTimes } from './hooks/useApptTimes';
 import { nav } from './lib/nav';
-import { PENDING_HASH_KEY, PENDING_SAVE_KEY, PENDING_SHARE_KEY, stashPendingShare, type CloudBoot } from './lib/cloud/boot';
+import { PENDING_SAVE_KEY, PENDING_SHARE_KEY, stashPendingShare, type CloudBoot } from './lib/cloud/boot';
 import type { TermMeta, WebSnapshot } from './lib/cloud/records';
-import { BRIDGE_SOURCE, installBridgeHub, resetBridgeHubForTests } from './lib/bridge';
-import { makeCourse, makePlan } from './lib/fixtures';
+import { BRIDGE_SOURCE, DEFERRED_ADDS_KEY, installBridgeHub, resetBridgeHubForTests } from './lib/bridge';
+import { makeClashPlan, makeCourse, makePlan } from './lib/fixtures';
 import type { NamedPlan } from './lib/plans';
 import { planToHash, planToMirrorHash } from './lib/share';
 import { loadReceived, saveReceived } from './lib/storage';
@@ -182,6 +182,7 @@ async function click(label: string) {
   await act(async () => el.click());
   await settle();
 }
+const buttons = () => [...container.querySelectorAll('button')].map((b) => b.textContent?.trim());
 const callsTo = (method: string, url: string) => srv.calls.filter((c) => c.method === method && c.url === url);
 const googleHref = () =>
   [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'))?.getAttribute('href');
@@ -226,17 +227,11 @@ const migrationPayload = (): MigrationPayload => ({
   terms: mine('Old plan', otherPlan()), plans: null, plan: null, pool: [], appt: null, received: null, hashPlan: null,
 });
 
-const CODE = 'AbCdEfGh12';
-/** What GET /api/s/<code> answers for a live link: MATH-18, named "Fall draft". */
+const CODE = 'Ab3dE9xQ2k';
+/** What GET /api/s/<code> answers for a live link made yesterday: MATH-18, named "Fall draft". */
 function serveShare(code = CODE, plan: PlanState = otherPlan(), name = 'Fall draft') {
-  srv.auth[`GET /api/s/${code}`] = () => json(200, { name, plan, createdAt: '2026-10-20T00:00:00.000Z' });
-}
-
-async function signInWithEmail() {
-  srv.auth['POST /api/auth/login'] = () => json(200, { ok: true });
-  type(input('email'), 'student@ucsd.edu');
-  type(input('password'), 'correct horse');
-  await submit();
+  const expiresAt = new Date(Date.now() + 6 * 86_400_000 - 3_600_000).toISOString();
+  srv.auth[`GET /api/s/${code}`] = () => json(200, { name, plan, version: 1, expiresAt });
 }
 
 /** The sign-in card's own button: signed out, the planner's top bar has a Sign in button of its own. */
@@ -516,194 +511,102 @@ describe('Root: signed in', () => {
   });
 });
 
-describe('Root: opening a shared plan', () => {
-  it('a signed-out visitor sees a shared plan read-only, with no sign-in wall', async () => {
+describe('Root: a shared plan link', () => {
+  it.each([
+    ['signed out', 'out'],
+    ['signed in', 'in'],
+  ] as const)('%s, /s/<code> opens the shared plan page without asking who this is', async (_, me) => {
     serveShare();
+    srv.me = me;
+    srv.state = snapshotOf(mine());
     await mount(`/s/${CODE}`);
-    expect(container.querySelector('h1')?.textContent).toBe('Fall draft');
-    expect(text()).toContain('Fall 2026 · shared with you · read-only');
-    expect(text()).toContain('MATH-18');
-    expect(input('email')).toBeNull();
+    const bar = container.querySelector('.topbar--shared');
+    expect(bar?.textContent).toContain('Shared plan');
+    expect(bar?.textContent).toContain('expires in 6 days');
+    expect([...bar!.querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual(['Map', 'Copy link', 'Save to my plans']);
+    expect(courseCodes()).toEqual(['MATH-18']);
+    // None of the own planner's top bar (plans, terms, account, Clear, calendar Share), and no sign-in wall.
+    expect(container.querySelectorAll('.topbar')).toHaveLength(1);
+    expect(container.querySelector('.planswitch')).toBeNull();
+    expect(container.querySelector('.termsw')).toBeNull();
     expect(accountPlanner()).toBeNull();
-    expect(srv.calls[0]?.url).toBe(`/api/s/${CODE}`); // asked for before who this is
+    expect(container.querySelector('[aria-haspopup="dialog"]')).toBeNull();
+    expect(buttons()).not.toContain('Clear');
+    expect(input('email')).toBeNull();
+    expect(callsTo('GET', '/api/me')).toHaveLength(0);
     expect(callsTo('GET', '/api/state')).toHaveLength(0);
     expect(window.location.pathname).toBe(`/s/${CODE}`); // a reload shows it again
-    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull(); // nothing kept until they ask to save
+    expect(loadReceived()).toBeNull();
   });
 
-  it('a turned-off or unknown code shows the "no longer works" page', async () => {
+  it('Copy link copies the link to this page', async () => {
+    const write = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+    serveShare();
+    await mount(`/s/${CODE}`);
+    await click('Copy link');
+    expect(write).toHaveBeenCalledWith(`${window.location.origin}/s/${CODE}`);
+    expect(text()).toContain('Link copied');
+  });
+
+  it('the rail has no remove button, and switching a section posts it to the shared plan', async () => {
+    serveShare(CODE, makeClashPlan());
+    srv.auth[`POST /api/s/${CODE}/select`] = () => json(200, { version: 2 });
+    await mount(`/s/${CODE}`);
+    expect(container.querySelector('.course-card__remove')).toBeNull();
+    const cse = [...container.querySelectorAll('.course-card')].find((c) => c.textContent?.includes('CSE-8A'))!;
+    await act(async () => cse.querySelector<HTMLButtonElement>('.picker__toggle')!.click());
+    const p002 = [...cse.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find((b) => b.textContent?.includes('P-002'))!;
+    await act(async () => p002.click());
+    await settle();
+    expect(callsTo('POST', `/api/s/${CODE}/select`).map((c) => c.body)).toEqual([{ courseId: 'CSE-8A|2026|2', optionId: 'o2' }]);
+  });
+
+  it('an expired or unknown code says the shared plan has expired', async () => {
     await mount(`/s/${CODE}`); // the fake server answers 404 for any code it does not hold
-    expect(text()).toContain('This link no longer works. The person who shared it may have turned it off.');
+    expect(text()).toContain('This shared plan has expired.');
+    expect(text()).toContain('Shared plans last 7 days.');
     const home = [...container.querySelectorAll('a')].find((a) => a.textContent === 'Go to TritonPlan');
     expect(home?.getAttribute('href')).toBe('/');
     expect(input('email')).toBeNull();
     expect(callsTo('GET', '/api/me')).toHaveLength(0);
   });
 
-  it('a short link the server cannot answer shows the offline screen, and Try again opens it', async () => {
+  it('a link the server cannot answer shows the offline screen, and Try again opens it', async () => {
     srv.auth[`GET /api/s/${CODE}`] = () => json(503, { error: 'unavailable' });
     await mount(`/s/${CODE}`);
     expect(text()).toContain("Can't reach TritonPlan right now.");
     serveShare();
     await click('Try again');
-    expect(container.querySelector('h1')?.textContent).toBe('Fall draft');
+    expect(container.querySelector('.topbar--shared')).not.toBeNull();
   });
 
-  it('Save to my account → sign in → the plan is saved as a new plan, no second click', async () => {
+  it('a "+ TritonPlan" click drained into a shared plan lands in the own plan on its next load', async () => {
+    installBridgeHub();
     serveShare();
     await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    expect(text()).toContain('Sign in to save this plan');
-    expect(googleHref()).toBe(`/api/auth/google?returnTo=%2Fs%2F${CODE}`);
-    await signInWithEmail();
-    expect(navSpy).toHaveBeenCalledWith(`/s/${CODE}`);
+    const course = makeCourse('CSE-100|2026|2', 'CSE-100');
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { source: BRIDGE_SOURCE, type: 'plan-add', version: 1, payload: { course, selectedOptionId: course.options[0]!.id } },
+        source: window,
+        origin: window.location.origin,
+      }),
+    );
+    await settle();
+    expect(courseCodes()).toEqual(['MATH-18']);
+    expect(localStorage.getItem(DEFERRED_ADDS_KEY)).not.toBeNull();
 
-    // The navigation to returnTo (Google's comes back the same way): the short link again, now signed in.
     reload();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount(`/s/${CODE}`);
-    expect(window.location.pathname).toBe('/');
-    await expectSavedAsNewPlan('Fall draft');
-
-    // A reload neither fetches the link again nor saves it twice.
-    reload();
-    await mount('/');
-    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(2); // the signed-out visit and the save
-    expect(Object.keys(srv.state.plans)).toHaveLength(2);
-  });
-
-  it('a shared plan named like one of theirs is saved under a name of its own', async () => {
-    serveShare(CODE, otherPlan(), 'Mine');
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    reload();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount(`/s/${CODE}`);
-    await expectSavedAsNewPlan('Mine (shared)');
-  });
-
-  it('a new account starts with just the plan it saved, under its shared name', async () => {
-    serveShare(CODE, otherPlan(), 'My plan');
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    reload();
-    srv.me = 'in';
-    srv.state = snapshotOf(); // signed up just now: nothing in the account
-    await mount(`/s/${CODE}`);
-    expect(container.querySelector('.planswitch__name')?.textContent).toBe('My plan');
-    await letSyncRun();
-    expect(savedPlans()).toEqual({ 'My plan': ['MATH-18|2026|2'] }); // no empty "My plan" beside it
-  });
-
-  it('a new account whose only Save is from a term that is over still gets a plan it can edit', async () => {
-    serveShare(CODE, planIn({ year: '2025', period: '2', label: 'Fall 2025' }, 'CSE-12'), 'Last year');
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    reload();
-    srv.me = 'in';
-    srv.state = snapshotOf();
-    await mount(`/s/${CODE}`);
-    await letSyncRun();
-    expect(savedPlans()).toEqual({ 'My plan': [], 'Last year': ['CSE-12|2025|2'] });
-  });
-
-  it('a plan from a term that is over is saved, and the planner says it is read-only', async () => {
-    const FA25: Term = { year: '2025', period: '2', label: 'Fall 2025' };
-    serveShare(CODE, planIn(FA25, 'CSE-12'), 'Last year');
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    reload();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount(`/s/${CODE}`);
-    expect(text()).toContain('Saved the shared plan to your account — Fall 2025 is over, so it is read-only');
-    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Last year');
-    await letSyncRun();
-    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], 'Last year': ['CSE-12|2025|2'] });
-  });
-
-  it('a signed-in visitor goes straight to the planner with the plan received', async () => {
-    serveShare();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount(`/s/${CODE}`);
-    expect(accountPlanner()).not.toBeNull();
-    expect(container.querySelector('.received--active')).not.toBeNull();
-    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
-    expect(text()).not.toContain('Save to my account');
-    expect(window.location.pathname).toBe('/');
-
-    // A reload opens "/", so the link is not fetched again; the plan stays in the received slot.
-    const here = window.location.pathname + window.location.search + window.location.hash;
-    reload();
-    await mount(here);
-    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(1);
-    expect(container.querySelector('.received--active')).not.toBeNull();
-  });
-
-  it('a #p= stashed earlier in this tab does not override a short link opened since', async () => {
-    const hash = `#${planToHash(planWith('CSE-11'))}`;
-    await mount(`/${hash}`); // signed out: the hash waits in this tab's sessionStorage
-    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBe(hash);
-
-    reload(); // same tab, so the stash is still there
-    serveShare();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount(`/s/${CODE}`);
-    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
-    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
-    expect(window.location.hash).toBe('');
-  });
-
-  it('a signed-out #p= link shows the read-only view and survives sign-in', async () => {
-    const hash = `#${planToHash(otherPlan())}`;
-    await mount(`/${hash}`);
-    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBe(hash);
-    expect(container.querySelector('h1')?.textContent).toBe('Shared plan');
-    expect(text()).toContain('MATH-18');
-    expect(input('email')).toBeNull();
-
-    await click('Save to my account');
-    expect(text()).toContain('Sign in to save this plan');
-    expect(googleHref()).toBe('/api/auth/google?returnTo=%2F');
-    await signInWithEmail();
-    expect(callsTo('POST', '/api/auth/login')[0]?.body).toEqual({ email: 'student@ucsd.edu', password: 'correct horse' });
-    expect(navSpy).toHaveBeenCalledWith('/');
-
-    // The navigation to returnTo: a fresh load of "/" with no hash, now signed in.
-    reload();
+    installBridgeHub();
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
-    await expectSavedAsNewPlan('Shared plan');
-  });
-
-  it('a #p= link Save was clicked on is saved when this tab sees the sign-in from another tab', async () => {
-    const hash = `#${planToHash(otherPlan())}`;
-    await mount(`/${hash}`);
-    await click('Save to my account');
-    // Signed in from the confirm mail's tab; back in this one, the link is still in the address bar.
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await becomeVisible();
-    expect(window.location.hash).toBe(''); // or it would open again, as a received plan
-    await expectSavedAsNewPlan('Shared plan');
-  });
-
-  it('a #p= Save keeps the plan on show, even when the address bar changed under it', async () => {
-    await mount(`/#${planToHash(otherPlan())}`);
-    window.history.replaceState(null, '', `/#${planToHash(planWith('CSE-11'))}`); // pasted over, no reload
-    await click('Save to my account');
-    await signInWithEmail();
-    reload();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount('/');
-    await expectSavedAsNewPlan('Shared plan');
+    expect(localStorage.getItem(DEFERRED_ADDS_KEY)).toBeNull();
+    expect(courseCodes()).toContain('CSE-100');
+    await letSyncRun();
+    const saved = Object.values(srv.state.plans).map((p) => p.data as NamedPlan);
+    expect(saved.flatMap((p) => p.plan.entries.map((e) => e.course.id))).toContain('CSE-100|2026|2');
   });
 
   it('a #p= link merely opened signed out still waits for its own Save after signing in', async () => {
@@ -725,19 +628,11 @@ describe('Root: opening a shared plan', () => {
 });
 
 describe('Root: a short link saved before signing in', () => {
-  it('opens after the confirm mail signs in from another tab', async () => {
+  it('is saved after the confirm mail signs in from another tab', async () => {
     serveShare();
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!)).toMatchObject({ code: CODE });
-    // Coming back to this tab while waiting for the mail fetches the link again: its own stash stays.
-    await becomeVisible();
-    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(2);
-    expect(text()).toContain('Sign in to save this plan');
-    expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!)).toMatchObject({ code: CODE });
+    stashPendingShare(CODE);
 
     // The confirm mail opens a new tab (its own sessionStorage), and /verify sends it to "/", not to the link.
-    reload();
     sessionStorage.clear();
     srv.auth['POST /api/auth/verify'] = () => json(200, { ok: true });
     await mount('/verify#token=tok');
@@ -752,11 +647,52 @@ describe('Root: a short link saved before signing in', () => {
     await expectSavedAsNewPlan('Fall draft');
   });
 
+  it('is saved under a name of its own when named like one of theirs', async () => {
+    serveShare(CODE, otherPlan(), 'Mine');
+    stashPendingShare(CODE);
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    await expectSavedAsNewPlan('Mine (shared)');
+  });
+
+  it('starts a new account with just the plan it saved, under its shared name', async () => {
+    serveShare(CODE, otherPlan(), 'My plan');
+    stashPendingShare(CODE);
+    srv.me = 'in';
+    srv.state = snapshotOf(); // signed up just now: nothing in the account
+    await mount('/');
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('My plan');
+    await letSyncRun();
+    expect(savedPlans()).toEqual({ 'My plan': ['MATH-18|2026|2'] }); // no empty "My plan" beside it
+  });
+
+  it('from a term that is over still gives a new account a plan it can edit', async () => {
+    serveShare(CODE, planIn({ year: '2025', period: '2', label: 'Fall 2025' }, 'CSE-12'), 'Last year');
+    stashPendingShare(CODE);
+    srv.me = 'in';
+    srv.state = snapshotOf();
+    await mount('/');
+    await letSyncRun();
+    expect(savedPlans()).toEqual({ 'My plan': [], 'Last year': ['CSE-12|2025|2'] });
+  });
+
+  it('from a term that is over is saved, and the planner says it is read-only', async () => {
+    const FA25: Term = { year: '2025', period: '2', label: 'Fall 2025' };
+    serveShare(CODE, planIn(FA25, 'CSE-12'), 'Last year');
+    stashPendingShare(CODE);
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    expect(text()).toContain('Saved the shared plan to your account — Fall 2025 is over, so it is read-only');
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Last year');
+    await letSyncRun();
+    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], 'Last year': ['CSE-12|2025|2'] });
+  });
+
   it('is ignored after 24 h', async () => {
     serveShare();
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    reload();
+    stashPendingShare(CODE);
     vi.setSystemTime(Date.now() + 24 * 3_600_000 + 60_000);
     srv.me = 'in';
     srv.state = snapshotOf(mine());
@@ -764,22 +700,16 @@ describe('Root: a short link saved before signing in', () => {
     expect(accountPlanner()).not.toBeNull();
     expect(container.querySelector('.received')).toBeNull();
     expect(loadReceived()).toBeNull();
-    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(1); // only the visit itself
+    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(0);
     expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
   });
 
-  it.each([
-    ['a short link', () => {
-      serveShare('ZyXwVuTs98', otherPlan(), 'Newer');
-      return '/s/ZyXwVuTs98';
-    }],
-    ['a #p= link', () => `/#${planToHash(otherPlan())}`],
-  ])('is still saved beside %s in the address bar, which opens as received', async (_, path) => {
+  it('is still saved beside a #p= link in the address bar, which opens as received', async () => {
     serveShare(CODE, planWith('CSE-11'), 'Older save');
     stashPendingShare(CODE);
     srv.me = 'in';
     srv.state = snapshotOf(mine());
-    await mount(path());
+    await mount(`/#${planToHash(otherPlan())}`);
     expect(receivedIds()).toEqual(['MATH-18|2026|2']); // the link being opened now is what shows
     expect(container.querySelector('.received--active')).not.toBeNull();
     expect(text()).toContain('Saved the shared plan to your account');
@@ -789,20 +719,23 @@ describe('Root: a short link saved before signing in', () => {
   });
 
   it.each([
-    ['is turned off', 404, 'This link no longer works. The person who shared it may have turned it off.'],
+    ['is open', 200, 'Shared plan'],
+    ['has expired', 404, 'This shared plan has expired.'],
     ['cannot be reached', 503, "Can't reach TritonPlan right now."],
-  ])('survives a short link in the address bar that %s, and is saved at the next signed-in load', async (_, status, screen) => {
+  ])('waits while another shared plan that %s is on show, and is saved at the next planner load', async (_, status, screen) => {
     serveShare(CODE, planWith('CSE-11'), 'Older save');
     stashPendingShare(CODE);
-    srv.auth['GET /api/s/DeadDead00'] = () => json(status, { error: 'x' });
-    await mount('/s/DeadDead00');
+    if (status === 200) serveShare('ZyXwVuTs98', otherPlan(), 'Just looking');
+    else srv.auth['GET /api/s/ZyXwVuTs98'] = () => json(status, { error: 'x' });
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/s/ZyXwVuTs98');
     expect(text()).toContain(screen);
+    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(0);
     expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!)).toMatchObject({ code: CODE });
 
     // "Go to TritonPlan" (or any later visit), signed in.
     reload();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
     await mount('/');
     expect(container.querySelector('.planswitch__name')?.textContent).toBe('Older save');
     expect(loadReceived()).toBeNull();
@@ -810,128 +743,13 @@ describe('Root: a short link saved before signing in', () => {
     expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], 'Older save': ['CSE-11|2026|2'] });
   });
 
-  it('is not cancelled by looking at another link in another tab', async () => {
-    serveShare();
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    const tabA = sessionStorage.getItem(PENDING_SAVE_KEY);
-
-    // Another tab, signed out, only looks at a second link.
-    reload();
-    sessionStorage.clear();
-    serveShare('ZyXwVuTs98', planWith('CSE-11'), 'Just looking');
-    await mount('/s/ZyXwVuTs98');
-    expect(container.querySelector('h1')?.textContent).toBe('Just looking');
-
-    // Back in the first tab, Google sends it to its link, signed in.
-    reload();
-    sessionStorage.clear();
-    sessionStorage.setItem(PENDING_SAVE_KEY, tabA!);
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount(`/s/${CODE}`);
-    await expectSavedAsNewPlan('Fall draft');
-  });
-
-  it('the first tab, back after the confirm mail\'s tab saved it, neither saves nor offers it again — edited there or not', async () => {
-    serveShare();
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    const tabA = sessionStorage.getItem(PENDING_SAVE_KEY);
-
-    // The confirm mail's tab (its own sessionStorage) signs in and saves "Fall draft"...
-    reload();
-    sessionStorage.clear();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount('/');
-    await expectSavedAsNewPlan('Fall draft');
-    // ...which the student then changes there.
-    const [id, doc] = Object.entries(srv.state.plans).find(([, p]) => (p.data as NamedPlan).name === 'Fall draft')!;
-    const named = doc.data as NamedPlan;
-    const edited = { ...named, plan: { ...named.plan, entries: named.plan.entries.map((e) => ({ ...e, selectedOptionId: null })) } };
-    srv.state.plans[id] = { ...doc, version: doc.version + 100, data: edited };
-
-    // Back in the first tab, which Google (or a refocus) brings to its link signed in.
-    reload();
-    sessionStorage.clear();
-    sessionStorage.setItem(PENDING_SAVE_KEY, tabA!);
-    await mount(`/s/${CODE}`);
-    expect(accountPlanner()).not.toBeNull();
-    expect(container.querySelector('.received')).toBeNull();
-    expect(loadReceived()).toBeNull();
-    expect(text()).toContain('That shared plan is already in your account');
-    expect(text()).not.toContain('Saved the shared plan');
-    expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
-    expect(window.location.pathname).toBe('/');
-    await letSyncRun();
-    expect(Object.keys(savedPlans()).sort()).toEqual(['Fall draft', 'Mine']);
-  });
-
-  it('a #p= link and then a short link, both saved in one tab before signing in, are both kept', async () => {
-    await mount(`/#${planToHash(otherPlan())}`);
-    await click('Save to my account');
-    reload(); // same tab
-    serveShare(CODE, planWith('CSE-11'), 'Short save');
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    await signInWithEmail();
-
-    reload();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount(`/s/${CODE}`);
-    expect(text()).toContain('Saved 2 shared plans to your account');
-    await letSyncRun();
-    expect(savedPlans()).toEqual({
-      Mine: ['CSE-8A|2026|2'], 'Short save': ['CSE-11|2026|2'], 'Shared plan': ['MATH-18|2026|2'],
-    });
-  });
-
-  it('a Save whose link was turned off meanwhile does not hide the live link being opened', async () => {
-    stashPendingShare('DeadDead00');
-    serveShare();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount(`/s/${CODE}`);
-    expect(container.querySelector('.received--active')).not.toBeNull();
-    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
-    expect(text()).toContain('A plan you chose to save is no longer shared');
-    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
-  });
-
-  it('a short link and then a #p= link, both saved in one tab before signing in, are both kept', async () => {
-    serveShare(CODE, planWith('CSE-11'), 'Short save');
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    reload(); // same tab
-    await mount(`/#${planToHash(otherPlan())}`);
-    await click('Save to my account');
-    await signInWithEmail();
-
-    reload();
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount('/');
-    expect(text()).toContain('Saved 2 shared plans to your account');
-    expect(loadReceived()).toBeNull();
-    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
-    expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
-    await letSyncRun();
-    expect(savedPlans()).toEqual({
-      Mine: ['CSE-8A|2026|2'], 'Short save': ['CSE-11|2026|2'], 'Shared plan': ['MATH-18|2026|2'],
-    });
-  });
-
   it('waits out the old-site import screen, and a reload there does not lose it', async () => {
     serveShare();
-    await mount(`/s/${CODE}`);
-    await click('Save to my account');
-    reload();
+    stashPendingShare(CODE);
     savePendingMigration(migrationPayload());
     srv.me = 'in';
     srv.state = snapshotOf(mine());
-    await mount(`/s/${CODE}`);
+    await mount('/');
     expect(text()).toContain('Move your plans');
     expect(accountPlanner()).toBeNull();
 

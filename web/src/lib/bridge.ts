@@ -134,12 +134,19 @@ export function isBookedMessage(data: unknown): data is BookedMessage {
  * latest of each as the old one did. A `plan-add` is a click, delivered exactly once to the
  * signed-in planner. The signed-out planner shows the clicks too, but only keeps a copy: they
  * stay queued for the planner that can save them.
+ *
+ * A shared plan's page (/s/<code>) is not the student's planner and never takes a click. Current
+ * extensions leave it alone; an older one still drains its queue into whatever planner tab it
+ * finds. Those clicks are parked in localStorage, which the student's own planner, in any tab,
+ * picks up on its next load.
  */
 
 export type BridgeKind = 'courses' | 'plan-add' | 'booked' | 'appt-times';
 
 /** Queued plan-adds mirror here so they survive the sign-in page navigation (same tab). */
 export const PENDING_ADDS_KEY = 'triton-planner:pending-adds:v1';
+/** Plan-adds that reached a shared plan's page, waiting for the next load of the student's own planner. */
+export const DEFERRED_ADDS_KEY = 'triton-planner:deferred-adds:v1';
 
 /** Queue cap for `plan-add`: keeps the latest N, so a student who never signs in does not grow memory without bound. */
 const MAX_QUEUED_PER_KIND = 200;
@@ -164,6 +171,8 @@ interface Subscriber { kinds: ReadonlySet<BridgeKind>; handler: (data: unknown) 
 
 let hubInstalled = false;
 let hubListener: ((event: MessageEvent) => void) | null = null;
+/** This page is a shared plan's: plan-adds go to DEFERRED_ADDS_KEY instead of the queue. */
+let deferring = false;
 /** Undelivered plan-adds, in arrival order. */
 let queue: Queued[] = [];
 /** The latest snapshot of each kind this page load, delivered or not. */
@@ -183,17 +192,52 @@ function persistPendingAdds(): void {
   }
 }
 
-function restorePendingAdds(): void {
+/**
+ * The valid plan-adds stored under `key`; none when it is missing, corrupt or unreadable. The store
+ * comes as a thunk because where storage is blocked, merely reading `localStorage` throws.
+ */
+function readAdds(storage: () => Storage, key: string): PlanAddMessage[] {
   try {
-    const raw = sessionStorage.getItem(PENDING_ADDS_KEY);
-    if (!raw) return;
+    const raw = storage().getItem(key);
+    if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return;
-    // Restored entries go first: they arrived before anything posted on this page load.
-    const restored = parsed.filter(isPlanAddMessage).map((data) => ({ kind: 'plan-add' as const, data }));
-    queue = [...restored, ...queue].slice(-MAX_QUEUED_PER_KIND);
+    return Array.isArray(parsed) ? parsed.filter(isPlanAddMessage) : [];
   } catch {
-    // Corrupt or unreadable: start empty.
+    return [];
+  }
+}
+
+function restorePendingAdds(): void {
+  const own = readAdds(() => sessionStorage, PENDING_ADDS_KEY);
+  const deferred = readAdds(() => localStorage, DEFERRED_ADDS_KEY);
+  try { localStorage.removeItem(DEFERRED_ADDS_KEY); } catch { /* blocked: nothing was deferred either */ }
+  // Restored entries go first: they arrived before anything posted on this page load.
+  const restored = [...own, ...deferred].map((data) => ({ kind: 'plan-add' as const, data }));
+  queue = [...restored, ...queue].slice(-MAX_QUEUED_PER_KIND);
+  // Taken from localStorage, they now belong to this tab, and a sign-in round trip must not lose them.
+  if (deferred.length > 0) persistPendingAdds();
+}
+
+/** Append plan-adds to the deferred list (another shared tab may have left some). False when storage refuses. */
+function deferAdds(adds: unknown[]): boolean {
+  try {
+    const kept = readAdds(() => localStorage, DEFERRED_ADDS_KEY);
+    localStorage.setItem(DEFERRED_ADDS_KEY, JSON.stringify([...kept, ...adds].slice(-MAX_MIRRORED_ADDS)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * This page is a shared plan's: every plan-add queued so far, and every later one this page load,
+ * is parked in localStorage for the student's own planner. Nobody on this page subscribes to them.
+ */
+export function deferPlanAdds(): void {
+  deferring = true;
+  if (queue.length > 0 && deferAdds(queue.map((q) => q.data))) {
+    queue = [];
+    persistPendingAdds();
   }
 }
 
@@ -236,7 +280,7 @@ export function installBridgeHub(): void {
     if (!kind) return;
     if (isSnapshot(kind)) latest.set(kind, data);
     const targets = [...subscribers].filter((s) => s.kinds.has(kind));
-    if (!isSnapshot(kind) && !targets.some((s) => !s.keep)) enqueue({ kind, data });
+    if (!isSnapshot(kind) && !targets.some((s) => !s.keep) && !(deferring && deferAdds([data]))) enqueue({ kind, data });
     for (const s of targets) deliver(s.handler, data);
   };
   window.addEventListener('message', hubListener);
@@ -288,6 +332,7 @@ export function resetBridgeHubForTests(): void {
   if (hubListener) window.removeEventListener('message', hubListener);
   hubListener = null;
   hubInstalled = false;
+  deferring = false;
   queue = [];
   latest.clear();
   warnedEviction = false;

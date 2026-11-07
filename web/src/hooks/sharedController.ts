@@ -16,7 +16,7 @@ import {
   planUnits,
 } from '../lib/plan';
 import { termKey } from '../lib/terms';
-import { openBooking, openInTss } from '../lib/tss';
+import { openInTss } from '../lib/tss';
 import type { PlanController } from './usePlan';
 
 const noop = () => {};
@@ -54,9 +54,8 @@ export function sharedController(
     toggleBooked: noop,
     // Leaving for TSS only opens a tab. Never through the extension: a shared page doesn't talk to it.
     openCourseInTss: (course) => openInTss(course),
-    openBookingInTss: (course, option) => {
-      openBooking(course, option);
-    },
+    // Booking is the student's own business, done from their own planner.
+    openBookingInTss: noop,
     activeTermKey: key,
     termsState: { version: 1, activeTermKey: key, terms: {} },
     termList: [],

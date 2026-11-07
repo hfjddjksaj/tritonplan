@@ -212,6 +212,13 @@ export const MapPinIcon = (p: P) => (
     <circle cx="12" cy="10" r="2.5" />
   </svg>
 );
+/** ⇄ — two arrows passing each other: a plan going back and forth between friends. */
+export const Swap = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 8h15M15 4l4 4-4 4" />
+    <path d="M20 16H5M9 12l-4 4 4 4" />
+  </svg>
+);
 /** A north needle — the map's compass, drawn as a control, not on the canvas. */
 export const Compass = (p: P) => (
   <svg {...base(p)}>

@@ -38,8 +38,6 @@ export function PlannerBody({
   /** Owned by the caller, whose top bar has a Map button of its own. */
   campus: CampusOpen;
   setCampus: (next: CampusOpen) => void;
-  /** Shows the caller's toast. */
-  flash: (msg: string) => void;
 }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<MobileTab>('calendar');
@@ -101,7 +99,7 @@ export function PlannerBody({
   function hintText(): string {
     if (conflictCount > 0) return `${conflictCount} ${pluralize(conflictCount, 'conflict')}`;
     if (ctl.selectedCourses.length > 0) return 'No conflicts — looks clear';
-    return 'Bring in a course to begin';
+    return ctl.shared ? 'No courses in this plan' : 'Bring in a course to begin';
   }
 
   return (

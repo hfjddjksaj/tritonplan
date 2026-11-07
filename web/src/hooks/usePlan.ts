@@ -332,8 +332,8 @@ export function usePlan(boot: CloudBoot) {
   }, [addIntoTerm]);
 
   // ---- plan-add picker queue (course's term has several plans) -----------
-  // at(), not [0]: an index reads as never-undefined, which would type a null head as non-null.
-  const pendingAdd = pendingQueue.at(0) ?? null;
+  // Not `[0] ?? null`, which types the head as never null; not at(), which Safari before 15.4 lacks.
+  const pendingAdd = pendingQueue.length > 0 ? pendingQueue[0]! : null;
   const confirmPendingAdd = useCallback((planId: string) => {
     const head = pendingQueue[0];
     if (!head) return;

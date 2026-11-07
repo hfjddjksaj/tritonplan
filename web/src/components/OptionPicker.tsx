@@ -47,8 +47,10 @@ interface Props {
   course: CourseOffering;
   selectedOptionId: string | null;
   onSelect: (optionId: string) => void;
-  /** Received (shared/imported) plan: options are visible but not switchable. */
+  /** Someone else's plan or an archived term: options are visible but not switchable. */
   readOnly?: boolean;
+  /** A shared plan: switchable, but browsing TSS never refreshes its seat counts. */
+  shared?: boolean;
   /** User has confirmed enrollment — supersedes the collapsed-row "full" greying. */
   booked?: boolean;
   /** Collapsed: only the toggle row shows (with the selected section's code). */
@@ -56,7 +58,7 @@ interface Props {
   onToggle: () => void;
 }
 
-export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = false, booked, collapsed, onToggle }: Props) {
+export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = false, shared = false, booked, collapsed, onToggle }: Props) {
   if (course.options.length === 0) return null;
   const selected = findOption(course, selectedOptionId);
   // With the list collapsed, this code is the only trace of the chosen section —
@@ -156,7 +158,7 @@ export function OptionPicker({ course, selectedOptionId, onSelect, readOnly = fa
             </button>
           );
         })}
-        {hasSeats && !readOnly && (
+        {hasSeats && !readOnly && !shared && (
           <p className="picker__note">
             Note: seat counts don’t refresh on their own. Use “open in TSS” above and browse the
             course again to refresh them.
