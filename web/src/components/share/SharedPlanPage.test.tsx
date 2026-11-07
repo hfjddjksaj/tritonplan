@@ -221,9 +221,20 @@ function account(): TermsState {
   };
 }
 
+/** The shared plan and "Mine" are Fall 2026, which archives on Dec 20: only before then is replacing offered. */
+const TODAY = new Date('2026-11-06T20:00:00Z');
+/** Pins the clock to TODAY. The real-timers reset first, or a second useFakeTimers would leave `also` real. */
+function pinToday(also: ('setInterval' | 'clearInterval')[] = []) {
+  vi.useRealTimers();
+  vi.useFakeTimers({ toFake: ['Date', ...also] });
+  vi.setSystemTime(TODAY);
+}
+
 describe('SharedPlanPage: Save to my plans', () => {
   let synced: SyncOp[][];
   beforeEach(() => {
+    pinToday();
+    fetchPlan.mockResolvedValue(docOf()); // made the day before TODAY, not before the real day
     synced = [];
     fetchMe.mockResolvedValue(TEST_ME);
     fetchState.mockResolvedValue(snapshotOf(account()));
@@ -257,7 +268,7 @@ describe('SharedPlanPage: Save to my plans', () => {
     synced.flat().filter((o): o is Extract<SyncOp, { op: 'putPlan' }> => o.op === 'putPlan').map((o) => o.data as NamedPlan);
 
   it('signed in, a new plan of the picked courses is saved, a toast says so, and the page stays and keeps polling', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    pinToday(['setInterval', 'clearInterval']);
     await render();
     await press(button('Save to my plans'));
     expect(dialog()?.textContent).toContain('Save as a new plan');
