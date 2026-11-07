@@ -80,6 +80,26 @@ export function displayTermLabel(term: Term): string {
   return labelFor(term, seasonOf(term));
 }
 
+const SEASON_CODES: Record<Season, string> = {
+  fall: 'FA',
+  winter: 'WI',
+  spring: 'SP',
+  summer1: 'S1',
+  summer2: 'S2',
+};
+
+/**
+ * The short form, WebReg-style ("FA26"), for a button with no room for the full
+ * label (the campus map's term button on a phone). Its year is the one
+ * `displayTermLabel` shows, so the code and the full name beside it in the list
+ * always name the same term: Winter 2026 is WI26. An unknown season keeps its full label.
+ */
+export function termCode(term: Term): string {
+  const season = seasonOf(term);
+  if (!season) return displayTermLabel(term);
+  return `${SEASON_CODES[season]}${String(displayYear(term)).slice(-2)}`;
+}
+
 /** Season order within ONE calendar year: Winter(Jan) < Spring < Summer I/II < Fall(Sep). */
 const SEASON_ORDER: Record<Season, number> = {
   winter: 0,

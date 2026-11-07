@@ -112,6 +112,32 @@ describe('MenuSelect', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('shows an option’s short form on its button and the full label in the list', () => {
+    const terms: MenuOption[] = [
+      { value: 'f', label: 'Fall 2026', short: 'FA26' },
+      { value: 'w', label: 'Winter 2026', short: 'WI26' },
+    ];
+    act(() => root.render(<MenuSelect label="Term" value="f" options={terms} onChange={onChange} />));
+    const b = menuSelects()[0]!;
+    expect(menuShown(b)).toBe('FA26');
+    expect(menuOptions(b).map((o) => o.label)).toEqual(['Fall 2026', 'Winter 2026']);
+  });
+
+  it('tags a row with a pill after its label', () => {
+    const terms: MenuOption[] = [
+      { value: 'old', label: 'Spring 2026', tag: 'archived' },
+      { value: 'f', label: 'Fall 2026' },
+    ];
+    act(() => root.render(<MenuSelect label="Term" value="f" options={terms} onChange={onChange} />));
+    const b = menuSelects()[0]!;
+    act(() => b.click());
+    const pills = [...document.body.querySelectorAll('[role="option"] .pill')].map((p) => p.textContent);
+    expect(pills).toEqual(['archived']);
+    act(() => b.click());
+    // The tag sits beside the label, not in it: the row is still called "Spring 2026".
+    expect(menuOptions(b)[0]!.label).toBe('Spring 2026');
+  });
+
   it('a press outside closes the list', () => {
     act(() => root.render(<Harness />));
     act(() => menuSelects()[0]!.click());

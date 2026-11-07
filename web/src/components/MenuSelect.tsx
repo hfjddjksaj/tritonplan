@@ -20,6 +20,10 @@ import { Check, ChevronDown } from './icons';
 export interface MenuOption {
   value: string;
   label: string;
+  /** What the closed button shows instead of `label`, where it has less room than the list (the map's term on a phone). */
+  short?: string;
+  /** A short caps tag after the label ("archived"). */
+  tag?: string;
   /** A 13px icon before the label. */
   icon?: ReactNode;
   /** A colour swatch before the label (a course's colour). */
@@ -71,7 +75,7 @@ export function MenuSelect({
   const listId = useId();
 
   const current = options.find((o) => o.value === value);
-  const shown = current?.label ?? placeholder ?? '';
+  const shown = current?.short ?? current?.label ?? placeholder ?? '';
   const empty = !current || current.faint === true;
 
   const close = useCallback((refocus: boolean) => {
@@ -209,6 +213,7 @@ export function MenuSelect({
                   {o.swatch && <span className="menu__swatch" style={{ background: o.swatch }} aria-hidden="true" />}
                   {o.icon && <span className="menu__icon" aria-hidden="true">{o.icon}</span>}
                   <span className="menu__label">{o.label}</span>
+                  {o.tag && <span className="pill pill--muted">{o.tag}</span>}
                   {o.count != null && <span className="menu__count mono">{o.count}</span>}
                 </button>
               </div>

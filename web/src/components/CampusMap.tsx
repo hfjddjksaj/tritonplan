@@ -46,8 +46,8 @@ import {
   unplacedPins,
   type PlacedMarker,
 } from '../lib/map-labels';
-import { loadMapBookedOnly, saveMapBookedOnly } from '../lib/storage';
-import { pluralize } from '../lib/format';
+import { displayTermLabel, termCode, termKey, type TermKey } from '../lib/terms';
+import type { MapTerm } from '../lib/map-terms';
 import type { Profile } from '../lib/walk-cost';
 import { walkPlaces, type WalkPlace } from '../lib/walk-places';
 import { DROPPED_ID, droppedPlace } from '../lib/walk-pin';
@@ -63,16 +63,23 @@ import { MapMarkers } from './MapMarkers';
 import { MarkerCard } from './MarkerCard';
 import { BuildingPopover } from './BuildingPopover';
 import { ViewTabs, type PlannerView } from './ViewTabs';
-import { Check, ChevronDown, Compass, MapPinIcon, Minus, Plus, X } from './icons';
+import { MenuSelect, type MenuOption } from './MenuSelect';
+import { ChevronDown, Compass, MapPinIcon, Minus, Plus, X } from './icons';
 import { tip } from './Tooltip';
 
 interface Props {
-  /** The plan on screen — yours, or a shared one. */
+  /** The planner's plan on view — yours, or a shared one. The map opens on its term. */
   plan: PlanState;
   /** Course ids the student is enrolled in. RENDER-TIME ONLY; never persisted here. */
   booked: ReadonlySet<string>;
-  /** Not the student's live plan (a shared plan, an archived term) — the booked toggle is meaningless then. */
+  /** Not the student's live plan (a shared plan, an archived term): its enrolment is not painted. */
   readOnly: boolean;
+  /**
+   * Every term the map may switch to, the one on view included (lib/map-terms), so a
+   * student planning next term can look up this term's finals without leaving the map.
+   * Switching changes only the map. Absent, or a single term: no term button.
+   */
+  terms?: readonly MapTerm[];
   /** The tab the map opens on — the planner's current view. One-way: switching tabs here never changes the planner. */
   initialView?: PlannerView;
   /**
@@ -188,7 +195,23 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
  * the gesture entirely. A `suppressClick` guard is only needed when the
  * markers live INSIDE the element being dragged, and here they don't.
  */
-export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', focusBuilding, onClose }: Props) {
+export function CampusMap({
+  plan: viewPlan,
+  booked: viewBooked,
+  readOnly: viewReadOnly,
+  terms,
+  initialView = 'calendar',
+  focusBuilding,
+  onClose,
+}: Props) {
+  // The term on screen: the planner's own until the student picks another here.
+  // Picking one never reaches the planner, and closing the map forgets it.
+  const viewKey = termKey(viewPlan.term);
+  const [termSel, setTermSel] = useState<TermKey>(viewKey);
+  const otherTerm = termSel !== viewKey ? terms?.find((t) => t.key === termSel) : undefined;
+  const plan = otherTerm?.plan ?? viewPlan;
+  const booked = otherTerm?.booked ?? viewBooked;
+  const readOnly = otherTerm ? otherTerm.archived : viewReadOnly;
   const [data, setData] = useState<{ geo: CampusGeo; map: CampusMapData } | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
   const isMobile = useIsMobile();
@@ -208,9 +231,6 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', fo
   const homeIslandH = useElementHeight(islandRef, ISLAND_FALLBACK_H, distPanelShare);
   const homeInsetTop = ISLAND_TOP + homeIslandH + ISLAND_GAP;
   const [collapsed, setCollapsed] = useState(false);
-  // Off unless the student switched it on before: the map is for planning first,
-  // and "everything in the plan" is the honest default.
-  const [bookedOnly, setBookedOnly] = useState<boolean>(() => loadMapBookedOnly() ?? false);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [mapLoc, setMapLoc] = useState<{ building: string; room?: string } | null>(null);
   const [unplacedOpen, setUnplacedOpen] = useState(false);
@@ -299,15 +319,10 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', fo
     };
   }, [gl.map]);
 
-  // Both read-only defences, side by side. The toggle hides because the plan on
-  // screen is someone else's; the same reasoning kills the solid/hollow booked dots,
-  // which would otherwise paint YOUR enrolment over THEIR plan with nothing to explain it.
-  // On your own plan the toggle appears as soon as anything is booked — by the extension's
-  // feed or by a manual "mark booked" in the rail — because only then is there a subset
-  // to show. (Gating on the feed alone would hide it from a student who marked by hand.)
+  // A plan on screen that is not the student's live one (someone else's shared plan,
+  // an archived term) gets no solid/hollow booked dots: they would paint an enrolment
+  // that says nothing about it, with nothing on screen to explain them.
   const effectiveBooked = readOnly ? NO_BOOKED : booked;
-  const showBookedToggle = !readOnly && booked.size > 0;
-  const effectiveBookedOnly = showBookedToggle && bookedOnly;
 
   // Where a pin sits on its building. matchBuilding answers with UCSD's building
   // POINT record, but the map draws the FOOTPRINT polygon — two datasets that
@@ -322,17 +337,12 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', fo
       return coords === p.coords ? p : { ...p, coords };
     });
   }, [mapView, plan, effectiveBooked, anchors]);
-  const scoped = useMemo(
-    () => (effectiveBookedOnly ? allPins.filter((p) => p.booked) : allPins),
-    [allPins, effectiveBookedOnly],
-  );
-
-  const sliced = useMemo(() => slicesFor(scoped, by), [scoped, by]);
+  const sliced = useMemo(() => slicesFor(allPins, by), [allPins, by]);
   const { slices, predicate } = sliced;
   // The student's pick. It sticks while they stay on this view — reselecting the
   // same tab is a no-op, not a reset — but the view-switch handler below clears it
-  // the moment the view actually changes, so the today rule gets to run again; it
-  // also yields early if Booked only has removed its slice from what's offered.
+  // the moment the view (or the term) actually changes, so the today rule gets to run
+  // again; it also yields early if a change to the plan has removed its slice.
   // A focused building opens on "All": an exam view's today rule could land on a sitting elsewhere.
   const [picked, setPicked] = useState<string | null>(focusBuilding ? ALL_SLICE_ID : null);
   const today = useMemo(() => todayKey(by), [by]);
@@ -340,7 +350,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', fo
     picked !== null && slices.some((s) => s.id === picked)
       ? picked
       : openOn === 'today'
-        ? defaultSliceId(sliced, scoped, today)
+        ? defaultSliceId(sliced, allPins, today)
         : ALL_SLICE_ID;
   const sliceLabel = slices.find((s) => s.id === sliceId)?.label ?? 'All';
 
@@ -363,7 +373,7 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', fo
       ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }, [sliceId, collapsed]);
 
-  const shown = useMemo(() => scoped.filter(predicate(sliceId)), [scoped, predicate, sliceId]);
+  const shown = useMemo(() => allPins.filter(predicate(sliceId)), [allPins, predicate, sliceId]);
 
   // Split against the ground the basemap actually covers — NOT against the camera's
   // opening frame. The home view is framed tightly on the teaching core, and a
@@ -697,17 +707,8 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', fo
     };
   }, [gl.map, gl.ready, pinKey]);
 
-  // The generic "nothing to place" copy is false only when a LOCATABLE class exists that
-  // booked-only is hiding — an unbooked pin with no coords was never going on the map
-  // either way, and turning the toggle off wouldn't change that.
-  const bookedOnlyHidesEverything =
-    effectiveBookedOnly &&
-    onCanvas.length === 0 &&
-    allPins.some((p) => p.coords !== null && !p.booked);
-
-  const emptyCopy = bookedOnlyHidesEverything
-    ? 'Enrolled only is on and you are not enrolled in anything here yet. Turn it off to see every course in your plan.'
-    : onCanvas.length === 0 && unplaced.length > 0
+  const emptyCopy =
+    onCanvas.length === 0 && unplaced.length > 0
       ? `Nothing here lands on the mapped part of campus — the list at the bottom-left has where these ${viewNoun} actually meet.`
       : onCanvas.length === 0 && noRoom.length === 0
         ? emptyViewCopy
@@ -761,23 +762,36 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', fo
     };
   }, []);
 
+  // The term button: full names on a desktop; on a phone, where the cluster shares the
+  // title row, the button names the term by its code (FA26) and the list still in full.
+  const termOptions = useMemo<MenuOption[]>(
+    () =>
+      (terms ?? []).map((t) => ({
+        value: t.key,
+        label: displayTermLabel(t.term),
+        short: isMobile ? termCode(t.term) : undefined,
+        count: t.plan.entries.length,
+        tag: t.archived ? 'archived' : undefined,
+      })),
+    [terms, isMobile],
+  );
+  // Another term is another plan: the open card, the day picked and both distance ends
+  // all belong to the one being left. The view tab stays — a student checking where
+  // last term's finals are is still asking about finals.
+  const switchTerm = (key: TermKey) => {
+    if (key === termSel) return;
+    setTermSel(key);
+    setPicked(null);
+    setOpenKey(null);
+    setDistA(null);
+    setDistB(null);
+    setPinEnd(null);
+  };
+
   const cluster = (
     <div className="campusmap__cluster">
-      {showBookedToggle && (
-        <button
-          type="button"
-          className={`btn btn--sm campusmap__bookedtoggle${bookedOnly ? ' is-on' : ''}`}
-          aria-pressed={bookedOnly}
-          {...tip('Show only the classes you are enrolled in')}
-          onClick={() => {
-            const next = !bookedOnly;
-            setBookedOnly(next);
-            saveMapBookedOnly(next);
-          }}
-        >
-          {bookedOnly && <Check size={13} />}
-          <span className="campusmap__bookedtoggle-label">Enrolled only</span>
-        </button>
+      {termOptions.length > 1 && (
+        <MenuSelect label="Term" value={termSel} options={termOptions} onChange={switchTerm} />
       )}
       {/* Flat ⇄ standing up. It sits next to the compass because the two now say
           the same kind of thing about the camera — which way it faces, and
@@ -850,11 +864,6 @@ export function CampusMap({ plan, booked, readOnly, initialView = 'calendar', fo
         <div className="campusmap__titlerow">
           <MapPinIcon size={16} className="campusmap__titleicon" />
           <span className="campusmap__title">Campus map</span>
-          <span className="campusmap__count">
-            {onCanvas.length === 0
-              ? 'nothing to show'
-              : `${onCanvas.length} ${pluralize(onCanvas.length, 'building')}`}
-          </span>
           {/* On a phone the island spans the screen, so the control cluster joins its title row. */}
           {isMobile && cluster}
           <button

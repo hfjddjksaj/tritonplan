@@ -5,6 +5,7 @@ import {
   seasonOf,
   displayYear,
   displayTermLabel,
+  termCode,
   chronoIndex,
   archiveBoundary,
   isArchived,
@@ -51,6 +52,20 @@ describe('displayTermLabel', () => {
   });
   it('unknown period with empty label synthesizes the fallback', () => {
     expect(displayTermLabel({ year: '2027', period: '9', label: '' })).toBe('Period 9 2027');
+  });
+});
+
+describe('termCode', () => {
+  it('writes the WebReg-style two-letter season and two-digit year', () => {
+    expect(termCode(FALL26)).toBe('FA26');
+  });
+  it('takes its year from the label the planner shows, so Winter 2026 is WI26', () => {
+    // The button and the list beside it must name the same term: the list says
+    // "Winter 2026" (displayTermLabel), so the code says 26 too.
+    expect(termCode(WINTER27)).toBe('WI26');
+  });
+  it('falls back to the full label for a season it does not know', () => {
+    expect(termCode(UNKNOWN)).toBe('Period 9 2027');
   });
 });
 

@@ -14,8 +14,6 @@ import {
   loadCalView,
   saveApptTimes,
   loadApptTimes,
-  loadMapBookedOnly,
-  saveMapBookedOnly,
 } from './storage';
 import { makePlan, makeCourse } from './fixtures';
 
@@ -217,16 +215,3 @@ describe('terms storage', () => {
   });
 });
 
-describe('campus map "booked only" preference', () => {
-  it('returns null before the user has ever chosen', () => {
-    localStorage.clear();
-    expect(loadMapBookedOnly()).toBeNull();
-  });
-
-  it('round-trips both values', () => {
-    saveMapBookedOnly(true);
-    expect(loadMapBookedOnly()).toBe(true);
-    saveMapBookedOnly(false);
-    expect(loadMapBookedOnly()).toBe(false);
-  });
-});

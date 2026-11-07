@@ -11,6 +11,7 @@ import { countConflictPairs, entryHue } from '../lib/plan';
 import { colorsForHue } from '../lib/colors';
 import { pluralize } from '../lib/format';
 import { loadCalView, saveCalView, type CalView } from '../lib/storage';
+import { mapTerms } from '../lib/map-terms';
 import type { PositionedBlock } from '../lib/layout';
 import { CoursePanel } from './CoursePanel';
 import { CalendarGrid } from './CalendarGrid';
@@ -89,6 +90,16 @@ export function PlannerBody({
       setFocusReq((prev) => ({ courseId, nonce: (prev?.nonce ?? 0) + 1 }));
     },
     [isMobile],
+  );
+
+  // The terms the map can switch to. A shared plan is someone else's: the account's own
+  // terms have no place beside it.
+  const campusTerms = useMemo(
+    () =>
+      ctl.shared
+        ? undefined
+        : mapTerms(ctl.termsState, { plan: ctl.viewPlan, booked: ctl.bookedIds, readOnly: ctl.readOnly }, new Date()),
+    [ctl.shared, ctl.termsState, ctl.viewPlan, ctl.bookedIds, ctl.readOnly],
   );
 
   const conflictCount = useMemo(
@@ -245,6 +256,7 @@ export function PlannerBody({
             plan={ctl.viewPlan}
             booked={ctl.bookedIds}
             readOnly={ctl.readOnly}
+            terms={campusTerms}
             initialView={plannerView}
             focusBuilding={campus.focusBuilding}
             onClose={() => setCampus(null)}

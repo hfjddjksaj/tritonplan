@@ -3,6 +3,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { CourseOffering, PlanState } from '@triton/shared';
 import { makePlan } from '../lib/fixtures';
+import { termKey } from '../lib/terms';
+import type { MapTerm } from '../lib/map-terms';
+import { menuOptions, menuPick, menuSelects, menuShown, menuValue } from '../test/menu-select';
 import { FakeMap, fakeMapLibreModule } from '../test/fake-maplibre';
 vi.mock('maplibre-gl', () => fakeMapLibreModule);
 
@@ -246,6 +249,25 @@ async function settleConstructed() {
   throw new Error('map was never constructed');
 }
 
+/** The term after Fall 2026, as the planner names it (displayTermLabel: the academic year's start). */
+const WINTER = { year: '2026', period: '3', label: 'Winter 2026' };
+
+/** The planner's term in the term-switch tests: Winter, with nothing the map can place. */
+function winterPlan(): PlanState {
+  return { ...makePlan(), term: WINTER };
+}
+
+/** What `mapTerms` hands the map: the term on view and one other, oldest first. */
+function termsFor(view: PlanState, other: PlanState, otherOver: Partial<MapTerm> = {}): MapTerm[] {
+  const entry = (plan: PlanState): MapTerm => ({
+    key: termKey(plan.term), term: plan.term, plan, booked: new Set(), archived: false,
+  });
+  return [{ ...entry(other), ...otherOver }, entry(view)];
+}
+
+const termButton = () =>
+  document.querySelector<HTMLButtonElement>('.campusmap__cluster button[aria-haspopup="listbox"]');
+
 function tabNamed(name: string): HTMLButtonElement {
   return [...document.querySelectorAll('.campusmap__island [role="tab"]')].find(
     (t) => t.textContent === name,
@@ -312,37 +334,108 @@ describe('CampusMap', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the booked-only toggle once anything is booked, however it got booked', async () => {
-    // Manual "mark booked" in the rail counts — the extension feed is not required.
-    render({ booked: new Set(['CSE-8A|2026|2']) });
+  it('titles the island without a building count', async () => {
+    render({ plan: planWithMeeting() });
     await settle();
-    expect(container.querySelector('.campusmap__bookedtoggle')).not.toBeNull();
+    expect(container.querySelector('.campusmap__count')).toBeNull();
+    expect(container.querySelector('.campusmap__titlerow')!.textContent).toBe('Campus map');
   });
 
-  it('HIDES the booked-only toggle on someone else’s plan', async () => {
-    render({ readOnly: true, booked: new Set(['CSE-8A|2026|2']) });
-    await settle();
-    expect(container.querySelector('.campusmap__bookedtoggle')).toBeNull();
-  });
-
-  it('hides the toggle when nothing is booked, even if the feed was captured', async () => {
-    render({ booked: new Set() });
-    await settle();
-    expect(container.querySelector('.campusmap__bookedtoggle')).toBeNull();
-    // And there is no nudge to go and "open" anything — the feed loads by itself.
-    expect(container.textContent).not.toContain('Booked Courses');
-  });
-
-  it('draws every course in the plan by default — booked-only starts off', async () => {
-    // Something IS booked (so the toggle shows), just not the class on this plan.
+  it('has no Enrolled only toggle, whatever is booked', async () => {
     render({ plan: planWithMeeting(), booked: new Set(['MATH-20C|2026|2']) });
     await settle();
-    const toggle = container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement;
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(container.querySelector('.campusmap__bookedtoggle')).toBeNull();
+    expect(container.textContent).not.toContain('Enrolled only');
+    // Every course in the plan is drawn, enrolled in or not.
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
-    act(() => toggle.click());
-    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('has no term button when there is only one term to show', async () => {
+    render({ plan: planWithMeeting() });
+    await settle();
+    expect(termButton()).toBeNull();
+    const fall = planWithMeeting();
+    render({ plan: fall, terms: termsFor(fall, fall).slice(1) });
+    await settle();
+    expect(termButton()).toBeNull();
+  });
+
+  it('opens on the planner’s term and switches the map to another', async () => {
+    const winter = winterPlan();
+    render({ plan: winter, terms: termsFor(winter, planWithMeeting()) });
+    await settle();
+    const b = termButton()!;
+    expect(menuShown(b)).toBe('Winter 2026');
+    expect(menuOptions(b).map((o) => o.label)).toEqual(['Fall 2026', 'Winter 2026']);
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
+    menuPick(b, '2026|2');
+    await pump();
+    expect(menuShown(termButton()!)).toBe('Fall 2026');
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+  });
+
+  it('a term switch closes the open card, starts the day filter over and clears the distance', async () => {
+    const fall = planWithMeeting();
+    const winter = { ...planWithMeeting(), term: WINTER };
+    render({ plan: fall, terms: termsFor(fall, winter) });
+    await settle();
+    const mon = sliceButtons().find((b) => b.textContent === 'Mon')!;
+    act(() => mon.click());
+    act(() => {
+      container.querySelector('.campusmap__marker')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.campusmap__card')).not.toBeNull();
+    act(() => container.querySelector<HTMLButtonElement>('.campusmap__dist-bar')!.click());
+    const endA = () => menuSelects(container.querySelector('.campusmap__dist')!)[0]!;
+    const centre = menuOptions(endA()).find((o) => o.label.includes('Center Hall'))!;
+    menuPick(endA(), centre.value);
+    expect(menuValue(endA())).toBe(centre.value);
+
+    menuPick(termButton()!, termKey(WINTER));
+    await pump();
+    expect(container.querySelector('.campusmap__card')).toBeNull();
+    expect(sliceOn()).toBe('All');
+    expect(menuValue(endA())).toBe('');
+  });
+
+  it('tags an archived term, and paints no enrolment on it', async () => {
+    const winter = winterPlan();
+    const enrolled = new Set(['CSE-8A|2026|2']);
+    // Control: a live term paints the class it is enrolled in solid.
+    render({ plan: winter, terms: termsFor(winter, planWithMeeting(), { booked: enrolled }) });
+    await settle();
+    menuPick(termButton()!, '2026|2');
+    await pump();
+    expect(container.querySelectorAll('.campusmap__marker--booked')).toHaveLength(1);
+
+    render({ plan: winter, terms: termsFor(winter, planWithMeeting(), { booked: enrolled, archived: true }) });
+    await settle();
+    act(() => termButton()!.click());
+    const pills = [...document.body.querySelectorAll('[role="option"] .pill')].map((p) => p.textContent);
+    expect(pills).toEqual(['archived']);
+    act(() => termButton()!.click());
+    menuPick(termButton()!, '2026|2');
+    await pump();
+    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
+    expect(container.querySelectorAll('.campusmap__marker--booked')).toHaveLength(0);
+  });
+
+  it('names the term by its code on a phone', async () => {
+    const real = window.matchMedia;
+    window.matchMedia = ((q: string) => ({
+      matches: true, media: q, addEventListener() {}, removeEventListener() {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const winter = winterPlan();
+      render({ plan: winter, terms: termsFor(winter, planWithMeeting()) });
+      await settle();
+      const b = termButton()!;
+      expect(menuShown(b)).toBe('WI26');
+      // The list still names every term in full.
+      expect(menuOptions(b).map((o) => o.label)).toEqual(['Fall 2026', 'Winter 2026']);
+    } finally {
+      window.matchMedia = real;
+    }
   });
 
   it('shows an empty state for a plan with no locatable classes', async () => {
@@ -517,9 +610,8 @@ describe('CampusMap', () => {
     expect(island.querySelector('[role="tablist"]')).toBeNull();
     expect(island.querySelector('.campusmap__slices')).toBeNull();
     expect(island.querySelector('.campusmap__summary')!.textContent).toBe('Classes · Mon');
-    // Title row survives, with the count.
+    // Title row survives.
     expect(island.querySelector('.campusmap__title')!.textContent).toBe('Campus map');
-    expect(island.querySelector('.campusmap__count')).not.toBeNull();
     act(() => fold.click());
     expect(fold.getAttribute('aria-expanded')).toBe('true');
     expect(island.querySelector('.campusmap__summary')).toBeNull();
@@ -528,13 +620,14 @@ describe('CampusMap', () => {
     expect(monAgain.classList.contains('calseg__btn--on')).toBe(true);
   });
 
-  it('puts the 3D toggle and compass between Booked only and close in the top-right cluster', async () => {
-    render({ plan: planWithMeeting(), booked: new Set(['CSE-8A|2026|2']) });
+  it('puts the 3D toggle and compass between the term button and close in the top-right cluster', async () => {
+    const winter = winterPlan();
+    render({ plan: winter, terms: termsFor(winter, planWithMeeting()) });
     await settle();
     const cluster = container.querySelector('.campusmap__cluster')!;
     const kinds = [...cluster.children].map((el) =>
-      el.classList.contains('campusmap__bookedtoggle')
-        ? 'booked'
+      el.classList.contains('msel')
+        ? 'term'
         : el.classList.contains('campusmap__mode3d')
           ? '3d'
           : el.classList.contains('campusmap__compass')
@@ -546,7 +639,7 @@ describe('CampusMap', () => {
     // 3D sits immediately left of the compass: both describe the camera, and a
     // tilt gesture can press the toggle by itself, so it belongs where the eye
     // already is rather than in the 28 px zoom column.
-    expect(kinds).toEqual(['booked', '3d', 'compass', 'close']);
+    expect(kinds).toEqual(['term', '3d', 'compass', 'close']);
     const compass = cluster.querySelector('.campusmap__compass') as HTMLButtonElement;
     expect(compass.tagName).toBe('BUTTON');
     // In 2D it still resets bearing AND pitch: a two-finger pitch on a flat map
@@ -560,18 +653,6 @@ describe('CampusMap', () => {
     await act(async () => compass.click());
     expect(map.getPitch()).toBe(0);
     expect(map.getBearing()).toBe(0);
-  });
-
-  it('explains a booked-only-hidden plan instead of claiming there is nothing to place', async () => {
-    render({ plan: planWithMeeting(), booked: new Set(['MATH-20C|2026|2']) });
-    await settle();
-    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
-    // Booked-only on; the plan's one class isn't booked, so it's filtered out — but it
-    // DOES exist, unlike makePlan().
-    expect(container.textContent).toContain(
-      'Enrolled only is on and you are not enrolled in anything here yet. Turn it off to see every course in your plan.',
-    );
-    expect(container.textContent).not.toContain('No class locations to place yet');
   });
 
   it('never marks a pin booked on someone else’s plan, even in a course you take', async () => {
@@ -602,17 +683,10 @@ describe('CampusMap', () => {
     expect(container.querySelector('.campusmap__card-place')!.textContent).toBe('Computer Science & Eng Bldg');
   });
 
-  it('counts buildings in English', async () => {
-    render({ plan: planWithMeeting() });
-    await settle();
-    expect(container.querySelector('.campusmap__count')!.textContent).toBe('1 building');
-  });
-
   it('lists a class outside the mapped area instead of counting it as drawn', async () => {
     render({ plan: planOffTheMap() });
     await settle();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
-    expect(container.querySelector('.campusmap__count')!.textContent).toBe('nothing to show');
     // Collapsed to a pill over the map until asked for.
     const pill = container.querySelector('.campusmap__unlocated-toggle') as HTMLButtonElement;
     expect(pill.textContent).toContain('1 not on the map');
@@ -633,7 +707,6 @@ describe('CampusMap', () => {
     render({ plan: planFarButMapped() });
     await settle();
     expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
-    expect(container.querySelector('.campusmap__count')!.textContent).toBe('1 building');
     expect(container.querySelector('.campusmap__unlocated-toggle')).toBeNull();
     expect(container.textContent).not.toContain('outside the mapped area');
   });
@@ -650,19 +723,6 @@ describe('CampusMap', () => {
     render({ plan: planWithMeeting() });
     await settle();
     expect(container.querySelector('.campusmap__unlocated')).toBeNull();
-  });
-
-  it('does not blame booked-only when the only class was never locatable to begin with', async () => {
-    // Booked-only on, but the course's building can't be matched — turning the toggle
-    // off would NOT put it on the map, so the booked-only explanation would be a lie.
-    // The generic empty state is the honest one.
-    render({ plan: planWithUnlocatableMeeting(), booked: new Set(['MATH-20C|2026|2']) });
-    await settle();
-    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
-    expect(container.textContent).not.toContain(
-      'Enrolled only is on and you are not enrolled in anything here yet',
-    );
-    expect(container.textContent).toContain('No class locations to place yet');
   });
 
   it('applies host colours to the map once it is ready', async () => {
@@ -1195,16 +1255,6 @@ describe('CampusMap', () => {
     );
   });
 
-  it('Booked only filters exam views too', async () => {
-    render({ plan: planWithFinal(), booked: new Set(['MATH-20C|2026|2']) });
-    await settle();
-    act(() => tabNamed('Finals').click());
-    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(1);
-    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
-    expect(container.querySelectorAll('.campusmap__marker')).toHaveLength(0);
-    expect(container.textContent).toContain('Enrolled only is on and you are not enrolled in anything here yet');
-  });
-
   it('the marker card in an exam view is dated on the code row', async () => {
     render({ plan: planWithFinal(), initialView: 'finals' });
     await settle();
@@ -1284,19 +1334,6 @@ describe('CampusMap', () => {
     // …and coming back does not resurrect it.
     act(() => tabNamed('Classes').click());
     expect(container.querySelector('.campusmap__card')).toBeNull();
-  });
-
-  it('a pick yields while Booked only hides its slice, and returns when Booked only is lifted', async () => {
-    vi.setSystemTime(new Date(2026, 9, 28, 9)); // Wed Oct 28: the week of the Oct 31 midterm
-    render({ plan: planWithMidterms(), booked: new Set(['MATH-20C|2026|2']) }); // nothing in this plan is booked
-    await settle();
-    act(() => tabNamed('Midterms').click());
-    act(() => sliceButtons()[2]!.click());
-    expect(sliceOn()).toBe('Nov 09–15');
-    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
-    expect(sliceOn()).toBe('All'); // no booked pins → no slices but All
-    act(() => (container.querySelector('.campusmap__bookedtoggle') as HTMLButtonElement).click());
-    expect(sliceOn()).toBe('Nov 09–15');
   });
 
   it('says TSS has listed no room yet — icon, title, the sittings — instead of "not on the map"', async () => {

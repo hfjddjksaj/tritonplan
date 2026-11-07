@@ -1536,6 +1536,12 @@ p {
   background: var(--gold-soft);
   box-shadow: inset 0 0 0 1px var(--gold-line);
 }
+/* A plain fact about a row (a term's "archived"), in the faint ink: gold is for the current choice. */
+.pill--muted {
+  color: var(--text-muted);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
 
 /* --- prow: a recessed panel row, caps label left, the value or control right (the
    enrolled-section popover's row). Gold while it waits on the student. --- */
@@ -3390,15 +3396,6 @@ button.termsw__cell--placeholder {
   color: var(--ink);
   white-space: nowrap;
 }
-.campusmap__count {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-.campusmap__count::before {
-  content: '· ';
-}
 .campusmap__collapse {
   margin-left: auto;
   display: grid;
@@ -3455,7 +3452,7 @@ button.termsw__cell--placeholder {
   white-space: nowrap;
 }
 
-/* --- the control cluster (top-right): Enrolled only · 3D · compass · close ---- */
+/* --- the control cluster (top-right): term · 3D · compass · close ------------- */
 .campusmap__cluster {
   position: absolute;
   top: 10px;
@@ -3465,19 +3462,15 @@ button.termsw__cell--placeholder {
   align-items: center;
   gap: 8px;
 }
-.campusmap__cluster .btn {
+.campusmap__cluster .btn,
+.campusmap__cluster .msel {
   box-shadow: var(--shadow-sm);
-}
-.campusmap__bookedtoggle.is-on {
-  color: var(--ink);
-  background: var(--surface-2);
-  border-color: var(--text-faint);
 }
 /* The 3D toggle, which moved here from the 28 px zoom column. It is the one
    control the map can press by itself — a tilt gesture past CAMERA.enter3dPitch
    turns it on — so a state you did not click has to be readable at a glance.
-   That reading comes from the width, the weight and the pressed colours, which
-   are "Enrolled only"'s so a toggle still looks like a toggle. NOT from the height:
+   That reading comes from the width, the weight and the pressed colours (the
+   surface-2 fill and faint-ink edge a pressed toggle wears). NOT from the height:
    it stood 34px in a row of 28px controls and simply read as the odd one out,
    so it now sits at the row's height like everything else in the cluster. */
 .campusmap__mode3d {
@@ -4275,9 +4268,6 @@ button.termsw__cell--placeholder {
   }
   .campusmap__titlerow .campusmap__collapse {
     margin-left: 0;
-  }
-  .campusmap__count {
-    display: none;
   }
   /* Expanded this panel stands ~268 px tall — most of a phone screen. That is
      why it is collapsed by default and never remembered (spec §7.2); once open

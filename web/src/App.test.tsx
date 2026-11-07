@@ -8,6 +8,9 @@ import { makeGuestBoot } from './lib/cloud/boot';
 import { clearRmpCache } from './lib/cloud/api';
 import { makeCourse, makePlan } from './lib/fixtures';
 import type { TermsState } from './lib/terms-state';
+import { fakeMapLibreModule } from './test/fake-maplibre';
+vi.mock('maplibre-gl', () => fakeMapLibreModule);
+import { menuOptions, menuPick, menuShown } from './test/menu-select';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -63,6 +66,69 @@ describe('App → campus map', () => {
     expect(count(remove)).toBe(1);
     root = createRoot(container); // afterEach unmounts this one
     vi.restoreAllMocks();
+  });
+});
+
+describe("App → the map's term button", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let boot: ReturnType<typeof makeTestBoot>;
+
+  /** Fall 2026 with a course, and Winter 2026 (the term after it) with one too. */
+  function account(): TermsState {
+    const fall = makePlan();
+    const winterCourse = makeCourse('CSE-12|2026|3', 'CSE-12');
+    const winter: PlanState = {
+      version: 1,
+      term: { year: '2026', period: '3', label: 'Winter 2026' },
+      entries: [{ course: winterCourse, selectedOptionId: winterCourse.options[0]!.id }],
+    };
+    const ws = (plan: PlanState, id: string) => ({
+      term: plan.term,
+      plans: { activeId: id, plans: [{ id, name: 'Plan', plan, createdAt: 'c', updatedAt: 'u', browsed: [] }] },
+    });
+    return { version: 1, activeTermKey: '2026|3', terms: { '2026|2': ws(fall, 'f'), '2026|3': ws(winter, 'w') } };
+  }
+  const termChip = () => container.querySelector('.topbar__term-label')?.textContent ?? '';
+
+  beforeEach(() => {
+    localStorage.clear();
+    clearRmpCache();
+    // Both terms are live: Fall 2026 archives on Dec 20, so the planner opens on the newest, Winter.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-06T20:00:00Z'));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [] }), { status: 200 })));
+    boot = makeTestBoot({ terms: account() });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    boot.engine.dispose();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('opens on the planner’s term, offers the account’s others, and switching leaves the planner alone', async () => {
+    await act(async () => root.render(<App boot={boot} />));
+    expect(termChip()).toContain('Winter 2026');
+    const mapBtn = [...container.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Map')!;
+    await act(async () => mapBtn.click());
+    const termButton = () =>
+      container.querySelector<HTMLButtonElement>('.campusmap__cluster button[aria-haspopup="listbox"]');
+    for (let i = 0; i < 40 && !termButton(); i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 10));
+      });
+    }
+    const b = termButton()!;
+    expect(menuShown(b)).toBe('Winter 2026');
+    expect(menuOptions(b).map((o) => o.label)).toEqual(['Fall 2026', 'Winter 2026']);
+    menuPick(b, '2026|2');
+    expect(menuShown(termButton()!)).toBe('Fall 2026');
+    expect(termChip()).toContain('Winter 2026');
   });
 });
 
