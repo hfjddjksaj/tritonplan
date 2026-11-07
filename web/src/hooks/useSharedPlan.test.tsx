@@ -92,19 +92,41 @@ describe('useSharedPlan', () => {
   });
 
   it('keeps an optimistic select while its POST is in flight, then adopts the returned version', async () => {
-    fetchPlan.mockResolvedValue(doc('a', 1));
-    fetchVersion.mockResolvedValue(1);
+    fetchPlan
+      .mockResolvedValueOnce(doc('a', 1))
+      .mockResolvedValueOnce(doc('a', 2)) // someone's write that predates our POST landing
+      .mockResolvedValue(doc('b', 2));
+    fetchVersion.mockResolvedValue(2);
     let answer: (v: number) => void = () => {};
     postSelect.mockReturnValue(new Promise((r) => { answer = r; }));
     await mount();
     await act(async () => hook.select('c1', 'b'));
     expect(selected(hook)).toBe('b');
-    await tick(2000);
+    await tick(2000); // polls see version 2 and refetch, but the doc must not replace the pending switch
+    expect(fetchPlan.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(selected(hook)).toBe('b');
+    const before = fetchPlan.mock.calls.length;
     await act(async () => answer(2));
     expect(selected(hook)).toBe('b');
     expect(hook.status).toMatchObject({ version: 2 });
-    expect(fetchPlan).toHaveBeenCalledTimes(1);
+    expect(fetchPlan.mock.calls.length).toBeGreaterThan(before); // settle refetches what was deferred
+  });
+
+  it('settles on the server state when quick switches commit in reverse order', async () => {
+    fetchPlan.mockResolvedValue(doc('a', 1));
+    fetchVersion.mockResolvedValue(3);
+    const answers: Array<(v: number) => void> = [];
+    postSelect.mockImplementation(() => new Promise((r) => { answers.push(r); }));
+    await mount();
+    await act(async () => { hook.select('c1', 'b'); hook.select('c1', 'c'); });
+    expect(selected(hook)).toBe('c');
+    // The server committed the second click first (v2), then the first (v3).
+    await act(async () => answers[1](2));
+    await act(async () => answers[0](3));
+    expect(selected(hook)).toBe('b');
+    expect(hook.status).toMatchObject({ version: 3 });
+    await tick(2000);
+    expect(selected(hook)).toBe('b');
   });
 
   it('switches to gone on 404 from poll', async () => {

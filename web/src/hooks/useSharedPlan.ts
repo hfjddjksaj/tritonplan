@@ -91,21 +91,22 @@ export function useSharedPlan(code: string, opts?: { pollMs?: number }): SharedP
         if (dead) return;
         if (res === 'not-found') return gone();
         if (res === null || res === 'invalid') {
-          // The server didn't take it: go back to what it last confirmed, then ask what it holds now.
-          if (server) held = { ...(held ?? server), plan: server.plan };
+          // Leave held alone: another course's switch may still be in flight and must stay visible.
           stale = true;
-          if (inflight === 0) { show(); settle(); }
+          if (inflight === 0 && server) { held = server; show(); }
+          settle();
           return;
         }
-        if (server && held) {
+        if (server) {
           const prev = server.version;
           const confirmed = applySelection(server.plan, courseId, optionId);
           server = { ...server, plan: confirmed ?? server.plan, version: res };
-          held = { ...held, version: res };
           // Anything but prev+1 means someone else wrote in between, so our plan isn't version `res`.
           if (res !== prev + 1) stale = true;
+          // Answers arrive in commit order, so once none are pending the mirror is the truth, whatever order we clicked in.
+          if (inflight === 0) { held = server; show(); }
+          else if (held) held = { ...held, version: res };
         }
-        if (inflight === 0) show();
         settle();
       });
     };
