@@ -26,6 +26,7 @@
 - **教学楼查询**——点上课地点，弹窗显示这是哪栋楼，附 Google Maps 和 UCSD 校园地图链接。
 - **选课时间**——从 TSS "My Appointment Times" 被动捕获的 First Pass / Second Pass 等窗口常驻 planner 顶栏，随时知道自己什么时候能选课。完全私有：只在你自己的账号里。
 - **放进日历**——点 **Share** → 选一个方案 → Apple 或 Google 日历。课程、教室、期末考试和期中考试都会出现在日历里，改方案后日历跟着更新。日历链接是私密的（拿到链接的人能看到这些方案），可随时在账号菜单的 **Calendar subscription** 里重置。
+- **分享给朋友**——账号菜单 → **Share with friends** → 选一个方案生成链接。拿到链接的人不用账号就能在这份方案的副本里切换 Section，所有人实时看到变化，还可以把里面的课存进自己的方案。你自己的方案不会被改动，副本 7 天后删除。
 - **教授评分**——每张课程卡片上都有 RateMyProfessors 评分。只有老师名字会发到我们的服务器，不会向 RMP 发送任何关于你的信息。
 - **账号**——用邮箱 + 密码或 Google 登录；方案存在我们的服务器上，不只是留在某一个浏览器里。
 
@@ -64,7 +65,7 @@ TritonPlan 需要的仅此而已。扩展在这些响应**到达你浏览器时�
 2. 照常在 TSS 里浏览 **Schedule of Classes**。
 3. 在想要的 Section 上点 **"+ TritonPlan"**——你会来到排课网站，那个 Section 已经摆好。
 4. 调整各门课的 Section 避开冲突，再看一眼 **Finals** 视图。
-5. 用 **Share** 把方案放进 Apple 或 Google 日历。
+5. 用 **Share** 把方案放进 Apple 或 Google 日历，或在账号菜单里把链接发给朋友。
 
 <details>
 <summary>手动安装（加载已解压的扩展）</summary>

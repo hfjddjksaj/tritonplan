@@ -26,6 +26,7 @@ The old WebReg showed your week as a calendar — times, locations, professors, 
 - **Building lookup** — click a class's location to see which building it is, with Google Maps and UCSD campus map links.
 - **Your appointment times** — the "My Appointment Times" windows (First Pass, Second Pass, …) captured from TSS show as a live capsule in the planner topbar, so you always know when you can enroll. Private to your account.
 - **Share to your calendar** — **Share** → pick a plan → Apple or Google Calendar. Your classes, rooms, finals and midterms show up there and stay in sync as you edit. The calendar link is private (anyone with it can see those plans); reset it any time under **Calendar subscription** in the Account menu.
+- **Share with friends** — Account menu → **Share with friends** → pick a plan to get a link. Anyone with it can switch sections in a copy of that plan (no account needed) and everyone sees the change live; they can also save courses from it to their own plans. Your own plan never changes, and the copy is deleted after 7 days.
 - **Professor ratings** — RateMyProfessors ratings on every course card. Only instructor names go to our server; nothing about you goes to RMP.
 - **Accounts** — sign in with email + password or Google; your plans are stored on our server, not just in one browser.
 
@@ -64,7 +65,7 @@ This passive design is the product's hard rule:
 2. Browse the **Schedule of Classes** in TSS as usual.
 3. Click **"+ TritonPlan"** on a section you want — you land on the planner with it placed.
 4. Arrange sections to avoid conflicts, and check the **Finals** view.
-5. **Share** it to Apple or Google Calendar.
+5. **Share** it to Apple or Google Calendar, or send a link to friends from the Account menu.
 
 <details>
 <summary>Manual install (load unpacked)</summary>

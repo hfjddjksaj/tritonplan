@@ -228,21 +228,35 @@ Configure the server through `server/.env.local`. It is gitignored; secrets neve
 
 ### Routes for shares, calendar and ratings
 
-All under `/api`. Everything needs a signed-in session except the two routes marked public.
-Since 2026-10-30 the web app no longer makes or lists share links (Share exports to a calendar
-instead); the share routes stay so links made before then keep opening.
+All under `/api`. Everything needs a signed-in session except the routes marked public.
+A shared plan is a server-side copy of one plan that lives exactly 7 days from creation
+(`shared_plans`, deleted with its owner); the public routes never expose the owner. The old
+`shares` snapshots and `#p=` links no longer exist.
 
 | Route | Access | Purpose |
 |---|---|---|
-| `POST /shares`, `GET /shares` | signed in | Create a share snapshot; list your own. |
-| `DELETE /shares/:code` | signed in | Revoke one (deletes the snapshot). |
-| `GET /s/:code` | **public** | Read a snapshot: `{name, plan, createdAt}`. Rate-limited per IP. |
+| `POST /shared`, `GET /shared` | signed in | Copy one plan into a shared plan; list your live ones. |
+| `GET /s/:code` | **public** | Read a shared plan (name, plan, version, expiry; no owner). Rate-limited per IP. |
+| `GET /s/:code/version` | **public** | Cheap version number the open viewers poll (~5 s) to pick up changes. Own, larger rate limit. |
+| `POST /s/:code/select` | **public** | Switch one course to another option it already has; the only edit a shared plan allows. |
 | `GET /calendar`, `PUT /calendar` | signed in | Read / save which plan is picked per term. |
 | `POST /calendar/link` | signed in | Create the feed link, or return the existing one. |
 | `POST /calendar/reset` | signed in | Issue a new secret; the old URL stops working. |
 | `GET /cal/:file` | **public** | Every picked term in one `.ics` feed at `/api/cal/<secret>.ics` (named `TritonPlan`; links handed out before per-term feeds); the secret is the credential. Rate-limited per IP. |
 | `GET /cal/:secret/:file` | **public** | One term's feed at `/api/cal/<secret>/<year>-<period>.ics`, named e.g. `Winter 26 Schedule`; what the planner's Apple/Google buttons subscribe to. A term with no pick is an empty calendar. Same rate limit. |
 | `GET /rmp?name=…` | signed in | Look up RMP ratings for up to 20 instructor names. |
+
+### Checking the shared-plan UI locally
+
+Run `npm run dev -w @triton/server` (needs `server/.env.local`: `TP_ORIGIN=http://localhost:5173`,
+`TP_DB_PATH=./.data/dev.db`, `TP_MAIL_TRANSPORT=console`, `TP_COOKIE_SECURE=false`, `TP_RMP_REFRESH=off`)
+plus `npm run dev -w @triton/web`. Sign-up prints the verify link in the server log. To seed courses
+without the extension, post the bridge envelope from the page
+(`window.postMessage({source:'triton-planner-extension', type:'plan-add', version:1, payload:{course, selectedOptionId}}, location.origin)`).
+To look at a shared page without a server, stub the API in Playwright with
+`page.route('**/api/s/<code>', r => r.fulfill({json: {...}}))` (and `/api/s/<code>/version`); two
+browser contexts (owner, signed-out viewer) cover the share, switch, save and expiry flow, and
+setting `expires_at` in `shared_plans` to the past exercises the expired screen on the next poll.
 
 ## Reference material
 
