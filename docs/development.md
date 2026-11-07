@@ -87,8 +87,7 @@ issues, replays, retries, prefetches, or automates anything.
    extension the page falls back to a plain `window.open`.
 5. **Plan** (`web/`): `usePlan` merges incoming courses, computes conflicts
    (`shared/src/conflicts.ts`), renders the calendar/finals views, and saves to
-   the signed-in account on the server. Only UI preferences and received shares stay in
-   `localStorage`.
+   the signed-in account on the server. Only UI preferences stay in `localStorage`.
 
 The normalized model shared by both halves is `shared/src/types.ts`
 (`CourseOffering → SectionOption → Component → Meeting/FinalExam`, plus `PlanState`).

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ApptTimes } from '@triton/shared';
 import {
   savePlan,
@@ -8,11 +8,8 @@ import {
   savePool,
   loadPool,
   isCoursePool,
-  saveReceived,
   loadReceived,
-  clearReceived,
-  saveSyncedToken,
-  loadSyncedToken,
+  dropRetiredState,
   saveCalView,
   loadCalView,
   saveApptTimes,
@@ -67,14 +64,11 @@ describe('storage', () => {
   });
 });
 
-describe('received-plan slot (plans from a link or an imported file)', () => {
-  it('round-trips a received plan without touching my plan', () => {
-    const mine = makePlan();
-    savePlan(mine);
+describe('the received-plan slot an older version kept (read by the old site\'s hand-off)', () => {
+  it('reads what an older version stored', () => {
     const received = { plan: makePlan(), source: 'link' as const, receivedAt: '2026-07-24T10:00:00.000Z' };
-    saveReceived(received);
+    localStorage.setItem('triton-planner:received:v1', JSON.stringify(received));
     expect(loadReceived()).toEqual(received);
-    expect(loadPlan()).toEqual(mine);
   });
 
   it('returns null when nothing is stored, on corrupt JSON, and on wrong shapes', () => {
@@ -92,11 +86,36 @@ describe('received-plan slot (plans from a link or an imported file)', () => {
     );
     expect(loadReceived()).toBeNull();
   });
+});
 
-  it('clears the received plan', () => {
-    saveReceived({ plan: makePlan(), source: 'json', receivedAt: '2026-07-24T10:00:00.000Z' });
-    clearReceived();
-    expect(loadReceived()).toBeNull();
+describe('dropRetiredState', () => {
+  const LOCAL = ['triton-planner:received:v1', 'triton-planner:saved-shares:v1'];
+  const SESSION = ['triton-planner:viewing:v1', 'triton-planner:synced-hash:v1', 'triton-planner:pending-save:v1'];
+
+  it('removes what an older version kept, and nothing else', () => {
+    for (const k of LOCAL) localStorage.setItem(k, '{}');
+    for (const k of SESSION) sessionStorage.setItem(k, 'x');
+    const mine = makePlan();
+    savePlan(mine);
+    localStorage.setItem('triton-planner:pending-share:v1', '{}');
+    sessionStorage.setItem('triton-planner:pending-hash:v1', '#m=x');
+    dropRetiredState();
+    for (const k of LOCAL) expect(localStorage.getItem(k)).toBeNull();
+    for (const k of SESSION) expect(sessionStorage.getItem(k)).toBeNull();
+    expect(loadPlan()).toEqual(mine);
+    expect(localStorage.getItem('triton-planner:pending-share:v1')).toBe('{}');
+    expect(sessionStorage.getItem('triton-planner:pending-hash:v1')).toBe('#m=x');
+  });
+
+  it('blocked storage is not an error', () => {
+    const remove = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    try {
+      expect(() => dropRetiredState()).not.toThrow();
+    } finally {
+      remove.mockRestore();
+    }
   });
 });
 
@@ -132,16 +151,6 @@ describe('pool storage', () => {
     expect(isCoursePool([])).toBe(true);
     expect(isCoursePool('x')).toBe(false);
     expect(isCoursePool([{ id: 'A' }])).toBe(false); // missing options[]
-  });
-});
-
-describe('synced-token marker', () => {
-  it('round-trips and defaults to null', () => {
-    expect(loadSyncedToken()).toBeNull();
-    saveSyncedToken('3~abc');
-    expect(loadSyncedToken()).toBe('3~abc');
-    saveSyncedToken('');
-    expect(loadSyncedToken()).toBe('');
   });
 });
 

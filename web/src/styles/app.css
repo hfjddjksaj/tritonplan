@@ -254,7 +254,7 @@ p {
      content, so this changes nothing for most buttons — it matters the moment
      a `width`, `min-width` or `flex: 1` stretches one, and every such rule in
      this file was already re-declaring `justify-content: center` by hand
-     (.btn--icon, .received__actions .btn, .campusmap__island .tab, …). The one
+     (.btn--icon, .campusmap__island .tab, …). The one
      that was not, .campusmap__mode3d, drew "3D" 3.5 px left of centre. */
   justify-content: center;
   gap: 6px;
@@ -1735,9 +1735,9 @@ p {
   color: inherit;
 }
 
-/* =============================== received plan (share link / imported JSON) banner */
-/* Constant reminder that what's on screen (or parked nearby) is someone else's
-   plan: read-only, stored apart, never clobbering the user's own. */
+/* =============================== status bar under the top bar */
+/* The signed-out reminder and the next term's enrollment note. The class name
+   is from the banner that once showed a plan someone sent. */
 .received,
 .notebar {
   display: flex;
@@ -1749,11 +1749,6 @@ p {
   color: var(--ink);
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
-}
-.received__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
 }
 .received--active {
   background: var(--gold-soft);
@@ -1781,21 +1776,6 @@ p {
 }
 .received__spacer {
   flex: 1;
-}
-.received__discard {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text-faint);
-}
-.received__discard:hover {
-  background: var(--conflict-soft);
-  color: var(--conflict);
 }
 
 /* Read-only option rows: selection is shown but not switchable. */
@@ -2965,20 +2945,6 @@ p {
   .received {
     flex-wrap: wrap;
     row-gap: 8px;
-  }
-  /* the three received-plan actions share ONE row, equal widths */
-  .received__actions {
-    flex: 1 1 100%;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
-  .received__actions .btn {
-    justify-content: center;
-    min-width: 0;
-    padding: 0 4px;
-    font-size: 11.5px;
-    white-space: nowrap;
   }
   .final-row {
     grid-template-columns: 86px 1fr auto;

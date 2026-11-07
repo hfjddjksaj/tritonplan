@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { makeClashPlan, makeCourse } from '../lib/fixtures';
-import { emptyPlan } from '../lib/plan';
 import { tssDeepLink } from '../lib/tss';
 import type { TermsState } from '../lib/terms-state';
 import { makeTestBoot } from '../test/boot';
@@ -91,7 +90,6 @@ describe('sharedController', () => {
     ctl.removeCourse(CSE);
     ctl.addCourse(makeCourse('BILD-1|2026|2'));
     ctl.addCourseWithOption(course, 'o2');
-    ctl.replacePlan(emptyPlan(plan.term));
     ctl.resetPlan();
     ctl.toggleBooked(course);
     ctl.removeFromPool(CSE);
@@ -107,8 +105,6 @@ describe('sharedController', () => {
     expect(ctl).toMatchObject({
       readOnly: true,
       guest: false,
-      viewing: 'mine',
-      received: null,
       pendingAdd: null,
       pendingAddPlans: [],
       extensionSeen: false,

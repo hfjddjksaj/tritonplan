@@ -47,7 +47,7 @@ interface Props {
   course: CourseOffering;
   selectedOptionId: string | null;
   onSelect: (optionId: string) => void;
-  /** Someone else's plan or an archived term: options are visible but not switchable. */
+  /** An archived term (or a shared plan, unless `shared`): options are visible but not switchable. */
   readOnly?: boolean;
   /** A shared plan: switchable, but browsing TSS never refreshes its seat counts. */
   shared?: boolean;

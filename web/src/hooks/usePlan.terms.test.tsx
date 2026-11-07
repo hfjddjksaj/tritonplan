@@ -6,7 +6,6 @@ import { makePlan } from '../lib/fixtures';
 import { emptyPlan } from '../lib/plan';
 import type { TermsState, TermWorkspace } from '../lib/terms-state';
 import { termOf } from '../lib/terms';
-import type { AdoptPlan } from '../lib/cloud/boot';
 import { makeTestBoot } from '../test/boot';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -48,9 +47,8 @@ describe('usePlan: default term and creating the upcoming one', () => {
     return null;
   }
 
-  async function open(terms: TermsState | undefined, adopt?: AdoptPlan[]) {
+  async function open(terms: TermsState | undefined) {
     boot = makeTestBoot({ terms });
-    if (adopt) boot.adopt = adopt;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -108,21 +106,6 @@ describe('usePlan: default term and creating the upcoming one', () => {
     expect(boot.terms).toBeNull();
     expect(Object.keys(api.termsState.terms)).toEqual(['2026|3']);
     expect(api.activeTermKey).toBe('2026|3');
-  });
-
-  it('adopting a Fall plan with courses into an account holding only a pristine Fall: no Winter is created', async () => {
-    await open(account(emptyFall()), [{ name: 'Shared plan', plan: makePlan() }]);
-    expect(Object.keys(api.termsState.terms)).toEqual(['2026|2']);
-    expect(api.activeTermKey).toBe('2026|2');
-    expect(api.activePlanName).toBe('Shared plan');
-    expect(api.plan.entries.length).toBeGreaterThan(0);
-  });
-
-  it('adopting a Winter plan into an account holding only a pristine Fall: Winter holds just that plan', async () => {
-    await open(account(emptyFall()), [{ name: 'Shared plan', plan: { ...makePlan(), term: WINTER } }]);
-    expect(api.activeTermKey).toBe('2026|3');
-    expect(api.termsState.terms['2026|3']!.plans.plans.map((p) => p.name)).toEqual(['Shared plan']);
-    expect(api.activePlanName).toBe('Shared plan');
   });
 
   it('createTerm(Winter) adds the workspace and switches to it; the default on a re-open stays Fall', async () => {

@@ -78,7 +78,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
           {ctl.shared
             ? 'Anyone with the link can switch a section below — everyone who has this plan open sees the change.'
             : readOnly
-              ? 'This plan is read-only — a plan someone sent you, or a past term kept as an archive.'
+              ? 'This plan is read-only — a past term kept as an archive.'
               : isMobile
                 ? 'Your plans follow your account, so they’re the same here as on your computer. New courses come in from TSS on a computer; switch a section below to clear a conflict.'
                 : 'Sections you pick in TSS land here. Switch a section below to clear a conflict.'}
@@ -134,7 +134,7 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
           </div>
         )}
 
-        {/* Browsed — not yet added (yours; hidden while viewing a received plan) */}
+        {/* Browsed — not yet added (yours; hidden while read-only) */}
         {!readOnly && (
         <>
         <div className="rail__section">

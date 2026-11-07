@@ -7,7 +7,7 @@ interface Props {
   /** The term chip / switcher, rendered after the plan switcher. */
   termSlot: ReactNode;
   units: number;
-  /** Viewing someone else's plan — editing actions (Clear) hide. */
+  /** Nothing on screen to edit (an archived term, signed out) — editing actions (Clear) hide. */
   readOnly: boolean;
   /** The named-plans dropdown, rendered next to the brand. */
   planSwitcher?: ReactNode;

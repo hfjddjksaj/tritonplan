@@ -67,11 +67,11 @@ import { Check, ChevronDown, Compass, MapPinIcon, Minus, Plus, X } from './icons
 import { tip } from './Tooltip';
 
 interface Props {
-  /** The plan on screen — yours, or a received one. */
+  /** The plan on screen — yours, or a shared one. */
   plan: PlanState;
   /** Course ids the student is enrolled in. RENDER-TIME ONLY; never persisted here. */
   booked: ReadonlySet<string>;
-  /** Viewing someone else's plan — the booked toggle is meaningless then. */
+  /** Not the student's live plan (a shared plan, an archived term) — the booked toggle is meaningless then. */
   readOnly: boolean;
   /** The tab the map opens on — the planner's current view. One-way: switching tabs here never changes the planner. */
   initialView?: PlannerView;
@@ -161,8 +161,8 @@ const MAP_VIEWS: Record<PlannerView, MapViewDef> = {
 
 /**
  * Full-screen campus map, toggled by state rather than a route: the address bar
- * hash is already owned by share links (#p=) and the self-mirror (#m=), so a
- * router would collide with readHash(). `position: fixed` covers the viewport
+ * hash is read on load for old plan links (#p=, #m=), so a router would collide
+ * with readHash(). `position: fixed` covers the viewport
  * regardless of DOM depth, so — like BuildingPopover — this renders inline
  * rather than through a portal.
  *

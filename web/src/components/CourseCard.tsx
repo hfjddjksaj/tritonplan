@@ -14,7 +14,7 @@ interface Props {
   entry: PlanEntry;
   index: number;
   conflicted: boolean;
-  /** Not the student's own editable plan (a received plan, an archived term, a shared plan): no removing. Sections stay fixed unless `shared`. */
+  /** Not the student's own editable plan (an archived term, a shared plan): no removing. Sections stay fixed unless `shared`. */
   readOnly?: boolean;
   /** A plan opened from a share link: read-only, except that its sections stay switchable. */
   shared?: boolean;

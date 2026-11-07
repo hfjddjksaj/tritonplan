@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { apiPost, fetchCalendar, type CalendarState, type Me } from '../lib/cloud/api';
 import { nav } from '../lib/nav';
 import { clearPendingMigration } from '../lib/migration';
-import { clearReceived } from '../lib/storage';
 import { useClickAway } from '../hooks/useClickAway';
 import { Calendar, ChevronDown, Download, Key, Link, SignOut, Trash, Unlink } from './icons';
 import { ShareFriendsDialog, type SharablePlan } from './share/ShareFriendsDialog';
@@ -92,7 +91,6 @@ export function AccountMenu({
     await saveBeforeLeaving();
     await apiPost('/api/auth/logout', {}); // a failed logout still leaves: the next load re-checks the session
     clearPendingMigration(); // the old site's plans are this student's, not the next person's on a shared browser
-    clearReceived(); // someone else's plan must not greet the next person on this browser
     nav.assign('/');
   }
 

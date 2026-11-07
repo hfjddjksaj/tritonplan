@@ -7,7 +7,6 @@ import { makeTestBoot } from './test/boot';
 import { makeGuestBoot } from './lib/cloud/boot';
 import { clearRmpCache } from './lib/cloud/api';
 import { makeCourse, makePlan } from './lib/fixtures';
-import { saveReceived, saveViewing } from './lib/storage';
 import type { TermsState } from './lib/terms-state';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -239,16 +238,5 @@ describe("App → the next term's enrollment bar", () => {
     expect(termChip()).toContain('Fall 2026');
     expect(bar()).toBeNull();
     expect(container.textContent).toContain('You’re not signed in');
-  });
-
-  it('is not shown while a plan someone sent is up', async () => {
-    const course = makeCourse('MATH-18|2026|2', 'MATH-18');
-    const sent = { ...makePlan(), entries: [{ course, selectedOptionId: course.options[0]!.id, color: '120' }] };
-    saveReceived({ plan: sent, source: 'link', receivedAt: '2026-11-01T00:00:00.000Z' });
-    saveViewing('received');
-    boot = makeTestBoot({ terms: fallAccount() });
-    await act(async () => root.render(<App boot={boot!} />));
-    expect(container.textContent).toContain('Viewing a shared plan');
-    expect(bar()).toBeNull();
   });
 });

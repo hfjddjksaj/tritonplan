@@ -5,7 +5,7 @@ import type { CloudBoot } from '../lib/cloud/boot';
 
 /** The student's own appointment times: loaded from the account, live-updated
  *  by extension pushes (which the sync engine saves back). Global — independent
- *  of plans and of the received/read-only view. */
+ *  of plans and of the read-only view. */
 export function useApptTimes(boot: CloudBoot): ApptTimes[] {
   const [appt, setAppt] = useState<ApptTimes[]>(() => boot.appt ?? []);
   const current = useRef(appt);

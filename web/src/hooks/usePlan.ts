@@ -22,23 +22,12 @@ import {
   toggleBooked as toggleBookedIn,
   waitlistedSet,
 } from '../lib/booked';
-import type { AdoptPlan, CloudBoot } from '../lib/cloud/boot';
-import {
-  loadReceived,
-  saveReceived,
-  clearReceived,
-  loadViewing,
-  saveViewing,
-  loadSyncedToken,
-  type ReceivedPlan,
-  type Viewing,
-} from '../lib/storage';
+import type { CloudBoot } from '../lib/cloud/boot';
 import {
   activePlan,
   updateActivePlan,
   mapAllPlans,
   createPlan,
-  freeSharedName,
   renamePlan as renamePlanIn,
   duplicatePlan as duplicatePlanIn,
   deletePlan as deletePlanIn,
@@ -49,7 +38,6 @@ import {
 } from '../lib/plans';
 import {
   activeWorkspace,
-  adoptPlanIn,
   archiveSweep,
   ensureWorkspace,
   mapWorkspaces,
@@ -62,7 +50,7 @@ import {
   type TermsState,
 } from '../lib/terms-state';
 import { isArchived, liveUpcomingTerm, termKey, type TermKey } from '../lib/terms';
-import { mirrorTokenFromHash, readHash } from '../lib/share';
+import { readHash } from '../lib/share';
 import { openBooking, openInTss, openTssHome } from '../lib/tss';
 import {
   buildSelectedCourses,
@@ -82,6 +70,8 @@ import {
 // the extension re-pushes the real pool on each load via a `courses` bridge message.
 const SAMPLE = import.meta.env.DEV ? (sampleCourses as unknown as CourseOffering[]) : [];
 
+const noop = () => {};
+
 /** One-shot boot from the account: pool repository + terms container + the archive sweep's forget list. */
 function initialState(boot: CloudBoot): {
   pool: CourseOffering[];
@@ -93,43 +83,15 @@ function initialState(boot: CloudBoot): {
   const upcomingTerm = liveUpcomingTerm(now);
   const iso = now.toISOString();
   const pool = mergeCourses(SAMPLE, boot.pool);
-  const adopt = boot.adopt ?? [];
-  const adopted = adopt.flatMap((a) => a.plan.entries.map((e) => e.course));
-  // A new account that starts with plans they chose to save holds just those, not an empty "My plan" beside them —
-  // unless they are all from terms that are over, which leave nothing to edit.
-  if (!boot.terms && adopt.some((a) => !isArchived(a.plan.term, now))) {
-    return { pool: mergeCourses(pool, adopted), terms: adoptInto(null, adopt, iso), forgetModuleIds: [], upcomingTerm };
-  }
   // An account with no terms yet starts from the same single empty plan a new device always did.
   // Its first workspace is the live upcoming term when there is one.
   const terms = boot.terms ?? migrateToTermsState(null, null, null, pool, iso, upcomingTerm ?? DEFAULT_TERM);
   const swept = archiveSweep(terms, pool, now);
   // The upcoming term is opened when no non-archived term has planned courses; then the default view is the newest
   // non-archived term with planned courses (see defaultTermKey). The stored activeTermKey is ignored on load.
-  // Plans they chose to save before signing in are kept after that, and shown (their switch wins). An adopted plan
-  // of a term that is not over counts as planned, so no empty upcoming term is opened beside it. That is checked
-  // here rather than by opening after adoptInto, which would take an adopted empty plan for a pristine placeholder
-  // and drop it.
-  const adoptsLive = adopt.some((a) => !isArchived(a.plan.term, now));
-  const opened = adoptsLive ? swept.state : openUpcomingTerm(swept.state, now, iso);
+  const opened = openUpcomingTerm(swept.state, now, iso);
   const state = switchTermIn(opened, defaultTermKey(opened, now));
-  if (adopt.length === 0) return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds, upcomingTerm };
-  return {
-    pool: mergeCourses(swept.pool, adopted),
-    terms: adoptInto(state, adopt, iso),
-    forgetModuleIds: swept.forgetModuleIds,
-    upcomingTerm,
-  };
-}
-
-/** Each plan they chose to save, as a new plan with a name of its own in its term; the planner opens on the last. */
-function adoptInto(state: TermsState | null, adopt: AdoptPlan[], iso: string): TermsState {
-  let s: TermsState = state ?? { version: 1, activeTermKey: termKey(adopt[0]!.plan.term), terms: {} };
-  for (const a of adopt) {
-    const names = s.terms[termKey(a.plan.term)]?.plans.plans.map((p) => p.name) ?? [];
-    s = adoptPlanIn(s, a.plan, freeSharedName(names, a.name), iso);
-  }
-  return s;
+  return { pool: swept.pool, terms: state, forgetModuleIds: swept.forgetModuleIds, upcomingTerm };
 }
 
 /** Append a fresh plan entry, coloring it with the next hue in the palette. */
@@ -145,7 +107,11 @@ function appendEntry(
   };
 }
 
-export function usePlan(boot: CloudBoot) {
+/**
+ * `onOldLink`: the address bar carried a link that no longer opens (see
+ * readHash); the hash is already gone when it is called.
+ */
+export function usePlan(boot: CloudBoot, onOldLink: () => void = noop) {
   // Signed out: the extension's pushes show, nothing is saved, and App asks for sign-in before any edit.
   const guest = boot.me === null;
   const bootRef = useRef<ReturnType<typeof initialState> | null>(null);
@@ -153,20 +119,15 @@ export function usePlan(boot: CloudBoot) {
   const [pool, setPool] = useState<CourseOffering[]>(bootRef.current.pool);
   const [termsState, setTermsState] = useState<TermsState>(bootRef.current.terms);
   const [pendingQueue, setPendingQueue] = useState<{ course: CourseOffering; optionId: string }[]>([]);
-  // A plan someone else sent (share link or imported JSON). Lives in its own slot,
-  // shown read-only — it can never overwrite any of the user's plans.
-  // Signed out, a plan someone sent opens on its own page instead, and one this device kept waits for the account.
-  const [received, setReceived] = useState<ReceivedPlan | null>(() => (guest ? null : loadReceived()));
-  const [viewing, setViewing] = useState<Viewing>(() =>
-    !guest && loadReceived() ? loadViewing() : 'mine',
-  );
-  // Latest pool/terms for effects that must not re-subscribe on every edit.
+  // Latest pool/terms/callback for effects that must not re-subscribe on every edit.
   const poolRef = useRef(pool);
   const termsRef = useRef(termsState);
+  const onOldLinkRef = useRef(onOldLink);
   useEffect(() => {
     poolRef.current = pool;
     termsRef.current = termsState;
-  }, [pool, termsState]);
+    onOldLinkRef.current = onOldLink;
+  }, [pool, termsState, onOldLink]);
 
   // One-time: tell the extension to release captured data the archive sweep dropped.
   // Signed out nothing was swept: there is no account yet.
@@ -205,58 +166,30 @@ export function usePlan(boot: CloudBoot) {
     });
   }, []);
 
-  const switchViewing = useCallback((v: Viewing) => {
-    setViewing(v);
-    saveViewing(v);
-  }, []);
-
-  // A hash that isn't one of this device's plans (a share link, or an old #m=
-  // mirror bookmarked/copied before plans lived in the account) is consumed ONCE into the received slot,
-  // then stripped from the address bar (leaving it would pin every reload to that
-  // snapshot). The user's own plans are untouched — it opens read-only alongside
-  // them. Also runs on hashchange: pasting a link into an already-open planner tab
-  // doesn't reload. Signed out, the sign-in gate has stashed the link for after sign-in.
+  // A plan hash in the address bar is consumed ONCE, then stripped: nothing writes one any more, and
+  // leaving it would make every reload re-read it. A #m= mirror of one of my plans switches to that
+  // plan; anything else that carries a plan is an old link that no longer opens, and my plans stay as
+  // they are. Also runs on hashchange: pasting a link into an already-open planner tab doesn't reload.
+  // Signed out, the sign-in gate has stashed a mirror for after sign-in; an old link has nothing to wait for.
   useEffect(() => {
-    if (guest) return;
     const consume = () => {
       const owned = Object.entries(termsRef.current.terms).flatMap(([key, ws]) =>
         ws.plans.plans.map((p) => ({ key, id: p.id, plan: p.plan })),
       );
-      const hash = window.location.hash;
-      const stripHash = () =>
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      const intent = readHash(hash, {
-        plans: owned.map((o) => o.plan),
-        syncedToken: loadSyncedToken(),
-      });
-      if (intent.kind === 'mine') {
-        // The hash names one of my plans — show that one, not whatever was active.
-        const match = intent.index === null ? null : owned[intent.index];
-        if (match) {
-          setTermsState((s) =>
-            switchTermIn(updateWorkspace(s, match.key, (ps) => switchActive(ps, match.id)), match.key),
-          );
-        }
-        // Nothing writes #m= any more; a stale one left in the bar would make an F5
-        // re-read an old snapshot (overwriting received, or flipping the active plan).
-        if (mirrorTokenFromHash(hash) !== null) stripHash();
+      const intent = readHash(window.location.hash, owned.map((o) => o.plan));
+      if (intent.kind === 'ignore' || (guest && intent.kind !== 'share')) return;
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      if (intent.kind !== 'mine') {
+        onOldLinkRef.current();
         return;
       }
-      if (intent.kind !== 'shared') return;
-      const rec: ReceivedPlan = {
-        plan: intent.plan,
-        source: 'link',
-        receivedAt: new Date().toISOString(),
-      };
-      saveReceived(rec);
-      setReceived(rec);
-      switchViewing('received');
-      stripHash();
+      const match = owned[intent.index]!;
+      setTermsState((s) => switchTermIn(updateWorkspace(s, match.key, (ps) => switchActive(ps, match.id)), match.key));
     };
     consume();
     window.addEventListener('hashchange', consume);
     return () => window.removeEventListener('hashchange', consume);
-  }, [guest, switchViewing]);
+  }, [guest]);
 
   // Everything the account holds is saved by the sync engine, which diffs it
   // against what the server acknowledged. No first-render skip: a new
@@ -273,14 +206,12 @@ export function usePlan(boot: CloudBoot) {
   // ---- term switching ----------------------------------------------------
   const switchTerm = useCallback((key: TermKey) => {
     setTermsState((s) => switchTermIn(s, key));
-    switchViewing('mine');
-  }, [switchViewing]);
+  }, []);
 
   /** Open a term that has no workspace yet (the upcoming one) and show it. */
   const createTerm = useCallback((term: Term) => {
     setTermsState((s) => switchTermIn(ensureWorkspace(s, term, new Date().toISOString()), termKey(term)));
-    switchViewing('mine');
-  }, [switchViewing]);
+  }, []);
 
   const termList = useMemo(() => Object.values(termsState.terms).map((ws) => ws.term), [termsState]);
 
@@ -369,15 +300,6 @@ export function usePlan(boot: CloudBoot) {
     }));
   }, [setPlan]);
 
-  const replacePlan = useCallback(
-    (next: PlanState) => {
-      // Any courses referenced by the imported plan should also exist in the pool.
-      setPool((prev) => mergeCourses(prev, next.entries.map((e) => e.course)));
-      setPlan(() => next);
-    },
-    [setPlan],
-  );
-
   const resetPlan = useCallback(() => {
     setPlan((prev) => emptyPlan(prev.term));
   }, [setPlan]);
@@ -385,69 +307,25 @@ export function usePlan(boot: CloudBoot) {
   // ---- named-plans management -------------------------------------------
   // switchPlan must work in archived terms too: viewing another archived plan
   // is read-only navigation, not an edit — so no archived guard here.
-  const switchPlan = useCallback(
-    (id: string) => {
-      setTermsState((s) => updateWorkspace(s, s.activeTermKey, (ps) => switchActive(ps, id)));
-      switchViewing('mine');
-    },
-    [switchViewing],
-  );
+  const switchPlan = useCallback((id: string) => {
+    setTermsState((s) => updateWorkspace(s, s.activeTermKey, (ps) => switchActive(ps, id)));
+  }, []);
 
   const createNewPlan = useCallback(() => {
     setPlans((s) => createPlan(s, new Date().toISOString()));
-    switchViewing('mine');
-  }, [setPlans, switchViewing]);
+  }, [setPlans]);
 
   const renamePlan = useCallback((id: string, name: string) => {
     setPlans((s) => renamePlanIn(s, id, name));
   }, [setPlans]);
 
-  const duplicatePlan = useCallback(
-    (id: string) => {
-      setPlans((s) => duplicatePlanIn(s, id, new Date().toISOString()));
-      switchViewing('mine');
-    },
-    [setPlans, switchViewing],
-  );
+  const duplicatePlan = useCallback((id: string) => {
+    setPlans((s) => duplicatePlanIn(s, id, new Date().toISOString()));
+  }, [setPlans]);
 
   const deletePlan = useCallback((id: string) => {
     setPlans((s) => deletePlanIn(s, id));
   }, [setPlans]);
-
-  /** Keep the received plan as a NEW named plan ("朋友的plan") in ITS OWN term and switch to it. */
-  const saveReceivedAsNewPlan = useCallback(
-    (name: string) => {
-      if (!received) return;
-      const incoming = received.plan;
-      setPool((prev) => mergeCourses(prev, incoming.entries.map((e) => e.course)));
-      const nowIso = new Date().toISOString();
-      setTermsState((s) => adoptPlanIn(s, incoming, name, nowIso));
-      clearReceived();
-      setReceived(null);
-      switchViewing('mine');
-    },
-    [received, switchViewing],
-  );
-
-  /** Replace the ACTIVE plan with the received one (destructive — caller confirms). */
-  const saveReceivedAsMine = useCallback(() => {
-    if (received && termKey(received.plan.term) !== termsRef.current.activeTermKey) {
-      // Different term: replacing the current term's plan with it would corrupt both.
-      saveReceivedAsNewPlan('Shared plan');
-      return;
-    }
-    if (received) replacePlan(received.plan);
-    clearReceived();
-    setReceived(null);
-    switchViewing('mine');
-  }, [received, replacePlan, switchViewing, saveReceivedAsNewPlan]);
-
-  /** Drop the received plan and go back to my own. */
-  const discardReceived = useCallback(() => {
-    clearReceived();
-    setReceived(null);
-    switchViewing('mine');
-  }, [switchViewing]);
 
   /** Drop a browsed course from THIS plan's own list (per-plan, per-term). */
   const removeFromPool = useCallback((courseId: string) => {
@@ -523,8 +401,6 @@ export function usePlan(boot: CloudBoot) {
         } else {
           addIntoTerm(course, optionId, null);
         }
-        // Adds always land in MY plans — surface them, even if a received plan was up.
-        switchViewing('mine');
       },
       onBooked: (rows, capturedAt, captured) => {
         markBridgeSeen();
@@ -585,7 +461,7 @@ export function usePlan(boot: CloudBoot) {
         });
       },
     }, { keep: guest });
-  }, [addIntoTerm, guest, markBridgeSeen, switchViewing]);
+  }, [addIntoTerm, guest, markBridgeSeen]);
 
   /** Jump back to TSS — through the extension when present, else a plain new tab. */
   const openCourseInTss = useCallback((course: CourseOffering) => {
@@ -603,10 +479,10 @@ export function usePlan(boot: CloudBoot) {
   }, []);
 
   // ---- derived view data (memoized) --------------------------------------
-  // Everything the screen shows derives from the plan being VIEWED — the user's
-  // own, or a received one (read-only). Archived terms are read-only too.
-  const viewPlan = viewing === 'received' && received ? received.plan : plan;
-  const readOnly = (viewing === 'received' && received !== null) || archived;
+  // Everything the screen shows derives from the plan on view: here always the
+  // active plan, a shared plan in sharedController. Archived terms are read-only.
+  const viewPlan = plan;
+  const readOnly = archived;
 
   /** Booked (enrolled) course ids of the VIEWED plan's own term. */
   const bookedIds = useMemo<ReadonlySet<string>>(() => {
@@ -708,7 +584,6 @@ export function usePlan(boot: CloudBoot) {
     addCourseWithOption,
     removeCourse,
     selectOption,
-    replacePlan,
     resetPlan,
     removeFromPool,
     clearBrowsed,
@@ -753,18 +628,11 @@ export function usePlan(boot: CloudBoot) {
     renamePlan,
     duplicatePlan,
     deletePlan,
-    // received plans (share links / imported JSON) — read-only companion slot
-    received,
-    viewing,
     viewPlan,
     readOnly,
     guest,
     // Only a plan opened from a share link is shared (sharedController): switching sections is its one edit.
     shared: false,
-    switchViewing,
-    saveReceivedAsMine,
-    saveReceivedAsNewPlan,
-    discardReceived,
     // derived
     selectedCourses,
     weeklyConflicts,
@@ -794,7 +662,6 @@ export function lockedForGuest(ctl: PlanController, ask: () => void): PlanContro
     addCourseWithOption: ask,
     removeCourse: ask,
     selectOption: ask,
-    replacePlan: ask,
     resetPlan: ask,
     removeFromPool: ask,
     clearBrowsed: ask,
@@ -805,8 +672,5 @@ export function lockedForGuest(ctl: PlanController, ask: () => void): PlanContro
     renamePlan: ask,
     duplicatePlan: ask,
     deletePlan: ask,
-    saveReceivedAsMine: ask,
-    saveReceivedAsNewPlan: ask,
-    discardReceived: ask,
   };
 }

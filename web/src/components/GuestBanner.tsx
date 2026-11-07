@@ -1,8 +1,8 @@
 import { Eye } from './icons';
 
 /**
- * Always-visible reminder on the signed-out planner, in the received-plan banner's
- * look: what is on screen is not saved anywhere, and keeping or editing it needs an account.
+ * Always-visible reminder on the signed-out planner, as a gold status bar under the
+ * top bar: what is on screen is not saved anywhere, and keeping or editing it needs an account.
  */
 export function GuestBanner({ onSignIn }: { onSignIn: () => void }) {
   return (

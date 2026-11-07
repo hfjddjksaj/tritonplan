@@ -161,21 +161,17 @@ export function loadTerms(): import('./terms-state').TermsState | null {
   return readJson(TERMS_KEY, isTermsState);
 }
 
-/* ---- received plans (opened from a share link or an imported JSON file) ----
-   Kept in their own slot so someone else's plan can NEVER overwrite yours: the
-   app shows it read-only and only writes it to the main slot on an explicit
-   "Save as my plan". */
+/* ---- the received-plan slot an older version kept --------------------------
+   Someone else's plan, opened from a #p= link, stored apart from the user's own.
+   Nothing writes it any more, and dropRetiredState clears it on this site; the
+   old site's hand-off still reads it on its own origin, to carry that plan into
+   the account. */
 
 const RECEIVED_KEY = 'triton-planner:received:v1';
 
 export interface ReceivedPlan {
   plan: PlanState;
-  /**
-   * How the plan arrived. Only 'link' is produced now — the JSON import/export
-   * path was removed (a share link carries the whole plan). 'json' stays in the
-   * union so a record persisted by an older build still validates and keeps
-   * showing, instead of being silently dropped on load.
-   */
+  /** 'json' was an imported file, a path an older build already removed. */
   source: 'link' | 'json';
   receivedAt: string; // ISO timestamp
 }
@@ -190,62 +186,30 @@ export function isReceivedPlan(value: unknown): value is ReceivedPlan {
   );
 }
 
-export function saveReceived(received: ReceivedPlan): void {
-  writeJson(RECEIVED_KEY, received);
-}
-
 export function loadReceived(): ReceivedPlan | null {
   return readJson(RECEIVED_KEY, isReceivedPlan);
 }
 
-export function clearReceived(): void {
-  removeKey(RECEIVED_KEY);
-}
+/* ---- keys an older version wrote that nothing reads any more ----------------
+   The received slot and which tab was viewing it, the share-link echo marker,
+   and the Saves a signed-out visitor clicked on a shared plan (a shared plan is
+   saved from its own page now). Removing them on every load costs nothing, and
+   they would otherwise sit in this browser for good. */
+const RETIRED_LOCAL_KEYS = [RECEIVED_KEY, 'triton-planner:saved-shares:v1'];
+const RETIRED_SESSION_KEYS = [
+  'triton-planner:viewing:v1',
+  'triton-planner:synced-hash:v1',
+  'triton-planner:pending-save:v1',
+];
 
-/* ---- which plan a tab is viewing (session-scoped, so a tab that opened a
-   share link keeps showing it across reloads while other tabs stay on the
-   user's own plan). Lives here with the other persistence keys. ---- */
-
-const VIEWING_KEY = 'triton-planner:viewing:v1';
-export type Viewing = 'mine' | 'received';
-
-export function loadViewing(): Viewing {
-  try {
-    return sessionStorage.getItem(VIEWING_KEY) === 'received' ? 'received' : 'mine';
-  } catch {
-    return 'mine';
-  }
-}
-
-export function saveViewing(v: Viewing): void {
-  try {
-    sessionStorage.setItem(VIEWING_KEY, v);
-  } catch {
-    /* ignore */
-  }
-}
-
-/* --- share-link echo marker (sessionStorage, per-tab) -----------------------
- * A #p=… link this tab parked in its own address bar (the ShareMenu clipboard
- * fallback). On load, a hash equal to this marker is our own echo, NOT an
- * incoming shared plan. The address-bar mirror does NOT use this: it writes
- * #m=…, whose key alone says "mine" — per-tab state cannot help a bookmark,
- * which always opens in a fresh tab. See readHash() in share.ts. */
-const SYNCED_KEY = 'triton-planner:synced-hash:v1';
-
-export function saveSyncedToken(token: string): void {
-  try {
-    sessionStorage.setItem(SYNCED_KEY, token);
-  } catch {
-    /* storage disabled — ignore */
-  }
-}
-
-export function loadSyncedToken(): string | null {
-  try {
-    return sessionStorage.getItem(SYNCED_KEY);
-  } catch {
-    return null;
+export function dropRetiredState(): void {
+  for (const key of RETIRED_LOCAL_KEYS) removeKey(key);
+  for (const key of RETIRED_SESSION_KEYS) {
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      /* storage blocked: nothing was kept either */
+    }
   }
 }
 

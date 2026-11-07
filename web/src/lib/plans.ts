@@ -149,7 +149,7 @@ export function createPlan(state: PlansState, now: string, name?: string): Plans
   return { activeId: id, plans: [...state.plans, entry] };
 }
 
-/** Store an incoming (received/imported) plan under the given name and activate it. */
+/** Store an incoming plan (a shared plan saved into the account) under the given name and activate it. */
 export function addPlan(state: PlansState, plan: PlanState, name: string, now: string): PlansState {
   const id = newPlanId();
   const entry: NamedPlan = {

@@ -7,7 +7,7 @@ import { AuthCard } from './auth/AuthCard';
  * chunk that a deploy replaced while this tab stayed open) unmounts everything
  * and leaves a blank page. A reload fetches the current build and the account.
  */
-export class ErrorBoundary extends Component<{ children: ReactNode; onReload?: () => void }, { failed: boolean }> {
+export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError(): { failed: boolean } {
@@ -21,10 +21,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; onReload?: (
         <button
           type="button"
           className="btn btn--primary auth__wide"
-          onClick={() => {
-            this.props.onReload?.();
-            nav.reload();
-          }}
+          onClick={() => nav.reload()}
         >
           Reload
         </button>

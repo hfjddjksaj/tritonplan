@@ -1,24 +1,20 @@
 /**
- * Portable plans. A link IS the whole plan — there is no JSON export/import
- * path; a shared plan arrives only by opening its URL.
+ * A plan as a URL-safe token, from the days when the address bar carried
+ * whole plans. Two hash keys were written: `#p=` for a link someone shared
+ * (it no longer opens: shared plans live on the server now) and `#m=` for the
+ * planner's mirror of the user's OWN active plan (see MIRROR_KEY below). Nothing
+ * writes either any more; they are read to make sense of old bookmarks here and
+ * by the old site's hand-off (migration.ts), and the token is how plans are
+ * compared and fingerprinted there.
  *
- * The shareable `#p=…` URL supports two wire formats, chosen via `ShareFormat`:
+ * Two wire formats, chosen via `ShareFormat`:
  *  - 'full' (v3, default): the whole plan INCLUDING every section option,
- *    prereqs and capturedAt, deflate-compressed. The receiving device can
- *    switch sections in place. See share-v3.ts for the wire shape.
- *  - 'lite' (v2 slim): only the section you actually picked per course, and
- *    only the fields needed to render it (times, place, instructor, final,
- *    seats). Other section-options and source/debug fields (rawSched, ids,
- *    emails, dates) are dropped, shrinking the link further than 'full'. A
- *    'lite' plan can't switch sections in place — reopen the course in TSS to
- *    pull its full data back.
+ *    prereqs and capturedAt, deflate-compressed. See share-v3.ts for the wire shape.
+ *  - 'lite' (v2 slim): only the section picked per course, and only the fields
+ *    needed to render it (times, place, instructor, final, seats).
  *
- * Old links still open: decode tries v3 full, then v2 slim, then v1 legacy
- * (the whole PlanState encoded verbatim, pre-dating both formats).
- *
- * Two hash keys, and the difference matters: `#p=` is a link someone SHARED
- * (opens read-only in the received slot), `#m=` is the planner's mirror of the
- * user's OWN active plan (see MIRROR_KEY below).
+ * Decode tries v3 full, then v2 slim, then v1 legacy (the whole PlanState
+ * encoded verbatim, pre-dating both formats).
  */
 import LZString from 'lz-string';
 import type {
@@ -35,7 +31,7 @@ import type {
 import { isPlanState } from './storage';
 import { V3_PREFIX, decodePlanV3, encodePlanV3 } from './share-v3';
 
-const HASH_KEY = 'p';
+const SHARE_KEY = 'p';
 /** Marks the slim share format; legacy links are a raw PlanState (`version:1`). */
 const SHARE_FORMAT = 2 as const;
 
@@ -185,7 +181,7 @@ function isSlimPlan(value: unknown): value is SlimPlan {
   );
 }
 
-/** Which wire format a link carries: 'full' (v3, all sections) or 'lite' (v2 slim). */
+/** Which wire format a token carries: 'full' (v3, all sections) or 'lite' (v2 slim). */
 export type ShareFormat = 'full' | 'lite';
 
 /** Compress a plan into a URL-safe token. Default 'full' carries every section option. */
@@ -209,31 +205,18 @@ export function decodePlan(token: string): PlanState | null {
   }
 }
 
-/** Build a `#p=…` hash fragment (without the leading `#`). */
-export function planToHash(plan: PlanState, format: ShareFormat = 'full'): string {
-  return `${HASH_KEY}=${encodePlan(plan, format)}`;
-}
-
-/** Extract the raw `#p=…` token from a location hash, or null. */
-export function tokenFromHash(hash: string): string | null {
+/** One key's raw value in a location hash ("#k=…" or "k=…"), or null. */
+function hashParam(hash: string, key: string): string | null {
   const clean = hash.startsWith('#') ? hash.slice(1) : hash;
   if (!clean) return null;
-  return new URLSearchParams(clean).get(HASH_KEY);
-}
-
-/** Read a plan out of a raw location hash string ("#p=…" or "p=…"). */
-export function planFromHash(hash: string): PlanState | null {
-  const token = tokenFromHash(hash);
-  if (!token) return null;
-  return decodePlan(token);
+  return new URLSearchParams(clean).get(key);
 }
 
 /* --- the address-bar mirror of the user's OWN plan --------------------------
- * The planner mirrors the active plan into the address bar so the browser's own
- * bookmark sync / "send this tab to my phone" carries the latest plan. The
- * mirror has its own key — `#m=` means mine, `#p=` means someone sent it — so
- * a bookmarked tab, which always opens fresh with no per-tab sessionStorage
- * marker, still reads as the user's own plan and not "not your plan". */
+ * The planner used to mirror the active plan into the address bar so the
+ * browser's own bookmark sync / "send this tab to my phone" carried the latest
+ * plan. The mirror has its own key — `#m=` means mine, `#p=` meant someone
+ * sent it — so a bookmarked tab still reads as the user's own plan. */
 const MIRROR_KEY = 'm';
 
 /** Build the `#m=…` fragment for the address-bar mirror (without the leading `#`). */
@@ -243,57 +226,29 @@ export function planToMirrorHash(plan: PlanState): string {
 
 /** Extract the raw `#m=…` token from a location hash, or null. */
 export function mirrorTokenFromHash(hash: string): string | null {
-  const clean = hash.startsWith('#') ? hash.slice(1) : hash;
-  if (!clean) return null;
-  return new URLSearchParams(clean).get(MIRROR_KEY);
+  return hashParam(hash, MIRROR_KEY);
 }
 
 /**
- * The plan a `#m=` hash carries, for seeding a device that has none of its own
- * (opening a synced tab on a phone for the first time). Null for anything else,
- * including an empty plan — there is nothing to seed from that.
- */
-export function mirrorSeedPlan(hash: string): PlanState | null {
-  const token = mirrorTokenFromHash(hash);
-  if (!token) return null;
-  const plan = decodePlan(token);
-  return plan && plan.entries.length > 0 ? plan : null;
-}
-
-/**
- * What a location hash means on load. 'mine' never reaches the received slot;
- * its `index` points into `own.plans` at the plan it re-encodes (null when only
- * the per-tab echo marker vouched for it).
+ * What a location hash means on load. 'mine': a `#m=` mirror re-encoding
+ * `plans[index]`. 'mirror': a `#m=` matching none of them (a bookmark synced
+ * from another device, a copied address bar). 'share': a `#p=` share link,
+ * decodable or not. An older version showed the last two read-only.
  */
 export type HashIntent =
   | { kind: 'ignore' }
-  | { kind: 'mine'; plan: PlanState; index: number | null }
-  | { kind: 'shared'; plan: PlanState };
+  | { kind: 'mine'; index: number }
+  | { kind: 'mirror' }
+  | { kind: 'share' };
 
-/**
- * Classify the hash the page loaded with.
- *
- * The URL is the plan: a hash is "mine" only when it re-encodes a plan this
- * device already holds, whichever key it uses. A `#m=` mirror matching none of
- * them came from another device or another person (a bookmark synced from a
- * laptop, a copied address bar), so it opens as a shared plan instead of being
- * silently replaced by whatever this device had active. `#p=` also counts as
- * mine when it matches this tab's echo marker (an older build's clipboard fallback
- * parked a link in the address bar).
- */
-export function readHash(
-  hash: string,
-  own: { plans: PlanState[]; syncedToken: string | null },
-): HashIntent {
-  const mirror = mirrorTokenFromHash(hash);
-  const token = mirror ?? tokenFromHash(hash);
+export function readHash(hash: string, plans: PlanState[]): HashIntent {
+  if (hashParam(hash, SHARE_KEY) !== null) return { kind: 'share' };
+  const token = mirrorTokenFromHash(hash);
   if (!token) return { kind: 'ignore' };
   const plan = decodePlan(token);
   if (!plan) return { kind: 'ignore' };
   // Compare normalized encodings: a plan adopted from a hash is stored decoded.
   const encoded = encodePlan(plan, 'full');
-  const index = own.plans.findIndex((p) => encodePlan(p, 'full') === encoded);
-  if (index >= 0) return { kind: 'mine', plan, index };
-  if (!mirror && token === own.syncedToken) return { kind: 'mine', plan, index: null };
-  return { kind: 'shared', plan };
+  const index = plans.findIndex((p) => encodePlan(p, 'full') === encoded);
+  return index >= 0 ? { kind: 'mine', index } : { kind: 'mirror' };
 }

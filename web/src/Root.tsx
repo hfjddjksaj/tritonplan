@@ -20,7 +20,6 @@ import { fetchMe, fetchState, UnauthorizedError, type Me } from './lib/cloud/api
 import { nav } from './lib/nav';
 import {
   clearPendingShare,
-  dropPendingSaves,
   makeBoot,
   makeGuestBoot,
   peekPendingShare,
@@ -32,7 +31,7 @@ import { pluralize } from './lib/format';
 import type { WebSnapshot } from './lib/cloud/records';
 import { loadPendingMigration, type MigrationPayload } from './lib/migration';
 import { ACCOUNT_CHANGED_KEY } from './lib/shared-save';
-import { saveViewing } from './lib/storage';
+import { dropRetiredState } from './lib/storage';
 
 type Entry =
   | { kind: 'reset'; token: string }
@@ -70,6 +69,8 @@ export default function Root() {
   const [entry] = useState(readEntry);
   const [received, setReceived] = useState(false);
   const onReceived = useCallback(() => setReceived(true), []);
+
+  useEffect(() => dropRetiredState(), []);
 
   useEffect(() => {
     if (entry.kind === 'shared') return; // its address is the link itself, to reload or pass on
@@ -120,10 +121,10 @@ type Loaded = { kind: 'offline' } | { kind: 'signed-out' } | { kind: 'ready'; me
 const REFRESH_MIN_GAP_MS = 30_000;
 
 /**
- * Drop the address bar's hash before another App mounts. A mounted planner
- * mirrors its active plan there as #m=; a fresh mount reads the hash on load,
- * and the old mirror would then pass for someone else's plan (overwriting the
- * received slot) or switch this tab back to the plan it showed before.
+ * Drop the address bar's hash before another App mounts. A planner from before
+ * the upgrade mirrored its active plan there as #m=; a fresh mount reads the
+ * hash on load, and that mirror would then switch this tab back to the plan it
+ * showed before, or (edited since) be taken for an old link that no longer opens.
  */
 function dropAddressHash(): void {
   if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -227,7 +228,6 @@ function SignInGate({ notice }: { notice?: string }) {
             nav.assign(`/s/${code}?save=1`);
             return;
           }
-          dropPendingSaves();
           enter(r.me, r.snapshot);
         } else if (r.kind === 'signed-out') {
           stashPendingHash(window.location.hash);
@@ -356,9 +356,8 @@ function SignInGate({ notice }: { notice?: string }) {
     case 'import':
       return <ImportConfirm snapshot={screen.snapshot} payload={screen.payload} onDone={(o) => void importDone(screen, o)} />;
     case 'planner':
-      // The tab keeps viewing a received plan across reloads; if that plan is what crashed, Reload would crash again.
       return (
-        <ErrorBoundary key={screen.nonce} onReload={() => saveViewing('mine')}>
+        <ErrorBoundary key={screen.nonce}>
           <App boot={screen.boot} initialFlash={screen.flash} />
         </ErrorBoundary>
       );

@@ -5,7 +5,7 @@ import {
   savePendingMigration, loadPendingMigration, clearPendingMigration,
   MIGRATION_PENDING_KEY, MIGRATE_MSG, type MigrationPayload,
 } from './migration';
-import { isTermShape, saveTerms, savePlans, savePlan, savePool, saveApptTimes, saveReceived } from './storage';
+import { isTermShape, saveTerms, savePlans, savePlan, savePool, saveApptTimes } from './storage';
 import type { TermsState, TermWorkspace } from './terms-state';
 import { planToMirrorHash, mirrorTokenFromHash, decodePlan } from './share';
 import { emptyPlan } from './plan';
@@ -420,7 +420,8 @@ describe('collectLegacyPayload', () => {
     const t = legacy();
     saveTerms(t);
     savePool([courseIn(FALL, 'POOL')]);
-    saveReceived({ plan: planWith(FALL, 'R'), source: 'link', receivedAt: NOW });
+    // The old site's received slot: only an older version wrote it.
+    localStorage.setItem('triton-planner:received:v1', JSON.stringify({ plan: planWith(FALL, 'R'), source: 'link', receivedAt: NOW }));
     saveApptTimes([{ academicYear: '2026', academicSession: '2', yearText: '', sessionText: '', windows: [], capturedAt: NOW }]);
     const mine = planWith(FALL, 'HASH');
     const p = collectLegacyPayload('#' + planToMirrorHash(mine), NOW);

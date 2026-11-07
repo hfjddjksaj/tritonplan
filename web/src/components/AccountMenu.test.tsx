@@ -10,7 +10,6 @@ import { AccountMenu } from './AccountMenu';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const RECEIVED_KEY = 'triton-planner:received:v1';
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
 let container: HTMLDivElement;
@@ -147,14 +146,12 @@ describe('AccountMenu items', () => {
 });
 
 describe('sign out', () => {
-  it('clears the received plan and leaves the page', async () => {
-    localStorage.setItem(RECEIVED_KEY, '{"x":1}');
+  it('ends the session and leaves the page', async () => {
     answers['POST /api/auth/logout'] = () => json(200, { ok: true });
     await render();
     await openMenu();
     await click('Sign out');
     expect(fetchMock.mock.calls.some((c) => c[0] === '/api/auth/logout')).toBe(true);
-    expect(localStorage.getItem(RECEIVED_KEY)).toBeNull();
     expect(assign).toHaveBeenCalledWith('/');
   });
 
@@ -216,11 +213,11 @@ describe('sign out', () => {
   });
 
   it('still clears and leaves when the logout call fails', async () => {
-    localStorage.setItem(RECEIVED_KEY, '{"x":1}');
+    localStorage.setItem(MIGRATION_PENDING_KEY, '{"x":1}');
     await render();
     await openMenu();
     await click('Sign out');
-    expect(localStorage.getItem(RECEIVED_KEY)).toBeNull();
+    expect(localStorage.getItem(MIGRATION_PENDING_KEY)).toBeNull();
     expect(assign).toHaveBeenCalledWith('/');
   });
 });
@@ -246,8 +243,7 @@ describe('delete account', () => {
     expect(assign).toHaveBeenCalledWith('/');
   });
 
-  it('a deleted account leaves no pending migration or received plan behind on this browser', async () => {
-    localStorage.setItem(RECEIVED_KEY, '{"x":1}');
+  it('a deleted account leaves no pending migration behind on this browser', async () => {
     localStorage.setItem(MIGRATION_PENDING_KEY, '{"x":1}');
     answers['DELETE /api/account'] = () => json(200, { ok: true });
     await render();
@@ -255,13 +251,12 @@ describe('delete account', () => {
     await click('Delete account…');
     type('input[type="email"]', 'student@ucsd.edu');
     await click('Delete account');
-    expect(localStorage.getItem(RECEIVED_KEY)).toBeNull();
     expect(localStorage.getItem(MIGRATION_PENDING_KEY)).toBeNull();
     expect(assign).toHaveBeenCalledWith('/');
   });
 
   it('a 400 shows the generic copy and stays', async () => {
-    localStorage.setItem(RECEIVED_KEY, '{"x":1}');
+    localStorage.setItem(MIGRATION_PENDING_KEY, '{"x":1}');
     answers['DELETE /api/account'] = () => json(400, { error: 'confirm_mismatch' });
     await render();
     await openMenu();
@@ -270,7 +265,7 @@ describe('delete account', () => {
     await click('Delete account');
     expect(q('[role="alert"]')!.textContent).toBe('Something went wrong. Please try again.');
     expect(assign).not.toHaveBeenCalled();
-    expect(localStorage.getItem(RECEIVED_KEY)).toBe('{"x":1}'); // nothing was deleted, so nothing is cleared
+    expect(localStorage.getItem(MIGRATION_PENDING_KEY)).toBe('{"x":1}'); // nothing was deleted, so nothing is cleared
   });
 
   it('Escape closes the dialog', async () => {

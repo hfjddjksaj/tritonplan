@@ -4,20 +4,12 @@ import type { NamedPlan } from '../plans';
 import type { TermsState } from '../terms-state';
 import {
   clearPendingShare,
-  consumeSaves,
-  dropPendingHash,
-  forgetSaves,
   makeBoot,
-  peekPendingSaves,
   peekPendingShare,
-  pendingSaves,
   PENDING_HASH_KEY,
-  PENDING_SAVE_KEY,
   PENDING_SHARE_KEY,
-  SAVED_SHARES_KEY,
   restorePendingHash,
   stashPendingHash,
-  stashPendingSave,
   stashPendingShare,
 } from './boot';
 import { splitTerms, type WebSnapshot } from './records';
@@ -85,34 +77,34 @@ describe('pending hash', () => {
     vi.restoreAllMocks();
   });
 
-  it('stashes only a hash that carries a plan', () => {
+  it('stashes only an own-plan mirror: an old #p= link no longer opens, so it is not kept either', () => {
     stashPendingHash('#foo=1');
     expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
     stashPendingHash('');
     expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
+    stashPendingHash('#p=abc');
+    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
     stashPendingHash('#m=xyz');
     expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBe('#m=xyz');
-    stashPendingHash('#p=abc');
-    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBe('#p=abc');
   });
 
   it('restore puts the stashed hash back into the address bar without a hashchange, then forgets it', () => {
     window.history.replaceState(null, '', '/?x=1');
-    sessionStorage.setItem(PENDING_HASH_KEY, '#p=abc');
+    sessionStorage.setItem(PENDING_HASH_KEY, '#m=abc');
     const onHash = vi.fn();
     window.addEventListener('hashchange', onHash);
     restorePendingHash();
     window.removeEventListener('hashchange', onHash);
-    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/?x=1#p=abc');
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/?x=1#m=abc');
     expect(onHash).not.toHaveBeenCalled();
     expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
   });
 
-  it('a plan link already in the address bar wins over a stale stash', () => {
-    window.history.replaceState(null, '', '/#p=newer');
-    sessionStorage.setItem(PENDING_HASH_KEY, '#p=older');
+  it('a mirror already in the address bar wins over a stale stash', () => {
+    window.history.replaceState(null, '', '/#m=newer');
+    sessionStorage.setItem(PENDING_HASH_KEY, '#m=older');
     restorePendingHash();
-    expect(window.location.hash).toBe('#p=newer');
+    expect(window.location.hash).toBe('#m=newer');
     expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
   });
 
@@ -120,17 +112,8 @@ describe('pending hash', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
     vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('blocked'); });
-    expect(() => stashPendingHash('#p=abc')).not.toThrow();
+    expect(() => stashPendingHash('#m=abc')).not.toThrow();
     expect(() => restorePendingHash()).not.toThrow();
-    expect(() => dropPendingHash()).not.toThrow();
-  });
-
-  it('drop forgets the stash without touching the address bar', () => {
-    window.history.replaceState(null, '', '/');
-    sessionStorage.setItem(PENDING_HASH_KEY, '#p=abc');
-    dropPendingHash();
-    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
-    expect(window.location.hash).toBe('');
   });
 });
 
@@ -181,92 +164,5 @@ describe('pending short link', () => {
     expect(() => stashPendingShare('AbCdEfGh12')).not.toThrow();
     expect(peekPendingShare()).toBeNull();
     expect(() => clearPendingShare()).not.toThrow();
-  });
-});
-
-describe('pending Saves', () => {
-  const HOUR = 3_600_000;
-  const T0 = Date.parse('2026-10-26T12:00:00.000Z');
-  beforeEach(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-  });
-  afterEach(() => vi.useRealTimers());
-
-  it("this tab's Saves, short link or #p=, are kept in sessionStorage with their time and last a day", () => {
-    stashPendingSave({ hash: '#p=abc' }, new Date(T0));
-    stashPendingSave({ code: 'AbCdEfGh12' }, new Date(T0 + HOUR));
-    expect(JSON.parse(sessionStorage.getItem(PENDING_SAVE_KEY)!)).toEqual([
-      { hash: '#p=abc', at: '2026-10-26T12:00:00.000Z' },
-      { code: 'AbCdEfGh12', at: '2026-10-26T13:00:00.000Z' },
-    ]);
-    expect(peekPendingSaves(T0 + 24 * HOUR)).toEqual([{ hash: '#p=abc' }, { code: 'AbCdEfGh12' }]);
-    expect(peekPendingSaves(T0 + 24 * HOUR + 1)).toEqual([{ code: 'AbCdEfGh12' }]);
-    expect(peekPendingSaves(T0 + 25 * HOUR + 1)).toEqual([]);
-    expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
-  });
-
-  it('clicking the same Save again keeps one, with the newer time', () => {
-    stashPendingSave({ code: 'AbCdEfGh12' }, new Date(T0));
-    stashPendingSave({ code: 'AbCdEfGh12' }, new Date(T0 + HOUR));
-    expect(JSON.parse(sessionStorage.getItem(PENDING_SAVE_KEY)!)).toEqual([{ code: 'AbCdEfGh12', at: '2026-10-26T13:00:00.000Z' }]);
-  });
-
-  it.each(['not json', '{"code":"AbCdEfGh12","at":"2026-10-26T12:00:00.000Z"}', '[{"at":"2026-10-26T12:00:00.000Z"}]', '[{"code":"AbCdEfGh12","at":"yesterday"}]', 'null'])(
-    'a damaged entry %j is dropped',
-    (raw) => {
-      sessionStorage.setItem(PENDING_SAVE_KEY, raw);
-      expect(peekPendingSaves(T0)).toEqual([]);
-      expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
-    },
-  );
-
-  it("lists this tab's Saves and another tab's short link, once each", () => {
-    vi.useFakeTimers({ now: T0 });
-    expect(pendingSaves()).toEqual({ intents: [], alreadySaved: [] });
-    stashPendingSave({ code: 'AbCdEfGh12' });
-    stashPendingShare('AbCdEfGh12');
-    expect(pendingSaves().intents).toEqual([{ code: 'AbCdEfGh12' }]);
-    stashPendingShare('ZyXwVuTs98'); // another tab saved a second link since
-    expect(pendingSaves().intents).toEqual([{ code: 'AbCdEfGh12' }, { code: 'ZyXwVuTs98' }]);
-  });
-
-  it('consuming the honored Saves leaves one stashed meanwhile', () => {
-    vi.useFakeTimers({ now: T0 });
-    stashPendingSave({ hash: '#p=abc' });
-    stashPendingSave({ code: 'AbCdEfGh12' });
-    stashPendingShare('ZyXwVuTs98');
-    consumeSaves([{ hash: '#p=abc' }]);
-    expect(peekPendingSaves()).toEqual([{ code: 'AbCdEfGh12' }]);
-    expect(peekPendingShare()).toBe('ZyXwVuTs98');
-  });
-
-  it('a link one tab saved is dropped from the other tabs, however its copy changed since', () => {
-    vi.useFakeTimers({ now: T0 });
-    stashPendingSave({ code: 'AbCdEfGh12' }); // the first tab
-    stashPendingShare('AbCdEfGh12');
-    vi.setSystemTime(T0 + HOUR);
-    consumeSaves([{ code: 'AbCdEfGh12' }]); // the confirm mail's tab saved it (here, same storage)
-    stashPendingSave({ code: 'AbCdEfGh12' }, new Date(T0)); // ...while the first tab still holds its own
-    expect(pendingSaves()).toEqual({ intents: [], alreadySaved: ['AbCdEfGh12'] });
-    expect(peekPendingSaves()).toEqual([]);
-
-    // A Save clicked after that is a new one.
-    vi.setSystemTime(T0 + 2 * HOUR);
-    stashPendingSave({ code: 'AbCdEfGh12' });
-    expect(pendingSaves()).toEqual({ intents: [{ code: 'AbCdEfGh12' }], alreadySaved: [] });
-    expect(JSON.parse(localStorage.getItem(SAVED_SHARES_KEY)!)).toEqual({ AbCdEfGh12: '2026-10-26T13:00:00.000Z' });
-  });
-
-  it('a turned-off link takes only its own Saves with it', () => {
-    vi.useFakeTimers({ now: T0 });
-    stashPendingSave({ code: 'AbCdEfGh12' });
-    stashPendingSave({ hash: '#p=abc' });
-    stashPendingShare('ZyXwVuTs98');
-    forgetSaves('AbCdEfGh12');
-    expect(peekPendingSaves()).toEqual([{ hash: '#p=abc' }]);
-    expect(peekPendingShare()).toBe('ZyXwVuTs98');
-    forgetSaves('ZyXwVuTs98');
-    expect(peekPendingShare()).toBeNull();
   });
 });

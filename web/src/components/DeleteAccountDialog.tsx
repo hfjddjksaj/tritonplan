@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react';
 import { apiDelete, type Me } from '../lib/cloud/api';
 import { nav } from '../lib/nav';
 import { clearPendingMigration } from '../lib/migration';
-import { clearReceived } from '../lib/storage';
 import { Dialog } from './Dialog';
 import { Field, Message } from './Field';
 import { WarnTriangle } from './icons';
@@ -24,7 +23,6 @@ export function DeleteAccountDialog({ me, onClose }: { me: Me; onClose: () => vo
     if (r.ok) {
       // As at sign-out: on a shared browser the next person must not inherit these.
       clearPendingMigration();
-      clearReceived();
       nav.assign('/'); // stays busy: the page is leaving
       return;
     }

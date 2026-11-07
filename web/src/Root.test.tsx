@@ -6,14 +6,13 @@ import Root from './Root';
 import { usePlan } from './hooks/usePlan';
 import { useApptTimes } from './hooks/useApptTimes';
 import { nav } from './lib/nav';
-import { PENDING_SAVE_KEY, PENDING_SHARE_KEY, stashPendingShare, type CloudBoot } from './lib/cloud/boot';
+import { PENDING_HASH_KEY, PENDING_SHARE_KEY, stashPendingShare, type CloudBoot } from './lib/cloud/boot';
 import { ACCOUNT_CHANGED_KEY, saveSharedToAccount } from './lib/shared-save';
 import type { TermMeta, WebSnapshot } from './lib/cloud/records';
 import { BRIDGE_SOURCE, DEFERRED_ADDS_KEY, installBridgeHub, resetBridgeHubForTests } from './lib/bridge';
 import { makeClashPlan, makeCourse, makePlan } from './lib/fixtures';
 import type { NamedPlan } from './lib/plans';
-import { planToHash, planToMirrorHash } from './lib/share';
-import { loadReceived, saveReceived } from './lib/storage';
+import { encodePlan, planToMirrorHash } from './lib/share';
 import { OLD_SITE_ORIGIN } from './lib/site';
 import { TSS_HOME_URL } from './lib/tss';
 import { loadPendingMigration, savePendingMigration, type MigrationPayload } from './lib/migration';
@@ -44,6 +43,7 @@ function disposed(boot: CloudBoot): boolean {
 
 const FA: Term = { year: '2026', period: '2', label: 'Fall 2026' };
 const LINK_EXPIRED = 'That link has expired or was already used. Sign in, or request a new one.';
+const OLD_LINK = 'That link is from an older version of TritonPlan and no longer opens.';
 
 function mine(name = 'Mine', plan: PlanState = makePlan()): TermsState {
   const p: NamedPlan = { id: 'plan-1', name, plan, createdAt: 'c', updatedAt: 'u', browsed: [] };
@@ -56,6 +56,9 @@ function planWith(code: string): PlanState {
 }
 
 const otherPlan = () => planWith('MATH-18');
+
+/** A share link from before shared plans lived on the server: the whole plan in the address bar. */
+const oldLink = (plan: PlanState) => `#p=${encodePlan(plan)}`;
 
 /** An old #m= mirror still in the address bar (nothing writes one any more): a tab from before the upgrade. */
 function leaveStaleMirror(plan: PlanState = makePlan()) {
@@ -187,7 +190,6 @@ const buttons = () => [...container.querySelectorAll('button')].map((b) => b.tex
 const callsTo = (method: string, url: string) => srv.calls.filter((c) => c.method === method && c.url === url);
 const googleHref = () =>
   [...container.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'))?.getAttribute('href');
-const receivedIds = () => loadReceived()?.plan.entries.map((e) => e.course.id);
 
 /** Every plan the fake server holds: name → course ids. */
 function savedPlans(): Record<string, string[]> {
@@ -437,12 +439,45 @@ describe('Root: signed in', () => {
     expect(callsTo('GET', '/api/state')).toHaveLength(1);
   });
 
-  it('a #p= link opened while signed in opens as a received plan', async () => {
+  it('an old #p= link opens the own planner, as it was, with a note that the link no longer opens', async () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
-    await mount(`/#${planToHash(otherPlan())}`);
-    expect(loadReceived()?.plan.entries.map((e) => e.course.id)).toEqual(['MATH-18|2026|2']);
-    expect(container.querySelector('.received')).not.toBeNull();
+    await mount(`/${oldLink(otherPlan())}`);
+    expect(text()).toContain(OLD_LINK);
+    expect(window.location.hash).toBe('');
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine');
+    expect(courseCodes()).not.toContain('MATH-18');
+    expect(localStorage.getItem('triton-planner:received:v1')).toBeNull();
+    await letSyncRun();
+    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'] });
+  });
+
+  it('what an older version kept in this browser is dropped on load, and nothing of it is adopted', async () => {
+    const at = new Date().toISOString();
+    localStorage.setItem('triton-planner:received:v1', JSON.stringify({ plan: otherPlan(), source: 'link', receivedAt: at }));
+    localStorage.setItem('triton-planner:saved-shares:v1', JSON.stringify({ [CODE]: at }));
+    sessionStorage.setItem('triton-planner:viewing:v1', 'received');
+    sessionStorage.setItem(
+      'triton-planner:pending-save:v1',
+      JSON.stringify([{ code: CODE, at }, { hash: oldLink(planWith('CSE-11')), at }]),
+    );
+    sessionStorage.setItem('triton-planner:synced-hash:v1', encodePlan(planWith('CSE-11')));
+    serveShare();
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    expect(accountPlanner()).not.toBeNull();
+    expect(localStorage.getItem('triton-planner:received:v1')).toBeNull();
+    expect(localStorage.getItem('triton-planner:saved-shares:v1')).toBeNull();
+    expect(sessionStorage.getItem('triton-planner:viewing:v1')).toBeNull();
+    expect(sessionStorage.getItem('triton-planner:pending-save:v1')).toBeNull();
+    expect(sessionStorage.getItem('triton-planner:synced-hash:v1')).toBeNull();
+    expect(navSpy).not.toHaveBeenCalled();
+    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(0);
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine');
+    expect(courseCodes()).toEqual(['CSE-8A']);
+    await letSyncRun();
+    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'] });
   });
 
   it('with nothing browsed, the extension that has spoken gets "Go to TSS", not the store link', async () => {
@@ -514,7 +549,6 @@ describe('Root: a shared plan link', () => {
     expect(callsTo('GET', '/api/me')).toHaveLength(0);
     expect(callsTo('GET', '/api/state')).toHaveLength(0);
     expect(window.location.pathname).toBe(`/s/${CODE}`); // a reload shows it again
-    expect(loadReceived()).toBeNull();
   });
 
   it('Copy link copies the link to this page', async () => {
@@ -587,21 +621,40 @@ describe('Root: a shared plan link', () => {
     expect(saved.flatMap((p) => p.plan.entries.map((e) => e.course.id))).toContain('CSE-100|2026|2');
   });
 
-  it('a #p= link merely opened signed out still waits for its own Save after signing in', async () => {
-    await mount(`/#${planToHash(otherPlan())}`);
-    reload(); // no Save click: the visitor went to sign in some other way
+  it('signed out, an old #p= link opens the guest planner without it, and is not kept for after sign-in', async () => {
+    await mount(`/${oldLink(otherPlan())}`);
+    expect(container.querySelector('.app')).not.toBeNull();
+    expect(window.location.hash).toBe('');
+    expect(text()).toContain(OLD_LINK);
+    expect(courseCodes()).not.toContain('MATH-18');
+    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
+
+    reload();
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    expect(receivedIds()).toEqual(['MATH-18|2026|2']);
-    expect(container.querySelector('.received')).not.toBeNull();
     expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine');
+    expect(courseCodes()).not.toContain('MATH-18');
+    expect(text()).not.toContain(OLD_LINK);
   });
 
-  it('a #p= that does not decode goes straight to the sign-in form', async () => {
-    await mount('/#p=not-a-plan');
-    expect(input('email')).not.toBeNull();
-    expect(text()).not.toContain('Save to my account');
+  it('signed out, a #m= bookmark of an own plan is kept for after sign-in and opens on that plan', async () => {
+    const terms = mine();
+    terms.terms['2026|2']!.plans.plans.push({
+      id: 'plan-2', name: 'Second', plan: otherPlan(), createdAt: 'c', updatedAt: 'u', browsed: [],
+    });
+    leaveStaleMirror(otherPlan());
+    await mount(window.location.pathname + window.location.hash);
+    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBe(window.location.hash);
+
+    reload(); // a Google sign-in comes back to "/" without the hash
+    srv.me = 'in';
+    srv.state = snapshotOf(terms);
+    await mount('/');
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Second');
+    expect(window.location.hash).toBe('');
+    expect(sessionStorage.getItem(PENDING_HASH_KEY)).toBeNull();
+    expect(text()).not.toContain(OLD_LINK);
   });
 });
 
@@ -675,22 +728,6 @@ describe("Root: a shared plan's Save clicked before signing in", () => {
     expect(input('email')).not.toBeNull();
     expect(navSpy).not.toHaveBeenCalled();
     expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!)).toMatchObject({ code: CODE });
-  });
-
-  it('a Save left from before is dropped, never adopted', async () => {
-    serveShare();
-    const at = new Date().toISOString();
-    sessionStorage.setItem(PENDING_SAVE_KEY, JSON.stringify([{ code: CODE, at }, { hash: `#${planToHash(planWith('CSE-11'))}`, at }]));
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount('/');
-    expect(accountPlanner()).not.toBeNull();
-    expect(navSpy).not.toHaveBeenCalled();
-    expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
-    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine');
-    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(0);
-    await letSyncRun();
-    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'] });
   });
 
   it('is ignored after 24 h', async () => {
@@ -822,8 +859,7 @@ describe('Root: coming back to the tab', () => {
     srv.me = 'in';
     await becomeVisible();
     expect(accountPlanner()).not.toBeNull();
-    expect(loadReceived()).toBeNull();
-    expect(container.querySelector('.received')).toBeNull();
+    expect(text()).not.toContain(OLD_LINK);
     expect(courseCodes()).toContain('MATH-18');
   });
 
@@ -1001,7 +1037,7 @@ describe('Root: coming back to the tab', () => {
     expect(callsTo('GET', '/api/state')).toHaveLength(gets);
   });
 
-  it('another device added a course → it shows, and our old #m= mirror is not taken for a received plan', async () => {
+  it('another device added a course → it shows, and our old #m= mirror is not taken for an old link', async () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
@@ -1012,22 +1048,8 @@ describe('Root: coming back to the tab', () => {
     await becomeVisible();
     expect(boots).toHaveLength(2);
     expect(courseCodes()).toContain('MATH-18');
-    expect(container.querySelector('.received')).toBeNull();
-    expect(loadReceived()).toBeNull();
-  });
-
-  it('a plan someone sent stays in the received slot across that remount', async () => {
-    const sent = { plan: otherPlan(), source: 'link' as const, receivedAt: '2026-10-01T00:00:00.000Z' };
-    saveReceived(sent);
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount('/');
-    await letSyncRun();
-    addCourseElsewhere();
-    await waitOutThrottle();
-    await becomeVisible();
-    expect(boots).toHaveLength(2);
-    expect(loadReceived()).toEqual(sent);
+    expect(text()).not.toContain(OLD_LINK);
+    expect(window.location.hash).toBe('');
   });
 
   it('another device switching its active plan is not switched back by this tab', async () => {
