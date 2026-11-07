@@ -1,6 +1,6 @@
 # Privacy Policy — TritonPlan
 
-**Effective date: 2026-10-30**
+**Effective date: 2026-11-06**
 
 TritonPlan is an unofficial, student-made course-planning tool for UC San Diego. It is **not affiliated with, authorized, or endorsed by UC San Diego**.
 
