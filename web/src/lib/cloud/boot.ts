@@ -213,6 +213,15 @@ export function pendingSaves(now: number = Date.now()): { intents: SaveIntent[];
   return { intents, alreadySaved };
 }
 
+/** Saves stashed by an older version of the page: a shared plan is now saved from its own page, so these are let go. */
+export function dropPendingSaves(): void {
+  try {
+    sessionStorage.removeItem(PENDING_SAVE_KEY);
+  } catch {
+    /* storage blocked: nothing was stashed either */
+  }
+}
+
 /** A short link turned off: any Save waiting on it goes with it. */
 export function forgetSaves(code: string): void {
   if (peekPendingShare() === code) clearPendingShare();
@@ -232,11 +241,12 @@ export function consumeSaves(done: SaveIntent[], now: Date = new Date()): void {
 }
 
 /**
- * A short link (/s/<code>) whose visitor chose "Save to my account" while
- * signed out. returnTo brings Google and a same-tab sign-in back to the link;
- * the confirm mail opens in another tab and lands on "/", so this is
- * localStorage, read by whichever tab signs in first. After a day it is a
- * visit the student walked away from, not one they are finishing.
+ * A short link (/s/<code>) whose visitor chose "Save to my plans" while
+ * signed out. returnTo brings Google and a same-tab sign-in back to the link's
+ * save dialog; the confirm mail opens in another tab and lands on "/", which
+ * sends it on to the link, so this is localStorage, read by whichever tab signs
+ * in first. After a day it is a visit the student walked away from, not one
+ * they are finishing.
  */
 export const PENDING_SHARE_KEY = 'triton-planner:pending-share:v1';
 const PENDING_SHARE_MAX_AGE_MS = 24 * 3_600_000;

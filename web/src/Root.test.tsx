@@ -7,6 +7,7 @@ import { usePlan } from './hooks/usePlan';
 import { useApptTimes } from './hooks/useApptTimes';
 import { nav } from './lib/nav';
 import { PENDING_SAVE_KEY, PENDING_SHARE_KEY, stashPendingShare, type CloudBoot } from './lib/cloud/boot';
+import { ACCOUNT_CHANGED_KEY, saveSharedToAccount } from './lib/shared-save';
 import type { TermMeta, WebSnapshot } from './lib/cloud/records';
 import { BRIDGE_SOURCE, DEFERRED_ADDS_KEY, installBridgeHub, resetBridgeHubForTests } from './lib/bridge';
 import { makeClashPlan, makeCourse, makePlan } from './lib/fixtures';
@@ -196,29 +197,6 @@ function savedPlans(): Record<string, string[]> {
       return [named.name, named.plan.entries.map((e) => e.course.id)];
     }),
   );
-}
-
-/**
- * The shared MATH-18 plan was kept as a new plan called `name`, without a second click: shown, announced,
- * and saved to the account beside "Mine", which is untouched. Nothing sits in the received slot.
- */
-async function expectSavedAsNewPlan(name: string) {
-  expect(accountPlanner()).not.toBeNull();
-  expect(container.querySelector('.received')).toBeNull();
-  expect(loadReceived()).toBeNull();
-  expect(container.querySelector('.planswitch__name')?.textContent).toBe(name);
-  expect(courseCodes()).toEqual(['MATH-18']);
-  expect(text()).toContain('Saved the shared plan to your account — you can edit it now');
-  expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
-  expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
-  await letSyncRun();
-  expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], [name]: ['MATH-18|2026|2'] });
-}
-
-/** One course of `code` in `term`. */
-function planIn(term: Term, code: string): PlanState {
-  const course = { ...makeCourse(`${code}|${term.year}|${term.period}`, code), term };
-  return { version: 1, term, entries: [{ course, selectedOptionId: course.options[0]!.id, color: '120' }] };
 }
 
 /** Plans the old site handed over, waiting for the import screen: "Old plan" (MATH-18). */
@@ -627,8 +605,18 @@ describe('Root: a shared plan link', () => {
   });
 });
 
-describe('Root: a short link saved before signing in', () => {
-  it('is saved after the confirm mail signs in from another tab', async () => {
+describe("Root: a shared plan's Save clicked before signing in", () => {
+  /** What GET /api/s/<code> serves, saved into the account from its own page: the dialog, then its Save. */
+  async function saveFromSharedPage() {
+    const dlg = () => document.body.querySelector<HTMLElement>('.savedlg');
+    expect(dlg()?.textContent).toContain('Save as a new plan');
+    const save = [...dlg()!.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Save')!;
+    await act(async () => save.click());
+    await settle();
+    expect(dlg()).toBeNull();
+  }
+
+  it('the confirm mail’s tab goes to the shared plan with the dialog open, adopting nothing on the way', async () => {
     serveShare();
     stashPendingShare(CODE);
 
@@ -644,50 +632,65 @@ describe('Root: a short link saved before signing in', () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    await expectSavedAsNewPlan('Fall draft');
+    expect(navSpy).toHaveBeenLastCalledWith(`/s/${CODE}?save=1`);
+    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull(); // one redirect, not one per load
+    expect(accountPlanner()).toBeNull();
+    expect(boots).toHaveLength(0);
+    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(0);
+    await letSyncRun();
+    expect(callsTo('POST', '/api/sync')).toHaveLength(0);
+
+    reload();
+    await mount(`/s/${CODE}?save=1`);
+    expect(window.location.pathname).toBe(`/s/${CODE}`);
+    await saveFromSharedPage();
+    expect(text()).toContain('Saved to your plans as "Fall draft"');
+    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], 'Fall draft': ['MATH-18|2026|2'] });
+    expect(window.location.pathname).toBe(`/s/${CODE}`);
   });
 
-  it('is saved under a name of its own when named like one of theirs', async () => {
-    serveShare(CODE, otherPlan(), 'Mine');
+  it("signing in from the shared page's own card comes straight back to it with the dialog open", async () => {
+    serveShare();
+    await mount(`/s/${CODE}`);
+    await click('Save to my plans');
+    expect(googleHref()).toBe(`/api/auth/google?returnTo=${encodeURIComponent(`/s/${CODE}?save=1`)}`);
+    srv.auth['POST /api/auth/login'] = () => json(200, { ok: true });
+    type(input('email'), 'student@ucsd.edu');
+    type(input('password'), 'correct horse');
+    await submit();
+    expect(navSpy).toHaveBeenLastCalledWith(`/s/${CODE}?save=1`);
+
+    reload();
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount(`/s/${CODE}?save=1`);
+    await saveFromSharedPage();
+    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], 'Fall draft': ['MATH-18|2026|2'] });
+    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull(); // no second trip from the next "/" load
+  });
+
+  it('signed out, the stashed link waits for the sign-in', async () => {
     stashPendingShare(CODE);
+    await mount('/');
+    expect(input('email')).not.toBeNull();
+    expect(navSpy).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem(PENDING_SHARE_KEY)!)).toMatchObject({ code: CODE });
+  });
+
+  it('a Save left from before is dropped, never adopted', async () => {
+    serveShare();
+    const at = new Date().toISOString();
+    sessionStorage.setItem(PENDING_SAVE_KEY, JSON.stringify([{ code: CODE, at }, { hash: `#${planToHash(planWith('CSE-11'))}`, at }]));
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    await expectSavedAsNewPlan('Mine (shared)');
-  });
-
-  it('starts a new account with just the plan it saved, under its shared name', async () => {
-    serveShare(CODE, otherPlan(), 'My plan');
-    stashPendingShare(CODE);
-    srv.me = 'in';
-    srv.state = snapshotOf(); // signed up just now: nothing in the account
-    await mount('/');
-    expect(container.querySelector('.planswitch__name')?.textContent).toBe('My plan');
+    expect(accountPlanner()).not.toBeNull();
+    expect(navSpy).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(PENDING_SAVE_KEY)).toBeNull();
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine');
+    expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(0);
     await letSyncRun();
-    expect(savedPlans()).toEqual({ 'My plan': ['MATH-18|2026|2'] }); // no empty "My plan" beside it
-  });
-
-  it('from a term that is over still gives a new account a plan it can edit', async () => {
-    serveShare(CODE, planIn({ year: '2025', period: '2', label: 'Fall 2025' }, 'CSE-12'), 'Last year');
-    stashPendingShare(CODE);
-    srv.me = 'in';
-    srv.state = snapshotOf();
-    await mount('/');
-    await letSyncRun();
-    expect(savedPlans()).toEqual({ 'My plan': [], 'Last year': ['CSE-12|2025|2'] });
-  });
-
-  it('from a term that is over is saved, and the planner says it is read-only', async () => {
-    const FA25: Term = { year: '2025', period: '2', label: 'Fall 2025' };
-    serveShare(CODE, planIn(FA25, 'CSE-12'), 'Last year');
-    stashPendingShare(CODE);
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount('/');
-    expect(text()).toContain('Saved the shared plan to your account — Fall 2025 is over, so it is read-only');
-    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Last year');
-    await letSyncRun();
-    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], 'Last year': ['CSE-12|2025|2'] });
+    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'] });
   });
 
   it('is ignored after 24 h', async () => {
@@ -698,31 +701,16 @@ describe('Root: a short link saved before signing in', () => {
     srv.state = snapshotOf(mine());
     await mount('/');
     expect(accountPlanner()).not.toBeNull();
-    expect(container.querySelector('.received')).toBeNull();
-    expect(loadReceived()).toBeNull();
+    expect(navSpy).not.toHaveBeenCalled();
     expect(callsTo('GET', `/api/s/${CODE}`)).toHaveLength(0);
     expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
-  });
-
-  it('is still saved beside a #p= link in the address bar, which opens as received', async () => {
-    serveShare(CODE, planWith('CSE-11'), 'Older save');
-    stashPendingShare(CODE);
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount(`/#${planToHash(otherPlan())}`);
-    expect(receivedIds()).toEqual(['MATH-18|2026|2']); // the link being opened now is what shows
-    expect(container.querySelector('.received--active')).not.toBeNull();
-    expect(text()).toContain('Saved the shared plan to your account');
-    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
-    await letSyncRun();
-    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], 'Older save': ['CSE-11|2026|2'] });
   });
 
   it.each([
     ['is open', 200, 'Shared plan'],
     ['has expired', 404, 'This shared plan has expired.'],
     ['cannot be reached', 503, "Can't reach TritonPlan right now."],
-  ])('waits while another shared plan that %s is on show, and is saved at the next planner load', async (_, status, screen) => {
+  ])('waits while another shared plan that %s is on show, and the next planner load goes to it', async (_, status, screen) => {
     serveShare(CODE, planWith('CSE-11'), 'Older save');
     stashPendingShare(CODE);
     if (status === 200) serveShare('ZyXwVuTs98', otherPlan(), 'Just looking');
@@ -737,67 +725,77 @@ describe('Root: a short link saved before signing in', () => {
     // "Go to TritonPlan" (or any later visit), signed in.
     reload();
     await mount('/');
-    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Older save');
-    expect(loadReceived()).toBeNull();
-    await letSyncRun();
-    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'], 'Older save': ['CSE-11|2026|2'] });
+    expect(navSpy).toHaveBeenLastCalledWith(`/s/${CODE}?save=1`);
+    expect(boots).toHaveLength(0);
+    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'] });
   });
 
-  it('waits out the old-site import screen, and a reload there does not lose it', async () => {
-    serveShare();
+  it('goes before the old-site import screen, which is still there on the next load', async () => {
     stashPendingShare(CODE);
     savePendingMigration(migrationPayload());
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    expect(text()).toContain('Move your plans');
-    expect(accountPlanner()).toBeNull();
+    expect(navSpy).toHaveBeenLastCalledWith(`/s/${CODE}?save=1`);
+    expect(text()).not.toContain('Move your plans');
+    expect(loadPendingMigration()).not.toBeNull();
 
-    reload(); // on the import screen
-    await mount('/');
-    await click('OK'); // the old site's plan is plan-1, which the account already holds
-    await expectSavedAsNewPlan('Fall draft');
-  });
-
-  it('one the server cannot answer yet stays stashed, first time and all, for the next load', async () => {
-    stashPendingShare(CODE);
-    const stashed = localStorage.getItem(PENDING_SHARE_KEY);
-    srv.auth[`GET /api/s/${CODE}`] = () => json(500, { error: 'boom' });
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount('/');
-    expect(text()).toContain("Can't reach TritonPlan right now.");
-    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBe(stashed);
-
-    // A reload rather than Try again: the link is still there to save.
     reload();
-    serveShare();
     await mount('/');
-    await expectSavedAsNewPlan('Fall draft');
+    expect(text()).toContain('Move your plans');
   });
+});
 
-  it('one the server cannot answer yet shows the offline screen, and Try again opens it', async () => {
-    stashPendingShare(CODE);
-    srv.auth[`GET /api/s/${CODE}`] = () => json(500, { error: 'boom' });
+describe('Root: a save from a shared plan in another tab', () => {
+  async function accountChanged(key = ACCOUNT_CHANGED_KEY) {
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent('storage', { key, newValue: String(Date.now()) }));
+    });
+    await settle();
+  }
+  /** Another tab saves "Fall draft" (MATH-18) into this account the way a shared page does. */
+  async function saveElsewhere() {
+    await act(async () => {
+      const r = await saveSharedToAccount({ plan: otherPlan(), mode: { kind: 'new', name: 'Fall draft' } });
+      expect(r.ok).toBe(true);
+    });
+  }
+  const planNames = (boot: CloudBoot) => boot.terms?.terms['2026|2']!.plans.plans.map((p) => p.name);
+
+  it('shows at once: the planner remounts on the fresh state, inside the 30 s a refocus waits', async () => {
     srv.me = 'in';
     srv.state = snapshotOf(mine());
     await mount('/');
-    expect(text()).toContain("Can't reach TritonPlan right now.");
-    serveShare();
-    await click('Try again');
-    await expectSavedAsNewPlan('Fall draft');
-  });
-
-  it('one turned off meanwhile is dropped, and the planner says so', async () => {
-    stashPendingShare(CODE);
-    srv.me = 'in';
-    srv.state = snapshotOf(mine());
-    await mount('/');
-    expect(accountPlanner()).not.toBeNull();
-    expect(text()).toContain('A plan you chose to save is no longer shared');
-    expect(localStorage.getItem(PENDING_SHARE_KEY)).toBeNull();
     await letSyncRun();
-    expect(savedPlans()).toEqual({ Mine: ['CSE-8A|2026|2'] });
+    const app = container.querySelector('.app');
+    await saveElsewhere();
+    await accountChanged();
+    expect(boots).toHaveLength(2);
+    expect(disposed(boots[0]!)).toBe(true);
+    expect(container.querySelector('.app')).not.toBe(app);
+    expect(planNames(boots[1]!)).toEqual(['Mine', 'Fall draft']);
+    expect(container.querySelector('.planswitch__name')?.textContent).toBe('Mine');
+  });
+
+  it('any other key changing is not this', async () => {
+    srv.me = 'in';
+    srv.state = snapshotOf(mine());
+    await mount('/');
+    await letSyncRun();
+    const gets = callsTo('GET', '/api/state').length;
+    await accountChanged('triton-planner:something-else');
+    expect(callsTo('GET', '/api/state')).toHaveLength(gets);
+    expect(boots).toHaveLength(1);
+  });
+
+  it('unsaved edits still skip it', async () => {
+    srv.me = 'in'; // an empty account: the planner's first "My plan" is waiting to be saved
+    srv.syncDown = true; // ...and cannot be, so it stays unsaved
+    await mount('/');
+    const gets = callsTo('GET', '/api/state').length;
+    await accountChanged();
+    expect(callsTo('GET', '/api/state')).toHaveLength(gets);
+    expect(boots).toHaveLength(1);
   });
 });
 

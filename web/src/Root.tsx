@@ -16,27 +16,23 @@ import { MigrateReceiver } from './components/migrate/MigrateReceiver';
 import { ResetPasswordScreen } from './components/auth/ResetPasswordScreen';
 import { VerifyScreen } from './components/auth/VerifyScreen';
 import { SharedPlanPage } from './components/share/SharedPlanPage';
-import { fetchMe, fetchSharedPlan, fetchState, UnauthorizedError, type Me } from './lib/cloud/api';
+import { fetchMe, fetchState, UnauthorizedError, type Me } from './lib/cloud/api';
 import { nav } from './lib/nav';
 import {
-  consumeSaves,
-  forgetSaves,
+  clearPendingShare,
+  dropPendingSaves,
   makeBoot,
   makeGuestBoot,
-  pendingSaves,
+  peekPendingShare,
   restorePendingHash,
   stashPendingHash,
-  type AdoptPlan,
   type CloudBoot,
-  type SaveIntent,
 } from './lib/cloud/boot';
 import { pluralize } from './lib/format';
 import type { WebSnapshot } from './lib/cloud/records';
 import { loadPendingMigration, type MigrationPayload } from './lib/migration';
-import { samePlanContent } from './lib/plans';
-import { planFromHash } from './lib/share';
+import { ACCOUNT_CHANGED_KEY } from './lib/shared-save';
 import { saveViewing } from './lib/storage';
-import { displayTermLabel, isArchived } from './lib/terms';
 
 type Entry =
   | { kind: 'reset'; token: string }
@@ -47,8 +43,6 @@ type Entry =
 
 /** A shared plan's path. Its code is not checked here: a mistyped one gets the server's 404, and with it the expired page. */
 const SHARE_PATH = /^\/s\/([^/]+)\/?$/;
-
-const noop = () => {};
 
 /** What this page load is for. Pure — StrictMode calls it twice — so the address bar is cleaned in an effect. */
 function readEntry(): Entry {
@@ -105,7 +99,7 @@ export default function Root() {
     // Anyone's plan, checked by the server only as far as ids go: a malformed one must not leave a blank page.
     return (
       <ErrorBoundary>
-        <SharedPlanPage code={entry.code} onSave={noop} />
+        <SharedPlanPage code={entry.code} />
       </ErrorBoundary>
     );
   }
@@ -116,7 +110,7 @@ type Screen =
   | { kind: 'loading' }
   | { kind: 'offline' }
   | { kind: 'signed-out' }
-  | { kind: 'import'; me: Me; snapshot: WebSnapshot; payload: MigrationPayload; saving?: Saving }
+  | { kind: 'import'; me: Me; snapshot: WebSnapshot; payload: MigrationPayload }
   | { kind: 'planner'; boot: CloudBoot; nonce: number; flash?: string };
 type PlannerScreen = Extract<Screen, { kind: 'planner' }>;
 
@@ -124,29 +118,6 @@ type Loaded = { kind: 'offline' } | { kind: 'signed-out' } | { kind: 'ready'; me
 
 /** A refocus refresh downloads the whole account; the TSS ↔ planner back-and-forth must not do that every few seconds. */
 const REFRESH_MIN_GAP_MS = 30_000;
-
-/**
- * Saves clicked before signing in: the plans to save and the Saves they answer (which stay stashed until a
- * planner holding the plans mounts), plus how many another tab saved already and how many links died since.
- */
-type Saving = { plans: AdoptPlan[]; intents: SaveIntent[]; already: number; gone: number };
-
-/** What the planner says about the Saves it just honored. */
-function savedFlash({ plans, already, gone }: Saving): string | undefined {
-  const parts: string[] = [];
-  if (plans.length > 1) parts.push(`Saved ${plans.length} shared plans to your account`);
-  else if (plans.length === 1) {
-    const term = plans[0]!.plan.term;
-    parts.push(
-      isArchived(term, new Date())
-        ? `Saved the shared plan to your account — ${displayTermLabel(term)} is over, so it is read-only`
-        : 'Saved the shared plan to your account — you can edit it now',
-    );
-  }
-  if (already > 0) parts.push(`${already === 1 ? 'That shared plan is' : 'Those shared plans are'} already in your account`);
-  if (gone > 0) parts.push(`${gone === 1 ? 'A plan you chose to save is' : `${gone} plans you chose to save are`} no longer shared`);
-  return parts.length > 0 ? parts.join('. ') : undefined;
-}
 
 /**
  * Drop the address bar's hash before another App mounts. A mounted planner
@@ -192,34 +163,24 @@ function SignInGate({ notice }: { notice?: string }) {
   }, []);
 
   const mountPlanner = useCallback(
-    (me: Me, snapshot: WebSnapshot, flash?: string, saving?: Saving) => {
+    (me: Me, snapshot: WebSnapshot, flash?: string) => {
       // On the page's first entry the hash is the link the student opened. After a planner has
       // been mounted here (signed out mid-session, back in), it can only be that planner's mirror.
       if (nonce.current > 0) dropAddressHash();
       restorePendingHash();
       setPageNotice(undefined);
       lastFresh.current = Date.now();
-      const boot = makeBoot(me, snapshot);
-      if (saving) {
-        // Only now are the Saves done with: until this planner exists (the import screen, a reload) they stay stashed.
-        consumeSaves(saving.intents);
-        // A #p= link that was saved must not also open as received, from the address bar or this tab's stash.
-        const bar = planFromHash(window.location.hash);
-        if (bar && saving.plans.some((a) => samePlanContent(a.plan, bar))) dropAddressHash();
-        if (saving.plans.length > 0) boot.adopt = saving.plans;
-        flash ??= savedFlash(saving);
-      }
-      show({ kind: 'planner', boot, nonce: nonce.current++, flash });
+      show({ kind: 'planner', boot: makeBoot(me, snapshot), nonce: nonce.current++, flash });
     },
     [show],
   );
 
   /** Signed in: plans waiting from the old site are confirmed before the planner (and its engine) exists. */
   const enter = useCallback(
-    (me: Me, snapshot: WebSnapshot, saving?: Saving) => {
+    (me: Me, snapshot: WebSnapshot) => {
       const payload = loadPendingMigration();
-      if (payload) show({ kind: 'import', me, snapshot, payload, saving });
-      else mountPlanner(me, snapshot, undefined, saving);
+      if (payload) show({ kind: 'import', me, snapshot, payload });
+      else mountPlanner(me, snapshot);
     },
     [mountPlanner, show],
   );
@@ -238,7 +199,7 @@ function SignInGate({ notice }: { notice?: string }) {
         : `Moved ${outcome.plans} ${pluralize(outcome.plans, 'plan')} to your account.`;
       try {
         const fresh = await fetchState();
-        if (alive.current) mountPlanner(s.me, fresh, flash, s.saving);
+        if (alive.current) mountPlanner(s.me, fresh, flash);
       } catch (err) {
         if (alive.current) show({ kind: err instanceof UnauthorizedError ? 'signed-out' : 'offline' });
       }
@@ -258,34 +219,16 @@ function SignInGate({ notice }: { notice?: string }) {
         const r = await loadAccount();
         if (!alive.current) return;
         if (r.kind === 'ready') {
-          // Every "Save to my account" clicked before signing in is saved now, without a second click.
-          const { intents, alreadySaved } = pendingSaves();
-          const saving: Saving = { plans: [], intents: [], already: alreadySaved.length, gone: 0 };
-          for (const it of intents) {
-            if ('hash' in it) {
-              const plan = planFromHash(it.hash); // null once it no longer decodes
-              if (plan) saving.plans.push({ name: 'Shared plan', plan });
-              saving.intents.push(it);
-              continue;
-            }
-            const s = await fetchSharedPlan(it.code);
-            if (!alive.current) return;
-            if (s === 'not-found') {
-              // Expired since: said on the planner.
-              forgetSaves(it.code);
-              saving.gone++;
-              continue;
-            }
-            if (!s) {
-              unreachable(); // the Saves stay stashed for Try again or the next load
-              return;
-            }
-            saving.plans.push({ name: s.name, plan: s.plan });
-            saving.intents.push(it);
+          // A shared plan's Save clicked before signing in (the confirm mail's tab lands here): that plan's
+          // page asks which courses to keep, so this load goes there instead. Once: the stash goes first.
+          const code = peekPendingShare();
+          if (code !== null) {
+            clearPendingShare();
+            nav.assign(`/s/${code}?save=1`);
+            return;
           }
-          // What they saved shows, not a plan received earlier in this tab; a #p= link in the address bar shows instead.
-          if (intents.length > 0) saveViewing('mine');
-          enter(r.me, r.snapshot, intents.length + alreadySaved.length > 0 ? saving : undefined);
+          dropPendingSaves();
+          enter(r.me, r.snapshot);
         } else if (r.kind === 'signed-out') {
           stashPendingHash(window.location.hash);
           if (current.current.kind !== 'signed-out') show({ kind: 'signed-out' });
@@ -299,12 +242,16 @@ function SignInGate({ notice }: { notice?: string }) {
     [enter, show],
   );
 
-  /** The tab came back: if another device changed the account, remount on the server's state. */
+  /**
+   * The tab came back: if another device changed the account, remount on the server's state.
+   * `force`: a shared plan's page in another tab has just saved into the account; show it now.
+   */
   const refresh = useCallback(
-    async (s: PlannerScreen) => {
+    async (s: PlannerScreen, opts?: { force?: boolean }) => {
       const { engine } = s.boot;
       // Unsaved edits would be lost by a remount; they save first and the next visit compares.
-      if (busy.current || engine.hasPending() || Date.now() - lastFresh.current < REFRESH_MIN_GAP_MS) return;
+      if (busy.current || engine.hasPending()) return;
+      if (!opts?.force && Date.now() - lastFresh.current < REFRESH_MIN_GAP_MS) return;
       busy.current = true;
       // A save that starts and finishes while the GET is out can make the answer older than our acks.
       let saved = false;
@@ -367,6 +314,16 @@ function SignInGate({ notice }: { notice?: string }) {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [load, refresh]);
+
+  // Fired in every other tab of this site when a shared plan's page saves into the account.
+  useEffect(() => {
+    const onStorage = (ev: StorageEvent) => {
+      const s = current.current;
+      if (ev.key === ACCOUNT_CHANGED_KEY && s.kind === 'planner') void refresh(s, { force: true });
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [refresh]);
 
   switch (screen.kind) {
     case 'loading':

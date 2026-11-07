@@ -4523,3 +4523,86 @@ button.termsw__cell--placeholder {
   margin-top: 12px;
   width: 100%;
 }
+
+/* Save to my plans (on a shared plan's page): which courses, then a new plan or one of theirs to replace. */
+.savedlg {
+  width: min(400px, calc(100vw - 40px));
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.savedlg input[type='checkbox'],
+.savedlg input[type='radio'] {
+  flex: none;
+  margin: 0;
+  accent-color: var(--ink);
+}
+.savedlg__courses {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.savedlg__course {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.savedlg__code {
+  flex: none;
+  font-weight: 700;
+}
+.savedlg__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.savedlg__sec {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.savedlg__modes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.savedlg__mode,
+.savedlg__target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.savedlg__mode {
+  font-weight: 700;
+}
+.savedlg__sub {
+  padding-left: 22px;
+}
+.savedlg__targets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.savedlg__question {
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.savedlg__save {
+  margin-top: 14px;
+  width: 100%;
+}

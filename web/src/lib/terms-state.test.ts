@@ -3,7 +3,7 @@ import type { Term } from '@triton/shared';
 import {
   newWorkspace, ensureWorkspace, activeWorkspace, adoptPlanIn, updateWorkspace,
   switchTermIn, newestTermKey, allPlansEmpty, adoptSeedPlan, migrateToTermsState,
-  archiveSweep, routeCapture, hasPlannedCourses, defaultTermKey, openUpcomingTerm,
+  archiveSweep, routeCapture, hasPlannedCourses, defaultTermKey, openUpcomingTerm, replacePlanEntriesIn,
   type TermsState,
 } from './terms-state';
 import { emptyPlan } from './plan';
@@ -68,6 +68,56 @@ describe('adoptPlanIn', () => {
     const s = adoptPlanIn({ version: 1, activeTermKey: '2027|3', terms: {} }, plan(), 'Winter', NOW);
     expect(Object.keys(s.terms)).toEqual(['2027|3']);
     expect(activeWorkspace(s).plans.plans.map((p) => p.name)).toEqual(['Winter']);
+  });
+});
+
+describe('replacePlanEntriesIn', () => {
+  const FALL25: Term = { year: '2025', period: '2', label: 'Fall 2025' };
+  const LATER = '2026-08-12T10:00:00.000Z';
+  const planOf = (term: Term, ...codes: string[]) => ({
+    ...emptyPlan(term),
+    entries: codes.map((code) => {
+      const course = { ...makeCourse(`${code}|${term.year}|${term.period}`, code), term };
+      return { course, selectedOptionId: course.options[0]!.id, color: '1' };
+    }),
+  });
+  /** Fall 2026 with "My plan" (CSE-8A, browsed CSE-8A + CSE-11) and an active "Other". */
+  function twoPlans(): TermsState {
+    let s = updateWorkspace(base(), '2026|2', (ps) =>
+      addBrowsed(updateActivePlan(ps, () => planOf(FALL26, 'CSE-8A'), NOW), ps.activeId, ['CSE-8A|2026|2', 'CSE-11|2026|2'], NOW),
+    );
+    s = updateWorkspace(s, '2026|2', (ps) => addPlan(ps, planOf(FALL26, 'MATH-20'), 'Other', NOW));
+    return s;
+  }
+
+  it('swaps the entries in place: same id, name, browsed and place in the list; the active plan stays', () => {
+    const start = twoPlans();
+    const target = start.terms['2026|2']!.plans.plans[0]!;
+    const s = replacePlanEntriesIn(start, target.id, planOf(FALL26, 'MATH-18', 'CSE-12'), LATER)!;
+    const ws = s.terms['2026|2']!;
+    expect(ws.plans.plans.map((p) => p.name)).toEqual(['My plan', 'Other']);
+    const replaced = ws.plans.plans[0]!;
+    expect(replaced.id).toBe(target.id);
+    expect(replaced.browsed).toEqual(['CSE-8A|2026|2', 'CSE-11|2026|2']);
+    expect(replaced.plan.entries.map((e) => e.course.id)).toEqual(['MATH-18|2026|2', 'CSE-12|2026|2']);
+    expect(replaced.plan.term).toEqual(FALL26);
+    expect(replaced.updatedAt).toBe(LATER);
+    expect(replaced.createdAt).toBe(target.createdAt);
+    expect(ws.plans.activeId).toBe(start.terms['2026|2']!.plans.activeId);
+    expect(ws.plans.plans[1]).toBe(start.terms['2026|2']!.plans.plans[1]);
+  });
+
+  it('null for a plan that is not there, or not in the plan’s own term', () => {
+    const start = ensureWorkspace(twoPlans(), WINTER27, NOW);
+    expect(replacePlanEntriesIn(start, 'gone', planOf(FALL26, 'MATH-18'), LATER)).toBeNull();
+    const winterPlan = start.terms['2027|3']!.plans.plans[0]!;
+    expect(replacePlanEntriesIn(start, winterPlan.id, planOf(FALL26, 'MATH-18'), LATER)).toBeNull();
+  });
+
+  it('null for a plan of a term that is over', () => {
+    const start = ensureWorkspace(base(), FALL25, NOW);
+    const old = start.terms['2025|2']!.plans.plans[0]!;
+    expect(replacePlanEntriesIn(start, old.id, planOf(FALL25, 'MATH-18'), LATER)).toBeNull();
   });
 });
 

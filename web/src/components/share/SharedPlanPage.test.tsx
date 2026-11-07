@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { PlanState } from '@triton/shared';
+import type { PlanState, SyncOp, SyncVersions, Term } from '@triton/shared';
 import * as api from '../../lib/cloud/api';
 import type { SharedDoc } from '../../lib/cloud/api';
+import { peekPendingShare, stashPendingShare } from '../../lib/cloud/boot';
 import { BRIDGE_SOURCE, DEFERRED_ADDS_KEY, installBridgeHub, resetBridgeHubForTests } from '../../lib/bridge';
-import { makeClashPlan, makeCourse } from '../../lib/fixtures';
+import { makeClashPlan, makeCourse, makePlan } from '../../lib/fixtures';
+import type { NamedPlan } from '../../lib/plans';
+import type { TermsState } from '../../lib/terms-state';
+import { snapshotOf, TEST_ME } from '../../test/boot';
 import { TIP_DELAY } from '../Tooltip';
 import { SharedPlanPage } from './SharedPlanPage';
 
@@ -16,10 +20,16 @@ vi.mock('../../lib/cloud/api', async (importOriginal) => ({
   fetchSharedPlan: vi.fn(),
   fetchSharedVersion: vi.fn(),
   selectSharedOption: vi.fn(),
+  fetchMe: vi.fn(),
+  fetchState: vi.fn(),
+  postSync: vi.fn(),
 }));
 const fetchPlan = vi.mocked(api.fetchSharedPlan);
 const fetchVersion = vi.mocked(api.fetchSharedVersion);
 const postSelect = vi.mocked(api.selectSharedOption);
+const fetchMe = vi.mocked(api.fetchMe);
+const fetchState = vi.mocked(api.fetchState);
+const postSync = vi.mocked(api.postSync);
 
 const DAY = 86_400_000;
 const CODE = 'Ab3dE9xQ2k';
@@ -45,13 +55,13 @@ const docOf = (plan: PlanState = browsedPlan()): SharedDoc => ({
 let container: HTMLDivElement;
 let root: Root;
 let write: ReturnType<typeof vi.fn>;
-const onSave = vi.fn();
 
 async function settle() {
   for (let i = 0; i < 4; i++) await act(async () => {});
 }
-async function render() {
-  await act(async () => root.render(<SharedPlanPage code={CODE} onSave={onSave} />));
+async function render(path = `/s/${CODE}`) {
+  window.history.replaceState(null, '', path);
+  await act(async () => root.render(<SharedPlanPage code={CODE} />));
   await settle();
 }
 const text = () => container.textContent ?? '';
@@ -89,6 +99,8 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   resetBridgeHubForTests();
+  vi.useRealTimers();
+  window.history.replaceState(null, '', '/');
 });
 
 describe('SharedPlanPage', () => {
@@ -157,13 +169,6 @@ describe('SharedPlanPage', () => {
     expect(container.querySelector('.toast')?.textContent).toContain(`${window.location.origin}/s/${CODE}`);
   });
 
-  it('Save to my plans hands over the plan on show', async () => {
-    const doc = docOf();
-    fetchPlan.mockResolvedValue(doc);
-    await render();
-    await act(async () => button('Save to my plans').click());
-    expect(onSave).toHaveBeenCalledWith(doc);
-  });
 
   it('an expired or unknown link says so, with a full page load back to TritonPlan', async () => {
     fetchPlan.mockResolvedValue('not-found');
@@ -196,5 +201,171 @@ describe('SharedPlanPage', () => {
     expect(container.querySelectorAll('.course-card')).toHaveLength(2);
     expect(text()).not.toContain('MATH-20');
     expect(postSelect).not.toHaveBeenCalled();
+  });
+});
+
+const FA: Term = { year: '2026', period: '2', label: 'Fall 2026' };
+const WI: Term = { year: '2027', period: '3', label: 'Winter 2027' };
+const named = (id: string, name: string, plan: PlanState): NamedPlan => ({
+  id, name, plan, createdAt: 'c', updatedAt: 'u', browsed: [],
+});
+/** The visitor's account: Fall 2026 "Mine" (CSE-8A) and Winter 2027 "Winter plan", the term their planner opens on. */
+function account(): TermsState {
+  return {
+    version: 1,
+    activeTermKey: '2027|3',
+    terms: {
+      '2026|2': { term: FA, plans: { activeId: 'plan-1', plans: [named('plan-1', 'Mine', makePlan())] } },
+      '2027|3': { term: WI, plans: { activeId: 'plan-w', plans: [named('plan-w', 'Winter plan', { version: 1, term: WI, entries: [] })] } },
+    },
+  };
+}
+
+describe('SharedPlanPage: Save to my plans', () => {
+  let synced: SyncOp[][];
+  beforeEach(() => {
+    synced = [];
+    fetchMe.mockResolvedValue(TEST_ME);
+    fetchState.mockResolvedValue(snapshotOf(account()));
+    let counter = 100;
+    postSync.mockImplementation(async (ops) => {
+      synced.push(ops);
+      const versions: SyncVersions = { terms: {}, plans: {} };
+      for (const op of ops) {
+        if (op.op === 'putTerm') versions.terms[op.termKey] = ++counter;
+        if (op.op === 'putPlan') versions.plans[op.planId] = ++counter;
+      }
+      return { ok: true, versions };
+    });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+  });
+  afterEach(() => {
+    delete (document as unknown as { visibilityState?: string }).visibilityState;
+  });
+
+  const dialog = () => document.body.querySelector<HTMLElement>('[role="dialog"]');
+  function inDialog(label: string): HTMLElement {
+    const el = [...(dialog()?.querySelectorAll<HTMLElement>('button, label') ?? [])].find((b) => b.textContent?.trim() === label);
+    if (!el) throw new Error(`no "${label}" in: ${dialog()?.textContent ?? '(no dialog)'}`);
+    return el;
+  }
+  async function press(el: HTMLElement) {
+    await act(async () => el.click());
+    await settle();
+  }
+  const putPlans = () =>
+    synced.flat().filter((o): o is Extract<SyncOp, { op: 'putPlan' }> => o.op === 'putPlan').map((o) => o.data as NamedPlan);
+
+  it('signed in, a new plan of the picked courses is saved, a toast says so, and the page stays and keeps polling', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    await render();
+    await press(button('Save to my plans'));
+    expect(dialog()?.textContent).toContain('Save as a new plan');
+    await press(dialog()!.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[1]!); // MATH-18 stays behind
+    await press(inDialog('Save'));
+
+    expect(dialog()).toBeNull();
+    expect(container.querySelector('.toast')?.textContent).toContain('Saved to your plans as "Fall draft"');
+    expect(putPlans()).toHaveLength(1);
+    expect(putPlans()[0]!.name).toBe('Fall draft');
+    expect(putPlans()[0]!.plan.entries.map((e) => e.course.id)).toEqual(['CSE-8A|2026|2']);
+    expect(window.location.pathname).toBe(`/s/${CODE}`);
+    expect(window.location.search).toBe('');
+    expect(container.querySelector('.topbar--shared')).not.toBeNull();
+
+    const polls = fetchVersion.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+    expect(fetchVersion.mock.calls.length).toBeGreaterThan(polls);
+  });
+
+  it("replace offers the visitor's plans of the shared plan's term, asks first, and says what it replaced", async () => {
+    await render();
+    await press(button('Save to my plans'));
+    await press(inDialog('Replace a plan'));
+    expect(dialog()?.textContent).toContain('Mine');
+    expect(dialog()?.textContent).not.toContain('Winter plan');
+    await press(inDialog('Mine'));
+    await press(inDialog('Save'));
+    expect(synced).toHaveLength(0);
+    await press(inDialog('Replace'));
+    expect(container.querySelector('.toast')?.textContent).toContain('Replaced "Mine" with the courses you picked');
+    expect(putPlans().map((p) => [p.id, p.name, p.plan.entries.map((e) => e.course.id)])).toEqual([
+      ['plan-1', 'Mine', ['CSE-8A|2026|2', 'MATH-18|2026|2']],
+    ]);
+  });
+
+  it("a save that fails keeps the dialog open with an error, and Save tries again", async () => {
+    postSync.mockResolvedValueOnce({ ok: false, kind: 'network' });
+    await render();
+    await press(button('Save to my plans'));
+    await press(inDialog('Save'));
+    expect(dialog()?.querySelector('[role="alert"]')?.textContent).toBe("Couldn't save. Try again.");
+    expect(container.querySelector('.toast')).toBeNull();
+    await press(inDialog('Save'));
+    expect(dialog()).toBeNull();
+    expect(container.querySelector('.toast')?.textContent).toContain('Saved to your plans as "Fall draft"');
+  });
+
+  it('signed out, the sign-in card opens over the page and comes back here with the dialog open', async () => {
+    fetchMe.mockResolvedValue(null);
+    await render();
+    await press(button('Save to my plans'));
+    expect(fetchState).not.toHaveBeenCalled();
+    expect(dialog()?.textContent).toContain('Sign in to TritonPlan');
+    const google = [...document.body.querySelectorAll('a')].find((a) => a.textContent?.includes('Continue with Google'));
+    expect(google?.getAttribute('href')).toBe(`/api/auth/google?returnTo=${encodeURIComponent(`/s/${CODE}?save=1`)}`);
+    // The emailed confirm link opens a tab of its own at "/", which sends it back here from this.
+    expect(peekPendingShare()).toBe(CODE);
+    await press(dialog()!.querySelector<HTMLButtonElement>('[aria-label="Close"]')!);
+    expect(dialog()).toBeNull();
+    expect(container.querySelector('.topbar--shared')).not.toBeNull();
+  });
+
+  it('a session that ended while the dialog was open asks to sign in, keeping the link', async () => {
+    postSync.mockResolvedValue({ ok: false, kind: 'unauthorized' });
+    await render();
+    await press(button('Save to my plans'));
+    await press(inDialog('Save'));
+    expect(dialog()?.textContent).toContain('Sign in to TritonPlan');
+    expect(peekPendingShare()).toBe(CODE);
+  });
+
+  it('?save=1 opens the dialog once the plan is in, drops the flag from the address bar and the stashed link', async () => {
+    stashPendingShare(CODE);
+    await render(`/s/${CODE}?save=1`);
+    expect(window.location.pathname).toBe(`/s/${CODE}`);
+    expect(window.location.search).toBe('');
+    expect(dialog()?.textContent).toContain('Save as a new plan');
+    expect(peekPendingShare()).toBeNull();
+    // Once: closing it does not bring it back.
+    await press(dialog()!.querySelector<HTMLButtonElement>('[aria-label="Close"]')!);
+    await settle();
+    expect(dialog()).toBeNull();
+    expect(fetchMe).toHaveBeenCalledTimes(1);
+  });
+
+  it('?save=1 on an unreachable link opens the dialog after Try again', async () => {
+    fetchPlan.mockResolvedValueOnce(null);
+    await render(`/s/${CODE}?save=1`);
+    expect(text()).toContain("Can't reach TritonPlan right now.");
+    expect(dialog()).toBeNull();
+    await act(async () => button('Try again').click());
+    await settle();
+    expect(dialog()?.textContent).toContain('Save as a new plan');
+  });
+
+  it('?save=1 on an expired code shows the expired screen and saves nothing', async () => {
+    fetchPlan.mockResolvedValue('not-found');
+    stashPendingShare(CODE);
+    await render(`/s/${CODE}?save=1`);
+    expect(container.querySelector('h1')?.textContent).toBe('This shared plan has expired.');
+    expect(dialog()).toBeNull();
+    expect(fetchMe).not.toHaveBeenCalled();
+    expect(fetchState).not.toHaveBeenCalled();
+    expect(postSync).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('');
+    expect(peekPendingShare()).toBeNull();
   });
 });
