@@ -9,7 +9,9 @@ import { dataRoutes } from './data/routes';
 import { shareRoutes } from './share/routes';
 import { calendarRoutes } from './calendar/routes';
 import { rmpRoutes } from './rmp/routes';
-import { createStatusRelay, statusHookRoutes } from './status/relay';
+import { createStatusCommand } from './status/command';
+import { createStatusRelay } from './status/relay';
+import { statusHookRoutes } from './status/routes';
 import { createRateLimiter } from './http/rate-limit';
 import { sameOriginJson, type AppEnv } from './http/guard';
 import type { Mailer } from './mail/mailer';
@@ -25,10 +27,16 @@ export interface Deps {
 export function createApp(deps: Deps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
-  // The one route ahead of the guard below: its caller is the UCSD status page, not a browser on our origin.
-  // It reads no cookie and touches no account. Any other write under /api/hooks still meets the guard.
+  // The only routes ahead of the guard below: their callers are the UCSD status page and Discord, not a browser
+  // on our origin. They read no cookie and touch no account. Any other write under /api/hooks still meets the guard.
   const target = deps.config.statusRelay;
-  app.route('/api/hooks', statusHookRoutes(target ? createStatusRelay(deps, target) : null));
+  app.route(
+    '/api/hooks',
+    statusHookRoutes({
+      relay: target ? createStatusRelay(deps, target) : null,
+      command: target ? createStatusCommand(deps, target) : null,
+    }),
+  );
 
   // Registered before every other route so it also covers writes to routes that don't exist.
   app.use('/api/*', sameOriginJson(deps.config));

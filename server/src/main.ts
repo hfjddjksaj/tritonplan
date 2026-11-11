@@ -7,6 +7,7 @@ import { createConsoleMailer, createMemoryMailer, type Mailer } from './mail/mai
 import { createResendMailer } from './mail/resend';
 import { startRmpRefresh } from './rmp/refresh';
 import { startSharedSweep } from './share/routes';
+import { registerStatusCommand } from './status/command';
 
 assertArgon2Available();
 const config = loadConfig(process.env);
@@ -29,6 +30,8 @@ function buildMailer(): Mailer {
 
 const deps = { db, config, mailer: buildMailer(), now: () => new Date(), fetch };
 const app = createApp(deps);
+// Once per start; it logs its own outcome and never throws.
+if (config.statusRelay) void registerStatusCommand(deps, config.statusRelay);
 const stopRmp = config.rmpRefresh ? startRmpRefresh(deps) : () => {};
 const stopSweep = startSharedSweep(deps);
 const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {

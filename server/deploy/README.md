@@ -124,6 +124,28 @@ may not post in that channel; `404` = wrong channel id.
 Sent updates are remembered in memory only, so after a restart a repeated
 delivery can post one update a second time.
 
+#### The bot's `/status` command
+
+Typing `/status` in the server makes the bot answer with the TSS incident that
+changed last on the status page (open or resolved). Discord sends each use to
+`POST /api/hooks/discord` over HTTP; the request is checked against the
+application's signing key, which the server reads from Discord with the bot
+token, so there is nothing more to put in the env file.
+
+1. Deploy. At start the server registers the command
+   (`Status command: /status registered` in the journal).
+2. Developer Portal → the application → General Information → Interactions
+   Endpoint URL: `https://tritonplan.cn/api/hooks/discord`, Save. Discord tests
+   the address on the spot and refuses to save it if the test fails.
+3. If `/status` does not show up in the server, reload Discord (Ctrl+R); if it
+   still does not, invite the bot again with the `applications.commands` scope
+   ticked.
+
+`Status command is off: Discord responded 401` = wrong bot token.
+`Status command failed: <reason>` = the status page or Discord could not be
+reached for one answer. Nothing from a request (who asked, where) is stored or
+logged.
+
 ## Rollback
 
 ```sh

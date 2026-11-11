@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApp } from '../app';
 import { testDeps } from '../test-helpers';
-import { createStatusRelay, formatIncident } from './relay';
+import { formatIncident } from './page';
+import { createStatusRelay } from './relay';
 
 const TARGET = { botToken: 'secret-token', channelId: '1456539102395760764' };
 const POST_URL = 'https://discord.com/api/v10/channels/1456539102395760764/messages';
