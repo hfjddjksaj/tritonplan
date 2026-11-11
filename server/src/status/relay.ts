@@ -2,10 +2,11 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import type { Deps } from '../app';
+import type { DiscordTarget } from '../config';
 
 /**
  * UCSD status page -> Discord. status.ucsd.edu (Atlassian Statuspage) calls our hook when an incident changes;
- * updates to TSS incidents are passed on to one Discord channel.
+ * updates to TSS incidents are posted in one Discord channel by our bot.
  *
  * The hook is public and anyone can POST to it, so the delivery is only a nudge: it names an incident, and what
  * gets posted is read from the status page's own API. A forged delivery can at most make us post a real update
@@ -54,7 +55,7 @@ export function formatIncident(incident: Incident): string {
 
 export function createStatusRelay(
   deps: Pick<Deps, 'fetch' | 'now'>,
-  webhookUrl: string,
+  target: DiscordTarget,
   wait: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): StatusRelay {
   // Update ids already sent. In memory only: after a restart a repeated delivery can post one update twice.
@@ -103,9 +104,14 @@ export function createStatusRelay(
 
     posted.add(update.id); // before the send, so two deliveries of one update cannot both post it
     try {
-      const res = await deps.fetch(webhookUrl, {
+      // Plain REST: posting a message needs no gateway connection, so there is no bot process to keep alive.
+      const res = await deps.fetch(`https://discord.com/api/v10/channels/${target.channelId}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bot ${target.botToken}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'DiscordBot (https://tritonplan.cn, 2.0)', // the form Discord asks bots to use
+        },
         // No mentions, whatever the text says.
         body: JSON.stringify({ content: formatIncident(incident), allowed_mentions: { parse: [] } }),
         signal: AbortSignal.timeout(10_000),
@@ -124,7 +130,7 @@ export function createStatusRelay(
       try {
         await run(payload);
       } catch (e) {
-        // Message only: no body, no stack, and never the webhook address.
+        // Message only: no body, no stack, and never the bot token.
         console.error(`Status relay failed: ${e instanceof Error ? e.message : 'unknown error'}`);
       }
     },
@@ -135,7 +141,7 @@ export function createStatusRelay(
 export function statusHookRoutes(relay: StatusRelay | null): Hono {
   const r = new Hono();
 
-  // Lets the operator see whether the webhook address in the env file was accepted, without reading the journal.
+  // Lets the operator see whether the two values in the env file were accepted, without reading the journal.
   r.get('/ucsd-status', (c) => c.json({ relay: relay ? 'on' : 'off' }));
 
   r.post(

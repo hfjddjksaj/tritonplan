@@ -1,3 +1,9 @@
+/** A Discord bot and the one channel it posts in. */
+export interface DiscordTarget {
+  botToken: string;
+  channelId: string;
+}
+
 export interface Config {
   port: number;
   host: string;
@@ -7,27 +13,23 @@ export interface Config {
   googleClientId: string;
   googleClientSecret: string;
   rmpRefresh: boolean;
-  /** Discord channel webhook for TSS status updates; absent = the relay is off. A secret: never log it. */
-  discordStatusWebhook?: string;
+  /** Where TSS status updates are posted; absent = the relay is off. The token is a secret: never log it. */
+  statusRelay?: DiscordTarget;
   mail: { transport: 'resend' | 'console' | 'memory'; resendApiKey?: string; from: string };
 }
 
 const TRANSPORTS = ['resend', 'console', 'memory'] as const;
 
 /**
- * An optional extra, so a mistyped address turns the relay off instead of stopping the whole server from
- * starting; GET /api/hooks/ucsd-status shows which it is.
+ * An optional extra, so a missing or mistyped value turns the relay off instead of stopping the whole server
+ * from starting; GET /api/hooks/ucsd-status shows which it is.
  */
-function discordWebhook(raw: string | undefined): string | undefined {
-  if (!raw) return undefined;
-  try {
-    const u = new URL(raw);
-    const discord = u.hostname === 'discord.com' || u.hostname === 'discordapp.com';
-    if (u.protocol === 'https:' && discord && u.pathname.startsWith('/api/webhooks/')) return u.href;
-  } catch {
-    // falls through to "off"
-  }
-  return undefined;
+function statusRelay(env: Record<string, string | undefined>): DiscordTarget | undefined {
+  const botToken = (env.TP_DISCORD_BOT_TOKEN ?? '').trim();
+  const channelId = (env.TP_DISCORD_STATUS_CHANNEL ?? '').trim();
+  // A channel id is a 17-20 digit number; a token has no spaces. Anything else is a paste gone wrong.
+  if (!botToken || /\s/.test(botToken) || !/^\d{17,20}$/.test(channelId)) return undefined;
+  return { botToken, channelId };
 }
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
@@ -70,7 +72,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     googleClientSecret: env.GOOGLE_CLIENT_SECRET ?? '',
     // On by default; only the literal 'off' stops the monthly RateMyProfessors fetch (local dev, tests).
     rmpRefresh: env.TP_RMP_REFRESH !== 'off',
-    discordStatusWebhook: discordWebhook(env.TP_DISCORD_STATUS_WEBHOOK),
+    statusRelay: statusRelay(env),
     mail: {
       transport: transport as Config['mail']['transport'],
       resendApiKey: env.RESEND_API_KEY || undefined,

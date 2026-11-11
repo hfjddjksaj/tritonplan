@@ -3,7 +3,8 @@ import { createApp } from '../app';
 import { testDeps } from '../test-helpers';
 import { createStatusRelay, formatIncident } from './relay';
 
-const HOOK = 'https://discord.com/api/webhooks/123/secret-token';
+const TARGET = { botToken: 'secret-token', channelId: '1456539102395760764' };
+const POST_URL = 'https://discord.com/api/v10/channels/1456539102395760764/messages';
 const LIST = 'https://status.ucsd.edu/api/v2/incidents.json';
 
 interface Update { id: string; body: string }
@@ -24,8 +25,8 @@ const other: Incident = {
 };
 
 /** A fetch that serves the status page's list from `lists` (one per call, the last one repeating) and plays Discord. */
-function fakeNet(lists: Incident[][], discordStatus = 204) {
-  const sent: { url: string; body: { content: string; allowed_mentions: unknown } }[] = [];
+function fakeNet(lists: Incident[][], discordStatus = 200) {
+  const sent: { url: string; auth: string | null; body: { content: string; allowed_mentions: unknown } }[] = [];
   let listCalls = 0;
   const fetchFn = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = String(input);
@@ -33,8 +34,8 @@ function fakeNet(lists: Incident[][], discordStatus = 204) {
       const incidents = lists[Math.min(listCalls++, lists.length - 1)];
       return new Response(JSON.stringify({ incidents }), { status: 200 });
     }
-    sent.push({ url, body: JSON.parse(String(init?.body)) });
-    return new Response(null, { status: discordStatus });
+    sent.push({ url, auth: new Headers(init?.headers).get('authorization'), body: JSON.parse(String(init?.body)) });
+    return new Response('{}', { status: discordStatus });
   }) as typeof fetch;
   return { fetchFn, sent, listCalls: () => listCalls };
 }
@@ -60,12 +61,13 @@ const now = () => new Date('2026-11-10T23:00:00.000Z');
 const noWait = () => Promise.resolve();
 
 describe('status relay', () => {
-  test('posts the newest update of a TSS incident, in the status page\'s words, with mentions off', async () => {
+  test('posts the newest update of a TSS incident as the bot, in the status page\'s words, with mentions off', async () => {
     const net = fakeNet([[other, tss([{ id: 'u2', body: 'This incident has been resolved.' }, { id: 'u1', body: 'Investigating.' }], 'resolved')]]);
-    await createStatusRelay({ fetch: net.fetchFn, now }, HOOK, noWait).handle(delivery('hm72y9krwjqx', 'u2'));
+    await createStatusRelay({ fetch: net.fetchFn, now }, TARGET,noWait).handle(delivery('hm72y9krwjqx', 'u2'));
 
     expect(net.sent).toHaveLength(1);
-    expect(net.sent[0]!.url).toBe(HOOK);
+    expect(net.sent[0]!.url).toBe(POST_URL);
+    expect(net.sent[0]!.auth).toBe('Bot secret-token');
     expect(net.sent[0]!.body.content).toBe('**TSS Down** — resolved\nThis incident has been resolved.\nhttps://stspg.io/9jh550cp9275');
     expect(net.sent[0]!.body.allowed_mentions).toEqual({ parse: [] });
     expect(JSON.stringify(net.sent)).not.toContain('forged');
@@ -75,7 +77,7 @@ describe('status relay', () => {
     const first = [tss([{ id: 'u1', body: 'Investigating.' }])];
     const second = [tss([{ id: 'u2', body: 'Fixed.' }, { id: 'u1', body: 'Investigating.' }], 'resolved')];
     const net = fakeNet([first, first, second]);
-    const relay = createStatusRelay({ fetch: net.fetchFn, now }, HOOK, noWait);
+    const relay = createStatusRelay({ fetch: net.fetchFn, now }, TARGET,noWait);
 
     await relay.handle(delivery('hm72y9krwjqx', 'u1'));
     await relay.handle(delivery('hm72y9krwjqx', 'u1'));
@@ -86,7 +88,7 @@ describe('status relay', () => {
 
   test('an incident that is not about TSS, or not on the status page at all, posts nothing', async () => {
     const net = fakeNet([[other]]);
-    const relay = createStatusRelay({ fetch: net.fetchFn, now }, HOOK, noWait);
+    const relay = createStatusRelay({ fetch: net.fetchFn, now }, TARGET,noWait);
     await relay.handle(delivery('p492l570j1ys', 'x1')); // real, but uAchieve; the forged name says TSS
     await relay.handle(delivery('zzzzzzzzzzzz', 'u9')); // made up
     expect(net.sent).toHaveLength(0);
@@ -94,7 +96,7 @@ describe('status relay', () => {
 
   test('a delivery with no incident never reaches the status page', async () => {
     const net = fakeNet([[other]]);
-    const relay = createStatusRelay({ fetch: net.fetchFn, now }, HOOK, noWait);
+    const relay = createStatusRelay({ fetch: net.fetchFn, now }, TARGET,noWait);
     for (const payload of [null, 'text', {}, { component: { name: 'Academic Services' } }, { incident: { id: '../etc' } }]) {
       await relay.handle(payload);
     }
@@ -107,7 +109,7 @@ describe('status relay', () => {
     const fresh = [tss([{ id: 'u2', body: 'Fixed.' }, { id: 'u1', body: 'Investigating.' }], 'resolved')];
     const net = fakeNet([stale, stale, fresh]);
     const waits: number[] = [];
-    const relay = createStatusRelay({ fetch: net.fetchFn, now }, HOOK, async (ms) => void waits.push(ms));
+    const relay = createStatusRelay({ fetch: net.fetchFn, now }, TARGET,async (ms) => void waits.push(ms));
 
     await relay.handle(delivery('hm72y9krwjqx', 'u1'));
     await relay.handle(delivery('hm72y9krwjqx', 'u2')); // list still shows u1
@@ -118,7 +120,7 @@ describe('status relay', () => {
   test('at most six looks at the status page per minute, however many deliveries arrive', async () => {
     const net = fakeNet([[other]]);
     let t = Date.parse('2026-11-10T23:00:00.000Z');
-    const relay = createStatusRelay({ fetch: net.fetchFn, now: () => new Date(t) }, HOOK, noWait);
+    const relay = createStatusRelay({ fetch: net.fetchFn, now: () => new Date(t) }, TARGET,noWait);
     for (let i = 0; i < 20; i++) await relay.handle(delivery('zzzzzzzzzzzz'));
     expect(net.listCalls()).toBe(6);
     t += 61_000;
@@ -126,14 +128,14 @@ describe('status relay', () => {
     expect(net.listCalls()).toBe(7);
   });
 
-  test('a refused post is logged without the webhook address and tried again on the next delivery', async () => {
+  test('a refused post is logged without the bot token and tried again on the next delivery', async () => {
     const list = [tss([{ id: 'u1', body: 'Investigating.' }])];
-    const down = fakeNet([list], 500);
+    const down = fakeNet([list], 403); // what Discord answers when the bot may not post in the channel
     let fetchFn = down.fetchFn;
-    const relay = createStatusRelay({ fetch: ((...a: Parameters<typeof fetch>) => fetchFn(...a)) as typeof fetch, now }, HOOK, noWait);
+    const relay = createStatusRelay({ fetch: ((...a: Parameters<typeof fetch>) => fetchFn(...a)) as typeof fetch, now }, TARGET,noWait);
 
     await relay.handle(delivery('hm72y9krwjqx', 'u1'));
-    expect(err).toHaveBeenCalledWith('Status relay failed: Discord responded 500');
+    expect(err).toHaveBeenCalledWith('Status relay failed: Discord responded 403');
     expect(JSON.stringify(err.mock.calls)).not.toContain('secret-token');
 
     const up = fakeNet([list]);
@@ -144,7 +146,7 @@ describe('status relay', () => {
 
   test('a broken answer from the status page is one log line and no post', async () => {
     const fetchFn = (async () => new Response('<html>503</html>', { status: 503 })) as unknown as typeof fetch;
-    await createStatusRelay({ fetch: fetchFn, now }, HOOK, noWait).handle(delivery('hm72y9krwjqx', 'u1'));
+    await createStatusRelay({ fetch: fetchFn, now }, TARGET,noWait).handle(delivery('hm72y9krwjqx', 'u1'));
     expect(err).toHaveBeenCalledWith('Status relay failed: status page responded 503');
   });
 
@@ -163,7 +165,7 @@ describe('POST /api/hooks/ucsd-status', () => {
   test('accepts the status page (no Origin) and relays in the background', async () => {
     const net = fakeNet([[tss([{ id: 'u1', body: 'Investigating.' }])]]);
     const deps = testDeps({ fetch: net.fetchFn });
-    deps.config.discordStatusWebhook = HOOK;
+    deps.config.statusRelay = TARGET;
     const app = createApp(deps);
 
     const res = await post(app, '/api/hooks/ucsd-status', JSON.stringify(delivery('hm72y9krwjqx', 'u1')));
@@ -172,7 +174,7 @@ describe('POST /api/hooks/ucsd-status', () => {
     expect((await (await app.request('/api/hooks/ucsd-status')).json())).toEqual({ relay: 'on' });
   });
 
-  test('with no webhook configured it still answers 200 and does nothing', async () => {
+  test('with no bot configured it still answers 200 and does nothing', async () => {
     const app = createApp(testDeps()); // testDeps' fetch rejects if anything calls it
     const res = await post(app, '/api/hooks/ucsd-status', JSON.stringify(delivery('hm72y9krwjqx', 'u1')));
     expect(res.status).toBe(200);

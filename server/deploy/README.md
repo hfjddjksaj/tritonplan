@@ -96,17 +96,21 @@ turn the download off.
 page (status.ucsd.edu, Atlassian Statuspage) and posts each new update of a TSS
 incident to one Discord channel. The delivery only names the incident; the text
 that is posted is read from the status page's own API, so a forged delivery
-cannot put words in the channel. It is off until the webhook address is set.
+cannot put words in the channel. The message is sent by a Discord bot over
+plain REST, so no bot process runs. It is off until both values below are set.
 
-1. Discord: channel settings → Integrations → Webhooks → New Webhook → Copy
-   Webhook URL.
+1. Discord Developer Portal → the application → Bot: Reset Token and copy it
+   (shown once). Installation / OAuth2: invite the bot to the server with the
+   `bot` scope and the View Channels + Send Messages permissions.
 2. Tencent console web terminal: `nano /etc/tritonplan/env`, set
-   `TP_DISCORD_STATUS_WEBHOOK=<that address>`, then
-   `systemctl restart tritonplan`. The address is a secret: anyone who has it
-   can post in the channel.
+   `TP_DISCORD_BOT_TOKEN=<the token>` and
+   `TP_DISCORD_STATUS_CHANNEL=<the channel's numeric id>` (Discord: right-click
+   the channel → Copy Channel ID, or the last number in the channel's URL), then
+   `systemctl restart tritonplan`. The token is a secret: whoever has it can
+   act as the bot.
 3. `https://tritonplan.cn/api/hooks/ucsd-status` in a browser now shows
-   `{"relay":"on"}`. `off` means the variable is empty or is not a Discord
-   webhook address (the journal says which).
+   `{"relay":"on"}`. `off` means one of the two is empty, or the channel id is
+   not a number.
 4. status.ucsd.edu → Subscribe to Updates → the webhook tab: the URL is
    `https://tritonplan.cn/api/hooks/ucsd-status`, the email address is where
    Statuspage writes if deliveries keep failing. Statuspage drops a subscription
@@ -114,7 +118,9 @@ cannot put words in the channel. It is off until the webhook address is set.
 
 Check it: `journalctl -u tritonplan | grep 'Status relay'` shows
 `Status relay: posted a TSS update (<status>)` per post and
-`Status relay failed: <reason>` per failure. Neither line carries the address.
+`Status relay failed: <reason>` per failure. Neither line carries the token.
+`Discord responded 401` = wrong token; `403` = the bot is not in the server or
+may not post in that channel; `404` = wrong channel id.
 Sent updates are remembered in memory only, so after a restart a repeated
 delivery can post one update a second time.
 

@@ -27,8 +27,8 @@ export function createApp(deps: Deps): Hono<AppEnv> {
 
   // The one route ahead of the guard below: its caller is the UCSD status page, not a browser on our origin.
   // It reads no cookie and touches no account. Any other write under /api/hooks still meets the guard.
-  const hook = deps.config.discordStatusWebhook;
-  app.route('/api/hooks', statusHookRoutes(hook ? createStatusRelay(deps, hook) : null));
+  const target = deps.config.statusRelay;
+  app.route('/api/hooks', statusHookRoutes(target ? createStatusRelay(deps, target) : null));
 
   // Registered before every other route so it also covers writes to routes that don't exist.
   app.use('/api/*', sameOriginJson(deps.config));
