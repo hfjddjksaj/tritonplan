@@ -11,6 +11,10 @@ import { startSharedSweep } from './share/routes';
 assertArgon2Available();
 const config = loadConfig(process.env);
 const db = openDb(config.dbPath);
+// Says only that the value was refused, never the value: it is a secret even when mistyped.
+if (process.env.TP_DISCORD_STATUS_WEBHOOK && !config.discordStatusWebhook) {
+  console.error('TP_DISCORD_STATUS_WEBHOOK is not a Discord webhook address; the status relay is off');
+}
 
 function buildMailer(): Mailer {
   switch (config.mail.transport) {

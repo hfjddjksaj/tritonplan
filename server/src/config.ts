@@ -7,10 +7,28 @@ export interface Config {
   googleClientId: string;
   googleClientSecret: string;
   rmpRefresh: boolean;
+  /** Discord channel webhook for TSS status updates; absent = the relay is off. A secret: never log it. */
+  discordStatusWebhook?: string;
   mail: { transport: 'resend' | 'console' | 'memory'; resendApiKey?: string; from: string };
 }
 
 const TRANSPORTS = ['resend', 'console', 'memory'] as const;
+
+/**
+ * An optional extra, so a mistyped address turns the relay off instead of stopping the whole server from
+ * starting; GET /api/hooks/ucsd-status shows which it is.
+ */
+function discordWebhook(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const u = new URL(raw);
+    const discord = u.hostname === 'discord.com' || u.hostname === 'discordapp.com';
+    if (u.protocol === 'https:' && discord && u.pathname.startsWith('/api/webhooks/')) return u.href;
+  } catch {
+    // falls through to "off"
+  }
+  return undefined;
+}
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
   const transport = env.TP_MAIL_TRANSPORT || 'resend';
@@ -52,6 +70,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     googleClientSecret: env.GOOGLE_CLIENT_SECRET ?? '',
     // On by default; only the literal 'off' stops the monthly RateMyProfessors fetch (local dev, tests).
     rmpRefresh: env.TP_RMP_REFRESH !== 'off',
+    discordStatusWebhook: discordWebhook(env.TP_DISCORD_STATUS_WEBHOOK),
     mail: {
       transport: transport as Config['mail']['transport'],
       resendApiKey: env.RESEND_API_KEY || undefined,

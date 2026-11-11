@@ -50,6 +50,16 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...base, TP_ORIGIN: 'not a url' })).toThrow(/TP_ORIGIN/);
   });
 
+  test('the status relay is on only for a real Discord webhook address; anything else leaves it off without failing', () => {
+    const hook = 'https://discord.com/api/webhooks/123/token';
+    expect(loadConfig(base).discordStatusWebhook).toBeUndefined();
+    expect(loadConfig({ ...base, TP_DISCORD_STATUS_WEBHOOK: hook }).discordStatusWebhook).toBe(hook);
+    expect(loadConfig({ ...base, TP_DISCORD_STATUS_WEBHOOK: 'https://discordapp.com/api/webhooks/1/t' }).discordStatusWebhook).toBeDefined();
+    for (const bad of ['', 'paste here', 'http://discord.com/api/webhooks/1/t', 'https://discord.com.evil.test/api/webhooks/1/t', 'https://discord.com/channels/1/2']) {
+      expect(loadConfig({ ...base, TP_DISCORD_STATUS_WEBHOOK: bad }).discordStatusWebhook).toBeUndefined();
+    }
+  });
+
   test('rejects an unknown mail transport and a bad port', () => {
     expect(() => loadConfig({ ...base, TP_MAIL_TRANSPORT: 'smtp' })).toThrow(/TP_MAIL_TRANSPORT/);
     expect(() => loadConfig({ ...base, TP_PORT: 'abc' })).toThrow(/TP_PORT/);

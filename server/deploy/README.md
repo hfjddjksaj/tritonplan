@@ -90,6 +90,34 @@ old list stays in use and the next daily check retries. Neither line contains
 names or response data. Set `TP_RMP_REFRESH=off` in `/etc/tritonplan/env` to
 turn the download off.
 
+### TSS status updates to Discord
+
+`POST /api/hooks/ucsd-status` takes webhook deliveries from the UCSD status
+page (status.ucsd.edu, Atlassian Statuspage) and posts each new update of a TSS
+incident to one Discord channel. The delivery only names the incident; the text
+that is posted is read from the status page's own API, so a forged delivery
+cannot put words in the channel. It is off until the webhook address is set.
+
+1. Discord: channel settings → Integrations → Webhooks → New Webhook → Copy
+   Webhook URL.
+2. Tencent console web terminal: `nano /etc/tritonplan/env`, set
+   `TP_DISCORD_STATUS_WEBHOOK=<that address>`, then
+   `systemctl restart tritonplan`. The address is a secret: anyone who has it
+   can post in the channel.
+3. `https://tritonplan.cn/api/hooks/ucsd-status` in a browser now shows
+   `{"relay":"on"}`. `off` means the variable is empty or is not a Discord
+   webhook address (the journal says which).
+4. status.ucsd.edu → Subscribe to Updates → the webhook tab: the URL is
+   `https://tritonplan.cn/api/hooks/ucsd-status`, the email address is where
+   Statuspage writes if deliveries keep failing. Statuspage drops a subscription
+   after about ten failed deliveries in an hour; subscribe again if that happens.
+
+Check it: `journalctl -u tritonplan | grep 'Status relay'` shows
+`Status relay: posted a TSS update (<status>)` per post and
+`Status relay failed: <reason>` per failure. Neither line carries the address.
+Sent updates are remembered in memory only, so after a restart a repeated
+delivery can post one update a second time.
+
 ## Rollback
 
 ```sh
