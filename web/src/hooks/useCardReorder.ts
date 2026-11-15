@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { attachCardReorder } from '../lib/card-reorder';
+import { dismissTip } from '../components/Tooltip';
 
 /**
  * Ref callback for the list of cards. The list only exists while the plan has
@@ -25,8 +26,12 @@ export function useCardReorder(
       scroller,
       bounds,
       // The engine measures the list straight after this returns, so the new
-      // order has to be in the DOM by then.
-      onReorder: (id, to) => flushSync(() => latest.current(id, to)),
+      // order has to be in the DOM by then. A bubble open on a button in the
+      // list would be left pointing at whichever card takes that button's place.
+      onReorder: (id, to) => {
+        dismissTip();
+        flushSync(() => latest.current(id, to));
+      },
     });
   }, [list, enabled]);
 

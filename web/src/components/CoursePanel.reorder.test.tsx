@@ -1,11 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act } from 'react';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { makeClashPlan, makePlan } from '../lib/fixtures';
+import { moveEntry } from '../lib/plan';
 import { sharedController } from '../hooks/sharedController';
 import type { PlanController } from '../hooks/usePlan';
 import { fire, layOut } from '../test/drag';
 import { CoursePanel } from './CoursePanel';
+import { TooltipLayer, TIP_DELAY } from './Tooltip';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -14,6 +16,9 @@ function own(over: Partial<PlanController> = {}): PlanController {
 }
 
 describe('CoursePanel card reordering', () => {
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = vi.fn(); // not in jsdom
+  });
   let container: HTMLDivElement;
   let root: Root;
   beforeEach(() => {
@@ -64,6 +69,52 @@ describe('CoursePanel card reordering', () => {
     fire(window, 'pointermove', 50, 180);
     fire(window, 'pointerup', 50, 180);
     expect(reorderCourse.mock.calls).toEqual([['CSE-8A|2026|2', 1]]);
+  });
+
+  /** The panel over a plan it can really reorder. */
+  function Owned() {
+    const [plan, setPlan] = useState(makeClashPlan);
+    return <CoursePanel ctl={own({ viewPlan: plan, reorderCourse: (id, to) => setPlan((p) => moveEntry(p, id, to)) })} />;
+  }
+  const order = () => [...list().children].map((c) => (c as HTMLElement).dataset.courseId);
+
+  it('the new order is in the DOM by the time a drop returns', () => {
+    act(() => root.render(<Owned />));
+    layOut(list());
+    const first = list().querySelector<HTMLElement>('.course-card__code')!;
+    // Inside act the commit would wait for act to end; the engine measures straight away.
+    const env = globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    env.IS_REACT_ACT_ENVIRONMENT = false;
+    try {
+      fire(first, 'pointerdown', 50, 30);
+      fire(window, 'pointermove', 50, 40);
+      fire(window, 'pointermove', 50, 180);
+      fire(window, 'pointerup', 50, 180);
+      expect(order()).toEqual(['MATH-18|2026|2', 'CSE-8A|2026|2']);
+    } finally {
+      env.IS_REACT_ACT_ENVIRONMENT = true;
+    }
+  });
+
+  it('a keyboard move takes down the bubble of the button it moves', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      act(() => root.render(<><Owned /><TooltipLayer /></>));
+      const remove = list().querySelectorAll<HTMLButtonElement>('.course-card__remove')[1];
+      act(() => remove.focus());
+      act(() => void vi.advanceTimersByTime(TIP_DELAY));
+      expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('Remove MATH-18');
+      // Moving up, the card keeps its node and focus never leaves the button.
+      act(() => {
+        remove.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true }));
+      });
+      expect(order()).toEqual(['MATH-18|2026|2', 'CSE-8A|2026|2']);
+      expect(document.activeElement).toBe(remove);
+      act(() => void vi.advanceTimersByTime(TIP_DELAY * 3));
+      expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('plays a card’s entry animation once', () => {

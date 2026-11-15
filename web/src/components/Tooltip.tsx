@@ -76,6 +76,18 @@ function hide() {
 }
 
 /**
+ * Takes the bubble down without warming the next one: for when its trigger is
+ * moved out from under it, so whatever is asked about next is asked from scratch,
+ * once it has settled where it is going.
+ */
+export function dismissTip() {
+  clearTimeout(showTimer);
+  if (!shown) return;
+  shown = null;
+  emit();
+}
+
+/**
  * Where the bubble goes. Above the trigger by default and centred on it; below
  * when there is no room above, because a bubble that covers its own trigger
  * hides the thing the reader is asking about. Kept pure so the flipping and

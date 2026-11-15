@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { tip, TooltipLayer, tooltipPosition, TIP_DELAY } from './Tooltip';
+import { dismissTip, tip, TooltipLayer, tooltipPosition, TIP_DELAY } from './Tooltip';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -156,6 +156,33 @@ describe('tip()', () => {
     a.leave();
     b.enter();
     expect(shown()?.textContent).toBe('second');
+    a.cleanup();
+    b.cleanup();
+  });
+
+  it('a cold dismiss leaves nothing warm and nothing waiting', () => {
+    // For a bubble whose trigger moved out from under it: whatever is asked about
+    // next waits its turn, as if no bubble had been up.
+    const a = trigger('Remove MATH-18');
+    const b = trigger('Remove CSE-8A');
+    a.enter();
+    act(() => void vi.advanceTimersByTime(TIP_DELAY));
+    a.leave();
+    act(() => void vi.advanceTimersByTime(TIP_DELAY * 3)); // cold from here
+    a.enter();
+    act(() => void vi.advanceTimersByTime(TIP_DELAY));
+    expect(shown()?.textContent).toBe('Remove MATH-18');
+    act(() => dismissTip());
+    expect(shown()).toBeNull();
+    b.enter();
+    expect(shown()).toBeNull();
+    act(() => void vi.advanceTimersByTime(TIP_DELAY));
+    expect(shown()?.textContent).toBe('Remove CSE-8A');
+    act(() => dismissTip());
+    a.enter();
+    act(() => dismissTip());
+    act(() => void vi.advanceTimersByTime(TIP_DELAY * 3));
+    expect(shown()).toBeNull();
     a.cleanup();
     b.cleanup();
   });

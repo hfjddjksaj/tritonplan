@@ -206,6 +206,30 @@ describe('attachCardReorder', () => {
     expect(said()).toBe('C0 moved to position 2 of 3.');
   });
 
+  it('Alt+Arrow refocuses and scrolls inside the move, before the card is drawn at its old place', () => {
+    const m = mount();
+    const btn = m.remove(0);
+    btn.focus();
+    const seen: unknown[] = [];
+    const focus = btn.focus.bind(btn);
+    vi.spyOn(btn, 'focus').mockImplementation((o) => {
+      seen.push(['focus', m.order(), m.card(0).style.transform]);
+      focus(o);
+    });
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (this: Element, o) {
+      seen.push(['scroll', m.order(), m.card(0).style.transform, o]);
+    });
+    btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }));
+    scroll.mockRestore();
+    const moved = ['c1', 'c0', 'c2'];
+    expect(seen).toEqual([
+      ['focus', moved, ''],
+      ['scroll', moved, '', { block: 'nearest', behavior: 'instant' }],
+    ]);
+    expect(m.card(0).style.transform).toBe('translate3d(0, -100px, 0)'); // then glides from where it was
+    expect(document.activeElement).toBe(btn);
+  });
+
   it('Alt+Arrow at either end does nothing', () => {
     const m = mount();
     m.remove(0).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }));
