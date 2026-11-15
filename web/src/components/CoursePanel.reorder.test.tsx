@@ -31,8 +31,8 @@ describe('CoursePanel card reordering', () => {
     container.remove();
   });
 
-  function render(ctl: PlanController) {
-    act(() => root.render(<CoursePanel ctl={ctl} />));
+  function render(ctl: PlanController, hidden = false) {
+    act(() => root.render(<CoursePanel ctl={ctl} hidden={hidden} />));
   }
   const list = () => container.querySelector<HTMLElement>('.rail__cards')!;
 
@@ -42,14 +42,24 @@ describe('CoursePanel card reordering', () => {
     expect([...list().children].map((c) => (c as HTMLElement).dataset.courseId)).toEqual(['CSE-8A|2026|2', 'MATH-18|2026|2']);
   });
 
-  it.each([
+  it.each<[string, () => PlanController, boolean?]>([
     ['a shared plan', () => sharedController(makeClashPlan(), vi.fn())],
     ['an archived term', () => own({ readOnly: true })],
     ['a signed-out visitor', () => own({ guest: true })],
     ['a single course', () => own({ viewPlan: makePlan() })],
-  ])('leaves %s alone', (_name, ctl) => {
-    render(ctl());
+    ['a pane hidden behind another tab', () => own(), true],
+  ])('leaves %s alone', (_name, ctl, hidden) => {
+    render(ctl(), hidden);
     expect(list().dataset.reorderable).toBeUndefined();
+  });
+
+  it('stays attached while the panel re-renders', () => {
+    render(own({ reorderCourse: vi.fn() }));
+    const layer = document.querySelector('.reorder-layer');
+    expect(layer).not.toBeNull();
+    render(own({ reorderCourse: vi.fn() }));
+    expect(document.querySelectorAll('.reorder-layer')).toHaveLength(1);
+    expect(document.querySelector('.reorder-layer')).toBe(layer);
   });
 
   it('turns reordering off when the plan stops being editable', () => {

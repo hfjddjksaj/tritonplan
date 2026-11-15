@@ -37,7 +37,8 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
   }, [filter, ctl.browsedNotAdded]);
 
   const hasEntries = entries.length > 0;
-  const cardsRef = useCardReorder(!readOnly && !ctl.guest && entries.length > 1, ctl.reorderCourse);
+  // A hidden pane stays mounted but has no layout to measure.
+  const cardsRef = useCardReorder(!hidden && !readOnly && !ctl.guest && entries.length > 1, ctl.reorderCourse);
   // Only worth offering where it can work: an editable plan, on a machine whose
   // extension has actually spoken to us. Phones can't run it at all.
   const canCheckBookings = !readOnly && !isMobile && ctl.extensionSeen;
