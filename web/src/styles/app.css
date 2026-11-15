@@ -653,6 +653,9 @@ p {
   width: 4px;
   background: var(--c-spine);
 }
+.course-card--entered {
+  animation: none;
+}
 .course-card--conflict {
   border-color: var(--conflict);
   box-shadow: 0 0 0 1px var(--conflict);

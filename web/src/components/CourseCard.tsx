@@ -53,6 +53,9 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, shared 
   // Section list starts tucked away — long option lists otherwise dominate the rail.
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [flash, setFlash] = useState(false);
+  // React re-inserts nodes to re-order them, and a re-inserted node replays its
+  // CSS animation. The entry animation is for arriving, so it is retired once run.
+  const [entered, setEntered] = useState(false);
   const [prereqsOpen, setPrereqsOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const rootRef = useRef<HTMLElement | null>(null);
@@ -85,7 +88,11 @@ export function CourseCard({ entry, index, conflicted, readOnly = false, shared 
   return (
     <section
       ref={rootRef}
-      className={`course-card${conflicted ? ' course-card--conflict' : ''}${full ? ' course-card--full' : ''}${flash ? ' course-card--flash' : ''}`}
+      data-course-id={course.id}
+      onAnimationEnd={(e) => {
+        if (e.target === e.currentTarget && e.animationName === 'card-in') setEntered(true);
+      }}
+      className={`course-card${entered ? ' course-card--entered' : ''}${conflicted ? ' course-card--conflict' : ''}${full ? ' course-card--full' : ''}${flash ? ' course-card--flash' : ''}`}
       style={{
         ['--c-spine' as string]: c.spine,
         ['--c-border' as string]: c.border,
