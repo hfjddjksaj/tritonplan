@@ -4,15 +4,25 @@
  * rail's boxes are stubbed to a fixed geometry.
  */
 
-/** Dispatch a bubbling, cancelable pointer event of `type` at (x, y); returns it. */
+/**
+ * Dispatch a bubbling, cancelable pointer event of `type` at (x, y); returns it.
+ * A move is made with the button held unless `buttons` says otherwise.
+ */
 export function fire(
   target: EventTarget,
   type: string,
   x: number,
   y: number,
-  init: { pointerType?: 'mouse' | 'touch'; button?: number } = {},
+  init: { pointerType?: 'mouse' | 'touch'; button?: number; buttons?: number } = {},
 ): MouseEvent {
-  const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: init.button ?? 0 });
+  const e = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX: x,
+    clientY: y,
+    button: init.button ?? 0,
+    buttons: init.buttons ?? (type === 'pointermove' ? 1 : 0),
+  });
   Object.defineProperty(e, 'pointerId', { value: 1 });
   Object.defineProperty(e, 'pointerType', { value: init.pointerType ?? 'mouse' });
   target.dispatchEvent(e);

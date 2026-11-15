@@ -211,6 +211,15 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     window.addEventListener('click', stopClick, { capture: true, once: true });
     setTimeout(() => window.removeEventListener('click', stopClick, { capture: true }), 0);
   }
+  /** The drag ended with the pointer still down: the click its pointerup brings is not for the list. */
+  function swallowLateClick() {
+    window.addEventListener('pointerup', swallowClick, { once: true });
+    // A pointerup that never came must not take the next press's click instead.
+    window.addEventListener('pointerdown', disarmLateClick, { capture: true, once: true });
+  }
+  function disarmLateClick() {
+    window.removeEventListener('pointerup', swallowClick);
+  }
 
   function onDown(e: PointerEvent) {
     if (press || drag) return;
@@ -235,8 +244,12 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     bind();
   }
   const onDragStart = (e: Event) => e.preventDefault();
+  // A menu that opens over a mouse press takes the button's release with it
+  // (macOS opens one on Ctrl+mousedown), so the press ends here. A finger's long
+  // press brings a menu too, about when it lifts the card, and the card wins.
   const onContextMenu = (e: Event) => {
     if (drag || press?.touch) e.preventDefault();
+    else dropPress();
   };
   // Once a card is up, the finger moves the card, not the list.
   const onTouchMove = (e: Event) => {
@@ -244,11 +257,19 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
   };
 
   function onMove(e: PointerEvent) {
+    // A mouse moving with no button down was let go where the page could not see.
+    const unseenUp = e.pointerType === 'mouse' && e.buttons === 0;
     if (drag) {
-      if (e.pointerId === drag.pid) pointerAt(e.clientX, e.clientY);
+      if (e.pointerId !== drag.pid) return;
+      if (unseenUp) release(false);
+      else pointerAt(e.clientX, e.clientY);
       return;
     }
     if (!press || e.pointerId !== press.pid) return;
+    if (unseenUp) {
+      dropPress();
+      return;
+    }
     const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y);
     if (press.touch) {
       if (moved > 8) dropPress();
@@ -275,11 +296,12 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
   function onEscape(e: KeyboardEvent) {
     if (e.key !== 'Escape' || !drag) return;
     e.preventDefault();
-    window.addEventListener('pointerup', swallowClick, { once: true });
+    swallowLateClick();
     release(false);
   }
   function onBlur() {
     if (drag) release(false);
+    else dropPress();
   }
 
   /** The pointer, and a short memory of it: the release velocity comes from here. */
@@ -493,8 +515,7 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     const still = reduced();
 
     if (drag && gone(drag.card)) {
-      // The pointer is still down: the click that ends this press is not for the list.
-      window.addEventListener('pointerup', swallowClick, { once: true });
+      swallowLateClick();
       const d = letGo();
       if (d) restore(d);
     }
@@ -635,6 +656,7 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     window.removeEventListener('keydown', onEscape);
     window.removeEventListener('blur', onBlur);
     window.removeEventListener('pointerup', swallowClick);
+    window.removeEventListener('pointerdown', disarmLateClick, { capture: true });
     window.removeEventListener('click', stopClick, { capture: true });
     for (const c of cardEls()) c.style.transform = '';
     delete list.dataset.reorderable;

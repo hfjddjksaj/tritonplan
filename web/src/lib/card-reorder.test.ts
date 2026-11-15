@@ -213,3 +213,120 @@ describe('attachCardReorder', () => {
     expect(m.onReorder).not.toHaveBeenCalled();
   });
 });
+
+describe('a press that ends out of sight', () => {
+  const contextMenu = (target: EventTarget) => {
+    const e = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    target.dispatchEvent(e);
+    return e;
+  };
+
+  it('puts a held card back when the window loses focus', () => {
+    const m = mount();
+    carry(m, 50, 180);
+    window.dispatchEvent(new Event('blur'));
+    expect(root.dataset.reordering).toBeUndefined();
+    expect(said()).toBe('C0 put back.');
+    fire(window, 'pointerup', 50, 180);
+    expect(m.onReorder).not.toHaveBeenCalled();
+  });
+
+  it('lifts nothing once the window has lost focus during the hold', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const m = mount();
+    fire(m.code(0), 'pointerdown', 50, 30);
+    vi.advanceTimersByTime(100);
+    window.dispatchEvent(new Event('blur'));
+    vi.advanceTimersByTime(1000);
+    fire(window, 'pointermove', 50, 180);
+    expect(ghost()).toBeNull();
+    expect(root.dataset.reordering).toBeUndefined();
+  });
+
+  it('puts the card back on pointercancel', () => {
+    const m = mount();
+    carry(m, 50, 180);
+    fire(window, 'pointercancel', 50, 180);
+    expect(root.dataset.reordering).toBeUndefined();
+    expect(said()).toBe('C0 put back.');
+    fire(window, 'pointerup', 50, 180);
+    expect(m.onReorder).not.toHaveBeenCalled();
+  });
+
+  it('a context menu ends a mouse press and is left to open', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const m = mount();
+    fire(m.code(0), 'pointerdown', 50, 30);
+    expect(contextMenu(m.code(0)).defaultPrevented).toBe(false);
+    vi.advanceTimersByTime(1000);
+    fire(window, 'pointermove', 50, 180);
+    expect(ghost()).toBeNull();
+  });
+
+  it('a long-press menu does not end a finger’s press', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const m = mount();
+    fire(m.code(0), 'pointerdown', 50, 30, { pointerType: 'touch' });
+    vi.advanceTimersByTime(100);
+    expect(contextMenu(m.code(0)).defaultPrevented).toBe(true);
+    vi.advanceTimersByTime(200);
+    expect(ghost()).not.toBeNull();
+  });
+
+  it('no menu opens over a card in the hand', () => {
+    const m = mount();
+    carry(m, 50, 180);
+    expect(contextMenu(m.list).defaultPrevented).toBe(true);
+    expect(root.dataset.reordering).toBe('');
+  });
+
+  it('a mouse moving with no button down has let go: the press is dropped', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const m = mount();
+    fire(m.code(0), 'pointerdown', 50, 30);
+    fire(window, 'pointermove', 50, 40, { buttons: 0 });
+    vi.advanceTimersByTime(1000);
+    expect(ghost()).toBeNull();
+  });
+
+  it('a mouse moving with no button down has let go: the held card goes back', () => {
+    const m = mount();
+    carry(m, 50, 180);
+    fire(window, 'pointermove', 50, 200, { buttons: 0 });
+    expect(root.dataset.reordering).toBeUndefined();
+    expect(said()).toBe('C0 put back.');
+    fire(window, 'pointerup', 50, 200);
+    expect(m.onReorder).not.toHaveBeenCalled();
+  });
+
+  it('the next click after a drag cancelled mid-press is an ordinary one', () => {
+    const m = mount();
+    const clicked = vi.fn();
+    m.remove(2).addEventListener('click', clicked);
+    carry(m, 50, 180);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    // The button comes up where the page cannot see it, and the mouse moves on.
+    fire(window, 'pointermove', 250, 230, { buttons: 0 });
+    fire(m.remove(2), 'pointerdown', 250, 230);
+    fire(window, 'pointerup', 250, 230);
+    m.remove(2).click();
+    expect(clicked).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets go cleanly when the held card leaves the list before any pointerup', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+    const m = mount();
+    const clicked = vi.fn();
+    m.remove(1).addEventListener('click', clicked);
+    carry(m, 50, 180);
+    m.card(0).remove();
+    vi.advanceTimersToNextFrame();
+    expect(ghost()).toBeNull();
+    expect(root.dataset.reordering).toBeUndefined();
+    expect(m.list.dataset.dragging).toBeUndefined();
+    fire(window, 'pointerup', 50, 180);
+    m.remove(1).click(); // the click that ends this press
+    expect(clicked).not.toHaveBeenCalled();
+    expect(m.onReorder).not.toHaveBeenCalled();
+  });
+});
