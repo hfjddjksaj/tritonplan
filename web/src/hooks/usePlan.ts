@@ -61,6 +61,7 @@ import {
   finalsSorted,
   meetingInstances,
   midtermsSorted,
+  moveEntry,
   planUnits,
   refreshPlanEntries,
 } from '../lib/plan';
@@ -577,12 +578,17 @@ export function usePlan(boot: CloudBoot, onOldLink: () => void = noop) {
       .filter((c): c is CourseOffering => c !== undefined);
   }, [pool, plan, active]);
 
+  const reorderCourse = useCallback((courseId: string, toIndex: number) => {
+    setPlan((prev) => moveEntry(prev, courseId, toIndex));
+  }, [setPlan]);
+
   return {
     pool,
     plan,
     addCourse,
     addCourseWithOption,
     removeCourse,
+    reorderCourse,
     selectOption,
     resetPlan,
     removeFromPool,
@@ -661,6 +667,7 @@ export function lockedForGuest(ctl: PlanController, ask: () => void): PlanContro
     addCourse: ask,
     addCourseWithOption: ask,
     removeCourse: ask,
+    reorderCourse: ask,
     selectOption: ask,
     resetPlan: ask,
     removeFromPool: ask,
