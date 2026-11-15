@@ -204,8 +204,9 @@ from a focused button inside one). The engine is `web/src/lib/card-reorder.ts`: 
 React, every motion a spring from `lib/spring.ts`, slot maths in `lib/reorder-geometry.ts`, the
 insertion line's drawings in `lib/insertion-line.ts`. `hooks/useCardReorder.ts` attaches it to
 `.rail__cards` in `CoursePanel.tsx`, only for the student's own editable plan
-(`!ctl.readOnly && !ctl.guest && entries.length > 1`). Its resting styles are the "reorder cards"
-block in `web/src/styles/app.css`.
+(`!ctl.readOnly && !ctl.guest && entries.length > 1`) and only while the pane is shown: on a phone
+the course pane stays mounted behind another tab, and there it has no engine. Its resting styles
+are the "reorder cards" block in `web/src/styles/app.css`.
 
 - The order changes only through `ctl.reorderCourse` (`moveEntry` in `lib/plan.ts`, which writes
   down each course's hue first, so a course saved without a colour keeps it). The engine never
@@ -216,16 +217,28 @@ block in `web/src/styles/app.css`.
   `reorder-geometry.ts` must equal `.course-card { margin-bottom }`.
 - `INSERTION_LINE` in `web/src/lib/insertion-line.ts` switches the line between `scroll`
   (scrollwork, the default) and `drop`; changing that constant is the whole switch.
+- Scroll anchoring on `.rail__scroll` is switched off by the engine, as an inline
+  `overflow-anchor: none`, only while it moves something, and back on once its frame loop goes
+  idle. Do not switch it off in CSS: with it off, adding a browsed course shifts the rows under
+  the pointer.
+- At lift the engine reads two things off `.rail__scroll`: its `padding-bottom` (autoscroll stops
+  once the end of the cards reaches it) and its `scroll-padding-bottom` (what covers its bottom;
+  the autoscroll band starts above it). The mobile layout sets both to the tab bar's height.
 
 jsdom has no layout, so the reorder tests (`card-reorder.test.ts`, `CoursePanel.reorder.test.tsx`,
 `usePlan.reorder.test.tsx`) cover wiring only: what lifts, what gets written, what is cleaned up.
 **Check motion in a real browser** after any change here. The dev server alone will do: in
 Playwright, route `/api/me` to a user (`TEST_ME` in `web/src/test/boot.ts`), `/api/state` to a
-snapshot with a plan of six or more courses (`snapshotOf` there builds one), and answer
-`POST /api/sync` with `{ok: true, versions}` while recording its bodies. Drive the mouse one frame
-at a time; touch goes through CDP `Input.dispatchTouchEvent` with touch emulation on, at 390×844.
+snapshot with a plan of six or more courses (`snapshotOf` there builds one; for the Browsed list,
+give it a `pool` and list those ids in the plan's `browsed`), `GET /api/calendar` to
+`{terms: {}, missing: []}` (or the console fills with 404s), and answer `POST /api/sync` with
+`{ok: true, versions}` while recording its bodies. Drive the mouse one frame at a time; touch
+goes through CDP `Input.dispatchTouchEvent` with touch emulation on, at 390×844.
+That recipe runs Chrome's own touch and gesture handling but does not stand in for a real phone:
+the long-press callout, iOS `touch-action` handling and momentum scrolling go unchecked by it.
 After every drop nothing may be left behind: no `.reorder-ghost`, no `data-reorder`, no inline
-`height` / `margin-bottom` / `transform` on a card, no `data-dragging` or `data-reordering`.
+`height` / `margin-bottom` / `transform` on a card, no `data-dragging` or `data-reordering`, and,
+once the motion has stopped, no inline `overflow-anchor` on `.rail__scroll`.
 
 ## Server
 
