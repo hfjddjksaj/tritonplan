@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { edgePull, gapY, releaseVelocity, slotIndex } from './reorder-geometry';
+import { autoscrollStep, edgePull, gapY, releaseVelocity, slotIndex } from './reorder-geometry';
 
 describe('slotIndex', () => {
   const mids = [50, 150, 250];
@@ -50,5 +50,19 @@ describe('edgePull', () => {
     expect(edgePull(40, 100, 500)).toBe(-1);
     expect(edgePull(472, 100, 500)).toBe(0.5);
     expect(edgePull(560, 100, 500)).toBe(1);
+  });
+});
+
+describe('autoscrollStep', () => {
+  it('scrolls down as asked while the end of the list is still below the floor', () => {
+    expect(autoscrollStep(13, 900, 500)).toBe(13);
+  });
+  it('goes no further down than brings the end of the list up to the floor', () => {
+    expect(autoscrollStep(13, 505, 500)).toBe(5);
+    expect(autoscrollStep(13, 500, 500)).toBe(0);
+    expect(autoscrollStep(13, 480, 500)).toBe(0);
+  });
+  it('leaves scrolling up alone', () => {
+    expect(autoscrollStep(-13, 480, 500)).toBe(-13);
   });
 });

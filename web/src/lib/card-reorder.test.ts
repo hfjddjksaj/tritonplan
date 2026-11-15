@@ -239,6 +239,23 @@ describe('attachCardReorder', () => {
   });
 });
 
+describe('autoscroll', () => {
+  it('pulls the list up at the bottom edge until its end reaches the bottom padding, and no further', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+    const m = mount(8); // the list runs 12…800 in a 600px scroller
+    const s = scroller();
+    s.style.paddingBottom = '24px';
+    const laid = m.list.getBoundingClientRect;
+    m.list.getBoundingClientRect = () => {
+      const r = laid.call(m.list);
+      return { ...r, top: r.top - s.scrollTop, bottom: r.bottom - s.scrollTop } as DOMRect;
+    };
+    carry(m, 50, 590);
+    vi.advanceTimersByTime(2000);
+    expect(s.scrollTop).toBeCloseTo(800 - (600 - 24), 6);
+  });
+});
+
 describe('scroll anchoring', () => {
   const frames = () => vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
   const altDown = (el: Element) =>

@@ -56,3 +56,12 @@ export function edgePull(y: number, top: number, bottom: number): number {
   if (y > bottom - EDGE) return Math.min(1, (y - (bottom - EDGE)) / EDGE);
   return 0;
 }
+
+/**
+ * This frame's autoscroll in px, `want` as the edge asks for it. Downward it
+ * stops once the list's bottom (`end`) has come up to `floor`, without
+ * overshooting: whatever lies below the list is not somewhere to drop a card.
+ */
+export function autoscrollStep(want: number, end: number, floor: number): number {
+  return want > 0 ? Math.min(want, Math.max(0, end - floor)) : want;
+}

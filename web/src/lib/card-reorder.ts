@@ -9,7 +9,16 @@
 // `onReorder`, and the cards animate from wherever the DOM then puts them.
 
 import { clamp01, lerp, settled, snap, spring, step, tune, type Spring } from './spring';
-import { edgePull, gapY, GAP, releaseVelocity, slotIndex, type Span, type TrailPoint } from './reorder-geometry';
+import {
+  autoscrollStep,
+  edgePull,
+  gapY,
+  GAP,
+  releaseVelocity,
+  slotIndex,
+  type Span,
+  type TrailPoint,
+} from './reorder-geometry';
 import {
   buildLine,
   INSERTION_LINE,
@@ -89,6 +98,8 @@ interface Drag extends Lifted {
   top: number;
   trail: TrailPoint[];
   outside: boolean;
+  /** The scroller's bottom padding: autoscroll brings the list's end no higher than its top. */
+  floorInset: number;
 }
 
 interface Landing extends Lifted {
@@ -355,6 +366,7 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
 
     const ox = p.x - r.left;
     const oy = p.y - r.top;
+    const scrollerStyle = getComputedStyle(scroller);
     const d: Drag = {
       card,
       ghost,
@@ -377,6 +389,7 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
       top: r.top,
       trail: [],
       outside: false,
+      floorInset: parseFloat(scrollerStyle.paddingBottom) || 0,
     };
     d.morph.to = 1;
     d.slot.to = 0;
@@ -536,10 +549,14 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     }
 
     if (drag) {
-      // Near the top or bottom edge of the scroller, the list scrolls under the copy.
+      // Near the top or bottom edge of the scroller, the list scrolls under the
+      // copy, as far as the end of the cards.
       const edge = scroller.getBoundingClientRect();
       const pull = edgePull(drag.y, edge.top, edge.bottom);
-      if (pull && !drag.outside) scroller.scrollTop += pull * SCROLL_SPEED * dt;
+      if (pull && !drag.outside) {
+        const end = list.getBoundingClientRect().bottom;
+        scroller.scrollTop += autoscrollStep(pull * SCROLL_SPEED * dt, end, edge.bottom - drag.floorInset);
+      }
       advance(drag, dt, still);
     }
     for (const it of landings) advance(it, dt, still);
