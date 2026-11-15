@@ -197,6 +197,36 @@ one transform carries all three. Because the layout can be a frame behind what i
 `hitMarker` takes a live projection function — a marker you can see has to be a marker you can
 click.
 
+### Reordering course cards
+
+The cards under "Added Courses" can be dragged into a new order (or moved with `Alt` + `↑` / `↓`
+from a focused button inside one). The engine is `web/src/lib/card-reorder.ts`: plain DOM, no
+React, every motion a spring from `lib/spring.ts`, slot maths in `lib/reorder-geometry.ts`, the
+insertion line's drawings in `lib/insertion-line.ts`. `hooks/useCardReorder.ts` attaches it to
+`.rail__cards` in `CoursePanel.tsx`, only for the student's own editable plan
+(`!ctl.readOnly && !ctl.guest && entries.length > 1`). Its resting styles are the "reorder cards"
+block in `web/src/styles/app.css`.
+
+- The order changes only through `ctl.reorderCourse` (`moveEntry` in `lib/plan.ts`, which writes
+  down each course's hue first, so a course saved without a colour keeps it). The engine never
+  edits the order itself: it calls `onReorder` and animates from wherever the DOM then puts the
+  cards.
+- No CSS transition or animation on anything the engine moves, and the engine marks state with
+  `data-*` attributes and inline styles only (React rewrites `className`). `GAP` in
+  `reorder-geometry.ts` must equal `.course-card { margin-bottom }`.
+- `INSERTION_LINE` in `web/src/lib/insertion-line.ts` switches the line between `scroll`
+  (scrollwork, the default) and `drop`; changing that constant is the whole switch.
+
+jsdom has no layout, so the reorder tests (`card-reorder.test.ts`, `CoursePanel.reorder.test.tsx`,
+`usePlan.reorder.test.tsx`) cover wiring only: what lifts, what gets written, what is cleaned up.
+**Check motion in a real browser** after any change here. The dev server alone will do: in
+Playwright, route `/api/me` to a user (`TEST_ME` in `web/src/test/boot.ts`), `/api/state` to a
+snapshot with a plan of six or more courses (`snapshotOf` there builds one), and answer
+`POST /api/sync` with `{ok: true, versions}` while recording its bodies. Drive the mouse one frame
+at a time; touch goes through CDP `Input.dispatchTouchEvent` with touch emulation on, at 390×844.
+After every drop nothing may be left behind: no `.reorder-ghost`, no `data-reorder`, no inline
+`height` / `margin-bottom` / `transform` on a card, no `data-dragging` or `data-reordering`.
+
 ## Server
 
 `server/` (`@triton/server`) is a Hono app on Node 24 using `node:sqlite`. It handles
