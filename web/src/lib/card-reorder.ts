@@ -657,12 +657,16 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     const j = i + (e.key === 'ArrowUp' ? -1 : 1);
     if (j < 0 || j >= cards.length) return;
     const focused = document.activeElement;
-    // Inside the move, before the card is drawn back where it was: scrolled to
-    // after that, it would be found at its old place and glide out of view.
+    // Scrolled to by its new place, inside the move: drawn where it was, it
+    // would be found there and glide out of view. A card still gliding from
+    // the move before is drawn off its place too, so for the scroll it is not.
     reflow(() => {
       opts.onReorder(card.dataset.courseId!, j);
       if (focused instanceof HTMLElement && card.contains(focused)) focused.focus({ preventScroll: true });
+      const drawn = card.style.transform;
+      card.style.transform = '';
       card.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+      card.style.transform = drawn;
     });
     announce(`${nameOf(card)} moved to position ${j + 1} of ${cards.length}.`);
   }

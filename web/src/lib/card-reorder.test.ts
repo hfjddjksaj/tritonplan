@@ -237,6 +237,25 @@ describe('attachCardReorder', () => {
     expect(document.activeElement).toBe(btn);
   });
 
+  it('a card still gliding from the last Alt+Arrow is scrolled to by its place, not where it is drawn', () => {
+    const m = mount(4);
+    const btn = m.remove(0);
+    btn.focus();
+    const press = () =>
+      btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }));
+    press();
+    expect(m.card(0).style.transform).not.toBe(''); // the first move is still being drawn
+    const seen: string[] = [];
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (this: Element) {
+      seen.push((this as HTMLElement).style.transform);
+    });
+    press();
+    scroll.mockRestore();
+    expect(seen).toEqual(['']);
+    expect(m.order()).toEqual(['c1', 'c2', 'c0', 'c3']);
+    expect(m.card(0).style.transform).not.toBe('');
+  });
+
   it('Alt+Arrow at either end does nothing', () => {
     const m = mount();
     m.remove(0).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }));
