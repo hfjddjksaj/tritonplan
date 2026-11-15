@@ -165,9 +165,15 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
 
   /** Change the list's order or size; every card starts from where it was drawn. */
   function reflow(mutate: () => void, except?: HTMLElement) {
+    // Anchoring left on would scroll to hold the moved card still, and the
+    // measurement below would see it go nowhere while the others jump.
+    scroller.style.overflowAnchor = 'none';
     const before = new Map(cardEls().map((el) => [el, natural(el).top]));
     mutate();
-    if (reduced()) return;
+    if (reduced()) {
+      kick(); // nothing to animate, but the frame loop is what turns anchoring back on
+      return;
+    }
     for (const el of cardEls()) {
       const was = before.get(el);
       if (el === except || was === undefined) continue;
@@ -376,6 +382,9 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     d.slot.to = 0;
     drag = d;
 
+    // While anything moves, scroll anchoring would answer each fold of the slot
+    // with a scroll of its own. It comes back once everything is at rest.
+    scroller.style.overflowAnchor = 'none';
     card.dataset.reorder = 'slot';
     card.style.height = `${H}px`;
     lineHost.style.color = card.style.getPropertyValue('--c-spine');
@@ -613,6 +622,7 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     }
 
     if (drag || landings.size || busy) raf = requestAnimationFrame(frame);
+    else scroller.style.overflowAnchor = '';
   }
 
   /** Alt+Arrow moves the card that holds focus one place. */
@@ -663,6 +673,7 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     window.removeEventListener('pointerdown', disarmLateClick, { capture: true });
     window.removeEventListener('click', stopClick, { capture: true });
     for (const c of cardEls()) c.style.transform = '';
+    scroller.style.overflowAnchor = '';
     delete list.dataset.reorderable;
     delete list.dataset.dragging;
     delete root.dataset.reordering;

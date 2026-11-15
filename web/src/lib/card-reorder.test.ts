@@ -52,6 +52,7 @@ function carry(m: ReturnType<typeof mount>, x: number, y: number, from = 0) {
   fire(window, 'pointermove', x, y);
 }
 const ghost = () => document.querySelector('.reorder-ghost');
+const scroller = () => document.querySelector<HTMLElement>('.rail__scroll')!;
 const said = () => document.querySelector('.reorder-layer [aria-live]')!.textContent;
 const root = document.documentElement;
 
@@ -235,6 +236,73 @@ describe('attachCardReorder', () => {
     m.remove(0).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }));
     m.remove(2).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }));
     expect(m.onReorder).not.toHaveBeenCalled();
+  });
+});
+
+describe('scroll anchoring', () => {
+  const frames = () => vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+  const altDown = (el: Element) =>
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }));
+  /** The scroller's anchoring at the moment the order changes. */
+  function anchoringAtMove(m: ReturnType<typeof mount>) {
+    const seen: string[] = [];
+    const move = m.onReorder.getMockImplementation()!;
+    m.onReorder.mockImplementation((id, to) => {
+      seen.push(scroller().style.overflowAnchor);
+      move(id, to);
+    });
+    return seen;
+  }
+
+  it('is off while a card is held and landing, and back once everything is at rest', () => {
+    frames();
+    const m = mount();
+    expect(scroller().style.overflowAnchor).toBe('');
+    carry(m, 50, 180);
+    expect(scroller().style.overflowAnchor).toBe('none');
+    vi.advanceTimersByTime(500);
+    fire(window, 'pointerup', 50, 180);
+    vi.advanceTimersToNextFrame();
+    expect(ghost()).not.toBeNull(); // still landing
+    expect(scroller().style.overflowAnchor).toBe('none');
+    vi.advanceTimersByTime(3000);
+    expect(ghost()).toBeNull();
+    expect(scroller().style.overflowAnchor).toBe('');
+  });
+
+  it('comes back when the list is detached mid-drag', () => {
+    const m = mount();
+    carry(m, 50, 180);
+    expect(scroller().style.overflowAnchor).toBe('none');
+    detach!();
+    detach = undefined;
+    expect(scroller().style.overflowAnchor).toBe('');
+  });
+
+  it('is off before a keyboard move changes the order, and back once the cards have glided', () => {
+    frames();
+    const m = mount();
+    const seen = anchoringAtMove(m);
+    altDown(m.remove(0));
+    expect(seen).toEqual(['none']);
+    vi.advanceTimersByTime(3000);
+    expect(scroller().style.overflowAnchor).toBe('');
+  });
+
+  it('with reduced motion, comes back on the next frame', () => {
+    frames();
+    window.matchMedia = vi.fn((media: string) => ({ matches: true, media }) as unknown as MediaQueryList);
+    try {
+      const m = mount();
+      const seen = anchoringAtMove(m);
+      altDown(m.remove(0));
+      expect(seen).toEqual(['none']);
+      expect(m.card(0).style.transform).toBe('');
+      vi.advanceTimersToNextFrame();
+      expect(scroller().style.overflowAnchor).toBe('');
+    } finally {
+      delete (window as { matchMedia?: unknown }).matchMedia;
+    }
   });
 });
 
