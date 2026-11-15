@@ -349,6 +349,7 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
     const ghost = document.createElement('div');
     ghost.className = 'reorder-ghost';
     ghost.setAttribute('aria-hidden', 'true');
+    ghost.inert = true; // the clone's buttons are a picture: hidden, so they must not take focus either
     for (const v of ['--c-spine', '--c-border', '--c-text']) {
       ghost.style.setProperty(v, card.style.getPropertyValue(v));
     }

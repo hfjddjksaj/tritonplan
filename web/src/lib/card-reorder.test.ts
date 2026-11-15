@@ -72,6 +72,12 @@ describe('attachCardReorder', () => {
     expect(said()).toBe('C0 moved to position 2 of 3.');
   });
 
+  it('the copy in the air is out of reach of focus and clicks', () => {
+    const m = mount();
+    carry(m, 50, 180);
+    expect((ghost() as HTMLElement).inert).toBe(true); // its buttons are a picture of the card's
+  });
+
   it('carries a card to the end of the list', () => {
     const m = mount();
     carry(m, 50, 500);
