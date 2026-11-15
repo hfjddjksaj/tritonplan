@@ -119,8 +119,10 @@ export function tip(text: string | undefined | null | false): TipHandlers {
     onPointerEnter: (e) => {
       // A finger has no hover, and a long-press bubble fights scrolling and text
       // selection over a control that is already on screen. Native `title` never
-      // appeared on touch either.
-      if (e.pointerType === 'touch') return;
+      // appeared on touch either. A pointer that arrives with a button held is
+      // carrying something across the page, a course card or a selection, and
+      // is not asking about what it passes over.
+      if (e.pointerType === 'touch' || e.buttons !== 0) return;
       requestShow(e.currentTarget, text);
     },
     onPointerLeave: hide,

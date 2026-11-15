@@ -58,8 +58,8 @@ describe('tip()', () => {
 
   /** jsdom ships no PointerEvent; React reads `pointerType` off the native event,
    *  so a MouseEvent carrying that one field is indistinguishable to the code. */
-  function pointer(type: string, pointerType: string) {
-    const e = new MouseEvent(type, { bubbles: true });
+  function pointer(type: string, pointerType: string, buttons = 0) {
+    const e = new MouseEvent(type, { bubbles: true, buttons });
     Object.defineProperty(e, 'pointerType', { value: pointerType });
     return e;
   }
@@ -73,9 +73,9 @@ describe('tip()', () => {
     const btn = host.querySelector('button')!;
     return {
       btn,
-      enter: (pointerType = 'mouse') =>
+      enter: (pointerType = 'mouse', buttons = 0) =>
         act(() => {
-          btn.dispatchEvent(pointer('pointerover', pointerType));
+          btn.dispatchEvent(pointer('pointerover', pointerType, buttons));
         }),
       leave: () =>
         act(() => {
@@ -118,6 +118,16 @@ describe('tip()', () => {
     // fights scrolling and text selection for a control that is already visible.
     const t = trigger('Remove CHEM-043A');
     t.enter('touch');
+    act(() => void vi.advanceTimersByTime(TIP_DELAY * 3));
+    expect(shown()).toBeNull();
+    t.cleanup();
+  });
+
+  it('says nothing to a pointer that is carrying something', () => {
+    // A course card dragged across the calendar passes over triggers without
+    // asking about any of them.
+    const t = trigger('PHYS-002A · Lecture');
+    t.enter('mouse', 1);
     act(() => void vi.advanceTimersByTime(TIP_DELAY * 3));
     expect(shown()).toBeNull();
     t.cleanup();
