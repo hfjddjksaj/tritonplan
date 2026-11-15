@@ -254,6 +254,26 @@ describe('autoscroll', () => {
     vi.advanceTimersByTime(2000);
     expect(s.scrollTop).toBeCloseTo(800 - (600 - 24), 6);
   });
+
+  it('starts the bottom band above what covers the bottom of the scroller', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+    const m = mount(8);
+    scroller().style.scrollPaddingBottom = '70px';
+    carry(m, 50, 510); // 90px above the bottom: in the band only once it starts 70px up
+    vi.advanceTimersByTime(200);
+    expect(scroller().scrollTop).toBeGreaterThan(0);
+  });
+
+  it('with nothing covering it, the bottom band is the scroller’s own last 56px', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+    const m = mount(8);
+    carry(m, 50, 510);
+    vi.advanceTimersByTime(200);
+    expect(scroller().scrollTop).toBe(0);
+    fire(window, 'pointermove', 50, 590);
+    vi.advanceTimersByTime(200);
+    expect(scroller().scrollTop).toBeGreaterThan(0);
+  });
 });
 
 describe('scroll anchoring', () => {

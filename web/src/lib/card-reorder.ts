@@ -100,6 +100,8 @@ interface Drag extends Lifted {
   outside: boolean;
   /** The scroller's bottom padding: autoscroll brings the list's end no higher than its top. */
   floorInset: number;
+  /** What covers the scroller's bottom (its scroll-padding): the autoscroll band starts above it. */
+  bandInset: number;
 }
 
 interface Landing extends Lifted {
@@ -390,6 +392,7 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
       trail: [],
       outside: false,
       floorInset: parseFloat(scrollerStyle.paddingBottom) || 0,
+      bandInset: parseFloat(scrollerStyle.scrollPaddingBottom) || 0, // 'auto' is 0
     };
     d.morph.to = 1;
     d.slot.to = 0;
@@ -552,7 +555,7 @@ export function attachCardReorder(list: HTMLElement, opts: CardReorderOptions): 
       // Near the top or bottom edge of the scroller, the list scrolls under the
       // copy, as far as the end of the cards.
       const edge = scroller.getBoundingClientRect();
-      const pull = edgePull(drag.y, edge.top, edge.bottom);
+      const pull = edgePull(drag.y, edge.top, edge.bottom - drag.bandInset);
       if (pull && !drag.outside) {
         const end = list.getBoundingClientRect().bottom;
         scroller.scrollTop += autoscrollStep(pull * SCROLL_SPEED * dt, end, edge.bottom - drag.floorInset);

@@ -3000,6 +3000,11 @@ p {
   .cal-grid {
     padding-bottom: calc(70px + env(safe-area-inset-bottom));
   }
+  /* The bar covers the bottom of the rail: a card dragged down meets the
+     autoscroll band above the bar, not under it. */
+  .rail__scroll {
+    scroll-padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
   .toast {
     bottom: calc(74px + env(safe-area-inset-bottom));
   }
