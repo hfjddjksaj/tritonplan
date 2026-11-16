@@ -175,3 +175,26 @@ test('an unexpected failure mid-batch answers 500 and applies nothing', async ()
   expect(await res.json()).toEqual({ error: 'server' });
   expect(deps.db.prepare('SELECT COUNT(*) AS n FROM plan_docs').get()).toEqual({ n: 0 });
 });
+
+test('an account holds at most 16 MB: the batch that would pass it is 413 account_full and writes nothing', async () => {
+  const { user, sync, snap } = setup();
+  const t = user('a@ucsd.edu');
+  const batch = (from: number, n: number) => Array.from({ length: n }, (_, i) => course(`c${from + i}`, 990_000));
+  // 8 courses of just under 1 MB fit one 8 MB body; two such batches are 15.8 MB.
+  expect((await sync({ ops: [{ op: 'putCourses', courses: batch(0, 8) }] }, t)).status).toBe(200);
+  expect((await sync({ ops: [{ op: 'putCourses', courses: batch(8, 8) }] }, t)).status).toBe(200);
+
+  const over = await sync({ ops: [
+    { op: 'putPlan', planId: 'p1', termKey: 'FA26', baseVersion: 0, data: 1 },
+    { op: 'putCourses', courses: batch(16, 1) },
+  ] }, t);
+  expect(over.status).toBe(413);
+  expect(await over.json()).toEqual({ error: 'account_full' });
+  const s = await snap(t);
+  expect([s.pool.length, Object.keys(s.plans)]).toEqual([16, []]);
+
+  // Making room in the same batch is enough, and another account has its own 16 MB.
+  const swap = await sync({ ops: [{ op: 'deleteCourses', ids: ['c0'] }, { op: 'putCourses', courses: batch(16, 1) }] }, t);
+  expect(swap.status).toBe(200);
+  expect((await sync({ ops: [{ op: 'putCourses', courses: batch(0, 8) }] }, user('b@ucsd.edu'))).status).toBe(200);
+});

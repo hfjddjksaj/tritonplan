@@ -59,6 +59,8 @@ export function dataRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
         if (oversize) return c.json({ error: 'doc_too_large' }, 413);
       }
       const res = applyOps(deps.db, c.get('userId'), ops, deps.now().toISOString(), cache);
+      // 413 like an oversized doc: the planner stops sending rather than retrying what cannot fit.
+      if (!res.ok && res.error === 'account_full') return c.json({ error: 'account_full' }, 413);
       return c.json(res, res.ok ? 200 : 409);
     },
   );

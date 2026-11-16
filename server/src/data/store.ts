@@ -1,4 +1,4 @@
-import { mergeApptTimes } from '@triton/shared';
+import { mergeApptTimes, SYNC_LIMITS } from '@triton/shared';
 import type { ApptTimes, CourseOffering, StateSnapshot, SyncOp, SyncResponse, SyncVersions } from '@triton/shared';
 import { tx, type Db } from '../db/db';
 
@@ -22,6 +22,9 @@ export function getSnapshot(db: Db, userId: string): StateSnapshot {
 }
 
 class Conflict extends Error {}
+class AccountFull extends Error {}
+
+export type SyncResult = SyncResponse | { ok: false; error: 'account_full' };
 
 /** Serialized-JSON cache so a doc is stringified once for both the size check and the write. */
 export type JsonCache = Map<unknown, string>;
@@ -38,8 +41,16 @@ export function docJson(v: unknown, cache: JsonCache): string {
  * Applies the whole batch atomically; any version conflict rolls everything back and reports every conflicting row.
  * Versions come from a per-user counter (users.version_seq), not row+1, so a delete followed by a re-create can never
  * hand out a version that a stale device still holds.
+ *
+ * An account stores at most maxAccountBytes (stored JSON, every kind of doc). Nothing else bounds how much one
+ * account can write, and GET /api/state builds the whole of it in memory. A batch is refused, whole, when it
+ * leaves the account over the cap and larger than it was: an account that is over (stored under a higher cap)
+ * can still delete, shrink and edit in place.
  */
-export function applyOps(db: Db, userId: string, ops: SyncOp[], nowIso: string, cache: JsonCache = new Map()): SyncResponse {
+export function applyOps(
+  db: Db, userId: string, ops: SyncOp[], nowIso: string, cache: JsonCache = new Map(),
+  maxAccountBytes: number = SYNC_LIMITS.maxAccountBytes,
+): SyncResult {
   const versions: SyncVersions = { terms: Object.create(null), plans: Object.create(null) };
   const conflicts: { kind: 'term' | 'plan'; id: string }[] = [];
   const seen = new Set<string>();
@@ -73,13 +84,24 @@ export function applyOps(db: Db, userId: string, ops: SyncOp[], nowIso: string, 
       `INSERT INTO user_docs (user_id, kind, data, updated_at) VALUES (?, 'appt', ?, ?)
        ON CONFLICT (user_id, kind) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
     ),
+    // octet_length reads a row's size from its header, not its content.
+    stored: db.prepare(
+      `SELECT (SELECT COALESCE(SUM(octet_length(data)), 0) FROM term_docs WHERE user_id = ?1)
+            + (SELECT COALESCE(SUM(octet_length(data)), 0) FROM plan_docs WHERE user_id = ?1)
+            + (SELECT COALESCE(SUM(octet_length(data)), 0) FROM pool_courses WHERE user_id = ?1)
+            + (SELECT COALESCE(SUM(octet_length(data)), 0) FROM user_docs WHERE user_id = ?1) AS bytes`,
+    ),
   };
+  const stored = (): number => (q.stored.get(userId) as { bytes: number }).bytes;
+  // Only a batch that stores something can grow the account; a batch of deletes is never measured.
+  const stores = ops.some((op) => op.op === 'putTerm' || op.op === 'putPlan' || op.op === 'putCourses' || op.op === 'putAppt');
   const current = (isTerm: boolean, id: string): number =>
     ((isTerm ? q.termVer : q.planVer).get(userId, id) as { version: number } | undefined)?.version ?? 0;
   const nextVersion = (): number => (q.seq.get(userId) as { version_seq: number }).version_seq;
 
   try {
     tx(db, () => {
+      const before = stores ? stored() : 0;
       for (const op of ops) {
         switch (op.op) {
           case 'putTerm':
@@ -131,9 +153,14 @@ export function applyOps(db: Db, userId: string, ops: SyncOp[], nowIso: string, 
         }
       }
       if (conflicts.length) throw new Conflict();
+      if (stores) {
+        const after = stored();
+        if (after > maxAccountBytes && after > before) throw new AccountFull();
+      }
     });
   } catch (e) {
     if (e instanceof Conflict) return { ok: false, error: 'conflict', conflicts };
+    if (e instanceof AccountFull) return { ok: false, error: 'account_full' };
     throw e;
   }
   return { ok: true, versions };

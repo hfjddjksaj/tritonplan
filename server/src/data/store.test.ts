@@ -166,3 +166,64 @@ test('users are fully isolated', () => {
   expect(snap.pool).toEqual([{ id: 'c' }]);
   expect(getSnapshot(db, b).plans.p!.data).toBe('B2');
 });
+
+// {"id":"a","pad":""} is 19 bytes, so `pad` picks the stored size exactly.
+const sized = (id: string, bytes: number, ch = 'x') => ({ id, pad: ch.repeat(bytes - 19) }) as never;
+const CAP = 1000;
+const capped = (db: Parameters<typeof applyOps>[0], user: string, ops: SyncOp[]) => applyOps(db, user, ops, T, new Map(), CAP);
+
+test('a batch that leaves the account over its storage cap is refused whole; at the cap is fine', () => {
+  const { db, mk } = setup();
+  const u = mk('a@ucsd.edu');
+  expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 500), sized('b', 500)] }]).ok).toBe(true);
+  const before = getSnapshot(db, u);
+
+  const over = capped(db, u, [
+    { op: 'putPlan', planId: 'p1', termKey: 'FA26', baseVersion: 0, data: 1 },
+    { op: 'putCourses', courses: [sized('c', 19)] },
+  ]);
+  expect(over).toEqual({ ok: false, error: 'account_full' });
+  expect(getSnapshot(db, u)).toEqual(before);
+  // The version counter rolled back with the batch.
+  expect(db.prepare('SELECT version_seq FROM users WHERE id = ?').get(u)).toEqual({ version_seq: 0 });
+});
+
+test('the cap counts every kind of doc the account stores, in bytes, and each account by itself', () => {
+  const { db, mk } = setup();
+  const u = mk('a@ucsd.edu');
+  const other = mk('b@ucsd.edu');
+  // "xx…" as JSON is its length plus the two quotes.
+  expect(capped(db, u, [
+    { op: 'putTerm', termKey: 'FA26', baseVersion: 0, data: 'x'.repeat(298) },
+    { op: 'putPlan', planId: 'p1', termKey: 'FA26', baseVersion: 0, data: 'x'.repeat(298) },
+    { op: 'putAppt', data: ['x'.repeat(296)] as unknown as ApptTimes[] },
+  ]).ok).toBe(true); // 300 + 300 + 300
+  expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 101)] }])).toEqual({ ok: false, error: 'account_full' });
+  expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 100)] }]).ok).toBe(true);
+
+  // 495 two-byte characters: 514 characters but 1009 bytes.
+  expect(capped(db, other, [{ op: 'putCourses', courses: [sized('m', 19 + 495, 'é')] }])).toEqual({ ok: false, error: 'account_full' });
+  expect(capped(db, other, [{ op: 'putCourses', courses: [sized('m', 1000)] }]).ok).toBe(true);
+});
+
+test('a full account can still delete, shrink a doc, and swap one doc for another in one batch', () => {
+  const { db, mk } = setup();
+  const u = mk('a@ucsd.edu');
+  expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 500), sized('b', 500)] }]).ok).toBe(true);
+  expect(capped(db, u, [{ op: 'deleteCourses', ids: ['b'] }, { op: 'putCourses', courses: [sized('c', 500)] }]).ok).toBe(true);
+  expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 100)] }]).ok).toBe(true);
+  expect(capped(db, u, [{ op: 'deleteCourses', ids: ['a', 'c'] }]).ok).toBe(true);
+  expect(getSnapshot(db, u).pool).toEqual([]);
+});
+
+test('an account that is already over the cap can shrink and delete, but not grow', () => {
+  const { db, mk } = setup();
+  const u = mk('a@ucsd.edu');
+  // Stored while the cap was higher.
+  expect(applyOps(db, u, [{ op: 'putCourses', courses: [sized('a', 800), sized('b', 700)] }], T).ok).toBe(true);
+  expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 801)] }])).toEqual({ ok: false, error: 'account_full' });
+  expect(capped(db, u, [{ op: 'putCourses', courses: [sized('c', 19)] }])).toEqual({ ok: false, error: 'account_full' });
+  expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 800)] }]).ok).toBe(true); // same size: an edit in place
+  expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 700)] }]).ok).toBe(true);
+  expect(capped(db, u, [{ op: 'deleteCourses', ids: ['b'] }, { op: 'putCourses', courses: [sized('c', 100)] }]).ok).toBe(true);
+});

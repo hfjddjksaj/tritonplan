@@ -32,4 +32,6 @@ export interface StateSnapshot<T = unknown, P = unknown> {
   pool: CourseOffering[];
   appt: ApptTimes[] | null;
 }
-export const SYNC_LIMITS = { maxOps: 500, maxBodyBytes: 8_000_000, maxDocBytes: 1_000_000 } as const;
+// maxAccountBytes is everything one account stores through /api/sync, as stored JSON. GET /api/state answers
+// with all of it in one piece, so it also bounds what a single answer costs the server.
+export const SYNC_LIMITS = { maxOps: 500, maxBodyBytes: 8_000_000, maxDocBytes: 1_000_000, maxAccountBytes: 16_000_000 } as const;
