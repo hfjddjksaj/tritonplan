@@ -7,14 +7,17 @@ import * as esbuild from 'esbuild';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, relative, resolve } from 'node:path';
+import { entryLine } from './deploy/entry.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
 // A checkout may keep an entry of its own in src/local/ (gitignored): the same server, started with routes that
-// are not part of this repository. When there is one, it is what gets built.
+// are not part of this repository. When there is one, it is what gets built. The bundle names its entry on its
+// first line, which deploy.sh reads back off the release in production (deploy/entry.mjs).
 const local = resolve(root, 'src/local/main.ts');
 const entry = existsSync(local) ? local : resolve(root, 'src/main.ts');
-console.log(`entry: ${relative(root, entry).replaceAll('\\', '/')}`);
+const entryName = relative(root, entry).replaceAll('\\', '/');
+console.log(`entry: ${entryName}`);
 
 await esbuild.build({
   entryPoints: [entry],
@@ -25,7 +28,7 @@ await esbuild.build({
   target: 'node24',
   alias: { '@triton/shared': resolve(root, '../shared/src/index.ts') },
   banner: {
-    js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+    js: `${entryLine(entryName)}\nimport { createRequire } from 'node:module'; const require = createRequire(import.meta.url);`,
   },
   logLevel: 'info',
 });

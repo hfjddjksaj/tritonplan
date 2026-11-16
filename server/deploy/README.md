@@ -74,6 +74,17 @@ the assets it shipped itself in `releases/<name>/web-assets.list`; only those
 are carried, so a release serves its own assets plus the previous release's,
 and nothing older piles up.
 
+The server bundle names the entry it was built from on its first line
+(`// entry: src/main.ts`, or `src/local/main.ts` when the checkout has an entry
+of its own; see `server/build.mjs`). Before uploading anything, `deploy.sh`
+reads that line off the bundle in production and prints both
+(`entry: production …, this build …`). It stops if production was built from a
+local entry and this build was not: the plain server would replace it, whatever
+that entry adds would be gone, and the health check would still pass. Deploy
+from the checkout that has `server/src/local/`, or run with
+`TP_REPLACE_LOCAL_ENTRY=1` when the plain server is what you want. The rule is
+in `server/deploy/entry.mjs`. A rollback (below) is not checked.
+
 ### RateMyProfessors ratings
 
 The server downloads RMP's public UCSD teacher list by itself: right after it

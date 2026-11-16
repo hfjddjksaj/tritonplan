@@ -17,6 +17,11 @@ npm run build -w @triton/server
 [ -f web/dist/index.html ] || { echo "error: web/dist/index.html missing after build" >&2; exit 1; }
 [ -f server/dist/main.mjs ] || { echo "error: server/dist/main.mjs missing after build" >&2; exit 1; }
 
+# A bundle names the entry it was built from on its first line. A plain build must not quietly replace a
+# release built from a checkout's own entry (entry.mjs has the rule); nothing has been uploaded yet.
+live_start="$(ssh "$TP_SSH" 'head -c 200 /srv/tritonplan/app/main.mjs 2>/dev/null || true')"
+node "$here/entry.mjs" "$live_start" "$(head -c 200 server/dist/main.mjs)"
+
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 cp -r web/dist "$stage/web"

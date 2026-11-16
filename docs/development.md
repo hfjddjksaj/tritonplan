@@ -279,7 +279,9 @@ Configure the server through `server/.env.local`. It is gitignored; secrets neve
 entry of its own at `server/src/local/main.ts` (the directory is gitignored): it calls `start(extra)`, and
 the routes `extra` returns are mounted ahead of the same-origin guard (`createApp(deps, ahead)`), which is
 where a webhook from another service has to sit. `build.mjs` builds that entry when it exists and prints
-which one it used; `npm run dev` always runs `src/main.ts`.
+which one it used; `npm run dev` always runs `src/main.ts`. The bundle carries the entry's name on its
+first line, and `deploy.sh` refuses to put a plain build over a release that was built from a local entry
+(`server/deploy/entry.mjs`; `TP_REPLACE_LOCAL_ENTRY=1` overrides).
 
 ### Routes for shares, calendar and ratings
 
