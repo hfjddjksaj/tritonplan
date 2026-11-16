@@ -356,11 +356,18 @@ p {
   font-size: 11px;
   color: var(--text-faint);
 }
+/* No scrollbar is drawn: one that takes room comes and goes with the length of
+   the list, and the cards change width each time. Lifting a card is enough to
+   do it, since the slot it leaves folds shut. */
 .rail__scroll {
   overflow-y: auto;
+  scrollbar-width: none;
   padding: 12px 16px 24px;
   flex: 1;
   min-height: 0;
+}
+.rail__scroll::-webkit-scrollbar {
+  display: none;
 }
 
 /* search / add */

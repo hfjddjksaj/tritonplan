@@ -221,6 +221,10 @@ are the "reorder cards" block in `web/src/styles/app.css`.
   `overflow-anchor: none`, only while it moves something, and back on once its frame loop goes
   idle. Do not switch it off in CSS: with it off, adding a browsed course shifts the rows under
   the pointer.
+- `.rail__scroll` draws no scrollbar (`scrollbar-width: none`). One that takes room comes and
+  goes as the list crosses the height of the rail, and the cards change width with it; lifting a
+  card is enough, because the slot it leaves folds shut. If it ever comes back, give it
+  `scrollbar-gutter: stable`.
 - At lift the engine reads two things off `.rail__scroll`: its `padding-bottom` (autoscroll stops
   once the end of the cards reaches it) and its `scroll-padding-bottom` (what covers its bottom;
   the autoscroll band starts above it). The mobile layout sets both to the tab bar's height.
