@@ -183,6 +183,22 @@ export function modeForPitch(pitch: number, current: MapMode): MapMode {
  */
 export const HOME_ZOOM_BOOST = Math.log2(1.3);
 
+/**
+ * How far a right-button (or ctrl) drag turns the map, as a fraction of what
+ * MapLibre's own rotate handler asks for — a preference, like the boost above.
+ *
+ * Stock MapLibre turns 0.8° per pixel of sideways travel while the cursor is
+ * within 100 px above or below the centre of the map (a full turn in 450 px),
+ * and everywhere else by the angle the cursor sweeps around that centre. This
+ * halves both: 0.4° per pixel along the centre line, half the swept angle away
+ * from it. It is a gain on the handler's answer rather than MapLibre's
+ * `rotateSpeed` option because that option reaches only the first of the two
+ * rules — see `scaleDragRotate` in useMapLibre.ts. The same drag's up-and-down
+ * travel (tilt) is not touched, nor is a two-finger twist on a touch screen,
+ * which follows the fingers and has no speed to speak of.
+ */
+export const DRAG_ROTATE_GAIN = 0.5;
+
 export interface StyleOptions {
   sources: MapSources;
   assetBase: string;

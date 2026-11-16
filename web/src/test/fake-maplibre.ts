@@ -183,6 +183,35 @@ export class FakeMap {
     this.fire('pitch', ev); this.fire('move', ev); this.fire('moveend', ev);
     return this;
   }
+  /**
+   * MapLibre's mouse rotate handler, as far as the planner touches it: the
+   * object behind `map.dragRotate._mouseRotate`, answering each mouse move with
+   * a `bearingDelta`. The stock answer here is the real handler's rule along
+   * the centre line, 0.8° per pixel of sideways travel.
+   */
+  private rotateLastX = 0;
+  dragRotate = {
+    _mouseRotate: {
+      mousemoveWindow: (_e: MouseEvent, point: { x: number; y: number }): { bearingDelta: number } | void => {
+        const dx = point.x - this.rotateLastX;
+        this.rotateLastX = point.x;
+        return { bearingDelta: dx * 0.8 };
+      },
+    },
+  };
+  /**
+   * What a right-button drag of `dx` pixels looks like from the inside. Real
+   * MapLibre's handler manager looks `mousemoveWindow` up ON THE HANDLER at
+   * every event and adds whatever `bearingDelta` comes back to the camera — so
+   * this goes through that same lookup, which is the only way a wrapper put on
+   * the handler after construction can be seen to take effect.
+   */
+  simulateUserRotate(dx: number) {
+    const e = new MouseEvent('mousemove');
+    const res = this.dragRotate._mouseRotate.mousemoveWindow(e, { x: this.rotateLastX + dx, y: 0 });
+    if (!res?.bearingDelta) return this;
+    return this.move({ bearing: this.cam.bearing + res.bearingDelta }, { originalEvent: e });
+  }
   getZoom() { return this.cam.zoom; }
   getCenter() { return { lng: this.cam.center[0], lat: this.cam.center[1] }; }
   getBearing() { return this.cam.bearing; }

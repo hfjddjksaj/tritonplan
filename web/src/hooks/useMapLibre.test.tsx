@@ -5,7 +5,7 @@ import { FakeMap, fakeMapLibreModule, workerUrls } from '../test/fake-maplibre';
 import { MAP_WORKER_URL } from '../lib/map-worker';
 vi.mock('maplibre-gl', () => fakeMapLibreModule);
 import { useMapLibre, MAP_LOAD_TIMEOUT_MS, type MapHandle, type HomeSpec } from './useMapLibre';
-import { HOME_ZOOM_BOOST } from '../lib/map-style';
+import { DRAG_ROTATE_GAIN, HOME_ZOOM_BOOST } from '../lib/map-style';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const STYLE = { version: 8 as const, sources: {}, layers: [] };
@@ -242,6 +242,28 @@ describe('useMapLibre', () => {
     expect(handle.atHome).toBe(false);
     await act(async () => handle.easeCamera({ bearing: 0, pitch: 0 }));
     expect(m.getPitch()).toBe(0);
+  });
+
+  it('turns the map half as far as MapLibre’s own rotate handler asks for', async () => {
+    // The gain sits on the handler's answer, not on the `rotateSpeed` option,
+    // because the option only reaches the band along the centre line.
+    let handle!: MapHandle;
+    const root = createRoot(document.body.appendChild(document.createElement('div')));
+    await act(async () => root.render(<Harness onHandle={(h) => (handle = h)} />));
+    await flush();
+    const m = FakeMap.instances[0]!;
+    expect(m.opts.rotateSpeed).toBeUndefined();
+    // 100 px sideways is 80° stock (0.8°/px).
+    await act(async () => { m.simulateUserRotate(100); });
+    expect(m.getBearing()).toBeCloseTo(80 * DRAG_ROTATE_GAIN, 6);
+    expect(DRAG_ROTATE_GAIN).toBe(0.5);
+    // Both directions, and it keeps adding up across moves of one drag.
+    await act(async () => { m.simulateUserRotate(-50); });
+    expect(m.getBearing()).toBeCloseTo(20, 6);
+    // A hand did it, so the view is no longer "home".
+    await flush();
+    expect(handle.atHome).toBe(false);
+    await act(async () => root.unmount());
   });
 
   it('goHome levels the map, not just its bearing', async () => {

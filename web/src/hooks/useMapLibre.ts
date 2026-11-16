@@ -13,10 +13,10 @@
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { Map as MapLibreMap, ScaleControl } from 'maplibre-gl';
-import type { StyleSpecification } from 'maplibre-gl';
+import type { Handler, StyleSpecification } from 'maplibre-gl';
 import type { LngLatBox } from '../lib/campus-geo';
 import { configureMapWorker } from '../lib/map-worker';
-import { HOME_ZOOM_BOOST } from '../lib/map-style';
+import { DRAG_ROTATE_GAIN, HOME_ZOOM_BOOST } from '../lib/map-style';
 
 /** The campus-core box the map homes to, plus the padding to fit it with. */
 export interface HomeSpec {
@@ -87,6 +87,37 @@ export interface MapHandle {
  */
 function boostedHomeZoom(fittedZoom: number, maxZoom: number): number {
   return Math.min(maxZoom, fittedZoom + HOME_ZOOM_BOOST);
+}
+
+/**
+ * Scales every bearing change the mouse rotate gesture (right-button or ctrl
+ * drag) produces by `gain`.
+ *
+ * MapLibre's own knob for this, the `rotateSpeed` map option, reaches only the
+ * band 100 px either side of the map's centre line; outside it the handler
+ * turns the map by the angle the cursor sweeps around the centre and never
+ * reads the option. So the gain goes on the handler's ANSWER, which is both
+ * rules at once — and, because MapLibre works its inertia out from those same
+ * answers, the coast after letting go starts from the slowed speed too.
+ *
+ * The handler manager looks `mousemoveWindow` up on the handler at every event
+ * (`handler[eventName](e, point)`), so replacing it on the instance is all it
+ * takes. `_mouseRotate` is MapLibre's own field, not public API: it is read
+ * through the library's types on purpose, so an upgrade that renames it fails
+ * `npm run typecheck` instead of quietly bringing the old speed back. Checked
+ * against maplibre-gl 6.4.1 — re-measure a right-drag after upgrading it.
+ */
+function scaleDragRotate(map: MapLibreMap, gain: number): void {
+  // `Handler` declares its event methods readonly; MapLibre itself assigns them
+  // per instance (`handler.mousemoveWindow = handler.dragMove`), as this does.
+  const rotate: { mousemoveWindow?: Handler['mousemoveWindow'] } = map.dragRotate._mouseRotate;
+  const stock = rotate.mousemoveWindow;
+  if (!stock) return;
+  rotate.mousemoveWindow = (e, point) => {
+    const moved = stock.call(rotate, e, point);
+    if (!moved || moved.bearingDelta === undefined) return moved;
+    return { ...moved, bearingDelta: moved.bearingDelta * gain };
+  };
 }
 
 /**
@@ -188,6 +219,7 @@ export function useMapLibre(
       canvasContextAttributes: { antialias: true },
     });
     m.addControl(new ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left');
+    scaleDragRotate(m, DRAG_ROTATE_GAIN);
 
     // One rAF per burst of synchronous `move` events — cheap enough to
     // re-project overlay markers on, without doing it once per camera frame
