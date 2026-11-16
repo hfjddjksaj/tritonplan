@@ -24,6 +24,13 @@ export function getSnapshot(db: Db, userId: string): StateSnapshot {
 class Conflict extends Error {}
 class AccountFull extends Error {}
 
+/**
+ * Charged per row on top of its doc and keys. A row costs the disk (the record, its index entry) and
+ * GET /api/state (its key and framing, the parsed object) about this much however small the doc is, so without
+ * it a million one-byte docs would count as one megabyte.
+ */
+const ROW_BYTES = 200;
+
 export type SyncResult = SyncResponse | { ok: false; error: 'account_full' };
 
 /** Serialized-JSON cache so a doc is stringified once for both the size check and the write. */
@@ -42,10 +49,10 @@ export function docJson(v: unknown, cache: JsonCache): string {
  * Versions come from a per-user counter (users.version_seq), not row+1, so a delete followed by a re-create can never
  * hand out a version that a stale device still holds.
  *
- * An account stores at most maxAccountBytes (stored JSON, every kind of doc). Nothing else bounds how much one
- * account can write, and GET /api/state builds the whole of it in memory. A batch is refused, whole, when it
- * leaves the account over the cap and larger than it was: an account that is over (stored under a higher cap)
- * can still delete, shrink and edit in place.
+ * An account stores at most maxAccountBytes, every kind of doc counted. Nothing else bounds how much one account
+ * can write, and GET /api/state builds the whole of it in memory. A batch is refused, whole, when it leaves the
+ * account over the cap and larger than it was: an account that is over (stored under a higher cap) can still
+ * delete, shrink and edit in place.
  */
 export function applyOps(
   db: Db, userId: string, ops: SyncOp[], nowIso: string, cache: JsonCache = new Map(),
@@ -84,12 +91,12 @@ export function applyOps(
       `INSERT INTO user_docs (user_id, kind, data, updated_at) VALUES (?, 'appt', ?, ?)
        ON CONFLICT (user_id, kind) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
     ),
-    // octet_length reads a row's size from its header, not its content.
+    // A row is charged its doc, its keys and ROW_BYTES. octet_length reads a size from the row's header, not its content.
     stored: db.prepare(
-      `SELECT (SELECT COALESCE(SUM(octet_length(data)), 0) FROM term_docs WHERE user_id = ?1)
-            + (SELECT COALESCE(SUM(octet_length(data)), 0) FROM plan_docs WHERE user_id = ?1)
-            + (SELECT COALESCE(SUM(octet_length(data)), 0) FROM pool_courses WHERE user_id = ?1)
-            + (SELECT COALESCE(SUM(octet_length(data)), 0) FROM user_docs WHERE user_id = ?1) AS bytes`,
+      `SELECT (SELECT COALESCE(SUM(octet_length(data) + octet_length(term_key) + ${ROW_BYTES}), 0) FROM term_docs WHERE user_id = ?1)
+            + (SELECT COALESCE(SUM(octet_length(data) + octet_length(plan_id) + octet_length(term_key) + ${ROW_BYTES}), 0) FROM plan_docs WHERE user_id = ?1)
+            + (SELECT COALESCE(SUM(octet_length(data) + octet_length(course_id) + ${ROW_BYTES}), 0) FROM pool_courses WHERE user_id = ?1)
+            + (SELECT COALESCE(SUM(octet_length(data) + octet_length(kind) + ${ROW_BYTES}), 0) FROM user_docs WHERE user_id = ?1) AS bytes`,
     ),
   };
   const stored = (): number => (q.stored.get(userId) as { bytes: number }).bytes;

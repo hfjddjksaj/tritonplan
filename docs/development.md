@@ -303,8 +303,9 @@ A shared plan is a server-side copy of one plan that lives exactly 7 days from c
 | `GET /cal/:secret/:file` | **public** | One term's feed at `/api/cal/<secret>/<year>-<period>.ics`, named e.g. `Winter 26 Schedule`; what the planner's Apple/Google buttons subscribe to. A term with no pick is an empty calendar. Same rate limit. |
 | `GET /rmp?name=…` | signed in | Look up RMP ratings for up to 20 instructor names. |
 
-One account stores at most 16 MB through `/api/sync` (`SYNC_LIMITS.maxAccountBytes`: stored JSON of its
-terms, plans, pool and appointment windows). A batch that would leave it over that, and larger than it
+One account stores at most 16 MB through `/api/sync` (`SYNC_LIMITS.maxAccountBytes`: its terms, plans,
+pool and appointment windows, each row charged its stored JSON, its keys and 200 bytes, so a flood of
+tiny rows counts too). A batch that would leave it over that, and larger than it
 was, is refused whole with `413 account_full` (`applyOps` in `server/src/data/store.ts`); deleting,
 shrinking and editing in place always work.
 
