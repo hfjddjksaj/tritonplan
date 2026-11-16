@@ -34,6 +34,26 @@ test('start() listens with the configuration in the environment and serves the a
   expect(running.server.listening).toBe(false);
 });
 
+test('a second stop(), during the shutdown or after it, joins the same shutdown instead of closing twice', async () => {
+  const running = start();
+  await listening(running);
+  await Promise.all([stopped(running), stopped(running)]);
+  await stopped(running);
+  expect(running.server.listening).toBe(false);
+});
+
+test('the SIGTERM handler stays on until the shutdown has finished, so a second signal mid-drain is absorbed', async () => {
+  const before = process.listenerCount('SIGTERM');
+  const running = start();
+  await listening(running);
+  expect(process.listenerCount('SIGTERM')).toBe(before + 1);
+
+  const done = stopped(running);
+  expect(process.listenerCount('SIGTERM')).toBe(before + 1); // still draining
+  await done;
+  expect(process.listenerCount('SIGTERM')).toBe(before);
+});
+
 test('start(extra) mounts the routes its extra returns, ahead of the guard', async () => {
   const seen: unknown[] = [];
   const running = start((deps) => {

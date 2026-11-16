@@ -43,15 +43,21 @@ export function start(extra?: (deps: Deps) => Mount | undefined): Running {
   });
 
   // systemd sends SIGTERM on stop/restart: drain the listener, then close SQLite so WAL checkpoints cleanly.
+  // The handler stays on until that is done, so a second signal mid-drain joins the shutdown under way instead
+  // of ending the process before the database is closed.
   const onTerm = () => stop(() => process.exit(0));
+  let shutdown: Promise<void> | undefined;
   function stop(done?: () => void) {
-    process.off('SIGTERM', onTerm);
-    stopRmp();
-    stopSweep();
-    server.close(() => {
-      db.close();
-      done?.();
+    shutdown ??= new Promise<void>((finished) => {
+      stopRmp();
+      stopSweep();
+      server.close(() => {
+        db.close();
+        process.off('SIGTERM', onTerm);
+        finished();
+      });
     });
+    if (done) void shutdown.then(done);
   }
   process.on('SIGTERM', onTerm);
 
