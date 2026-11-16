@@ -76,6 +76,18 @@ function hide() {
 }
 
 /**
+ * Takes the bubble down without warming the next one: for when its trigger is
+ * moved out from under it, so whatever is asked about next is asked from scratch,
+ * once it has settled where it is going.
+ */
+export function dismissTip() {
+  clearTimeout(showTimer);
+  if (!shown) return;
+  shown = null;
+  emit();
+}
+
+/**
  * Where the bubble goes. Above the trigger by default and centred on it; below
  * when there is no room above, because a bubble that covers its own trigger
  * hides the thing the reader is asking about. Kept pure so the flipping and
@@ -119,8 +131,10 @@ export function tip(text: string | undefined | null | false): TipHandlers {
     onPointerEnter: (e) => {
       // A finger has no hover, and a long-press bubble fights scrolling and text
       // selection over a control that is already on screen. Native `title` never
-      // appeared on touch either.
-      if (e.pointerType === 'touch') return;
+      // appeared on touch either. A pointer that arrives with a button held is
+      // carrying something across the page, a course card or a selection, and
+      // is not asking about what it passes over.
+      if (e.pointerType === 'touch' || e.buttons !== 0) return;
       requestShow(e.currentTarget, text);
     },
     onPointerLeave: hide,

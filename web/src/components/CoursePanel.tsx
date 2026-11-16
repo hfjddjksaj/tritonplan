@@ -8,6 +8,7 @@ import { displayTermLabel } from '../lib/terms';
 import type { PlanController } from '../hooks/usePlan';
 import { CHROME_STORE_URL, GITHUB_URL, PRODUCT_NAME } from '../lib/brand';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useCardReorder } from '../hooks/useCardReorder';
 import { CourseCard } from './CourseCard';
 import { Search, Plus, Cap, X, External } from './icons';
 import { tip } from './Tooltip';
@@ -36,6 +37,8 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
   }, [filter, ctl.browsedNotAdded]);
 
   const hasEntries = entries.length > 0;
+  // A hidden pane stays mounted but has no layout to measure.
+  const cardsRef = useCardReorder(!hidden && !readOnly && !ctl.guest && entries.length > 1, ctl.reorderCourse);
   // Only worth offering where it can work: an editable plan, on a machine whose
   // extension has actually spoken to us. Phones can't run it at all.
   const canCheckBookings = !readOnly && !isMobile && ctl.extensionSeen;
@@ -87,7 +90,8 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
 
       <div className="rail__scroll">
         {hasEntries ? (
-          entries.map((entry, i) => {
+          <div className="rail__cards" ref={cardsRef}>
+          {entries.map((entry, i) => {
             const option = findOption(entry.course, entry.selectedOptionId);
             const bookable = option && tssBookingLink(entry.course, option) !== null;
             // Warn only, and only when TSS names one specific other package —
@@ -122,7 +126,8 @@ export function CoursePanel({ ctl, focus, hidden = false }: Props) {
                 onToggleBooked={readOnly ? undefined : () => ctl.toggleBooked(entry.course)}
               />
             );
-          })
+          })}
+          </div>
         ) : (
           <div className="rail__empty">
             <Cap size={30} className="empty__mark" strokeWidth={1.4} />

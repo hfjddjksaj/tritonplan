@@ -98,6 +98,21 @@ export function entryHue(plan: PlanState, entry: PlanEntry): number {
   return hueFromEntryColor(entry.color, idx < 0 ? 0 : idx);
 }
 
+/**
+ * Move a course so it ends up at `toIndex` (clamped). A hue that was only implied by
+ * position has to be written down before positions change, or the course would recolor.
+ */
+export function moveEntry(plan: PlanState, courseId: string, toIndex: number): PlanState {
+  const from = plan.entries.findIndex((e) => e.course.id === courseId);
+  if (from < 0) return plan;
+  const to = Math.max(0, Math.min(plan.entries.length - 1, toIndex));
+  if (to === from) return plan;
+  const entries = plan.entries.map((e, i) => ({ ...e, color: String(hueFromEntryColor(e.color, i)) }));
+  const [moved] = entries.splice(from, 1);
+  entries.splice(to, 0, moved);
+  return { ...plan, entries };
+}
+
 /** Build the SelectedCourse[] the shared conflict engine consumes. Only entries with a chosen option. */
 export function buildSelectedCourses(plan: PlanState): SelectedCourse[] {
   const out: SelectedCourse[] = [];

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { tip, TooltipLayer, tooltipPosition, TIP_DELAY } from './Tooltip';
+import { dismissTip, tip, TooltipLayer, tooltipPosition, TIP_DELAY } from './Tooltip';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -58,8 +58,8 @@ describe('tip()', () => {
 
   /** jsdom ships no PointerEvent; React reads `pointerType` off the native event,
    *  so a MouseEvent carrying that one field is indistinguishable to the code. */
-  function pointer(type: string, pointerType: string) {
-    const e = new MouseEvent(type, { bubbles: true });
+  function pointer(type: string, pointerType: string, buttons = 0) {
+    const e = new MouseEvent(type, { bubbles: true, buttons });
     Object.defineProperty(e, 'pointerType', { value: pointerType });
     return e;
   }
@@ -73,9 +73,9 @@ describe('tip()', () => {
     const btn = host.querySelector('button')!;
     return {
       btn,
-      enter: (pointerType = 'mouse') =>
+      enter: (pointerType = 'mouse', buttons = 0) =>
         act(() => {
-          btn.dispatchEvent(pointer('pointerover', pointerType));
+          btn.dispatchEvent(pointer('pointerover', pointerType, buttons));
         }),
       leave: () =>
         act(() => {
@@ -123,6 +123,16 @@ describe('tip()', () => {
     t.cleanup();
   });
 
+  it('says nothing to a pointer that is carrying something', () => {
+    // A course card dragged across the calendar passes over triggers without
+    // asking about any of them.
+    const t = trigger('PHYS-002A · Lecture');
+    t.enter('mouse', 1);
+    act(() => void vi.advanceTimersByTime(TIP_DELAY * 3));
+    expect(shown()).toBeNull();
+    t.cleanup();
+  });
+
   it('Escape dismisses it', () => {
     const t = trigger('Remove CHEM-043A');
     t.enter();
@@ -146,6 +156,33 @@ describe('tip()', () => {
     a.leave();
     b.enter();
     expect(shown()?.textContent).toBe('second');
+    a.cleanup();
+    b.cleanup();
+  });
+
+  it('a cold dismiss leaves nothing warm and nothing waiting', () => {
+    // For a bubble whose trigger moved out from under it: whatever is asked about
+    // next waits its turn, as if no bubble had been up.
+    const a = trigger('Remove MATH-18');
+    const b = trigger('Remove CSE-8A');
+    a.enter();
+    act(() => void vi.advanceTimersByTime(TIP_DELAY));
+    a.leave();
+    act(() => void vi.advanceTimersByTime(TIP_DELAY * 3)); // cold from here
+    a.enter();
+    act(() => void vi.advanceTimersByTime(TIP_DELAY));
+    expect(shown()?.textContent).toBe('Remove MATH-18');
+    act(() => dismissTip());
+    expect(shown()).toBeNull();
+    b.enter();
+    expect(shown()).toBeNull();
+    act(() => void vi.advanceTimersByTime(TIP_DELAY));
+    expect(shown()?.textContent).toBe('Remove CSE-8A');
+    act(() => dismissTip());
+    a.enter();
+    act(() => dismissTip());
+    act(() => void vi.advanceTimersByTime(TIP_DELAY * 3));
+    expect(shown()).toBeNull();
     a.cleanup();
     b.cleanup();
   });

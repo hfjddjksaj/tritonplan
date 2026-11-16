@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { CourseOffering, MidtermExam, PlanState, SectionOption } from '@triton/shared';
 import {
+  entryHue,
   finalsSorted,
   meetingInstances,
   midtermOverlapKeys,
   midtermsSorted,
+  moveEntry,
   optionSummaryParts,
   refreshPlanEntries,
 } from './plan';
@@ -348,5 +350,43 @@ describe('full-section flag on calendar instances', () => {
     expect(meetingInstances(plan, booked).every((i) => !i.full)).toBe(true);
     expect(finalsSorted(plan, booked).every((f) => !f.full)).toBe(true);
     expect(midtermsSorted(plan, booked).dated.every((m) => !m.full)).toBe(true);
+  });
+});
+
+describe('moveEntry', () => {
+  const plan = (colors: (string | undefined)[]): PlanState => ({
+    version: 1,
+    term: { year: '2026', period: '2', label: 'Fall 2026' },
+    entries: colors.map((color, i) => ({
+      course: makeCourse(`C${i}`),
+      selectedOptionId: null,
+      ...(color === undefined ? {} : { color }),
+    })),
+  });
+  const ids = (p: PlanState) => p.entries.map((e) => e.course.id);
+
+  it('moves an entry to its new index', () => {
+    const p = plan(['231', '187', '340', '38']);
+    expect(ids(moveEntry(p, 'C1', 3))).toEqual(['C0', 'C2', 'C3', 'C1']);
+    expect(ids(moveEntry(p, 'C3', 0))).toEqual(['C3', 'C0', 'C1', 'C2']);
+  });
+
+  it('clamps the index to the list', () => {
+    const p = plan(['231', '187', '340']);
+    expect(ids(moveEntry(p, 'C0', 99))).toEqual(['C1', 'C2', 'C0']);
+    expect(ids(moveEntry(p, 'C2', -5))).toEqual(['C2', 'C0', 'C1']);
+  });
+
+  it('returns the same plan when nothing moves', () => {
+    const p = plan([undefined, '187']);
+    expect(moveEntry(p, 'C1', 1)).toBe(p);
+    expect(moveEntry(p, 'nope', 0)).toBe(p);
+  });
+
+  it('keeps every course on its hue, stored or not', () => {
+    const p = plan([undefined, '340', undefined, 'not-a-number']);
+    const before = new Map(p.entries.map((e) => [e.course.id, entryHue(p, e)]));
+    const moved = moveEntry(p, 'C3', 0);
+    for (const e of moved.entries) expect(entryHue(moved, e)).toBe(before.get(e.course.id));
   });
 });

@@ -35,6 +35,7 @@ export function sharedController(
     addCourse: noop,
     addCourseWithOption: noop,
     removeCourse: noop,
+    reorderCourse: noop,
     selectOption: onSelect,
     resetPlan: noop,
     removeFromPool: noop,

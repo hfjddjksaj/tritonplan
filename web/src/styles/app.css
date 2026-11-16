@@ -651,6 +651,9 @@ p {
   width: 4px;
   background: var(--c-spine);
 }
+.course-card--entered {
+  animation: none;
+}
 .course-card--conflict {
   border-color: var(--conflict);
   box-shadow: 0 0 0 1px var(--conflict);
@@ -680,6 +683,83 @@ p {
   55% {
     box-shadow: 0 0 0 3px var(--c-spine);
   }
+}
+/* ============================================================ reorder cards
+   Resting states only. Everything that moves while a card is dragged is driven
+   by springs in lib/card-reorder.ts; a transition here would fight them. */
+.rail__cards {
+  position: relative;
+}
+.rail__cards[data-reorderable] > .course-card {
+  cursor: grab;
+  -webkit-touch-callout: none;
+}
+@media (pointer: coarse) {
+  /* A long press picks the card up; it must not also start a text selection. */
+  .rail__cards[data-reorderable] > .course-card {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+.rail__cards[data-dragging] > .course-card {
+  pointer-events: none;
+}
+/* The slot a lifted card leaves: still in the flow so script can fold it shut,
+   borderless so it can reach zero height. */
+.course-card[data-reorder='slot'] {
+  visibility: hidden;
+  border-width: 0;
+}
+:root[data-reordering],
+:root[data-reordering] * {
+  cursor: grabbing !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+.reorder-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 110; /* over the page and toasts (100); under menus (150) and tooltips (200) */
+  pointer-events: none;
+  overflow: hidden;
+}
+.reorder-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 24px;
+  opacity: 0;
+  z-index: 1;
+}
+/* The card in the air. The frame belongs to this box, not to the card inside it,
+   so it survives the box closing down to the card's head. */
+.reorder-ghost {
+  --glass: 1;
+  --fade: 1;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  overflow: hidden;
+  background: rgb(255 255 255 / var(--glass));
+  border: 1px solid var(--c-border, var(--line));
+  border-radius: var(--r-md);
+  will-change: transform;
+}
+.reorder-ghost > .course-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  animation: none;
+}
+.reorder-ghost__fade {
+  opacity: var(--fade);
 }
 .course-card__head {
   display: flex;
@@ -2919,6 +2999,11 @@ p {
   }
   .cal-grid {
     padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+  /* The bar covers the bottom of the rail: a card dragged down meets the
+     autoscroll band above the bar, not under it. */
+  .rail__scroll {
+    scroll-padding-bottom: calc(70px + env(safe-area-inset-bottom));
   }
   .toast {
     bottom: calc(74px + env(safe-area-inset-bottom));
