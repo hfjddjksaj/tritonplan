@@ -176,6 +176,29 @@ over the restored file.
    matches the live database.
 7. Stop the second instance, `rm -f /tmp/restore.db*`.
 
+## Page CSP
+
+Caddy sends a `Content-Security-Policy` with everything it serves from disk
+(the `@pages` line in `Caddyfile`): scripts, styles, fonts, workers and requests
+only from this site, plus `data:` and `blob:` images. The API sets its own,
+stricter one in the app. A page that needs anything else (a font or script from
+another host, an inline `<script>`, a `blob:` worker) is refused by the browser,
+and the refusal shows in its console.
+
+To change it: add the new policy as a second header,
+`Content-Security-Policy-Report-Only`, run `provision-remote.sh`, and walk the
+planner (map in 2D and 3D, the dialogs, `/privacy.html`, `/s/<code>`, `/reset`,
+`/verify`, `/migrate`) with this in the console, which lists what the new policy
+would refuse, also from before the console was opened:
+
+```js
+new ReportingObserver((rs) => console.table(rs.map((r) => r.body)), { types: ['csp-violation'], buffered: true }).observe()
+```
+
+Nothing listed: make it the enforced policy and provision again. A Caddyfile
+change takes effect only through `provision-remote.sh`, not `deploy.sh`. To back
+out, restore the previous line and provision.
+
 ## Logs
 
 Caddy has no access log. The journal keeps error logs only;

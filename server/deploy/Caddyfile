@@ -15,12 +15,13 @@ tritonplan.cn {
 	# What a page may load and run: only this site's own files. If a script is
 	# ever injected into a page, the browser refuses to run it or to send data to
 	# another host. For everything served from disk; the API sets a stricter one
-	# of its own. Report-Only: the browser only logs what it would have refused
-	# (in its console), until the planner has been seen to run clean under it.
-	# 'unsafe-inline' is for styles only (privacy.html has a <style> block);
-	# data: and blob: images are the icons in the CSS and the map's own.
+	# of its own. 'unsafe-inline' is for styles only (privacy.html has a <style>
+	# block); data: and blob: images are the icons in the CSS and the map's own.
+	# Before widening or tightening it, send the new policy next to this one as
+	# Content-Security-Policy-Report-Only first: the browser then only logs what
+	# it would refuse (README.md, "Page CSP").
 	@pages not path /api/*
-	header @pages Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	header @pages Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 	handle /api/* {
 		# Just above the app's own 8 MB /api/sync cap: an oversized body is
 		# refused here before it reaches Node at all.
