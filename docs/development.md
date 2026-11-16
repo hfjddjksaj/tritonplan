@@ -303,6 +303,12 @@ A shared plan is a server-side copy of one plan that lives exactly 7 days from c
 | `GET /cal/:secret/:file` | **public** | One term's feed at `/api/cal/<secret>/<year>-<period>.ics`, named e.g. `Winter 26 Schedule`; what the planner's Apple/Google buttons subscribe to. A term with no pick is an empty calendar. Same rate limit. |
 | `GET /rmp?name=…` | signed in | Look up RMP ratings for up to 20 instructor names. |
 
+Every signed-in route also counts against one budget per account, 3000 requests per 15 minutes
+(`requireUser` in `server/src/http/guard.ts`); past it the answer is `429 rate_limited`, which the
+sync engine treats like being offline and retries. Every answer under `/api` carries
+`Cache-Control: no-store` unless the route sets its own (the calendar feed) and a
+`Content-Security-Policy` that loads nothing (`apiHeaders`, same file).
+
 ### Checking the shared-plan UI locally
 
 Run `npm run dev -w @triton/server` (needs `server/.env.local`: `TP_ORIGIN=http://localhost:5173`,

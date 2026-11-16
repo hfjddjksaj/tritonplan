@@ -187,6 +187,9 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
 
   r.post('/reset', async (c) => {
     const b = await body(c);
+    // Every attempt that gets as far as the token is a database write (the row is deleted as it is looked up).
+    const blocked = limited(c, [[`reset:ip:${clientIp(c)}`, 30, QUARTER]]);
+    if (blocked) return blocked;
     // Checked before consuming the token, so a too-short password does not burn the link.
     if (passwordProblem(str(b.password))) return c.json({ error: 'weak_password' }, 400);
     const token = str(b.token);
@@ -212,9 +215,9 @@ export function authRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   return r;
 }
 
-export function meRoute(deps: Deps): Hono<AppEnv> {
+export function meRoute(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
-  r.get('/', requireUser(deps), (c) => {
+  r.get('/', requireUser(deps, limiter), (c) => {
     const user = findUserById(deps.db, c.get('userId'));
     if (!user) return c.json({ error: 'unauthorized' }, 401);
     return c.json({ email: user.email, hasPassword: user.password_hash !== null, hasGoogle: user.google_sub !== null });

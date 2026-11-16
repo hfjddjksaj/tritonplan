@@ -64,7 +64,7 @@ export function calendarRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
   const { db, config } = deps;
   // Per route, not r.use('*'): this router mounts at /api and GET /api/cal/:file must stay public.
-  const auth = requireUser(deps);
+  const auth = requireUser(deps, limiter);
   const links = (secret: string) => {
     const https = `${config.origin}/api/cal/${secret}.ics`;
     return { https, webcal: https.replace(/^https:\/\//, 'webcal://') };

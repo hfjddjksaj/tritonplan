@@ -19,6 +19,29 @@ test('unhandled errors become 500 {error:"server"} without leaking detail', asyn
   err.mockRestore();
 });
 
+test('API answers are not to be stored and can load nothing, also from a route mounted ahead, a refusal, a 404 and a 500', async () => {
+  const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const app = createApp(testDeps(), (a) => {
+    a.get('/api/hooks/ping', (c) => c.json({ pong: true }));
+  });
+  app.get('/api/boom', () => { throw new Error('secret detail'); });
+  const write = await app.request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  const answers: [Response, number][] = [
+    [await app.request('/api/health'), 200],
+    [await app.request('/api/hooks/ping'), 200],
+    [await app.request('/api/state'), 401],
+    [write, 403],
+    [await app.request('/api/nope'), 404],
+    [await app.request('/api/boom'), 500],
+  ];
+  for (const [res, status] of answers) {
+    expect(res.status).toBe(status);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('content-security-policy')).toBe("default-src 'none'; frame-ancestors 'none'");
+  }
+  err.mockRestore();
+});
+
 test('a route mounted ahead of the guard takes a write with no Origin; a write it does not answer still meets the guard', async () => {
   const app = createApp(testDeps(), (a) => {
     a.post('/api/hooks/ping', (c) => c.json({ pong: true }));

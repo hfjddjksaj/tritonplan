@@ -282,6 +282,21 @@ test('reset sets the password, verifies the email and kills other sessions', asy
   expect(await again.json()).toEqual({ error: 'link_expired' });
 });
 
+test('reset attempts are limited per IP, before the token is looked at', async () => {
+  const { post, deps } = setup();
+  await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'hunter2hunter2' });
+  await post('/api/auth/forgot', { email: 'a@ucsd.edu' }); // verify mail 0, reset mail 1
+  const token = /token=([\w-]+)/.exec(deps.mailer.sent[1]!.text)![1]!;
+  const from = (ip: string, t: string) => post('/api/auth/reset', { token: t, password: 'brand-new-password' }, { 'X-Real-IP': ip });
+
+  for (let i = 0; i < 30; i++) expect((await from('203.0.113.7', 'not-a-token')).status).toBe(400);
+  // The 31st is refused even though it carries the real link, and the link is not used up by it.
+  const over = await from('203.0.113.7', token);
+  expect(over.status).toBe(429);
+  expect(await over.json()).toMatchObject({ error: 'rate_limited' });
+  expect((await from('203.0.113.8', token)).status).toBe(200);
+});
+
 test('reset marks an unverified account verified', async () => {
   const { post, deps, tokenFrom } = setup();
   await post('/api/auth/signup', { email: 'a@ucsd.edu', password: 'old-password1' });

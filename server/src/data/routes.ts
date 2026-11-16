@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { SYNC_LIMITS, type SyncOp } from '@triton/shared';
 import type { Deps } from '../app';
 import { requireUser, type AppEnv } from '../http/guard';
+import type { RateLimiter } from '../http/rate-limit';
 import { applyOps, docJson, getSnapshot, type JsonCache } from './store';
 
 // Keys become object keys in responses; these names would poke at Object.prototype.
@@ -26,10 +27,10 @@ const envelope = z.object({ ops: z.array(opSchema).min(1).max(SYNC_LIMITS.maxOps
 
 
 
-export function dataRoutes(deps: Deps): Hono<AppEnv> {
+export function dataRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
   // Per route, not r.use('*'): this router mounts at /api and a wildcard would put a login wall on every other /api path.
-  const auth = requireUser(deps);
+  const auth = requireUser(deps, limiter);
 
   r.get('/state', auth, (c) => c.json(getSnapshot(deps.db, c.get('userId'))));
 

@@ -35,7 +35,7 @@ export function shareRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
   const { db, config } = deps;
   // Per route, not r.use('*'): this router mounts at /api and the /s/:code routes must stay public.
-  const auth = requireUser(deps);
+  const auth = requireUser(deps, limiter);
   const urlOf = (code: string) => `${config.origin}/s/${code}`;
   const notFound = (c: { json: (b: unknown, s: 404) => Response }) => c.json({ error: 'not_found' }, 404);
   const limited = (key: string, max: number) => {

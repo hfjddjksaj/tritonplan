@@ -4,6 +4,7 @@ import { createApp } from '../app';
 import { createSession } from '../auth/sessions';
 import { testDeps } from '../test-helpers';
 import { clientIp, requireUser, sameOriginJson, type AppEnv } from './guard';
+import { createRateLimiter } from './rate-limit';
 
 const ORIGIN = 'https://tritonplan.cn';
 const post = (app: { request: (p: string, i?: RequestInit) => Response | Promise<Response> }, headers: Record<string, string>, path = '/api/x') =>
@@ -45,7 +46,7 @@ test('requireUser: 401 without a valid cookie, sets vars, re-sends cookie on ref
   const deps = testDeps();
   deps.db.prepare('insert into users (id, email, created_at) values (?, ?, ?)').run('u1', 'a@b.com', '2026-01-01T00:00:00Z');
   const app = new Hono<AppEnv>();
-  app.use('/me', requireUser(deps));
+  app.use('/me', requireUser(deps, createRateLimiter(deps.now)));
   app.get('/me', (c) => c.json({ id: c.get('userId'), tok: c.get('sessionToken') }));
 
   const none = await app.request('/me');
@@ -64,6 +65,33 @@ test('requireUser: 401 without a valid cookie, sets vars, re-sends cookie on ref
   const noRefresh = await app.request('/me', { headers: { Cookie: `tp_session=${fresh}` } });
   expect(noRefresh.status).toBe(200);
   expect(noRefresh.headers.get('set-cookie')).toBeNull();
+});
+
+test('requireUser: an account has 3000 requests per quarter hour; past that 429, and nobody else is affected', async () => {
+  let t = Date.parse('2026-01-15T12:00:00.000Z');
+  const deps = testDeps({ now: () => new Date(t) });
+  for (const id of ['u1', 'u2']) {
+    deps.db.prepare('insert into users (id, email, created_at) values (?, ?, ?)').run(id, `${id}@b.com`, '2026-01-01T00:00:00Z');
+  }
+  const app = new Hono<AppEnv>();
+  app.use('/me', requireUser(deps, createRateLimiter(deps.now)));
+  app.get('/me', (c) => c.json({ id: c.get('userId') }));
+  const as = (tok: string) => app.request('/me', { headers: { Cookie: `tp_session=${tok}` } });
+  const one = createSession(deps.db, 'u1', deps.now());
+  const two = createSession(deps.db, 'u2', deps.now());
+
+  // Signed-out requests spend nobody's budget.
+  for (let i = 0; i < 50; i++) expect((await as('bogus')).status).toBe(401);
+  for (let i = 0; i < 3000; i++) expect((await as(one)).status).toBe(200);
+  const over = await as(one);
+  expect(over.status).toBe(429);
+  expect(await over.json()).toEqual({ error: 'rate_limited', retryAfter: 900 });
+  // The budget is the account's: a second session of the same account is over it too, another account is not.
+  expect((await as(createSession(deps.db, 'u1', deps.now()))).status).toBe(429);
+  expect((await as(two)).status).toBe(200);
+
+  t += 900_000;
+  expect((await as(one)).status).toBe(200);
 });
 
 test('clientIp buckets IPv6 to /64 and unwraps IPv4-mapped addresses', async () => {

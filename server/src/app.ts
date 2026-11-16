@@ -10,7 +10,7 @@ import { shareRoutes } from './share/routes';
 import { calendarRoutes } from './calendar/routes';
 import { rmpRoutes } from './rmp/routes';
 import { createRateLimiter } from './http/rate-limit';
-import { sameOriginJson, type AppEnv } from './http/guard';
+import { apiHeaders, sameOriginJson, type AppEnv } from './http/guard';
 import type { Mailer } from './mail/mailer';
 
 export interface Deps {
@@ -26,6 +26,9 @@ export type Mount = (app: Hono<AppEnv>) => void;
 
 export function createApp(deps: Deps, ahead?: Mount): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+
+  // First, so it also covers what `ahead` mounts. It only adds headers to the answer.
+  app.use('/api/*', apiHeaders());
 
   // `ahead` mounts routes whose callers are not a browser on our origin (another service's webhook), so they go
   // in front of the guard below. Such a route reads no cookie and touches no account; a write it does not answer
@@ -49,12 +52,12 @@ export function createApp(deps: Deps, ahead?: Mount): Hono<AppEnv> {
   const limiter = createRateLimiter(deps.now);
   app.route('/api/auth', authRoutes(deps, limiter));
   app.route('/api/auth/google', googleRoutes(deps, limiter));
-  app.route('/api/me', meRoute(deps));
+  app.route('/api/me', meRoute(deps, limiter));
   app.route('/api/account', accountRoutes(deps, limiter));
-  app.route('/api', dataRoutes(deps));
+  app.route('/api', dataRoutes(deps, limiter));
   app.route('/api', shareRoutes(deps, limiter));
   app.route('/api', calendarRoutes(deps, limiter));
-  app.route('/api', rmpRoutes(deps));
+  app.route('/api', rmpRoutes(deps, limiter));
 
   // Never leak internals to the client; the log has the detail.
   app.onError((err, c) => {

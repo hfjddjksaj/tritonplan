@@ -23,7 +23,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 export function accountRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
   const { db, config } = deps;
-  r.use('*', requireUser(deps));
+  r.use('*', requireUser(deps, limiter));
 
   r.post('/password', async (c) => {
     const userId = c.get('userId');
