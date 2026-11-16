@@ -19,6 +19,21 @@ test('unhandled errors become 500 {error:"server"} without leaking detail', asyn
   err.mockRestore();
 });
 
+test('a route mounted ahead of the guard takes a write with no Origin; a write it does not answer still meets the guard', async () => {
+  const app = createApp(testDeps(), (a) => {
+    a.post('/api/hooks/ping', (c) => c.json({ pong: true }));
+  });
+  // As another service's webhook sends it: no Origin header.
+  const post = (path: string) =>
+    app.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+
+  const ok = await post('/api/hooks/ping');
+  expect([ok.status, await ok.json()]).toEqual([200, { pong: true }]);
+  expect((await post('/api/hooks/other')).status).toBe(403);
+  expect((await post('/api/auth/login')).status).toBe(403);
+  expect((await app.request('/api/hooks/ping', { method: 'DELETE' })).status).toBe(403);
+});
+
 function send(app: ReturnType<typeof createApp>, path: string, body: string, method = 'POST') {
   return app.request(path, {
     method,

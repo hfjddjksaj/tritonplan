@@ -269,6 +269,14 @@ Configure the server through `server/.env.local`. It is gitignored; secrets neve
 | `TP_MAIL_FROM` | `TritonPlan <noreply@tritonplan.cn>` | From address for outgoing mail. |
 | `TP_RMP_REFRESH` | `on` | Monthly RateMyProfessors roster download. Only the literal `off` disables it. Set `off` in `server/.env.local` so a dev server never calls RMP. |
 
+### A local entry
+
+`server/src/start.ts` holds the startup (`start()`); `src/main.ts` only calls it. A checkout may keep an
+entry of its own at `server/src/local/main.ts` (the directory is gitignored): it calls `start(extra)`, and
+the routes `extra` returns are mounted ahead of the same-origin guard (`createApp(deps, ahead)`), which is
+where a webhook from another service has to sit. `build.mjs` builds that entry when it exists and prints
+which one it used; `npm run dev` always runs `src/main.ts`.
+
 ### Routes for shares, calendar and ratings
 
 All under `/api`. Everything needs a signed-in session except the routes marked public.

@@ -4,13 +4,20 @@
  * The banner gives bundled CJS deps a working `require` under ESM output.
  */
 import * as esbuild from 'esbuild';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+// A checkout may keep an entry of its own in src/local/ (gitignored): the same server, started with routes that
+// are not part of this repository. When there is one, it is what gets built.
+const local = resolve(root, 'src/local/main.ts');
+const entry = existsSync(local) ? local : resolve(root, 'src/main.ts');
+console.log(`entry: ${relative(root, entry).replaceAll('\\', '/')}`);
+
 await esbuild.build({
-  entryPoints: [resolve(root, 'src/main.ts')],
+  entryPoints: [entry],
   outfile: resolve(root, 'dist/main.mjs'),
   bundle: true,
   platform: 'node',

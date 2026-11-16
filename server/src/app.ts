@@ -24,7 +24,10 @@ export interface Deps {
   fetch: typeof fetch;
 }
 
-export function createApp(deps: Deps): Hono<AppEnv> {
+/** Registers routes of its own on the app. */
+export type Mount = (app: Hono<AppEnv>) => void;
+
+export function createApp(deps: Deps, ahead?: Mount): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
   // The only routes ahead of the guard below: their callers are the UCSD status page and Discord, not a browser
@@ -37,6 +40,11 @@ export function createApp(deps: Deps): Hono<AppEnv> {
       command: target ? createStatusCommand(deps, target) : null,
     }),
   );
+
+  // `ahead` mounts routes whose callers are not a browser on our origin (another service's webhook), so they go
+  // in front of the guard below. Such a route reads no cookie and touches no account; a write it does not answer
+  // still meets the guard.
+  ahead?.(app);
 
   // Registered before every other route so it also covers writes to routes that don't exist.
   app.use('/api/*', sameOriginJson(deps.config));
