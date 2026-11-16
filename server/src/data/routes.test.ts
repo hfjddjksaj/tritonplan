@@ -198,3 +198,16 @@ test('an account holds at most 16 MB: the batch that would pass it is 413 accoun
   expect(swap.status).toBe(200);
   expect((await sync({ ops: [{ op: 'putCourses', courses: batch(0, 8) }] }, user('b@ucsd.edu'))).status).toBe(200);
 });
+
+test('/api/state answers JSON, whatever the account holds', async () => {
+  const { user, sync, state } = setup();
+  const t = user('a@ucsd.edu');
+  const empty = await state(t);
+  expect([empty.status, empty.headers.get('content-type')]).toEqual([200, 'application/json']);
+  expect(await empty.json()).toEqual({ terms: {}, plans: {}, pool: [], appt: null });
+  const odd = 'é"' + String.fromCharCode(92); // ends in a backslash
+  await sync({ ops: [{ op: 'putTerm', termKey: 'FA26', baseVersion: 0, data: { a: odd } }, { op: 'putAppt', data: [] }] }, t);
+  const full = await state(t);
+  expect(full.headers.get('content-type')).toBe('application/json');
+  expect(await full.json()).toMatchObject({ terms: { FA26: { data: { a: odd } } }, appt: [] });
+});

@@ -1,12 +1,14 @@
 import { expect, test } from 'vitest';
-import type { ApptTimes, SyncOp } from '@triton/shared';
+import type { ApptTimes, StateSnapshot, SyncOp } from '@triton/shared';
 import { createUser } from '../auth/users';
 import { testDeps } from '../test-helpers';
-import { applyOps, getSnapshot } from './store';
+import { applyOps, snapshotJson } from './store';
 
 const now = new Date('2026-01-15T12:00:00.000Z');
 const T = now.toISOString();
 const course = (id: string) => ({ id }) as never;
+// What GET /api/state answers with, read back the way the planner reads it.
+const getSnapshot = (db: Parameters<typeof snapshotJson>[0], userId: string) => JSON.parse(snapshotJson(db, userId)) as StateSnapshot;
 const ok = (r: ReturnType<typeof applyOps>) => {
   if (!r.ok) throw new Error('unexpected conflict');
   return r.versions;
@@ -244,4 +246,47 @@ test('an account that is already over the cap can shrink and delete, but not gro
   expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 800)] }]).ok).toBe(true); // same size: an edit in place
   expect(capped(db, u, [{ op: 'putCourses', courses: [sized('a', 700)] }]).ok).toBe(true);
   expect(capped(db, u, [{ op: 'deleteCourses', ids: ['b'] }, { op: 'putCourses', courses: [sized('c', 300)] }]).ok).toBe(true);
+});
+
+test('an empty account is this exact text', () => {
+  const { db, mk } = setup();
+  expect(snapshotJson(db, mk('a@ucsd.edu'))).toBe('{"terms":{},"plans":{},"pool":[],"appt":null}');
+});
+
+test('a stored doc goes into the answer as it is stored: reading an account never parses its docs', () => {
+  const { db, mk } = setup();
+  const u = mk('a@ucsd.edu');
+  // Not how JSON.stringify would write them, so a parse and re-serialize on the way out would show.
+  const term = '{ "a" : 1.50 }';
+  const plan = '[ 1,2 ,3 ]';
+  const pool = '{ "id" : "c1" }';
+  const appt = '[ ]';
+  db.prepare('INSERT INTO term_docs (user_id, term_key, version, data, updated_at) VALUES (?, ?, 7, ?, ?)').run(u, 'FA26', term, T);
+  db.prepare('INSERT INTO plan_docs (user_id, plan_id, term_key, version, data, updated_at) VALUES (?, ?, ?, 9, ?, ?)').run(u, 'p1', 'FA26', plan, T);
+  db.prepare('INSERT INTO pool_courses (user_id, course_id, data, updated_at) VALUES (?, ?, ?, ?)').run(u, 'c1', pool, T);
+  db.prepare("INSERT INTO user_docs (user_id, kind, data, updated_at) VALUES (?, 'appt', ?, ?)").run(u, appt, T);
+  expect(snapshotJson(db, u)).toBe(
+    `{"terms":{"FA26":{"version":7,"data":${term}}},"plans":{"p1":{"version":9,"termKey":"FA26","data":${plan}}},"pool":[${pool}],"appt":${appt}}`,
+  );
+});
+
+test('keys that need escaping, and several rows of each kind in key order, still read back as JSON', () => {
+  const { db, mk } = setup();
+  const u = mk('a@ucsd.edu');
+  // A quote, a backslash, a newline, U+2028 and a two-byte letter.
+  const odd = ['te"rm', String.fromCharCode(92), 'key', String.fromCharCode(10, 0x2028), 'é'].join('');
+  const v = ok(applyOps(db, u, [
+    { op: 'putTerm', termKey: odd, baseVersion: 0, data: { t: 1 } },
+    { op: 'putTerm', termKey: 'B', baseVersion: 0, data: 2 },
+    { op: 'putPlan', planId: 'z"p', termKey: odd, baseVersion: 0, data: null },
+    { op: 'putPlan', planId: 'a', termKey: 'B', baseVersion: 0, data: 'x' },
+    { op: 'putCourses', courses: [course('c2'), course('c1')] },
+  ], T));
+  expect(getSnapshot(db, u)).toEqual({
+    terms: { B: { version: v.terms.B, data: 2 }, [odd]: { version: v.terms[odd], data: { t: 1 } } },
+    plans: { a: { version: v.plans.a, termKey: 'B', data: 'x' }, 'z"p': { version: v.plans['z"p'], termKey: odd, data: null } },
+    pool: [{ id: 'c1' }, { id: 'c2' }],
+    appt: null,
+  });
+  expect(Object.keys(getSnapshot(db, u).terms)).toEqual(['B', odd]);
 });

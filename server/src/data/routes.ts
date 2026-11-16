@@ -5,7 +5,7 @@ import { SYNC_LIMITS, type SyncOp } from '@triton/shared';
 import type { Deps } from '../app';
 import { requireUser, type AppEnv } from '../http/guard';
 import type { RateLimiter } from '../http/rate-limit';
-import { applyOps, docJson, getSnapshot, type JsonCache } from './store';
+import { applyOps, docJson, snapshotJson, type JsonCache } from './store';
 
 // Keys become object keys in responses; these names would poke at Object.prototype.
 const MAX_ITEMS = 10_000;
@@ -32,7 +32,7 @@ export function dataRoutes(deps: Deps, limiter: RateLimiter): Hono<AppEnv> {
   // Per route, not r.use('*'): this router mounts at /api and a wildcard would put a login wall on every other /api path.
   const auth = requireUser(deps, limiter);
 
-  r.get('/state', auth, (c) => c.json(getSnapshot(deps.db, c.get('userId'))));
+  r.get('/state', auth, (c) => c.body(snapshotJson(deps.db, c.get('userId')), 200, { 'Content-Type': 'application/json' }));
 
   r.post(
     '/sync',

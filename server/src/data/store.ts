@@ -1,24 +1,25 @@
 import { mergeApptTimes, SYNC_LIMITS } from '@triton/shared';
-import type { ApptTimes, CourseOffering, StateSnapshot, SyncOp, SyncResponse, SyncVersions } from '@triton/shared';
+import type { ApptTimes, SyncOp, SyncResponse, SyncVersions } from '@triton/shared';
 import { tx, type Db } from '../db/db';
 
 // Every statement below is scoped by user_id; there is deliberately no helper that takes a bare row id.
 
-export function getSnapshot(db: Db, userId: string): StateSnapshot {
-  // Null-prototype maps: keys come from clients, and a `__proto__` key must stay a plain entry.
-  const snap: StateSnapshot = { terms: Object.create(null), plans: Object.create(null), pool: [], appt: null };
-  for (const r of db.prepare('SELECT term_key, version, data FROM term_docs WHERE user_id = ? ORDER BY term_key').all(userId) as { term_key: string; version: number; data: string }[]) {
-    snap.terms[r.term_key] = { version: r.version, data: JSON.parse(r.data) };
-  }
-  for (const r of db.prepare('SELECT plan_id, term_key, version, data FROM plan_docs WHERE user_id = ? ORDER BY plan_id').all(userId) as { plan_id: string; term_key: string; version: number; data: string }[]) {
-    snap.plans[r.plan_id] = { version: r.version, termKey: r.term_key, data: JSON.parse(r.data) };
-  }
-  for (const r of db.prepare('SELECT data FROM pool_courses WHERE user_id = ? ORDER BY course_id').all(userId) as { data: string }[]) {
-    snap.pool.push(JSON.parse(r.data) as CourseOffering);
-  }
+/**
+ * What GET /api/state answers with: a StateSnapshot, as JSON text. Every doc is stored as JSON already, so the
+ * answer is put together from the stored text and reading an account parses nothing. Parsing each doc only to
+ * serialize it again cost several times the account's size in memory, on the one thread that serves everyone.
+ * A term key and a plan id are unique within an account, so no key of the two maps repeats.
+ */
+export function snapshotJson(db: Db, userId: string): string {
+  const str = (s: string): string => JSON.stringify(s);
+  const terms = (db.prepare('SELECT term_key, version, data FROM term_docs WHERE user_id = ? ORDER BY term_key').all(userId) as { term_key: string; version: number; data: string }[])
+    .map((r) => `${str(r.term_key)}:{"version":${r.version},"data":${r.data}}`);
+  const plans = (db.prepare('SELECT plan_id, term_key, version, data FROM plan_docs WHERE user_id = ? ORDER BY plan_id').all(userId) as { plan_id: string; term_key: string; version: number; data: string }[])
+    .map((r) => `${str(r.plan_id)}:{"version":${r.version},"termKey":${str(r.term_key)},"data":${r.data}}`);
+  const pool = (db.prepare('SELECT data FROM pool_courses WHERE user_id = ? ORDER BY course_id').all(userId) as { data: string }[])
+    .map((r) => r.data);
   const appt = db.prepare(`SELECT data FROM user_docs WHERE user_id = ? AND kind = 'appt'`).get(userId) as { data: string } | undefined;
-  if (appt) snap.appt = JSON.parse(appt.data) as ApptTimes[];
-  return snap;
+  return `{"terms":{${terms.join(',')}},"plans":{${plans.join(',')}},"pool":[${pool.join(',')}],"appt":${appt ? appt.data : 'null'}}`;
 }
 
 class Conflict extends Error {}
