@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { PlanState } from '@triton/shared';
@@ -39,7 +39,7 @@ let container: HTMLDivElement;
 let root: Root | null;
 let api: Api;
 let boot: CloudBoot;
-let onOldLink: ReturnType<typeof vi.fn>;
+let onOldLink: Mock<() => void>;
 
 function Probe() {
   api = usePlan(boot, onOldLink);
@@ -58,7 +58,7 @@ async function open(hash: string, terms: TermsState, guest = false) {
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
-  onOldLink = vi.fn();
+  onOldLink = vi.fn<() => void>();
   // Fall 2026 is still open (it archives on Dec 20), so the planner opens on it.
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-11-06T20:00:00Z'));

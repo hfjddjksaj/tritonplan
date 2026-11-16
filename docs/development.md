@@ -22,7 +22,12 @@ npm workspaces monorepo (`shared`, `server`, `web`, `extension`). Both `web` and
 
 ## Prerequisites
 
-Node.js ≥ 20 and npm (the server workspace needs Node 24 for `node:sqlite`).
+Node.js ≥ 20.19 and npm (the server workspace needs Node 24 for `node:sqlite`).
+
+Build and test tools: Vite 7, Vitest 4, esbuild 0.28. The root `package.json` has an
+`overrides` entry that keeps the whole tree on one Vite: without it Vitest brings in the
+newest major for itself, and the planner's tests would run on a different bundler than its
+build. Moving to a newer Vite major means changing `web/package.json` and that entry together.
 
 ## Commands
 
