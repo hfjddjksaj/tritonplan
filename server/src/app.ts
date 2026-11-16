@@ -9,9 +9,6 @@ import { dataRoutes } from './data/routes';
 import { shareRoutes } from './share/routes';
 import { calendarRoutes } from './calendar/routes';
 import { rmpRoutes } from './rmp/routes';
-import { createStatusCommand } from './status/command';
-import { createStatusRelay } from './status/relay';
-import { statusHookRoutes } from './status/routes';
 import { createRateLimiter } from './http/rate-limit';
 import { sameOriginJson, type AppEnv } from './http/guard';
 import type { Mailer } from './mail/mailer';
@@ -29,17 +26,6 @@ export type Mount = (app: Hono<AppEnv>) => void;
 
 export function createApp(deps: Deps, ahead?: Mount): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
-
-  // The only routes ahead of the guard below: their callers are the UCSD status page and Discord, not a browser
-  // on our origin. They read no cookie and touch no account. Any other write under /api/hooks still meets the guard.
-  const target = deps.config.statusRelay;
-  app.route(
-    '/api/hooks',
-    statusHookRoutes({
-      relay: target ? createStatusRelay(deps, target) : null,
-      command: target ? createStatusCommand(deps, target) : null,
-    }),
-  );
 
   // `ahead` mounts routes whose callers are not a browser on our origin (another service's webhook), so they go
   // in front of the guard below. Such a route reads no cookie and touches no account; a write it does not answer

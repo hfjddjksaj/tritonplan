@@ -1,9 +1,3 @@
-/** A Discord bot and the one channel it posts in. */
-export interface DiscordTarget {
-  botToken: string;
-  channelId: string;
-}
-
 export interface Config {
   port: number;
   host: string;
@@ -13,24 +7,10 @@ export interface Config {
   googleClientId: string;
   googleClientSecret: string;
   rmpRefresh: boolean;
-  /** Where TSS status updates are posted; absent = the relay is off. The token is a secret: never log it. */
-  statusRelay?: DiscordTarget;
   mail: { transport: 'resend' | 'console' | 'memory'; resendApiKey?: string; from: string };
 }
 
 const TRANSPORTS = ['resend', 'console', 'memory'] as const;
-
-/**
- * An optional extra, so a missing or mistyped value turns the relay off instead of stopping the whole server
- * from starting; GET /api/hooks/ucsd-status shows which it is.
- */
-function statusRelay(env: Record<string, string | undefined>): DiscordTarget | undefined {
-  const botToken = (env.TP_DISCORD_BOT_TOKEN ?? '').trim();
-  const channelId = (env.TP_DISCORD_STATUS_CHANNEL ?? '').trim();
-  // A channel id is a 17-20 digit number; a token has no spaces. Anything else is a paste gone wrong.
-  if (!botToken || /\s/.test(botToken) || !/^\d{17,20}$/.test(channelId)) return undefined;
-  return { botToken, channelId };
-}
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
   const transport = env.TP_MAIL_TRANSPORT || 'resend';
@@ -72,7 +52,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     googleClientSecret: env.GOOGLE_CLIENT_SECRET ?? '',
     // On by default; only the literal 'off' stops the monthly RateMyProfessors fetch (local dev, tests).
     rmpRefresh: env.TP_RMP_REFRESH !== 'off',
-    statusRelay: statusRelay(env),
     mail: {
       transport: transport as Config['mail']['transport'],
       resendApiKey: env.RESEND_API_KEY || undefined,

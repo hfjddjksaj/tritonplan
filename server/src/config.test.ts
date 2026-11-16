@@ -50,24 +50,6 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...base, TP_ORIGIN: 'not a url' })).toThrow(/TP_ORIGIN/);
   });
 
-  test('the status relay is on only with a bot token and a numeric channel id; anything else leaves it off without failing', () => {
-    const on = { TP_DISCORD_BOT_TOKEN: 'abc.def.ghi', TP_DISCORD_STATUS_CHANNEL: '1456539102395760764' };
-    expect(loadConfig(base).statusRelay).toBeUndefined();
-    expect(loadConfig({ ...base, ...on }).statusRelay).toEqual({ botToken: 'abc.def.ghi', channelId: '1456539102395760764' });
-    // Stray spaces around a pasted value are forgiven.
-    expect(loadConfig({ ...base, TP_DISCORD_BOT_TOKEN: ' abc.def.ghi ', TP_DISCORD_STATUS_CHANNEL: ' 1456539102395760764 ' }).statusRelay).toEqual({ botToken: 'abc.def.ghi', channelId: '1456539102395760764' });
-    for (const bad of [
-      { TP_DISCORD_BOT_TOKEN: 'abc.def.ghi' },
-      { TP_DISCORD_STATUS_CHANNEL: '1456539102395760764' },
-      { ...on, TP_DISCORD_BOT_TOKEN: '' },
-      { ...on, TP_DISCORD_BOT_TOKEN: 'paste token here' },
-      { ...on, TP_DISCORD_STATUS_CHANNEL: '#bs' },
-      { ...on, TP_DISCORD_STATUS_CHANNEL: 'https://discord.com/channels/1/2' },
-    ]) {
-      expect(loadConfig({ ...base, ...bad }).statusRelay).toBeUndefined();
-    }
-  });
-
   test('rejects an unknown mail transport and a bad port', () => {
     expect(() => loadConfig({ ...base, TP_MAIL_TRANSPORT: 'smtp' })).toThrow(/TP_MAIL_TRANSPORT/);
     expect(() => loadConfig({ ...base, TP_PORT: 'abc' })).toThrow(/TP_PORT/);

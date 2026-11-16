@@ -10,6 +10,9 @@ web/dist-migrate/
 server/dist/
 server/.data/
 
+# this checkout's own server entry and what it adds (see server/build.mjs) — not for GitHub
+server/src/local/
+
 # packaged release artifacts (built from extension/dist on demand)
 *.zip
 
